@@ -23,7 +23,7 @@ import { uniqueId } from "lodash";
 
 const SidebarContent: MenuItem[] = [
   {
-    heading: "HOME",
+    // No heading here - this creates a flat list
     children: [
       {
         name: "Dashboard",
@@ -31,11 +31,6 @@ const SidebarContent: MenuItem[] = [
         id: uniqueId(),
         url: "/",
       },
-    ],
-  },
-  {
-    heading: "UTILITIES",
-    children: [
       {
         name: "Typography",
         icon: "solar:text-circle-outline",
@@ -60,11 +55,6 @@ const SidebarContent: MenuItem[] = [
         id: uniqueId(),
         url: "/ui/shadow",
       },
-    ],
-  },
-  {
-    heading: "AUTH",
-    children: [
       {
         name: "Login",
         icon: "solar:login-2-linear",
@@ -77,11 +67,6 @@ const SidebarContent: MenuItem[] = [
         id: uniqueId(),
         url: "/auth/register",
       },
-    ],
-  },
-  {
-    heading: "EXTRA",
-    children: [
       {
         name: "Icons",
         icon: "solar:smile-circle-outline",
