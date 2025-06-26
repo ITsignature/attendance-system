@@ -17,6 +17,12 @@ const Table = Loadable(lazy(() => import('../views/tables/Table')));
 const Form = Loadable(lazy(() => import('../views/forms/Form')));
 const Shadow = Loadable(lazy(() => import('../views/shadows/Shadow')));
 
+
+
+
+const AllEmployees = Loadable(lazy(() => import('../views/AllEmployees')));
+const AddEmployees = Loadable(lazy(() => import('../views/AddEmployees')));
+
 // icons
 const Solar = Loadable(lazy(() => import('../views/icons/Solar')));
 
@@ -32,7 +38,8 @@ const Router = [
     element: <FullLayout />,
     children: [
       { path: '/', exact: true, element: <Dashboard /> },
-      { path: '/ui/typography', exact: true, element: <Typography /> },
+      { path: '/ui/typography', exact: true, element: <AllEmployees /> },
+      { path: '/add-employee', exact: true, element: <AddEmployees /> },
       { path: '/ui/table', exact: true, element: <Table /> },
       { path: '/ui/form', exact: true, element: <Form /> },
       { path: '/ui/shadow', exact: true, element: <Shadow /> },
