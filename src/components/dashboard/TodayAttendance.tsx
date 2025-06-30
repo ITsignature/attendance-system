@@ -5,53 +5,53 @@ import { Badge } from "flowbite-react";
 
 const TodayAttendance = () => {
 
-  const ChartData: any = {
-    series: [
-      {
-        name: "monthly earnings",
-        color: "var(--color-error)",
-        data: [30, 25, 35, 20, 30, 40],
-      },
-    ],
-    chart: {
-      id: "total-income",
-      type: "area",
-      height: 60,
-      sparkline: {
-        enabled: true,
-      },
-      group: "sparklines",
-      fontFamily: "inherit",
-      foreColor: "#adb0bb",
-    },
-    stroke: {
-      curve: "smooth",
-      width: 2,
-    },
-    fill: {
-      type: "gradient",
-      gradient: {
-        shadeIntensity: 0,
-        inverseColors: false,
-        opacityFrom: 0,
-        opacityTo: 0,
-        stops: [20, 180],
-      },
-    },
-    markers: {
-      size: 0,
-    },
-    tooltip: {
-      theme: "dark",
-      fixed: {
-        enabled: true,
-        position: "right",
-      },
-      x: {
-        show: false,
-      },
-    },
-  };
+//   const ChartData: any = {
+//     series: [
+//       {
+//         name: "monthly earnings",
+//         color: "var(--color-error)",
+//         data: [30, 25, 35, 20, 30, 40],
+//       },
+//     ],
+//     chart: {
+//       id: "total-income",
+//       type: "area",
+//       height: 60,
+//       sparkline: {
+//         enabled: true,
+//       },
+//       group: "sparklines",
+//       fontFamily: "inherit",
+//       foreColor: "#adb0bb",
+//     },
+//     stroke: {
+//       curve: "smooth",
+//       width: 2,
+//     },
+//     fill: {
+//       type: "gradient",
+//       gradient: {
+//         shadeIntensity: 0,
+//         inverseColors: false,
+//         opacityFrom: 0,
+//         opacityTo: 0,
+//         stops: [20, 180],
+//       },
+//     },
+//     markers: {
+//       size: 0,
+//     },
+//     tooltip: {
+//       theme: "dark",
+//       fixed: {
+//         enabled: true,
+//         position: "right",
+//       },
+//       x: {
+//         show: false,
+//       },
+//     },
+//   };
   return (
     <>
       <div className="bg-white rounded-xl shadow-md p-8">
@@ -69,7 +69,7 @@ const TodayAttendance = () => {
             </Badge>
             <p className="text-success text-xs"></p>
           </div>
-          <div className="rounded-bars flex-1 md:ps-7">
+          {/* <div className="rounded-bars flex-1 md:ps-7">
             <Chart
               options={ChartData}
               series={ChartData.series}
@@ -77,7 +77,7 @@ const TodayAttendance = () => {
               height="60px"
               width="100%"
             />
-          </div>
+          </div> */}
         </div>
       </div>
     </>
