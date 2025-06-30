@@ -35,13 +35,13 @@ const SidebarContent: MenuItem[] = [
         name: "All employees",
         icon: "solar:text-circle-outline",
         id: uniqueId(),
-        url: "/ui/typography",
+        url: "/employees",
       },
       {
         name: "All departments",
         icon: "solar:bedside-table-3-linear",
         id: uniqueId(),
-        url: "/ui/table",
+        url: "/departments",
       },
       {
         name: "Attendance",

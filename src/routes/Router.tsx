@@ -18,10 +18,12 @@ const Form = Loadable(lazy(() => import('../views/forms/Form')));
 const Shadow = Loadable(lazy(() => import('../views/shadows/Shadow')));
 
 
-
-
 const AllEmployees = Loadable(lazy(() => import('../views/AllEmployees')));
 const AddEmployees = Loadable(lazy(() => import('../views/AddEmployees')));
+const EmployeeDetails = Loadable(lazy(() => import('../views/EmployeeDetails')));
+const EditEmployeeDetails = Loadable(lazy(() => import('../views/EditEmployeeDetails')));
+const ViewDepartments = Loadable(lazy(() => import('../views/DepartmentsPage')));
+const EmployeesByDesignation = Loadable(lazy(() => import('../views/EmployeesByDesignation')));
 
 // icons
 const Solar = Loadable(lazy(() => import('../views/icons/Solar')));
@@ -38,8 +40,13 @@ const Router = [
     element: <FullLayout />,
     children: [
       { path: '/', exact: true, element: <Dashboard /> },
-      { path: '/ui/typography', exact: true, element: <AllEmployees /> },
+      { path: '/employees', exact: true, element: <AllEmployees /> },
       { path: '/add-employee', exact: true, element: <AddEmployees /> },
+      { path: '/employee/:id', exact: true, element: <EmployeeDetails /> },
+      { path: '/edit-employee/:id', exact: true, element: <EditEmployeeDetails /> },
+      { path: '/Departments', exact: true, element: <ViewDepartments /> },
+      { path: '/departments-employees', exact: true, element: <EmployeesByDesignation /> },
+      
       { path: '/ui/table', exact: true, element: <Table /> },
       { path: '/ui/form', exact: true, element: <Form /> },
       { path: '/ui/shadow', exact: true, element: <Shadow /> },

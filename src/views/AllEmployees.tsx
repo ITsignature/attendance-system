@@ -82,11 +82,14 @@ const EmployeeTable = () => {
             <Table.HeadCell>Designation</Table.HeadCell>
             <Table.HeadCell>Type</Table.HeadCell>
             <Table.HeadCell>Status</Table.HeadCell>
-            <Table.HeadCell />
+            {/* <Table.HeadCell /> */}
           </Table.Head>
           <Table.Body className="divide-y divide-border dark:divide-darkborder">
             {EmployeeData.map((emp, index) => (
-              <Table.Row key={index}>
+              <Table.Row key={index}
+              className="cursor-pointer hover:bg-gray-100"
+              onClick={()=>navigate(`/employee/${emp.id}`)
+              }>
                 <Table.Cell className="whitespace-nowrap ps-6">
                   <div className="flex items-center gap-3">
                     <img
@@ -106,7 +109,7 @@ const EmployeeTable = () => {
                     {emp.status}
                   </Badge>
                 </Table.Cell>
-                <Table.Cell>
+                {/* <Table.Cell>
                   <Dropdown
                     label=""
                     dismissOnClick={false}
@@ -123,7 +126,7 @@ const EmployeeTable = () => {
                       </Dropdown.Item>
                     ))}
                   </Dropdown>
-                </Table.Cell>
+                </Table.Cell> */}
               </Table.Row>
             ))}
           </Table.Body>
