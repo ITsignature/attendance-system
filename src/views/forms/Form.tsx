@@ -1,9 +1,9 @@
 
-import BasicForm from 'src/components/forms/BasicForm'
+import AttendanceDashboard from 'src/components/forms/AttendanceDashboard'
 
 const Form = () => {
   return (
-    <BasicForm/>
+    <AttendanceDashboard/>
   )
 }
 
