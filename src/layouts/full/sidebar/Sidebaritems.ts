@@ -47,7 +47,7 @@ const SidebarContent: MenuItem[] = [
         name: "Attendance",
         icon: "solar:password-minimalistic-outline",
         id: uniqueId(),
-        url: "/ui/form",
+        url: "/attendance",
       },
       {
         name: "Payroll",
@@ -59,7 +59,7 @@ const SidebarContent: MenuItem[] = [
         name: "Leaves",
         icon: "solar:login-2-linear",
         id: uniqueId(),
-        url: "/auth/login",
+        url: "/leaves",
       },
       {
         name: "Holidays",
