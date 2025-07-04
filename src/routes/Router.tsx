@@ -24,6 +24,7 @@ const EmployeeDetails = Loadable(lazy(() => import('../views/EmployeeDetails')))
 const EditEmployeeDetails = Loadable(lazy(() => import('../views/EditEmployeeDetails')));
 const ViewDepartments = Loadable(lazy(() => import('../views/DepartmentsPage')));
 const EmployeesByDesignation = Loadable(lazy(() => import('../views/EmployeesByDesignation')));
+const AttendancePage = Loadable(lazy(() => import('../views/AttendancePage')));
 
 // icons
 const Solar = Loadable(lazy(() => import('../views/icons/Solar')));
@@ -46,6 +47,8 @@ const Router = [
       { path: '/edit-employee/:id', exact: true, element: <EditEmployeeDetails /> },
       { path: '/Departments', exact: true, element: <ViewDepartments /> },
       { path: '/departments-employees', exact: true, element: <EmployeesByDesignation /> },
+      { path: '/attendance', exact: true, element: <AttendancePage /> },
+   
       
       { path: '/ui/table', exact: true, element: <Table /> },
       { path: '/ui/form', exact: true, element: <Form /> },
