@@ -1,9 +1,9 @@
-import { AllShadows } from "src/components/shadows/AllShadows"
+import PayrollDashboard  from "src/components/shadows/AllShadows"
 
 
 const Shadow = () => {
   return (
-    <AllShadows/>
+    <PayrollDashboard/>
   )
 }
 
