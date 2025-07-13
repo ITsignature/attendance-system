@@ -1,83 +1,140 @@
-export interface ChildItem {
-  id?: number | string;
-  name?: string;
-  icon?: any;
-  children?: ChildItem[];
-  item?: any;
-  url?: any;
-  color?: string;
-}
+import {
+  IconAperture,
+  IconCopy,
+  IconLayoutDashboard,
+  IconLogin,
+  IconMoodHappy,
+  IconTypography,
+  IconUserPlus,
+  IconUsers,
+  IconClock,
+  IconCalendar,
+  IconCurrencyDollar,
+  IconBuilding,
+  IconSettings,
+  IconLogout,
+  IconSun,
+} from '@tabler/icons-react';
 
-export interface MenuItem {
-  heading?: string;
-  name?: string;
-  icon?: any;
-  id?: number;
-  to?: string;
-  items?: MenuItem[];
-  children?: ChildItem[];
-  url?: any;
-}
+import { uniqueId } from 'lodash';
 
-import { uniqueId } from "lodash";
-
-const SidebarContent: MenuItem[] = [
+const SidebarContent = [
   {
-    // No heading here - this creates a flat list
+    navlabel: true,
+    subheader: 'Home',
+    heading: 'Dashboard',
     children: [
       {
-        name: "Dashboard",
-        icon: "solar:widget-add-line-duotone",
         id: uniqueId(),
-        url: "/",
+        title: 'Dashboard',
+        icon: IconLayoutDashboard,
+        href: '/dashboard',
+        permission: 'dashboard.view',
+      },
+    ],
+  },
+  {
+    navlabel: true,
+    subheader: 'HR Management',
+    heading: 'Human Resources',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'All Employees',
+        icon: IconUsers,
+        href: '/employees',
+        permission: 'employees.view',
       },
       {
-        name: "All employees",
-        icon: "solar:text-circle-outline",
         id: uniqueId(),
-        url: "/employees",
+        title: 'Add Employee',
+        icon: IconUserPlus,
+        href: '/add-employee',
+        permission: 'employees.create',
       },
       {
-        name: "All departments",
-        icon: "solar:bedside-table-3-linear",
         id: uniqueId(),
-        url: "/departments",
+        title: 'Attendance',
+        icon: IconClock,
+        href: '/attendance',
+        permission: 'attendance.view',
       },
       {
-        name: "Attendance",
-        icon: "solar:password-minimalistic-outline",
         id: uniqueId(),
-        url: "/attendance",
+        title: 'Departments',
+        icon: IconBuilding,
+        href: '/Departments',
+        permission: 'employees.view',
       },
       {
-        name: "Payroll",
-        icon: "solar:airbuds-case-charge-outline",
         id: uniqueId(),
-        url: "/ui/shadow",
+        title: 'Dept. Employees',
+        icon: IconUsers,
+        href: '/departments-employees',
+        permission: 'employees.view',
       },
       {
-        name: "Leaves",
-        icon: "solar:login-2-linear",
         id: uniqueId(),
-        url: "/leaves",
+        title: 'Leaves',
+        icon: IconCalendar,
+        href: '/leaves',
+        permission: 'leaves.view',
       },
       {
-        name: "Holidays",
-        icon: "solar:shield-user-outline",
         id: uniqueId(),
-        url: "/auth/register",
+        title: 'Leave Requests',
+        icon: IconCalendar,
+        href: '/leave-requests',
+        permission: 'leaves.approve',
       },
       {
-        name: "Icons",
-        icon: "solar:smile-circle-outline",
         id: uniqueId(),
-        url: "/icons/solar",
+        title: 'Holidays',
+        icon: IconCalendar,
+        href: '/holidays',
+        permission: 'leaves.view',
       },
       {
-        name: "Settings",
-        icon: "solar:notes-minimalistic-outline",
         id: uniqueId(),
-        url: "/sample-page",
+        title: 'Payroll',
+        icon: IconCurrencyDollar,
+        href: '/payroll',
+        permission: 'payroll.view',
+      },
+    ],
+  },
+  {
+    navlabel: true,
+    subheader: 'Utilities',
+    heading: 'System',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Settings',
+        icon: IconSettings,
+        href: '/settings',
+        permission: 'settings.view',
+      },
+    ],
+  },
+  {
+    navlabel: true,
+    subheader: 'Admin',
+    heading: 'Administration',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Role Management',
+        icon: IconSettings,
+        href: '/rolemanagement',
+        permission: 'rbac.view',
+      },
+      {
+        id: uniqueId(),
+        title: 'User Management', 
+        icon: IconUsers,
+        href: '/adminusermanagement',
+        permission: 'rbac.assign',
       },
     ],
   },
