@@ -4,73 +4,75 @@ import { HiEye, HiEyeOff, HiInformationCircle, HiShieldCheck } from 'react-icons
 import { useDynamicRBAC } from './rbacSystem';
 import { useNavigate } from 'react-router-dom';
 
+
 const AdminLoginPage: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showDemoUsers, setShowDemoUsers] = useState(false);
-  
-  const { login, clients, roles } = useDynamicRBAC();
-  const navigate = useNavigate();
-
-  // Demo credentials
-  const demoCredentials = [
-    {
-      email: 'sarah@acme.com',
-      password: 'demo123',
-      name: 'Sarah Johnson',
-      role: 'HR Admin',
-      client: 'Acme Corporation',
-      access: 'Full Access'
-    },
-    {
-      email: 'mike@techstart.com',
-      password: 'demo123',
-      name: 'Mike Chen',
-      role: 'Manager',
-      client: 'TechStart Inc',
-      access: 'Moderate Access'
-    }
-  ];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const success = login(email, password);
-      
-      if (success) {
-        navigate('/dashboard');
-      } else {
-        setError('Invalid email or password. Please check your credentials.');
-      }
-    } catch (err) {
-      setError('An error occurred during login. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+ const [email, setEmail] = useState(''); // REMOVE default demo email
+   const [password, setPassword] = useState(''); // REMOVE default demo password
+   const [loading, setLoading] = useState(false);
+   const [error, setError] = useState('');
+   const [remainingAttempts, setRemainingAttempts] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+     const [showPassword, setShowPassword] = useState(false);
+   
+   const { login } = useDynamicRBAC();
+   const navigate = useNavigate();
+ 
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     
+     if (!email || !password) {
+       setError('Please enter both email and password');
+       return;
+     }
+ 
+     setLoading(true);
+     setError('');
+     setRemainingAttempts(null);
+ 
+     try {
+       const success = await login(email, password);
+ 
+       console.log('Login success:', success);
+       
+       if (success) {
+         // Redirect to dashboard on successful login
+         navigate('/dashboard');
+       } else {
+         setError('Invalid email or password. Only admin users can access this system.');
+       }
+     } catch (error: any) {
+       console.error('Login error:', error);
+       
+       // Handle specific error responses from backend
+       if (error.response?.data) {
+         const errorData = error.response.data;
+         setError(errorData.message || 'Login failed');
+         
+         // Show remaining attempts if account is being locked
+         if (errorData.remainingAttempts !== undefined) {
+           setRemainingAttempts(errorData.remainingAttempts);
+         }
+       } else {
+         setError('Login failed. Please check your credentials and try again.');
+       }
+     } finally {
+       setLoading(false);
+     }
+   };
+ 
   const handleDemoLogin = (demoEmail: string, demoPassword: string) => {
     setEmail(demoEmail);
     setPassword(demoPassword);
     setError('');
   };
 
-  const getRoleInfo = (roleId: string) => {
-    return roles.find(role => role.id === roleId);
-  };
+  // const getRoleInfo = (roleId: string) => {
+  //   return roles.find(role => role.id === roleId);
+  // };
 
-  const getClientInfo = (clientId: string) => {
-    return clients.find(client => client.id === clientId);
-  };
+  // const getClientInfo = (clientId: string) => {
+  //   return clients.find(client => client.id === clientId);
+  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
@@ -162,7 +164,7 @@ const AdminLoginPage: React.FC = () => {
           </form>
 
           {/* Demo Access */}
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          {/* <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
             <div className="text-center mb-4">
               <Button
                 color="green"
@@ -224,7 +226,7 @@ const AdminLoginPage: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
+          </div> */}
 
           {/* Footer */}
           <div className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">

@@ -6,7 +6,7 @@ require('dotenv').config({ path: '../.env' });
 const seedDatabase = async () => {
   const connection = await mysql.createConnection({
   host: 'localhost',
-  port: 3306,
+  port: 3307,
   user: 'root',
   password: '',
   database: 'attendance_system'
