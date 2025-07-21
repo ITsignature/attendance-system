@@ -1,5 +1,3 @@
-import React, { useState } from 'react';
-import { Button, Checkbox, Label, TextInput, Modal } from "flowbite-react";
 import AuthLogin from '../authforms/AuthLogin';
 
 // Updated Login Page Component

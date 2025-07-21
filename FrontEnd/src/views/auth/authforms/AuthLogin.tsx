@@ -1,263 +1,174 @@
-
 import React, { useState } from 'react';
-import { Button, Checkbox, Label, TextInput, Modal } from "flowbite-react";
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router-dom';
+import { Button, Label, TextInput, Alert } from 'flowbite-react';
+import { useDynamicRBAC } from '../../../components/RBACSystem/rbacSystem';
 
-// Type definitions
-interface SuccessModalProps {
-  show: boolean;
-  onClose: () => void;
-  title: string;
-  message: string;
-  buttonText: string;
-}
-
-// Success Modal Component
-const SuccessModal: React.FC<SuccessModalProps> = ({ show, onClose, title, message, buttonText }) => {
-  return (
-    <Modal show={show} onClose={onClose} size="md">
-      <Modal.Body>
-        <div className="text-center p-6">
-          {/* Success Icon */}
-          <div className="mx-auto mb-4">
-            <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center">
-              <div className="text-4xl">🎉</div>
-            </div>
-          </div>
-          
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {title}
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            {message}
-          </p>
-          
-          <Button 
-            onClick={onClose}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3"
-          >
-            {buttonText}
-          </Button>
-        </div>
-      </Modal.Body>
-    </Modal>
-  );
-};
-
-// Updated AuthLogin Component
-const AuthLogin: React.FC = () => {
-  const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
-  const [showOTP, setShowOTP] = useState<boolean>(false);
-  const [showSuccess, setShowSuccess] = useState<boolean>(false);
-  const [email, setEmail] = useState<string>('robertallen@example.com');
-  const [password, setPassword] = useState<string>('');
-  const [otpValues, setOtpValues] = useState<string[]>(['5', '0']);
-  const [rememberMe, setRememberMe] = useState<boolean>(true);
-  const navigate = useNavigate();
+const AuthLogin = () => {
+  const [email, setEmail] = useState(''); // REMOVE default demo email
+  const [password, setPassword] = useState(''); // REMOVE default demo password
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [remainingAttempts, setRemainingAttempts] = useState(null);
   
-  const handleSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    console.log('Login submitted');
-    navigate('/dashboard');
-    // Add login logic here
-  };
+  const { login } = useDynamicRBAC();
+  const navigate = useNavigate();
 
-  const handleForgotPassword = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setShowForgotPassword(false);
-    setShowOTP(true);
-  };
+    
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
 
-  const handleOTPSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    setShowOTP(false);
-    setShowSuccess(true);
-  };
+    setLoading(true);
+    setError('');
+    setRemainingAttempts(null);
 
-  const handleOTPChange = (index: number, value: string) => {
-    if (value.length <= 1 && /^[0-9]*$/.test(value)) {
-      const newOtpValues = [...otpValues];
-      newOtpValues[index] = value;
-      setOtpValues(newOtpValues);
+    try {
+      const success = await login(email, password);
+
+      console.log('Login success:', success);
+      
+      if (success) {
+        // Redirect to dashboard on successful login
+        navigate('/dashboard');
+      } else {
+        setError('Invalid email or password. Only admin users can access this system.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Handle specific error responses from backend
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        setError(errorData.message || 'Login failed');
+        
+        // Show remaining attempts if account is being locked
+        if (errorData.remainingAttempts !== undefined) {
+          setRemainingAttempts(errorData.remainingAttempts);
+        }
+      } else {
+        setError('Login failed. Please check your credentials and try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSuccessClose = () => {
-    setShowSuccess(false);
-    setShowForgotPassword(false);
-    setShowOTP(false);
-    // Reset to login form
-  };
-
-  if (showForgotPassword) {
-    return (
-      <div className="space-y-6">
-        {/* Back Button */}
-        <button 
-          onClick={() => setShowForgotPassword(false)}
-          className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 mb-4"
-        >
-          <span className="mr-2">←</span> Back
-        </button>
-
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Forgot Password
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 text-sm">
-            Enter your registered email address, we'll send you a code to reset your password.
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="reset-email" value="Email Address" className="mb-2 block text-sm font-medium" />
-            <TextInput
-              id="reset-email"
-              type="email"
-              value={email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-              placeholder="robertallen@example.com"
-              required
-              className="w-full"
-            />
-          </div>
-
-          <Button 
-            onClick={handleForgotPassword}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg"
-          >
-            Send OTP
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (showOTP) {
-    return (
-      <div className="space-y-6">
-        {/* Back Button */}
-        <button 
-          onClick={() => {setShowOTP(false); setShowForgotPassword(true);}}
-          className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 mb-4"
-        >
-          <span className="mr-2">←</span> Back
-        </button>
-
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Enter OTP
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 text-sm">
-            We have share a code of your registered email address<br />
-            <span className="font-medium">{email}</span>
-          </p>
-        </div>
-
-        <div className="space-y-6">
-          <div className="flex justify-center space-x-4">
-            {otpValues.map((value, index) => (
-              <input
-                key={index}
-                id={`otp-${index}`}
-                type="text"
-                value={value}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOTPChange(index, e.target.value)}
-                maxLength={1}
-                className="w-16 h-16 text-center text-2xl font-bold border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                required
-              />
-            ))}
-          </div>
-
-          <Button 
-            onClick={handleOTPSubmit}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg"
-          >
-            Verify
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Default Login Form
   return (
-    <>
-      <div className="space-y-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
         <div>
-          <Label htmlFor="login-email" value="Email Address" className="mb-2 block text-sm font-medium" />
-          <TextInput
-            id="login-email"
-            type="email"
-            value={email}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-            placeholder="robertallen@example.com"
-            required
-            className="w-full"
-          />
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Admin Login
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Access restricted to authorized administrators only
+          </p>
         </div>
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            {/* Error Alert */}
+            {error && (
+              <Alert color="failure">
+                <span className="font-medium">Login Failed:</span> {error}
+                {remainingAttempts !== null && remainingAttempts > 0 && (
+                  <div className="mt-1 text-sm">
+                    Remaining attempts: {remainingAttempts}
+                  </div>
+                )}
+                {remainingAttempts === 0 && (
+                  <div className="mt-1 text-sm font-medium">
+                    Account will be temporarily locked after next failed attempt.
+                  </div>
+                )}
+              </Alert>
+            )}
 
-        <div>
-          <Label htmlFor="login-password" value="Password" className="mb-2 block text-sm font-medium" />
-          <div className="relative">
-            <TextInput
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
-              required
-              className="w-full pr-10"
-            />
-            <button
-              type="button"
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            {/* Email Field */}
+            <div>
+              <Label htmlFor="email" value="Email Address" />
+              <TextInput
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                placeholder="Enter your admin email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                className="mt-1"
+              />
+            </div>
+
+            {/* Password Field */}
+            <div>
+              <Label htmlFor="password" value="Password" />
+              <TextInput
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div>
+            <Button
+              type="submit"
+              disabled={loading || !email || !password}
+              className="w-full"
+              size="lg"
             >
-              👁️
-            </button>
+              {loading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Signing in...
+                </>
+              ) : (
+                'Sign in to Admin Panel'
+              )}
+            </Button>
           </div>
-        </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Checkbox 
-              id="remember" 
-              checked={rememberMe}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRememberMe(e.target.checked)}
-              className="mr-2" 
-            />
-            <Label htmlFor="remember" className="text-sm">
-              Remember Me
-            </Label>
+          {/* Security Notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">
+                  Security Notice
+                </h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Only authorized admin users can access this system</li>
+                    <li>Multiple failed attempts will temporarily lock your account</li>
+                    <li>Contact your system administrator if you need access</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowForgotPassword(true)}
-            className="text-sm text-purple-600 hover:text-purple-700"
-          >
-            Forgot Password?
-          </button>
-        </div>
-
-        <Button 
-          onClick={handleSubmit}
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg"
-        >
-          Login
-        </Button>
+        </form>
       </div>
-
-      {/* Success Modal */}
-      <SuccessModal
-        show={showSuccess}
-        onClose={handleSuccessClose}
-        title="Password Update Successfully"
-        message="Your password has been update successfully"
-        buttonText="Back to Login"
-      />
-    </>
+    </div>
   );
 };
 

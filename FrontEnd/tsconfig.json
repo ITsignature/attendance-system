@@ -17,12 +17,14 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    //"types": ["react"],
+    "types": ["node"],
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
   },
   "include": ["src"]
 }

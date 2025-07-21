@@ -5,7 +5,6 @@ import {
   Button,
   Modal,
   Label,
-  Datepicker,
 } from "flowbite-react";
 import { HiOutlinePlus } from "react-icons/hi";
 

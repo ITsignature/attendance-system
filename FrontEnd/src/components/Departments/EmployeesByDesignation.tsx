@@ -1,5 +1,5 @@
 // src/pages/EmployeesByDesignation.tsx
-import React, { useState } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Table,
@@ -112,10 +112,10 @@ const EmployeesByDesignation = () => {
                     </Badge>
                   </Table.Cell>
                   <Table.Cell className="flex gap-2 text-purple-600">
-                    <Button size="xs" color="light" onClick={(e) => e.stopPropagation()}>
+                    <Button size="xs" color="light" onClick={(e:any) => e.stopPropagation()}>
                       <HiOutlinePlus className="text-lg" />
                     </Button>
-                    <Button size="xs" color="light" onClick={(e) => e.stopPropagation()}>
+                    <Button size="xs" color="light" onClick={(e:any) => e.stopPropagation()}>
                       <HiOutlineFilter className="text-lg" />
                     </Button>
                     {/* Add your own action handlers here */}

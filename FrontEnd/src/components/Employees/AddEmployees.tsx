@@ -1,5 +1,5 @@
 // src/pages/AddEmployeeForm.jsx
-import React, { useState } from "react";
+import { useState } from "react";
 import FileUploadBox from "./FileUploadBox";
 import {
   TextInput,

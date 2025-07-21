@@ -1,5 +1,3 @@
-
-import Chart from "react-apexcharts";
 import { Icon } from "@iconify/react";
 import { Badge } from "flowbite-react";
 

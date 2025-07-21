@@ -12,7 +12,7 @@ const AdminLoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showDemoUsers, setShowDemoUsers] = useState(false);
   
-  const { login, adminUsers, clients, roles } = useDynamicRBAC();
+  const { login, clients, roles } = useDynamicRBAC();
   const navigate = useNavigate();
 
   // Demo credentials

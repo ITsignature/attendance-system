@@ -1,42 +1,47 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// src/components/RBACSystem/rbacSystem.tsx
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { apiService, LoginResponse, User } from '../../services/api';
 
-// ========== TYPES ==========
-
-export interface Permission {
-  id: string;
-  name: string;
-  module: string;
-  description: string;
-}
+// ========== TYPE DEFINITIONS ==========
 
 export interface Role {
   id: string;
   name: string;
   description: string;
-  permissions: string[];
-  isSystemRole: boolean;
-  accessLevel: 'basic' | 'moderate' | 'full';
-  createdAt: string;
+  access_level: 'basic' | 'moderate' | 'full';
+  is_system_role: boolean;
+  is_editable: boolean;
+  is_active: boolean;
+  permissions?: Permission[];
+}
+
+export interface Permission {
+  id: string;
+  module: string;
+  action: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
 }
 
 export interface AdminUser {
   id: string;
   name: string;
   email: string;
-  roleId: string;
   clientId: string;
+  roleId: string;
   department?: string;
-  isActive: boolean;
+  is_active: boolean;
 }
 
-export interface Client {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
-
-// ========== PREDEFINED MODULES & PERMISSIONS ==========
-
+// ========== MODULES FOR ROLE MANAGEMENT ==========
 export const MODULES = {
   dashboard: {
     id: 'dashboard',
@@ -80,7 +85,7 @@ export const MODULES = {
   payroll: {
     id: 'payroll',
     name: 'Payroll Management',
-    description: 'Manage payroll and compensation',
+    description: 'Manage employee payroll and compensation',
     permissions: [
       { id: 'payroll.view', name: 'View Payroll', description: 'View payroll information and reports' },
       { id: 'payroll.process', name: 'Process Payroll', description: 'Process monthly payroll' },
@@ -91,16 +96,15 @@ export const MODULES = {
   settings: {
     id: 'settings',
     name: 'System Settings',
-    description: 'Configure system settings and preferences',
+    description: 'Manage system configuration and settings',
     permissions: [
       { id: 'settings.view', name: 'View Settings', description: 'View system configuration' },
-      { id: 'settings.edit', name: 'Edit Settings', description: 'Modify system settings' },
-      { id: 'settings.admin', name: 'Admin Settings', description: 'Access admin-only configurations' }
+      { id: 'settings.edit', name: 'Edit Settings', description: 'Modify system settings' }
     ]
   },
   rbac: {
     id: 'rbac',
-    name: 'Role Management',
+    name: 'Role & Permission Management',
     description: 'Manage roles and permissions',
     permissions: [
       { id: 'rbac.view', name: 'View Roles', description: 'View roles and permissions' },
@@ -112,242 +116,191 @@ export const MODULES = {
   }
 };
 
-// ========== PERMISSION INHERITANCE ==========
-
-export const PERMISSION_HIERARCHY: Record<string, string[]> = {
-  'employees.delete': ['employees.edit', 'employees.view'],
-  'employees.edit': ['employees.view'],
-  'employees.create': ['employees.view'],
-  'payroll.process': ['payroll.edit', 'payroll.view'],
-  'payroll.edit': ['payroll.view'],
-  'payroll.reports': ['payroll.view'],
-  'attendance.edit': ['attendance.view'],
-  'attendance.reports': ['attendance.view'],
-  'leaves.approve': ['leaves.view'],
-  'leaves.reject': ['leaves.view'],
-  'settings.edit': ['settings.view'],
-  'settings.admin': ['settings.edit', 'settings.view'],
-  'rbac.create': ['rbac.view'],
-  'rbac.edit': ['rbac.view'],
-  'rbac.delete': ['rbac.view'],
-  'rbac.assign': ['rbac.view']
-};
-
-// ========== DEFAULT SYSTEM ROLES ==========
-
-export const SYSTEM_ROLES: Role[] = [
-  {
-    id: 'employee-basic',
-    name: 'Employee',
-    description: 'Basic employee access - can view own data and apply for leave',
-    permissions: ['dashboard.view', 'leaves.view'],
-    isSystemRole: true,
-    accessLevel: 'basic',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'manager',
-    name: 'Manager',
-    description: 'Department manager - can manage team, approve leaves, view reports',
-    permissions: [
-      'dashboard.view',
-      'employees.view',
-      'attendance.view', 'attendance.reports',
-      'leaves.view', 'leaves.approve', 'leaves.reject',
-      'payroll.view', 'payroll.reports'
-    ],
-    isSystemRole: true,
-    accessLevel: 'moderate',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'hr-admin',
-    name: 'HR Admin',
-    description: 'Full HR access - can manage all employees, payroll, and system settings',
-    permissions: [
-      'dashboard.view',
-      'employees.view', 'employees.create', 'employees.edit', 'employees.delete',
-      'attendance.view', 'attendance.edit', 'attendance.reports',
-      'leaves.view', 'leaves.approve', 'leaves.reject',
-      'payroll.view', 'payroll.process', 'payroll.edit', 'payroll.reports',
-      'settings.view', 'settings.edit',
-      'rbac.view', 'rbac.create', 'rbac.edit', 'rbac.delete', 'rbac.assign'
-    ],
-    isSystemRole: true,
-    accessLevel: 'full',
-    createdAt: new Date().toISOString()
-  }
-];
-
-// ========== RBAC CONTEXT ==========
-
-interface DynamicRBACContextType {
-  // Current State
-  currentUser: AdminUser | null;
+export interface DynamicRBACContextType {
+  // Auth state
+  currentUser: User | null;
   currentClient: Client | null;
+  isLoading: boolean;
+  error: string | null;
   
   // Data
   roles: Role[];
   clients: Client[];
   adminUsers: AdminUser[];
   
-  // Role Management
-  createRole: (roleData: Omit<Role, 'id' | 'createdAt'>) => void;
-  updateRole: (roleId: string, updates: Partial<Role>) => void;
-  deleteRole: (roleId: string) => void;
+  // Auth methods
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   
-  // Permission Utilities
-  getAllPermissions: () => Permission[];
-  getInheritedPermissions: (permissions: string[]) => string[];
+  // Permission methods
   hasPermission: (permission: string) => boolean;
+  getAllPermissions: () => string[];
+  getInheritedPermissions: (permissions: string[]) => string[];
   
-  // User Management
-  createAdminUser: (userData: Omit<AdminUser, 'id'>) => void;
-  updateAdminUser: (userId: string, updates: Partial<AdminUser>) => void;
-  deleteAdminUser: (userId: string) => void;
-  
-  // Client Management
+  // Data methods
+  refreshUserData: () => Promise<void>;
   setCurrentClient: (clientId: string) => void;
   
-  // Auth
-  login: (email: string, password: string) => boolean;
-  logout: () => void;
+  // CRUD methods (if needed)
+  createRole?: (roleData: Omit<Role, 'id'>) => Promise<void>;
+  updateRole?: (roleId: string, updates: Partial<Role>) => Promise<void>;
+  deleteRole?: (roleId: string) => Promise<void>;
 }
+
+// ========== CONTEXT CREATION ==========
 
 const DynamicRBACContext = createContext<DynamicRBACContextType | undefined>(undefined);
 
-// ========== RBAC PROVIDER ==========
+// ========== PROVIDER COMPONENT ==========
 
-export const DynamicRBACProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+interface DynamicRBACProviderProps {
+  children: ReactNode;
+}
+
+export const DynamicRBACProvider: React.FC<DynamicRBACProviderProps> = ({ children }) => {
+  // Auth state
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentClient, setCurrentClientState] = useState<Client | null>(null);
-  const [roles, setRoles] = useState<Role[]>(SYSTEM_ROLES);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Data state
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
-  const [clients] = useState<Client[]>([
-    { id: 'client-1', name: 'Acme Corporation', isActive: true },
-    { id: 'client-2', name: 'TechStart Inc', isActive: true },
-    { id: 'client-3', name: 'Global Dynamics', isActive: true }
-  ]);
 
-  // Initialize demo data
+  // ========== INITIALIZATION ==========
+  
   useEffect(() => {
-    // Create demo admin users
-    setAdminUsers([
-      {
-        id: 'admin-1',
-        name: 'Sarah Johnson',
-        email: 'sarah@acme.com',
-        roleId: 'hr-admin',
-        clientId: 'client-1',
-        department: 'Human Resources',
-        isActive: true
-      },
-      {
-        id: 'admin-2',
-        name: 'Mike Chen',
-        email: 'mike@techstart.com',
-        roleId: 'manager',
-        clientId: 'client-2',
-        department: 'Engineering',
-        isActive: true
-      }
-    ]);
-
-    // Set default client
-    setCurrentClientState(clients[0]);
-    
-    // Load saved user
-    const savedUser = localStorage.getItem('adminUser');
-    if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
-    }
+    initializeAuth();
   }, []);
 
-  // ========== PERMISSION UTILITIES ==========
+  const initializeAuth = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-  const getAllPermissions = (): Permission[] => {
-    return Object.values(MODULES).flatMap(module => 
-      module.permissions.map(perm => ({
-        ...perm,
-        module: module.id,
-        description: perm.description
-      }))
-    );
+      // Check if user is already logged in
+      const savedUser = localStorage.getItem('user');
+      const savedToken = localStorage.getItem('accessToken');
+
+      if (savedUser && savedToken) {
+        const user: User = JSON.parse(savedUser);
+        setCurrentUser(user);
+        
+        // Try to get fresh user data from API
+        try {
+          await refreshUserData();
+        } catch (error) {
+          console.warn('Failed to refresh user data, using cached data');
+        }
+      }
+    } catch (error) {
+      console.error('Auth initialization failed:', error);
+      setError('Failed to initialize authentication');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const getInheritedPermissions = (permissions: string[]): string[] => {
-    const inheritedSet = new Set(permissions);
+  // ========== AUTH METHODS ==========
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    console.log('🔐 Attempting admin login for:', email);
     
-    permissions.forEach(permission => {
-      const inherited = PERMISSION_HIERARCHY[permission] || [];
-      inherited.forEach(inheritedPerm => inheritedSet.add(inheritedPerm));
-    });
+    const response = await apiService.login(email, password);
     
-    return Array.from(inheritedSet);
+    console.log('✅ Login response:', response);
+    
+    if (response.success && response.data) {
+      // Check if user is an admin user (has proper role/permissions)
+      const user = response.data.user;
+      console.log(user);
+      
+      if (!user.roleId || !user.permissions || user.permissions.length === 0) {
+        setError('Access denied: Admin privileges required');
+        return false;
+      }
+      
+      setCurrentUser(response.data.user);
+      setError(null);
+      return true;
+    } else {
+      setError(response.message || 'Login failed - Admin access required');
+      return false;
+    }
+  } catch (error: any) {
+    console.error('❌ Login error:', error);
+    
+    // Handle specific backend error responses
+    if (error.response?.status === 401) {
+      const errorData = error.response.data;
+      setError(errorData.message || 'Invalid credentials or access denied');
+    } else if (error.response?.status === 403) {
+      setError('Access forbidden - Admin privileges required');
+    } else if (error.response?.status === 429) {
+      setError('Too many login attempts - Please try again later');
+    } else {
+      setError('Login failed - Please check your internet connection');
+    }
+    return false;
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const logout = async (): Promise<void> => {
+    try {
+      await apiService.logout();
+    } catch (error) {
+      console.warn('Logout API call failed:', error);
+    } finally {
+      // Clear local state regardless of API success
+      setCurrentUser(null);
+      setCurrentClientState(null);
+      setRoles([]);
+      setClients([]);
+      setAdminUsers([]);
+    }
   };
+
+  const refreshUserData = async (): Promise<void> => {
+    try {
+      const response = await apiService.getCurrentUser();
+      if (response.success && response.data) {
+        setCurrentUser(response.data.user);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+      throw error;
+    }
+  };
+
+  // ========== PERMISSION METHODS ==========
 
   const hasPermission = (permission: string): boolean => {
     if (!currentUser) return false;
     
-    const userRole = roles.find(role => role.id === currentUser.roleId);
-    if (!userRole) return false;
+    // Super admin has all permissions
+    if (currentUser.isSuperAdmin) return true;
     
-    const allPermissions = getInheritedPermissions(userRole.permissions);
-    return allPermissions.includes(permission);
+    // Check if user has specific permission
+    return currentUser.permissions.includes(permission);
   };
 
-  // ========== ROLE MANAGEMENT ==========
-
-  const createRole = (roleData: Omit<Role, 'id' | 'createdAt'>) => {
-    const newRole: Role = {
-      ...roleData,
-      id: `custom-${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    
-    setRoles(prev => [...prev, newRole]);
+  const getAllPermissions = (): string[] => {
+    return currentUser?.permissions || [];
   };
 
-  const updateRole = (roleId: string, updates: Partial<Role>) => {
-    setRoles(prev => prev.map(role => 
-      role.id === roleId && !role.isSystemRole 
-        ? { ...role, ...updates }
-        : role
-    ));
-  };
-
-  const deleteRole = (roleId: string) => {
-    const role = roles.find(r => r.id === roleId);
-    if (role && !role.isSystemRole) {
-      setRoles(prev => prev.filter(r => r.id !== roleId));
-      // Also update any users with this role to a default role
-      setAdminUsers(prev => prev.map(user => 
-        user.roleId === roleId 
-          ? { ...user, roleId: 'employee-basic' }
-          : user
-      ));
-    }
-  };
-
-  // ========== USER MANAGEMENT ==========
-
-  const createAdminUser = (userData: Omit<AdminUser, 'id'>) => {
-    const newUser: AdminUser = {
-      ...userData,
-      id: `user-${Date.now()}`
-    };
-    
-    setAdminUsers(prev => [...prev, newUser]);
-  };
-
-  const updateAdminUser = (userId: string, updates: Partial<AdminUser>) => {
-    setAdminUsers(prev => prev.map(user => 
-      user.id === userId ? { ...user, ...updates } : user
-    ));
-  };
-
-  const deleteAdminUser = (userId: string) => {
-    setAdminUsers(prev => prev.filter(user => user.id !== userId));
+  const getInheritedPermissions = (permissions: string[]): string[] => {
+    // For now, just return the permissions as-is
+    // In a more complex system, you might add inherited permissions based on role hierarchy
+    return permissions;
   };
 
   // ========== CLIENT MANAGEMENT ==========
@@ -359,51 +312,54 @@ export const DynamicRBACProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
-  // ========== AUTH ==========
+  // ========== ROLE MANAGEMENT (Optional) ==========
 
-  const login = (email: string, password: string): boolean => {
-    // Demo login - in real app, this would call API
-    const user = adminUsers.find(u => u.email === email);
-    if (user && password === 'demo123') {
-      setCurrentUser(user);
-      localStorage.setItem('adminUser', JSON.stringify(user));
-      
-      // Set client based on user
-      const userClient = clients.find(c => c.id === user.clientId);
-      if (userClient) {
-        setCurrentClientState(userClient);
-      }
-      
-      return true;
-    }
-    return false;
+  const createRole = async (roleData: Omit<Role, 'id'>): Promise<void> => {
+    // Implementation would call API
+    console.log('Create role:', roleData);
   };
 
-  const logout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('adminUser');
+  const updateRole = async (roleId: string, updates: Partial<Role>): Promise<void> => {
+    // Implementation would call API
+    console.log('Update role:', roleId, updates);
+  };
+
+  const deleteRole = async (roleId: string): Promise<void> => {
+    // Implementation would call API
+    console.log('Delete role:', roleId);
   };
 
   // ========== CONTEXT VALUE ==========
 
   const value: DynamicRBACContextType = {
+    // Auth state
     currentUser,
     currentClient,
+    isLoading,
+    error,
+    
+    // Data
     roles,
     clients,
     adminUsers,
-    createRole,
-    updateRole,
-    deleteRole,
+    
+    // Auth methods
+    login,
+    logout,
+    
+    // Permission methods
+    hasPermission,
     getAllPermissions,
     getInheritedPermissions,
-    hasPermission,
-    createAdminUser,
-    updateAdminUser,
-    deleteAdminUser,
+    
+    // Data methods
+    refreshUserData,
     setCurrentClient,
-    login,
-    logout
+    
+    // CRUD methods
+    createRole,
+    updateRole,
+    deleteRole
   };
 
   return (
@@ -423,20 +379,67 @@ export const useDynamicRBAC = (): DynamicRBACContextType => {
   return context;
 };
 
-// ========== PROTECTED COMPONENT ==========
+// ========== PROTECTED ROUTE COMPONENT ==========
 
-interface ProtectedComponentProps {
-  permission: string;
+interface DynamicProtectedRouteProps {
   children: React.ReactNode;
+  permission: string;
+  redirectTo?: string;
   fallback?: React.ReactNode;
 }
 
-export const DynamicProtectedComponent: React.FC<ProtectedComponentProps> = ({
-  permission,
+export const DynamicProtectedRoute: React.FC<DynamicProtectedRouteProps> = ({
   children,
+  permission,
+  fallback
+}) => {
+  const { currentUser, hasPermission, isLoading } = useDynamicRBAC();
+
+  // Show loading while checking auth
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  // Check if user is logged in
+  if (!currentUser) {
+    window.location.href = '/admin/login';
+    return null;
+  }
+
+  // Check if user has required permission
+  if (!hasPermission(permission)) {
+    return fallback ? <>{fallback}</> : (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <p className="text-gray-600">You don't have permission to access this page.</p>
+          <p className="text-sm text-gray-500 mt-2">Required permission: {permission}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
+
+// ========== PROTECTED COMPONENT ==========
+
+interface DynamicProtectedComponentProps {
+  children: React.ReactNode;
+  permission: string;
+  fallback?: React.ReactNode;
+}
+
+export const DynamicProtectedComponent: React.FC<DynamicProtectedComponentProps> = ({
+  children,
+  permission,
   fallback = null
 }) => {
   const { hasPermission } = useDynamicRBAC();
-  
+
   return hasPermission(permission) ? <>{children}</> : <>{fallback}</>;
 };

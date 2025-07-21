@@ -195,7 +195,7 @@ const EmployeeTable = () => {
             
             {/* PROTECTED: Actions Column - Only show if user has any employee management permissions */}
             <DynamicProtectedComponent 
-              permissions={["employees.edit", "employees.delete"]}
+              permission={["employees.edit", "employees.delete"]}
               fallback={null}
             >
               <Table.HeadCell>Actions</Table.HeadCell>
@@ -272,7 +272,7 @@ const EmployeeTable = () => {
                         >
                           <Dropdown.Item 
                             className="flex gap-3"
-                            onClick={(e) => {
+                            onClick={(e:any) => {
                               e.stopPropagation(); // Prevent row click
                               action.action(emp.id);
                             }}

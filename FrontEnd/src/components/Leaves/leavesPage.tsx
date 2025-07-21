@@ -136,7 +136,7 @@ const LeavePage = () => {
   const pendingRequestsCount = pendingLeaveRequests.filter(request => request.status === "Pending").length;
 
   // Format date for display
-  const formatDate = (dateString) => {
+  const formatDate = (dateString:any) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
       weekday: 'long', 

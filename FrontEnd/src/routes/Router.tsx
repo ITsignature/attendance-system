@@ -4,6 +4,7 @@ import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
 import Loadable from 'src/layouts/full/shared/loadable/Loadable';
 import { DynamicProtectedRoute, UnauthorizedPage } from '../components/RBACSystem/rbacExamples';
+import { useDynamicRBAC } from '../components/RBACSystem/rbacSystem';
 
 /* *Layouts** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
@@ -48,15 +49,49 @@ const AdminUserManagement = Loadable(lazy(() => import('../components/RBACSystem
 const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLogin')));
 const RbacExamples = Loadable(lazy(() => import('../components/RBACSystem/rbacExamples')));
 
+// ==============================================
+// SINGLE AUTHENTICATION WRAPPER FOR ENTIRE APP
+// ==============================================
+const AuthenticatedApp = ({ children }: { children: React.ReactNode }) => {
+  const { currentUser, isLoading } = useDynamicRBAC();
+  
+  // Still loading user data
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-gray-600">Loading admin portal...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Not logged in - redirect to admin login
+  if (!currentUser) {
+    return <Navigate to="/admin/login" replace />;
+  }
+  
+  // Logged in as admin - show the app
+  return <>{children}</>;
+};
+
+// ==============================================
+// UPDATED ROUTER CONFIGURATION
+// ==============================================
 const Router = [
   {
     path: '/',
-    element: <FullLayout />,
+    element: (
+      <AuthenticatedApp>
+        <FullLayout />
+      </AuthenticatedApp>
+    ),
     children: [
       { 
         path: '/', 
         exact: true, 
-        element: <Navigate to="/admin/login" replace /> 
+        element: <Navigate to="/dashboard" replace /> 
       },
       
       // Dashboard - Basic access required
@@ -228,7 +263,7 @@ const Router = [
         )
       },
       
-      // Unauthorized page
+      // Unauthorized page (for permission-denied within app)
       { 
         path: '/unauthorized', 
         exact: true, 
@@ -241,6 +276,8 @@ const Router = [
       },
     ],
   },
+  
+  // PUBLIC AUTHENTICATION ROUTES
   {
     path: '/auth',
     element: <BlankLayout />,
@@ -251,11 +288,14 @@ const Router = [
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],
   },
+  
+  // ADMIN LOGIN (Main login for your system)
   {
     path: '/admin',
     element: <BlankLayout />,
     children: [
       { path: 'login', element: <AdminLogin /> },
+      { path: '*', element: <Navigate to="/admin/login" /> },
     ],
   },
 ];

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { TextInput, Button, Modal, Label } from "flowbite-react";
 import { HiOutlinePlus } from "react-icons/hi";
 import { useNavigate } from "react-router";

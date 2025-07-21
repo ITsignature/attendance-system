@@ -1,10 +1,5 @@
 import {
-  IconAperture,
-  IconCopy,
   IconLayoutDashboard,
-  IconLogin,
-  IconMoodHappy,
-  IconTypography,
   IconUserPlus,
   IconUsers,
   IconClock,
@@ -12,8 +7,6 @@ import {
   IconCurrencyDollar,
   IconBuilding,
   IconSettings,
-  IconLogout,
-  IconSun,
 } from '@tabler/icons-react';
 
 import { uniqueId } from 'lodash';
