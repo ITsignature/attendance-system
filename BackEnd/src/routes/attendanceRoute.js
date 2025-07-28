@@ -2,9 +2,9 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../config/database');
-const { authenticate } = require('../middleware/auth');
-const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbac');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { authenticate } = require('../middleware/authMiddleware');
+const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
+const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 
 const router = express.Router();
 

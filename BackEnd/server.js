@@ -7,17 +7,20 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 // Import routes and middleware
-const authRoutes = require('./src/routes/auth');
-const employeeRoutes = require('./src/routes/employee');
-const attendanceRoutes = require('./src/routes/attendance');
-const leaveRoutes = require('./src/routes/leaves');
-const payrollRoutes = require('./src/routes/payroll');
-const dashboardRoutes = require('./src/routes/dashboard');
-const rbacRoutes = require('./src/routes/rbac');
-const clientRoutes = require('./src/routes/clients');
+const authRoutes = require('./src/routes/authRoute');
+const employeeRoutes = require('./src/routes/employeeRoute');
+const attendanceRoutes = require('./src/routes/attendanceRoute');
+const leaveRoutes = require('./src/routes/leavesRoute');
+const payrollRoutes = require('./src/routes/payrollRoute');
+const dashboardRoutes = require('./src/routes/dashboardRoute');
+const rbacRoutes = require('./src/routes/rbacRoute');
+const clientRoutes = require('./src/routes/clientsRoute');
+const departments = require('./src/routes/departmentsRoute');
+const designations = require('./src/routes/designationsRoute');
 
-const { errorHandler } = require('./src/middleware/errorHandler');
-const { requestLogger } = require('./src/middleware/requestLogger');
+
+const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
+const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
 const { connectDB } = require('./src/config/database');
 
 const app = express();
@@ -112,6 +115,8 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rbac', rbacRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/departments', departments);
+app.use('/api/designations', designations);
 
 // =============================================
 // ERROR HANDLING

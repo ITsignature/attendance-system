@@ -4,8 +4,8 @@ const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const { getDB } = require('../config/database');
 const { generateTokens, verifyToken } = require('../config/jwt');
-const { asyncHandler } = require('../middleware/errorHandler');
-const { authenticate } = require('../middleware/auth');
+const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
+const { authenticate } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 

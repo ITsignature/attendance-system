@@ -13,6 +13,7 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@svgr/rollup": "8.1.0",
     "@tabler/icons-react": "^2.39.0",
     "aos": "^2.3.4",

@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { getDB } = require('../config/database');
 const { verifyToken } = require('../config/jwt');
-const { asyncHandler } = require('./errorHandler');
+const { asyncHandler } = require('./errorHandlerMiddleware');
 
 // Middleware to verify JWT token
 const authenticate = asyncHandler(async (req, res, next) => {
