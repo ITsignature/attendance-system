@@ -1,8 +1,8 @@
 const express = require('express');
 const { getDB } = require('../config/database');
-const { authenticate } = require('../middleware/auth');
-const { checkPermission, ensureClientAccess } = require('../middleware/rbac');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { authenticate } = require('../middleware/authMiddleware');
+const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
+const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 
 const router = express.Router();
 

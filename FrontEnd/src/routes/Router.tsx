@@ -55,8 +55,30 @@ const RbacExamples = Loadable(lazy(() => import('../components/RBACSystem/rbacEx
 const AuthenticatedApp = ({ children }: { children: React.ReactNode }) => {
   const { currentUser, isLoading } = useDynamicRBAC();
   
-  // Still loading user data
+  // Check if we have tokens while loading
+  // 🔍 DEBUG: Log state changes
+  console.log('🔍 AuthenticatedApp render:', { 
+    currentUser: currentUser?.name || null, 
+    isLoading 
+  });
+  const hasTokens = localStorage.getItem('accessToken') && localStorage.getItem('user');
+  
+  // Show loading if:
+  // 1. Still loading AND no user set AND we have tokens (restoration in progress)
+  if (isLoading && !currentUser && hasTokens) {    
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-gray-600">Restoring session...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show loading if still initializing
   if (isLoading) {
+    console.log('⏳ Showing loading screen...');
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center space-y-4">
@@ -69,10 +91,12 @@ const AuthenticatedApp = ({ children }: { children: React.ReactNode }) => {
   
   // Not logged in - redirect to admin login
   if (!currentUser) {
+    console.log('❌ No user found, redirecting to login...');
     return <Navigate to="/admin/login" replace />;
   }
   
   // Logged in as admin - show the app
+  console.log('✅ User authenticated, showing app for:', currentUser.name);
   return <>{children}</>;
 };
 
