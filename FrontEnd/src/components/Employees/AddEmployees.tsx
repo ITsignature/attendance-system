@@ -50,7 +50,7 @@ interface EmployeeFormData {
   manager_id: string;
   hire_date: string;
   employment_status: 'active' | 'inactive';
-  employment_type: 'permanent' | 'contract' | 'intern' | 'consultant';
+  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant';
   salary: number | '';
   
   // Emergency Contact
@@ -121,7 +121,7 @@ const AddEmployees: React.FC = () => {
     manager_id: '',
     hire_date: '',
     employment_status: 'active',
-    employment_type: 'permanent',
+    employee_type: 'permanent',
     salary: '',
     
     // Emergency Contact
@@ -282,7 +282,7 @@ const AddEmployees: React.FC = () => {
         if (!formData.designation_id) errors.designation_id = 'Designation is required';
         if (!formData.hire_date) errors.hire_date = 'Hire date is required';
         if (!formData.employment_status) errors.employment_status = 'Employment status is required';
-        if (!formData.employment_type) errors.employment_type = 'Employment type is required';
+        if (!formData.employee_type) errors.employee_type = 'Employment type is required';
         break;
 
       case 2: // Emergency Contact
