@@ -43,6 +43,55 @@ export interface User {
   permissions: string[];
 }
 
+export interface AttendanceFilters {
+  page?: number;
+  limit?: number;
+  employeeId?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  employee_id: string;
+  date: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  total_hours?: number;
+  overtime_hours?: number;
+  break_duration?: number;
+  status: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
+  work_type?: 'office' | 'remote' | 'hybrid';
+  notes?: string;
+  employee_name?: string;
+  employee_code?: string;
+  department_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateAttendanceData {
+  employee_id: string;
+  date: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  status: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
+  work_type?: 'office' | 'remote' | 'hybrid';
+  break_duration?: number;
+  notes?: string;
+}
+
+export interface UpdateAttendanceData {
+  check_in_time?: string;
+  check_out_time?: string;
+  break_duration?: number;
+  status?: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
+  work_type?: 'office' | 'remote' | 'hybrid';
+  notes?: string;
+}
 class ApiService {
   private baseURL: string;
   private token: string | null = null;
@@ -67,17 +116,31 @@ class ApiService {
   }
 
   // Get headers with authentication
-  private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
+  // Update your existing getHeaders() method to include this:
+private getHeaders(): HeadersInit {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
-    return headers;
+  if (this.token) {
+    headers['Authorization'] = `Bearer ${this.token}`;
   }
+
+  // ADD THIS SECTION for multi-tenant support
+  const userData = localStorage.getItem('user');
+  if (userData) {
+    try {
+      const user = JSON.parse(userData);
+      if (user.clientId) {
+        headers['X-Client-ID'] = user.clientId;
+      }
+    } catch (error) {
+      console.warn('Failed to parse user data for client ID');
+    }
+  }
+
+  return headers;
+}
 
   // Generic API call method
   private async apiCall<T>(
@@ -190,13 +253,14 @@ async createEmployee(employeeData: any): Promise<ApiResponse> {
   // Client-side validation
   const requiredFields = [
     'first_name', 'last_name', 'email', 'phone', 'date_of_birth', 
-    'gender', 'employee_id', 'department_id', 'designation_id', 
-    'hire_date', 'employment_type', 'emergency_contact_name', 
+    'gender', 'employee_code', 'department_id', 'designation_id', 
+    'hire_date', 'employee_type', 'emergency_contact_name', 
     'emergency_contact_phone', 'emergency_contact_relation'
   ];
   
   for (const field of requiredFields) {
     if (!employeeData[field] || employeeData[field].toString().trim() === '') {
+      console.log(`❌ Missing required field: ${field} = "${employeeData[field]}"`);
       throw new Error(`${field.replace('_', ' ')} is required`);
     }
   }
@@ -295,19 +359,14 @@ async getManagers(departmentId?: string): Promise<ApiResponse> {
   return this.apiCall(`/api/employees/managers${queryString}`);
 }
 
-  // Attendance methods
-  async getAttendance(params?: {
-    page?: number;
-    limit?: number;
-    employeeId?: string;
-    startDate?: string;
-    endDate?: string;
-    status?: string;
-    sortBy?: string;
-    sortOrder?: string;
-  }): Promise<ApiResponse> {
-    const queryString = params ? '?' + new URLSearchParams(
-      Object.entries(params).reduce((acc, [key, value]) => {
+  // ========== ATTENDANCE METHODS ==========
+  
+  /**
+   * Get attendance records with filtering and pagination
+   */
+  async getAttendance(filters?: AttendanceFilters): Promise<ApiResponse> {
+    const queryString = filters ? '?' + new URLSearchParams(
+      Object.entries(filters).reduce((acc, [key, value]) => {
         if (value !== undefined && value !== '') {
           acc[key] = String(value);
         }
@@ -315,8 +374,112 @@ async getManagers(departmentId?: string): Promise<ApiResponse> {
       }, {} as Record<string, string>)
     ).toString() : '';
     
+    console.log('🔄 Fetching attendance records with filters:', filters);
     return this.apiCall(`/api/attendance${queryString}`);
   }
+
+  /**
+   * Create a new attendance record
+   */
+  async createAttendance(data: CreateAttendanceData): Promise<ApiResponse> {
+    console.log('🔄 Creating attendance record:', data);
+    
+    // Validate required fields
+    if (!data.employee_id || !data.date || !data.status) {
+      return {
+        success: false,
+        message: 'Employee ID, date, and status are required'
+      };
+    }
+
+    return this.apiCall('/api/attendance', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update an existing attendance record
+   */
+  async updateAttendance(attendanceId: string, data: UpdateAttendanceData): Promise<ApiResponse> {
+    console.log('🔄 Updating attendance record:', attendanceId, data);
+    
+    if (!attendanceId) {
+      return {
+        success: false,
+        message: 'Attendance ID is required'
+      };
+    }
+
+    return this.apiCall(`/api/attendance/${attendanceId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Get attendance records for a specific employee
+   */
+  async getEmployeeAttendance(employeeId: string, startDate?: string, endDate?: string): Promise<ApiResponse> {
+    console.log('🔄 Fetching employee attendance:', employeeId);
+    
+    const filters: AttendanceFilters = {
+      employeeId,
+      sortBy: 'date',
+      sortOrder: 'DESC'
+    };
+    
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    
+    return this.getAttendance(filters);
+  }
+
+  /**
+   * Get today's attendance summary
+   */
+  async getTodayAttendance(): Promise<ApiResponse> {
+    const today = new Date().toISOString().split('T')[0];
+    console.log('🔄 Fetching today\'s attendance:', today);
+    
+    return this.getAttendance({
+      startDate: today,
+      endDate: today,
+      sortBy: 'employee_name',
+      sortOrder: 'ASC'
+    });
+  }
+
+  /**
+   * Mark attendance for quick check-in/check-out
+   */
+  async quickCheckIn(employeeId: string): Promise<ApiResponse> {
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const checkInTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    console.log('🔄 Quick check-in for employee:', employeeId);
+    
+    return this.createAttendance({
+      employee_id: employeeId,
+      date: today,
+      check_in_time: checkInTime,
+      status: 'present',
+      work_type: 'office'
+    });
+  }
+
+  async quickCheckOut(attendanceId: string): Promise<ApiResponse> {
+    const now = new Date();
+    const checkOutTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    console.log('🔄 Quick check-out for attendance:', attendanceId);
+    
+    return this.updateAttendance(attendanceId, {
+      check_out_time: checkOutTime
+    });
+  }
+
 
   // RBAC methods
   async getRoles(): Promise<ApiResponse> {
@@ -459,9 +622,76 @@ async assignRoleToUser(userId: string, roleId: string): Promise<ApiResponse> {
 }
 
   // Health check
-  async healthCheck(): Promise<ApiResponse> {
+async healthCheck(): Promise<ApiResponse> {
     return this.apiCall('/health');
   }
+
+// =============================================
+// UTILITY METHODS FOR ATTENDANCE
+// =============================================
+
+/**
+ * Format time for display (12-hour format)
+ */
+formatTime(time?: string): string {
+  if (!time) return 'Not Recorded';
+  
+  try {
+    const [hours, minutes] = time.split(':');
+    const hour24 = parseInt(hours);
+    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+    const ampm = hour24 < 12 ? 'AM' : 'PM';
+    return `${hour12}:${minutes} ${ampm}`;
+  } catch (error) {
+    return time;
+  }
+}
+
+/**
+ * Format date for display
+ */
+formatDate(date: string): string {
+  try {
+    return new Date(date).toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  } catch (error) {
+    return date;
+  }
+}
+
+/**
+ * Calculate working hours between two times
+ */
+calculateHours(checkIn?: string, checkOut?: string): number {
+  if (!checkIn || !checkOut) return 0;
+  
+  try {
+    const checkInTime = new Date(`2000-01-01 ${checkIn}`);
+    const checkOutTime = new Date(`2000-01-01 ${checkOut}`);
+    const diffMs = checkOutTime.getTime() - checkInTime.getTime();
+    return Math.max(0, diffMs / (1000 * 60 * 60));
+  } catch (error) {
+    return 0;
+  }
+}
+
+/**
+ * Get attendance status badge color for UI
+ */
+getStatusBadgeColor(status: string): string {
+  switch (status.toLowerCase()) {
+    case 'present': return 'success';
+    case 'late': return 'warning';
+    case 'absent': return 'failure';
+    case 'half_day': return 'info';
+    case 'on_leave': return 'purple';
+    default: return 'gray';
+  }
+}
 }
 
 // Create and export a singleton instance

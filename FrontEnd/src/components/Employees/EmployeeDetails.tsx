@@ -1,1027 +1,1018 @@
-import React, { useState } from "react";
-import { Tabs, Button, Select, Modal, TextInput, Label, Badge } from "flowbite-react";
-import { HiUser, HiBriefcase, HiDocumentText, HiCash } from "react-icons/hi";
-import { FaEye, FaDownload, FaPlus, FaTrash } from "react-icons/fa";
-import { useNavigate } from "react-router";
+// EmployeeDetails.tsx - Complete Enhanced Design Matching AddEmployees
+import React, { useState, useEffect } from "react";
+import { Tabs, Button, Select, Modal, TextInput, Label, Badge, Spinner, Alert, Card, Breadcrumb } from "flowbite-react";
+import { HiUser, HiBriefcase, HiDocumentText, HiCash, HiHome, HiCalendar, HiClock, HiPhone, HiMail, HiLocationMarker, HiIdentification } from "react-icons/hi";
+import { FaEye, FaDownload, FaPlus, FaTrash, FaEdit } from "react-icons/fa";
+import { useNavigate, useParams } from "react-router";
 import { DynamicProtectedComponent } from "../RBACSystem/rbacSystem";
+import apiService from '../../services/api';
 
-const employeeDetails = {
-  personal: {
-    firstName: "Brooklyn",
-    lastName: "Simmons",
-    mobile: "(702) 555-0122",
-    email: "brooklyn.s@example.com",
-    dob: "July 14, 1995",
-    maritalStatus: "Married",
-    gender: "Female",
-    nationality: "America",
-    address: "2464 Royal Ln. Mesa, New Jersey",
-    city: "California",
-    state: "United State",
-    zip: "35624",
-  },
-  professional: {
-    empId: "879912390",
-    username: "brooklyn_simmons",
-    type: "Office",
-    email: "brooklyn.s@example.com",
-    department: "Project Manager",
-    designation: "Project Manager",
-    workingDays: "5 Days",
-    joiningDate: "July 10, 2022",
-    location: "2464 Royal Ln. Mesa, New Jersey",
-  },
-  documents: [
-    "Appointment Letter.pdf",
-    "Reliving Letter.pdf",
-    "Experience Letter.pdf",
-  ],
-  attendance: [
-    ["July 01, 2023", "09:28 AM", "07:00 PM", "00:30 Min", "09:02 Hrs", "On Time"],
-    ["July 02, 2023", "09:20 AM", "07:00 PM", "00:20 Min", "09:20 Hrs", "On Time"],
-    ["July 03, 2023", "09:25 AM", "07:00 PM", "00:30 Min", "09:05 Hrs", "On Time"],
-    ["July 04, 2023", "09:45 AM", "07:00 PM", "00:40 Min", "08:35 Hrs", "Late"],
-    ["July 05, 2023", "10:00 AM", "07:00 PM", "00:30 Min", "08:30 Hrs", "Late"],
-  ],
-  leave: [
-    ["June, 2023", "June 05 - June 08", "3 Days", "Mark Williams", "Pending"],
-    ["Apr, 2023", "Apr 06 - Apr 10", "4 Days", "Mark Williams", "Approved"],
-    ["Mar, 2023", "Mar 14 - Mar 16", "2 Days", "Mark Williams", "Approved"],
-    ["Feb, 2023", "Feb 02 - Feb 10", "8 Days", "Mark Williams", "Approved"],
-    ["Jan, 2023", "Jan 16 - Jan 19", "3 Days", "Mark Williams", "Reject"],
-  ],
-};
+// Types
+interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  date_of_birth?: string;
+  gender?: 'male' | 'female' | 'other';
+  marital_status?: 'single' | 'married' | 'divorced' | 'widowed';
+  nationality?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  employee_code: string;
+  department_id?: string;
+  department_name?: string;
+  designation_id?: string;
+  designation_title?: string;
+  manager_id?: string;
+  manager_name?: string;
+  hire_date: string;
+  employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
+  employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
+  base_salary?: number;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation?: string;
+  created_at: string;
+  updated_at: string;
+}
 
-interface FieldProps {
-  label: string;
-  value: string;
+interface AttendanceRecord {
+  id: string;
+  date: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  break_duration?: number;
+  total_hours?: number;
+  overtime_hours?: number;
+  status: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
+  work_type?: 'office' | 'remote' | 'hybrid';
+  notes?: string;
+}
+
+interface LeaveRecord {
+  id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  days_requested: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  applied_at: string;
+  reviewed_at?: string;
+  reviewer_name?: string;
+  reviewer_comments?: string;
 }
 
 interface FinancialRecord {
   id: string;
-  type: 'salary' | 'advance' | 'loan';
+  type: 'salary' | 'advance' | 'loan' | 'bonus';
   amount: number;
   date: string;
-  monthYear?: string; // Changed to YYYY-MM format for salary slips
+  monthYear?: string;
   description: string;
   slip?: File | null;
   slipUrl?: string;
   status: 'Paid' | 'Pending' | 'Approved' | 'Rejected';
 }
 
-const ViewEmployeeDetails = () => {
-  // Mock navigation functions for demo
+interface FieldProps {
+  label: string;
+  value: string | number | undefined;
+  icon?: React.ReactNode;
+}
+
+const Field: React.FC<FieldProps> = ({ label, value, icon }) => (
+  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+    <div className="flex items-center gap-2 mb-1">
+      {icon}
+      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
+    </div>
+    <p className="text-base text-gray-900 dark:text-white font-medium">
+      {value || 'Not provided'}
+    </p>
+  </div>
+);
+
+const EmployeeDetails: React.FC = () => {
   const navigate = useNavigate();
-  const params = { id: '123' };
+  const { id: employeeId } = useParams<{ id: string }>();
   
+  // State management
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
+  const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
+  
+  // UI State
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
   const [activeSidebarTab, setActiveSidebarTab] = useState("Profile");
-  const [attendanceMonth, setAttendanceMonth] = useState("July , 2023");
-  const [leaveMonth, setLeaveMonth] = useState("Jun , 2023");
-
-  // Financial Records State - Updated with more examples
-  const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([
-    // 2024 Salary Slips
-    {
-      id: '1',
-      type: 'salary',
-      amount: 85000,
-      date: '2024-07-31',
-      monthYear: '2024-07',
-      description: 'Monthly Salary - July 2024',
-      slipUrl: 'salary_july_2024.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '2',
-      type: 'salary',
-      amount: 85000,
-      date: '2024-06-30',
-      monthYear: '2024-06',
-      description: 'Monthly Salary - June 2024',
-      slipUrl: 'salary_june_2024.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '3',
-      type: 'salary',
-      amount: 82000,
-      date: '2024-05-31',
-      monthYear: '2024-05',
-      description: 'Monthly Salary - May 2024',
-      slipUrl: 'salary_may_2024.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '4',
-      type: 'salary',
-      amount: 82000,
-      date: '2024-04-30',
-      monthYear: '2024-04',
-      description: 'Monthly Salary - April 2024',
-      slipUrl: 'salary_april_2024.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '5',
-      type: 'salary',
-      amount: 80000,
-      date: '2024-03-31',
-      monthYear: '2024-03',
-      description: 'Monthly Salary - March 2024',
-      slipUrl: 'salary_march_2024.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '6',
-      type: 'salary',
-      amount: 80000,
-      date: '2024-02-29',
-      monthYear: '2024-02',
-      description: 'Monthly Salary - February 2024',
-      slipUrl: 'salary_feb_2024.pdf',
-      status: 'Paid'
-    },
-    // Advance Payments
-    {
-      id: '7',
-      type: 'advance',
-      amount: 15000,
-      date: '2024-07-15',
-      description: 'Medical Emergency Advance',
-      slipUrl: 'advance_july_15.pdf',
-      status: 'Approved'
-    },
-    {
-      id: '8',
-      type: 'advance',
-      amount: 10000,
-      date: '2024-06-10',
-      description: 'Travel Advance for Business Trip',
-      slipUrl: 'advance_june_10.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '9',
-      type: 'advance',
-      amount: 8000,
-      date: '2024-05-20',
-      description: 'Emergency Home Repair Advance',
-      slipUrl: 'advance_may_20.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '10',
-      type: 'advance',
-      amount: 12000,
-      date: '2024-04-05',
-      description: 'Educational Fee Advance',
-      slipUrl: 'advance_april_5.pdf',
-      status: 'Approved'
-    },
-    {
-      id: '11',
-      type: 'advance',
-      amount: 7500,
-      date: '2024-03-12',
-      description: 'Festival Advance',
-      slipUrl: 'advance_march_12.pdf',
-      status: 'Paid'
-    },
-    // Loans
-    {
-      id: '12',
-      type: 'loan',
-      amount: 50000,
-      date: '2024-06-01',
-      description: 'Personal Loan - Housing Down Payment',
-      slipUrl: 'loan_housing_agreement.pdf',
-      status: 'Approved'
-    },
-    {
-      id: '13',
-      type: 'loan',
-      amount: 25000,
-      date: '2024-04-15',
-      description: 'Vehicle Loan - Car Purchase',
-      slipUrl: 'loan_vehicle_agreement.pdf',
-      status: 'Approved'
-    },
-    {
-      id: '14',
-      type: 'loan',
-      amount: 15000,
-      date: '2024-03-01',
-      description: 'Education Loan - Professional Course',
-      slipUrl: 'loan_education_agreement.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '15',
-      type: 'loan',
-      amount: 30000,
-      date: '2024-02-10',
-      description: 'Home Renovation Loan',
-      slipUrl: 'loan_renovation_agreement.pdf',
-      status: 'Approved'
-    },
-    // 2023 Records
-    {
-      id: '16',
-      type: 'salary',
-      amount: 78000,
-      date: '2023-12-31',
-      monthYear: '2023-12',
-      description: 'Monthly Salary - December 2023',
-      slipUrl: 'salary_dec_2023.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '17',
-      type: 'advance',
-      amount: 9000,
-      date: '2023-12-20',
-      description: 'Year-end Bonus Advance',
-      slipUrl: 'advance_dec_20_2023.pdf',
-      status: 'Paid'
-    },
-    {
-      id: '18',
-      type: 'salary',
-      amount: 78000,
-      date: '2023-11-30',
-      monthYear: '2023-11',
-      description: 'Monthly Salary - November 2023',
-      slipUrl: 'salary_nov_2023.pdf',
-      status: 'Paid'
-    }
-  ]);
-
-  const [showFinancialModal, setShowFinancialModal] = useState(false);
-  const [newFinancialRecord, setNewFinancialRecord] = useState<Partial<FinancialRecord>>({
-    type: 'salary',
-    amount: 0,
-    date: '',
-    description: '',
-    status: 'Pending'
-  });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Filter states
+  const [attendanceMonth, setAttendanceMonth] = useState("2024-07");
+  const [leaveMonth, setLeaveMonth] = useState("2024-07");
   const [filterType, setFilterType] = useState<string>('all');
-  const [filterMonthYear, setFilterMonthYear] = useState<string>('all'); // NEW: Month/Year filter
-  const [currentPage, setCurrentPage] = useState(1); // NEW: Pagination
-  const recordsPerPage = 5; // NEW: Records per page
+  const [filterMonthYear, setFilterMonthYear] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 5;
 
-  // Updated sidebar tabs to include Financial Records
-  const sidebarTabs = ["Profile", "Attendance", "Leave", "Financial Records"];
+  // Sidebar tabs with icons
+  const sidebarTabs = [
+    { id: "Profile", label: "Profile", icon: HiUser },
+    { id: "Attendance", label: "Attendance", icon: HiClock },
+    { id: "Leave", label: "Leave", icon: HiCalendar },
+    { id: "Financial Records", label: "Financial", icon: HiCash }
+  ];
 
-  // NEW: Generate month-year options for dropdown
-  const generateMonthYearOptions = () => {
-    const options = [];
-    const currentDate = new Date();
-    
-    // Generate last 12 months + next 3 months
-    for (let i = -12; i <= 3; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
-      const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const displayText = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      options.push({ value: monthYear, label: displayText });
-    }
-    
-    return options;
-  };
-
-  // NEW: Check if salary slip already exists for a month
-  const isSalarySlipExists = (monthYear: string) => {
-    return financialRecords.some(record => 
-      record.type === 'salary' && 
-      record.monthYear === monthYear
-    );
-  };
-
-  // NEW: Format month year for display
-  const formatMonthYear = (monthYear: string) => {
-    if (!monthYear) return '';
-    const [year, month] = monthYear.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1);
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
-  // UPDATED: Add duplicate prevention for salary slips
-  const handleAddFinancialRecord = () => {
-    if (!newFinancialRecord.amount || !newFinancialRecord.date || !newFinancialRecord.description) {
-      alert('Please fill all required fields');
+  // Load employee data on mount
+  useEffect(() => {
+    if (!employeeId) {
+      setError('Employee ID is required');
+      setLoading(false);
       return;
     }
-
-    // Check for duplicate salary slip
-    if (newFinancialRecord.type === 'salary') {
-      if (!newFinancialRecord.monthYear) {
-        alert('Please select month/year for salary slip');
-        return;
-      }
-      if (isSalarySlipExists(newFinancialRecord.monthYear)) {
-        alert('Salary slip for this month already exists!');
-        return;
-      }
-    }
-
-    const record: FinancialRecord = {
-      id: Date.now().toString(),
-      type: newFinancialRecord.type as 'salary' | 'advance' | 'loan',
-      amount: newFinancialRecord.amount,
-      date: newFinancialRecord.date,
-      description: newFinancialRecord.description,
-      slip: selectedFile,
-      slipUrl: selectedFile?.name,
-      status: newFinancialRecord.status as 'Paid' | 'Pending' | 'Approved' | 'Rejected',
-      ...(newFinancialRecord.type === 'salary' && { monthYear: newFinancialRecord.monthYear })
-    };
-
-    setFinancialRecords([...financialRecords, record]);
-    setShowFinancialModal(false);
-    setNewFinancialRecord({
-      type: 'salary',
-      amount: 0,
-      date: '',
-      description: '',
-      status: 'Pending'
-    });
-    setSelectedFile(null);
-  };
-
-  const handleDeleteFinancialRecord = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this record?')) {
-      setFinancialRecords(financialRecords.filter(record => record.id !== id));
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const colors = {
-      'Paid': 'bg-green-100 text-green-600',
-      'Pending': 'bg-yellow-100 text-yellow-600',
-      'Approved': 'bg-blue-100 text-blue-600',
-      'Rejected': 'bg-red-100 text-red-600'
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-600';
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch(type) {
-      case 'salary': return <HiBriefcase className="text-green-600 w-5 h-5" />;
-      case 'advance': return <HiCash className="text-blue-600 w-5 h-5" />;
-      case 'loan': return <HiDocumentText className="text-purple-600 w-5 h-5" />;
-      default: return <HiDocumentText className="w-5 h-5" />;
-    }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
-  // NEW: Get unique month/year options from existing records
-  const getUniqueMonthYears = () => {
-    const monthYears = new Set<string>();
     
-    financialRecords.forEach(record => {
-      const recordDate = new Date(record.date);
-      const monthYear = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`;
-      monthYears.add(monthYear);
+    loadEmployeeData();
+  }, [employeeId]);
+
+  const loadEmployeeData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      console.log('🔄 Loading employee data for ID:', employeeId);
+      
+      const response = await apiService.getEmployee(employeeId!);
+      
+      if (response.success && response.data) {
+        const employeeData = response.data.employee;
+        setEmployee(employeeData);
+        console.log('✅ Employee data loaded:', employeeData);
+        
+        // Load additional data
+        await Promise.all([
+          loadAttendanceData(employeeData.id),
+          loadLeaveData(employeeData.id),
+          loadFinancialData(employeeData.id)
+        ]);
+        
+      } else {
+        setError(response.message || 'Failed to load employee data');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to load employee:', error);
+      setError('Failed to load employee data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAttendanceData = async (empId: string) => {
+    try {
+      // Mock data for now - replace with actual API call
+      const mockAttendance: AttendanceRecord[] = [
+        {
+          id: '1',
+          date: '2024-07-01',
+          check_in_time: '09:28',
+          check_out_time: '19:00',
+          break_duration: 30,
+          total_hours: 9.02,
+          overtime_hours: 1.02,
+          status: 'present',
+          work_type: 'office'
+        },
+        {
+          id: '2',
+          date: '2024-07-02',
+          check_in_time: '09:20',
+          check_out_time: '19:00',
+          break_duration: 20,
+          total_hours: 9.20,
+          overtime_hours: 1.20,
+          status: 'present',
+          work_type: 'office'
+        },
+        {
+          id: '3',
+          date: '2024-07-03',
+          check_in_time: '09:25',
+          check_out_time: '19:00',
+          break_duration: 30,
+          total_hours: 9.05,
+          overtime_hours: 1.05,
+          status: 'present',
+          work_type: 'office'
+        },
+        {
+          id: '4',
+          date: '2024-07-04',
+          check_in_time: '09:45',
+          check_out_time: '19:00',
+          break_duration: 40,
+          total_hours: 8.35,
+          overtime_hours: 0.35,
+          status: 'late',
+          work_type: 'office'
+        },
+        {
+          id: '5',
+          date: '2024-07-05',
+          check_in_time: '10:00',
+          check_out_time: '19:00',
+          break_duration: 30,
+          total_hours: 8.30,
+          overtime_hours: 0.30,
+          status: 'late',
+          work_type: 'office'
+        }
+      ];
+      
+      setAttendance(mockAttendance);
+    } catch (error) {
+      console.warn('Failed to load attendance data:', error);
+      setAttendance([]);
+    }
+  };
+
+  const loadLeaveData = async (empId: string) => {
+    try {
+      // Mock data for now - replace with actual API call
+      const mockLeaves: LeaveRecord[] = [
+        {
+          id: '1',
+          leave_type: 'Annual Leave',
+          start_date: '2024-06-05',
+          end_date: '2024-06-08',
+          days_requested: 3,
+          reason: 'Family vacation',
+          status: 'pending',
+          applied_at: '2024-06-01',
+          reviewer_name: 'Mark Williams'
+        },
+        {
+          id: '2',
+          leave_type: 'Sick Leave',
+          start_date: '2024-04-06',
+          end_date: '2024-04-10',
+          days_requested: 4,
+          reason: 'Medical treatment',
+          status: 'approved',
+          applied_at: '2024-04-01',
+          reviewed_at: '2024-04-02',
+          reviewer_name: 'Mark Williams'
+        },
+        {
+          id: '3',
+          leave_type: 'Personal Leave',
+          start_date: '2024-03-14',
+          end_date: '2024-03-16',
+          days_requested: 2,
+          reason: 'Personal matters',
+          status: 'approved',
+          applied_at: '2024-03-10',
+          reviewed_at: '2024-03-11',
+          reviewer_name: 'Mark Williams'
+        }
+      ];
+      
+      setLeaves(mockLeaves);
+    } catch (error) {
+      console.warn('Failed to load leave data:', error);
+      setLeaves([]);
+    }
+  };
+
+  const loadFinancialData = async (empId: string) => {
+    try {
+      // Mock financial data - replace with actual API call
+      const mockFinancial: FinancialRecord[] = [
+        {
+          id: '1',
+          type: 'salary',
+          amount: 85000,
+          date: '2024-07-31',
+          monthYear: '2024-07',
+          description: 'Monthly Salary - July 2024',
+          slipUrl: 'salary_july_2024.pdf',
+          status: 'Paid'
+        },
+        {
+          id: '2',
+          type: 'salary',
+          amount: 85000,
+          date: '2024-06-30',
+          monthYear: '2024-06',
+          description: 'Monthly Salary - June 2024',
+          slipUrl: 'salary_june_2024.pdf',
+          status: 'Paid'
+        },
+        {
+          id: '3',
+          type: 'bonus',
+          amount: 15000,
+          date: '2024-06-15',
+          description: 'Performance Bonus Q2 2024',
+          status: 'Paid'
+        }
+      ];
+      
+      setFinancialRecords(mockFinancial);
+    } catch (error) {
+      console.warn('Failed to load financial data:', error);
+      setFinancialRecords([]);
+    }
+  };
+
+  // Helper functions
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
-    
-    return Array.from(monthYears)
-      .sort((a, b) => b.localeCompare(a)) // Sort newest first
-      .map(monthYear => {
-        const [year, month] = monthYear.split('-');
-        const date = new Date(parseInt(year), parseInt(month) - 1);
-        const displayText = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        return { value: monthYear, label: displayText };
-      });
   };
 
-  // NEW: Handle summary card clicks to filter by type
-  const handleSummaryCardClick = (type: string) => {
-    setFilterType(type);
-    setCurrentPage(1); // Reset to first page
+  const formatTime = (timeString?: string) => {
+    if (!timeString) return 'N/A';
+    return new Date(`2000-01-01 ${timeString}`).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
-  // NEW: Filter and paginate records
-  const getFilteredAndPaginatedRecords = () => {
+  const formatHours = (hours?: number) => {
+    if (hours === undefined || hours === null) return 'N/A';
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    return `${h}:${m.toString().padStart(2, '0')} Hrs`;
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'approved':
+      case 'paid':
+      case 'present':
+      case 'active':
+        return 'success';
+      case 'pending':
+        return 'warning';
+      case 'rejected':
+      case 'cancelled':
+      case 'absent':
+      case 'terminated':
+        return 'failure';
+      case 'late':
+      case 'on_leave':
+        return 'warning';
+      default:
+        return 'gray';
+    }
+  };
+
+  const getFilteredFinancialRecords = () => {
     let filtered = financialRecords;
     
-    // Filter by type
     if (filterType !== 'all') {
       filtered = filtered.filter(record => record.type === filterType);
     }
     
-    // Filter by month/year
     if (filterMonthYear !== 'all') {
-      filtered = filtered.filter(record => {
-        const recordDate = new Date(record.date);
-        const recordMonthYear = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`;
-        return recordMonthYear === filterMonthYear;
-      });
+      filtered = filtered.filter(record => record.monthYear === filterMonthYear);
     }
     
-    // Sort by date (newest first)
-    const sorted = filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Paginate
-    const startIndex = (currentPage - 1) * recordsPerPage;
-    const endIndex = startIndex + recordsPerPage;
-    const paginated = sorted.slice(startIndex, endIndex);
-    
-    return {
-      records: paginated,
-      totalRecords: sorted.length,
-      totalPages: Math.ceil(sorted.length / recordsPerPage)
-    };
+    return filtered;
   };
 
-  const { records: paginatedRecords, totalRecords, totalPages } = getFilteredAndPaginatedRecords();
+  const getPaginatedRecords = () => {
+    const filtered = getFilteredFinancialRecords();
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = startIndex + recordsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  };
+
+  const getUniqueMonthYears = () => {
+    const monthYears = financialRecords
+      .filter(record => record.monthYear)
+      .map(record => record.monthYear!)
+      .filter((value, index, self) => self.indexOf(value) === index)
+      .sort((a, b) => b.localeCompare(a));
+    
+    return monthYears.map(monthYear => {
+      const [year, month] = monthYear.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1);
+      return {
+        value: monthYear,
+        label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      };
+    });
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <Spinner size="xl" />
+          <span className="ml-3 text-lg">Loading employee details...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !employee) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <Alert color="failure">
+          <span className="font-medium">Error!</span> {error || 'Employee not found'}
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-md">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <img
-            src="https://via.placeholder.com/60"
-            alt="avatar"
-            className="w-16 h-16 rounded-full object-cover"
-          />
-          <div>
-            <h4 className="text-lg font-semibold">{employeeDetails.personal.firstName} {employeeDetails.personal.lastName}</h4>
-            <p className="text-sm text-gray-500">{employeeDetails.professional.designation}</p>
-            <p className="text-sm text-gray-500">{employeeDetails.personal.email}</p>
+    <DynamicProtectedComponent permission="employees.view">
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Breadcrumb */}
+        <Breadcrumb className="mb-6">
+          <Breadcrumb.Item href="/dashboard" icon={HiHome}>
+            Dashboard
+          </Breadcrumb.Item>
+          <Breadcrumb.Item href="/employees">
+            Employees
+          </Breadcrumb.Item>
+          <Breadcrumb.Item>{employee.full_name}</Breadcrumb.Item>
+        </Breadcrumb>
+
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <img
+                src="https://via.placeholder.com/80"
+                alt="Employee Avatar"
+                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg"
+              />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                  {employee.first_name} {employee.last_name}
+                </h1>
+                <div className="flex items-center gap-4 mb-2">
+                  <p className="text-gray-600 dark:text-gray-400 text-lg">
+                    {employee.designation_title || 'No designation'}
+                  </p>
+                  <Badge 
+                    color={getStatusBadgeColor(employee.employment_status)}
+                    size="sm"
+                  >
+                    {employee.employment_status.charAt(0).toUpperCase() + employee.employment_status.slice(1)}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <HiMail className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-600 dark:text-gray-400">{employee.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <HiIdentification className="w-4 h-4 text-gray-500" />
+                    <Badge color="gray" size="sm">{employee.employee_code}</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <DynamicProtectedComponent permission="employees.edit">
+                <Button color="purple" onClick={() => navigate(`/edit-employee/${employee.id}`)}>
+                  <FaEdit className="w-4 h-4 mr-2" />
+                  Edit Profile
+                </Button>
+              </DynamicProtectedComponent>
+            </div>
           </div>
         </div>
-        
-        {/* PROTECTED: Edit Profile Button - Only for users who can edit employees */}
-        <DynamicProtectedComponent permission="employees.edit">
-          <Button color="purple" onClick={() => navigate(`/edit-employee/${params.id}`)}>
-            Edit Profile
-          </Button>
-        </DynamicProtectedComponent>
-      </div>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <div className="w-1/5">
-          <div className="bg-gray-100 h-full rounded-lg p-6">
-            <ul className="space-y-3">
+        {/* Tab Navigation */}
+        <div className="mb-8">
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <nav className="-mb-px flex space-x-8">
               {sidebarTabs.map((tab) => (
-                <li
-                  key={tab}
-                  onClick={() => setActiveSidebarTab(tab)}
-                  className={`cursor-pointer hover:text-purple-600 transition-colors ${
-                    activeSidebarTab === tab
-                      ? "text-purple-600 font-semibold"
-                      : "text-gray-600"
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSidebarTab(tab.id)}
+                  className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeSidebarTab === tab.id
+                      ? 'border-purple-500 text-purple-600 dark:text-purple-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                   }`}
                 >
-                  {tab}
-                </li>
+                  <tab.icon className="w-5 h-5" />
+                  {tab.label}
+                </button>
               ))}
-            </ul>
+            </nav>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="w-4/5 ps-6">
-          {activeSidebarTab === "Profile" && (
-            <Tabs aria-label="Employee Info Tabs">
-              <Tabs.Item title="Personal Information" icon={HiUser}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                  {Object.entries(employeeDetails.personal).map(([key, value]) => (
-                    <Field key={key} label={key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())} value={value} />
-                  ))}
-                </div>
-              </Tabs.Item>
-
-              <Tabs.Item title="Professional Information" icon={HiBriefcase}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                  {Object.entries(employeeDetails.professional).map(([key, value]) => (
-                    <Field key={key} label={key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())} value={value} />
-                  ))}
-                </div>
-              </Tabs.Item>
-
-              <Tabs.Item title="Documents" icon={HiDocumentText}>
-                <div className="space-y-4 mt-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h5 className="font-medium text-blue-800 mb-2">Official Documents</h5>
-                    <p className="text-sm text-blue-600">
-                      Upload official documents like appointment letters, experience certificates, etc.
-                    </p>
+        {/* Content Card */}
+        <Card>
+          <div className="p-6">
+            {/* Profile Tab */}
+            {activeSidebarTab === "Profile" && (
+              <div className="space-y-8">
+                {/* Personal Information Section */}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <HiUser className="w-6 h-6 text-purple-600" />
+                    Personal Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <Field label="First Name" value={employee.first_name} />
+                    <Field label="Last Name" value={employee.last_name} />
+                    <Field 
+                      label="Email" 
+                      value={employee.email} 
+                      icon={<HiMail className="w-4 h-4 text-gray-500" />}
+                    />
+                    <Field 
+                      label="Phone" 
+                      value={employee.phone} 
+                      icon={<HiPhone className="w-4 h-4 text-gray-500" />}
+                    />
+                    <Field label="Date of Birth" value={employee.date_of_birth ? formatDate(employee.date_of_birth) : undefined} />
+                    <Field label="Gender" value={employee.gender} />
+                    <Field label="Marital Status" value={employee.marital_status} />
+                    <Field label="Nationality" value={employee.nationality} />
+                    <Field 
+                      label="Address" 
+                      value={employee.address} 
+                      icon={<HiLocationMarker className="w-4 h-4 text-gray-500" />}
+                    />
+                    <Field label="City" value={employee.city} />
+                    <Field label="State" value={employee.state} />
+                    <Field label="ZIP Code" value={employee.zip_code} />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {employeeDetails.documents.map((file, i) => (
-                      <div
-                        key={i}
-                        className="border border-gray-300 rounded-md px-4 py-3 flex justify-between items-center"
-                      >
-                        <p className="text-sm font-medium text-gray-700">{file}</p>
-                        <div className="flex gap-4 text-purple-600">
-                          <FaEye className="cursor-pointer" />
-                          <FaDownload className="cursor-pointer" />
+                </div>
+
+                {/* Professional Information Section */}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <HiBriefcase className="w-6 h-6 text-purple-600" />
+                    Professional Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <Field label="Employee Code" value={employee.employee_code} />
+                    <Field label="Department" value={employee.department_name} />
+                    <Field label="Designation" value={employee.designation_title} />
+                    <Field label="Manager" value={employee.manager_name} />
+                    <Field label="Hire Date" value={formatDate(employee.hire_date)} />
+                    <Field label="Employment Status" value={employee.employment_status} />
+                    <Field label="Employee Type" value={employee.employee_type} />
+                    <Field label="Base Salary" value={employee.base_salary ? `$${employee.base_salary.toLocaleString()}` : undefined} />
+                  </div>
+                </div>
+
+                {/* Emergency Contact Section */}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <HiPhone className="w-6 h-6 text-purple-600" />
+                    Emergency Contact
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Field label="Contact Name" value={employee.emergency_contact_name} />
+                    <Field label="Contact Phone" value={employee.emergency_contact_phone} />
+                    <Field label="Relationship" value={employee.emergency_contact_relation} />
+                  </div>
+                </div>
+
+                {/* Documents Section */}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <HiDocumentText className="w-6 h-6 text-purple-600" />
+                    Documents
+                  </h3>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                    <div className="space-y-3">
+                      {/* Mock documents - replace with actual document management */}
+                      <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <HiDocumentText className="w-5 h-5 text-gray-500" />
+                          <span className="text-sm font-medium">Appointment Letter.pdf</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="xs" color="gray">
+                            <FaEye className="w-3 h-3" />
+                          </Button>
+                          <Button size="xs" color="gray">
+                            <FaDownload className="w-3 h-3" />
+                          </Button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </Tabs.Item>
-            </Tabs>
-          )}
-
-          {activeSidebarTab === "Attendance" && (
-            <div>
-              <div className="flex justify-end mb-3">
-                <Select
-                  value={attendanceMonth}
-                  onChange={(e) => setAttendanceMonth(e.target.value)}
-                  className="w-fit text-sm"
-                >
-                  <option>July , 2023</option>
-                  <option>June , 2023</option>
-                  <option>May , 2023</option>
-                </Select>
-              </div>
-              <table className="w-full text-sm text-left text-gray-600">
-                <thead className="bg-gray-100 text-xs text-gray-500 uppercase">
-                  <tr>
-                    <th className="p-2">Date</th>
-                    <th className="p-2">Check In</th>
-                    <th className="p-2">Check Out</th>
-                    <th className="p-2">Break</th>
-                    <th className="p-2">Working Hours</th>
-                    <th className="p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employeeDetails.attendance.map(([date, inTime, outTime, breakTime, hours, status], i) => (
-                    <tr key={i}>
-                      <td className="p-2">{date}</td>
-                      <td className="p-2">{inTime}</td>
-                      <td className="p-2">{outTime}</td>
-                      <td className="p-2">{breakTime}</td>
-                      <td className="p-2">{hours}</td>
-                      <td className="p-2">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            status === "Late"
-                              ? "bg-red-100 text-red-600"
-                              : "bg-green-100 text-green-600"
-                          }`}
-                        >
-                          {status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {activeSidebarTab === "Leave" && (
-            <div>
-              <div className="flex justify-end mb-3">
-                <Select
-                  value={leaveMonth}
-                  onChange={(e) => setLeaveMonth(e.target.value)}
-                  className="w-fit text-sm"
-                >
-                  <option>Jun , 2023</option>
-                  <option>May , 2023</option>
-                  <option>Apr , 2023</option>
-                </Select>
-              </div>
-              <table className="w-full text-sm text-left text-gray-600">
-                <thead className="bg-gray-100 text-xs text-gray-500 uppercase">
-                  <tr>
-                    <th className="p-2">Month</th>
-                    <th className="p-2">Duration</th>
-                    <th className="p-2">Days</th>
-                    <th className="p-2">Reporting Manager</th>
-                    <th className="p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employeeDetails.leave.map(([month, duration, days, manager, status], i) => (
-                    <tr key={i}>
-                      <td className="p-2">{month}</td>
-                      <td className="p-2">{duration}</td>
-                      <td className="p-2">{days}</td>
-                      <td className="p-2">{manager}</td>
-                      <td className="p-2">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            status === "Approved"
-                              ? "bg-green-100 text-green-600"
-                              : status === "Reject"
-                              ? "bg-red-100 text-red-600"
-                              : "bg-yellow-100 text-yellow-600"
-                          }`}
-                        >
-                          {status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* UPDATED FINANCIAL RECORDS TAB */}
-          {activeSidebarTab === "Financial Records" && (
-            <div className="space-y-6">
-              {/* Header Controls */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <h3 className="text-lg font-semibold">Financial Records</h3>
-                  
-                  {/* Month/Year Filter */}
-                  <Select
-                    value={filterMonthYear}
-                    onChange={(e) => {
-                      setFilterMonthYear(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="w-48"
-                    sizing="sm"
-                  >
-                    <option value="all">All Months</option>
-                    {getUniqueMonthYears().map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                  
-                  {/* Type Filter */}
-                  <Select
-                    value={filterType}
-                    onChange={(e) => {
-                      setFilterType(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="w-40"
-                    sizing="sm"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="salary">Salary Slips</option>
-                    <option value="advance">Advance Payments</option>
-                    <option value="loan">Loans</option>
-                  </Select>
-                </div>
-                
-                {/* PROTECTED: Add Record Button - Only for users who can edit employees */}
-                <DynamicProtectedComponent permission="employees.edit">
-                  <Button 
-                    onClick={() => setShowFinancialModal(true)}
-                    className="bg-purple-600 hover:bg-purple-700"
-                  >
-                    <FaPlus className="mr-2 w-4 h-4" /> Add Record
-                  </Button>
-                </DynamicProtectedComponent>
-              </div>
-
-              {/* Summary Stats - Now Clickable */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div 
-                  className="bg-green-50 p-4 rounded-lg cursor-pointer hover:bg-green-100 transition-colors border-2 border-transparent hover:border-green-200"
-                  onClick={() => handleSummaryCardClick('salary')}
-                >
-                  <div className="flex items-center">
-                    <HiBriefcase className="h-8 w-8 text-green-600 mr-3" />
-                    <div>
-                      <p className="text-sm text-green-600 font-medium">Salary Slips</p>
-                      <p className="text-xl font-bold text-green-800">
-                        {financialRecords.filter(r => r.type === 'salary').length}
-                      </p>
-                      <p className="text-xs text-green-500">Click to view all</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div 
-                  className="bg-blue-50 p-4 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors border-2 border-transparent hover:border-blue-200"
-                  onClick={() => handleSummaryCardClick('advance')}
-                >
-                  <div className="flex items-center">
-                    <HiCash className="h-8 w-8 text-blue-600 mr-3" />
-                    <div>
-                      <p className="text-sm text-blue-600 font-medium">Advances</p>
-                      <p className="text-xl font-bold text-blue-800">
-                        {financialRecords.filter(r => r.type === 'advance').length}
-                      </p>
-                      <p className="text-xs text-blue-500">Click to view all</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div 
-                  className="bg-purple-50 p-4 rounded-lg cursor-pointer hover:bg-purple-100 transition-colors border-2 border-transparent hover:border-purple-200"
-                  onClick={() => handleSummaryCardClick('loan')}
-                >
-                  <div className="flex items-center">
-                    <HiDocumentText className="h-8 w-8 text-purple-600 mr-3" />
-                    <div>
-                      <p className="text-sm text-purple-600 font-medium">Loans</p>
-                      <p className="text-xl font-bold text-purple-800">
-                        {financialRecords.filter(r => r.type === 'loan').length}
-                      </p>
-                      <p className="text-xs text-purple-500">Click to view all</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Filter Status */}
-              {(filterType !== 'all' || filterMonthYear !== 'all') && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span>Filtered by:</span>
-                  {filterType !== 'all' && (
-                    <Badge color="blue" className="capitalize">
-                      {filterType}
-                    </Badge>
-                  )}
-                  {filterMonthYear !== 'all' && (
-                    <Badge color="green">
-                      {getUniqueMonthYears().find(m => m.value === filterMonthYear)?.label}
-                    </Badge>
-                  )}
-                  <Button
-                    size="xs"
-                    color="gray"
-                    onClick={() => {
-                      setFilterType('all');
-                      setFilterMonthYear('all');
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                  <span className="text-gray-500">({totalRecords} records found)</span>
-                </div>
-              )}
-
-              {/* Financial Records Grid */}
-              <div className="grid gap-4">
-                {paginatedRecords.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <div className="text-4xl mb-4">📄</div>
-                    <h3 className="text-lg font-medium mb-2">No Records Found</h3>
-                    <p className="text-sm">
-                      {filterType !== 'all' || filterMonthYear !== 'all' 
-                        ? 'Try adjusting your filters or add a new record.' 
-                        : 'Start by adding your first financial record.'
-                      }
-                    </p>
-                  </div>
-                ) : (
-                  paginatedRecords.map((record) => (
-                    <div key={record.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="p-2 bg-gray-100 rounded-lg">
-                            {getTypeIcon(record.type)}
-                          </div>
-                          
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-medium text-gray-900 capitalize">
-                                {record.type}
-                                {record.monthYear && ` - ${formatMonthYear(record.monthYear)}`}
-                              </h4>
-                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(record.status)}`}>
-                                {record.status}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-600">{record.description}</p>
-                            <div className="flex items-center gap-4 mt-1">
-                              <span className="text-lg font-semibold text-green-600">
-                                {formatCurrency(record.amount)}
-                              </span>
-                              <span className="text-sm text-gray-500">
-                                {new Date(record.date).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
+                      
+                      <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <HiDocumentText className="w-5 h-5 text-gray-500" />
+                          <span className="text-sm font-medium">Experience Certificate.pdf</span>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                          {record.slipUrl && (
-                            <>
-                              <Button size="xs" color="blue" className="p-2">
-                                <FaEye className="w-3 h-3" />
-                              </Button>
-                              <Button size="xs" color="green" className="p-2">
-                                <FaDownload className="w-3 h-3" />
-                              </Button>
-                            </>
-                          )}
-                          {/* PROTECTED: Delete Financial Record - Only for users who can edit employees */}
-                          <DynamicProtectedComponent permission="employees.edit">
-                            <Button 
-                              size="xs" 
-                              color="red" 
-                              className="p-2"
-                              onClick={() => handleDeleteFinancialRecord(record.id)}
-                            >
-                              <FaTrash className="w-3 h-3" />
-                            </Button>
-                          </DynamicProtectedComponent>
+                        <div className="flex gap-2">
+                          <Button size="xs" color="gray">
+                            <FaEye className="w-3 h-3" />
+                          </Button>
+                          <Button size="xs" color="gray">
+                            <FaDownload className="w-3 h-3" />
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
-                    Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, totalRecords)} of {totalRecords} records
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      color="gray"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                    >
-                      Previous
-                    </Button>
-                    
-                    <div className="flex gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <Button
-                          key={page}
-                          size="sm"
-                          color={currentPage === page ? "blue" : "gray"}
-                          onClick={() => setCurrentPage(page)}
-                          className="w-8 h-8 p-0"
-                        >
-                          {page}
+                      
+                      <DynamicProtectedComponent permission="employees.edit">
+                        <Button size="sm" color="purple" className="mt-4">
+                          <FaPlus className="w-3 h-3 mr-2" />
+                          Upload Document
                         </Button>
-                      ))}
+                      </DynamicProtectedComponent>
                     </div>
-                    
-                    <Button
-                      size="sm"
-                      color="gray"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                    >
-                      Next
-                    </Button>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* UPDATED Add Financial Record Modal */}
-      <Modal show={showFinancialModal} onClose={() => setShowFinancialModal(false)} size="md">
-        <Modal.Header>Add Financial Record</Modal.Header>
-        <Modal.Body>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="type" value="Type" />
-              <Select
-                id="type"
-                value={newFinancialRecord.type}
-                onChange={(e) => setNewFinancialRecord({...newFinancialRecord, type: e.target.value as any})}
-              >
-                <option value="salary">Salary Slip</option>
-                <option value="advance">Advance Payment</option>
-                <option value="loan">Loan</option>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="amount" value="Amount" />
-                <TextInput
-                  id="amount"
-                  type="number"
-                  value={newFinancialRecord.amount || ''}
-                  onChange={(e) => setNewFinancialRecord({...newFinancialRecord, amount: Number(e.target.value)})}
-                  placeholder="Enter amount"
-                />
-              </div>
-              <div>
-                <Label htmlFor="date" value="Date" />
-                <TextInput
-                  id="date"
-                  type="date"
-                  value={newFinancialRecord.date}
-                  onChange={(e) => setNewFinancialRecord({...newFinancialRecord, date: e.target.value})}
-                />
-              </div>
-            </div>
-
-            {/* UPDATED: Salary month/year dropdown */}
-            {newFinancialRecord.type === 'salary' && (
-              <div>
-                <Label htmlFor="monthYear" value="Month/Year" />
-                <Select
-                  id="monthYear"
-                  value={newFinancialRecord.monthYear || ''}
-                  onChange={(e) => setNewFinancialRecord({...newFinancialRecord, monthYear: e.target.value})}
-                  required
-                >
-                  <option value="">Select month</option>
-                  {generateMonthYearOptions().map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-                {newFinancialRecord.monthYear && isSalarySlipExists(newFinancialRecord.monthYear) && (
-                  <p className="text-red-500 text-sm mt-1">
-                    ⚠️ Salary slip for this month already exists!
-                  </p>
-                )}
               </div>
             )}
 
-            <div>
-              <Label htmlFor="description" value="Description" />
-              <TextInput
-                id="description"
-                value={newFinancialRecord.description}
-                onChange={(e) => setNewFinancialRecord({...newFinancialRecord, description: e.target.value})}
-                placeholder="Enter description"
-              />
-            </div>
+            {/* Attendance Tab */}
+            {activeSidebarTab === "Attendance" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <HiClock className="w-6 h-6 text-purple-600" />
+                    Attendance Records
+                  </h3>
+                  <Select
+                    value={attendanceMonth}
+                    onChange={(e) => setAttendanceMonth(e.target.value)}
+                    className="w-48"
+                  >
+                    <option value="2024-07">July 2024</option>
+                    <option value="2024-06">June 2024</option>
+                    <option value="2024-05">May 2024</option>
+                  </Select>
+                </div>
 
-            <div>
-              <Label htmlFor="status" value="Status" />
-              <Select
-                id="status"
-                value={newFinancialRecord.status}
-                onChange={(e) => setNewFinancialRecord({...newFinancialRecord, status: e.target.value as any})}
-              >
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Paid">Paid</option>
-                <option value="Rejected">Rejected</option>
-              </Select>
-            </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                      <tr>
+                        <th className="px-6 py-3">Date</th>
+                        <th className="px-6 py-3">Check In</th>
+                        <th className="px-6 py-3">Check Out</th>
+                        <th className="px-6 py-3">Break</th>
+                        <th className="px-6 py-3">Total Hours</th>
+                        <th className="px-6 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendance.map((record) => (
+                        <tr key={record.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                            {formatDate(record.date)}
+                          </td>
+                          <td className="px-6 py-4">{formatTime(record.check_in_time)}</td>
+                          <td className="px-6 py-4">{formatTime(record.check_out_time)}</td>
+                          <td className="px-6 py-4">{record.break_duration || 0} min</td>
+                          <td className="px-6 py-4">{formatHours(record.total_hours)}</td>
+                          <td className="px-6 py-4">
+                            <Badge color={getStatusBadgeColor(record.status)} size="sm">
+                              {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            <div>
-              <Label htmlFor="slip" value="Upload Slip/Document" />
-              <div className="mt-2">
-                <input
-                  id="slip"
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileUpload}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
-                />
-                {selectedFile && (
-                  <p className="mt-2 text-sm text-green-600">
-                    Selected: {selectedFile.name}
-                  </p>
-                )}
+                {/* Attendance Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Present Days</h4>
+                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                      {attendance.filter(a => a.status === 'absent').length}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Avg Hours</h4>
+                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                      {formatHours(attendance.reduce((sum, a) => sum + (a.total_hours || 0), 0) / attendance.length)}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Leave Tab */}
+            {activeSidebarTab === "Leave" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <HiCalendar className="w-6 h-6 text-purple-600" />
+                    Leave Records
+                  </h3>
+                  <Select
+                    value={leaveMonth}
+                    onChange={(e) => setLeaveMonth(e.target.value)}
+                    className="w-48"
+                  >
+                    <option value="2024-07">July 2024</option>
+                    <option value="2024-06">June 2024</option>
+                    <option value="2024-05">May 2024</option>
+                  </Select>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                      <tr>
+                        <th className="px-6 py-3">Leave Type</th>
+                        <th className="px-6 py-3">Date Range</th>
+                        <th className="px-6 py-3">Days</th>
+                        <th className="px-6 py-3">Reason</th>
+                        <th className="px-6 py-3">Reviewed By</th>
+                        <th className="px-6 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaves.map((leave) => (
+                        <tr key={leave.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                            {leave.leave_type}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div>
+                              <p>{formatDate(leave.start_date)} - {formatDate(leave.end_date)}</p>
+                              <p className="text-xs text-gray-500">
+                                Applied: {formatDate(leave.applied_at)}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">{leave.days_requested} Days</td>
+                          <td className="px-6 py-4">
+                            <div className="max-w-xs">
+                              <p className="truncate" title={leave.reason}>{leave.reason}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">{leave.reviewer_name || 'N/A'}</td>
+                          <td className="px-6 py-4">
+                            <Badge color={getStatusBadgeColor(leave.status)} size="sm">
+                              {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Leave Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Requests</h4>
+                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{leaves.length}</p>
+                  </div>
+                  
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Approved</h4>
+                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                      {leaves.filter(l => l.status === 'approved').length}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Pending</h4>
+                    <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+                      {leaves.filter(l => l.status === 'pending').length}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">Rejected</h4>
+                    <p className="text-2xl font-bold text-red-900 dark:text-red-100">
+                      {leaves.filter(l => l.status === 'rejected').length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Financial Records Tab */}
+            {activeSidebarTab === "Financial Records" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <HiCash className="w-6 h-6 text-purple-600" />
+                    Financial Records
+                  </h3>
+                  
+                  <div className="flex items-center gap-4">
+                    <Select
+                      value={filterMonthYear}
+                      onChange={(e) => {
+                        setFilterMonthYear(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-48"
+                      sizing="sm"
+                    >
+                      <option value="all">All Months</option>
+                      {getUniqueMonthYears().map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                    
+                    <Select
+                      value={filterType}
+                      onChange={(e) => {
+                        setFilterType(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-32"
+                      sizing="sm"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="salary">Salary</option>
+                      <option value="bonus">Bonus</option>
+                      <option value="advance">Advance</option>
+                      <option value="loan">Loan</option>
+                    </Select>
+
+                    <DynamicProtectedComponent permission="payroll.view">
+                      <Button size="sm" color="purple">
+                        <FaPlus className="w-3 h-3 mr-2" />
+                        Add Record
+                      </Button>
+                    </DynamicProtectedComponent>
+                  </div>
+                </div>
+
+                {/* Financial Records Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                      <tr>
+                        <th className="px-6 py-3">Type</th>
+                        <th className="px-6 py-3">Amount</th>
+                        <th className="px-6 py-3">Description</th>
+                        <th className="px-6 py-3">Date</th>
+                        <th className="px-6 py-3">Status</th>
+                        <th className="px-6 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getPaginatedRecords().map((record) => (
+                        <tr key={record.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                          <td className="px-6 py-4">
+                            <Badge 
+                              color={record.type === 'salary' ? 'blue' : record.type === 'bonus' ? 'green' : 'gray'}
+                              size="sm"
+                            >
+                              {record.type.charAt(0).toUpperCase() + record.type.slice(1)}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                            ${record.amount.toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="max-w-xs">
+                              <p className="truncate" title={record.description}>{record.description}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {formatDate(record.date)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge color={getStatusBadgeColor(record.status)} size="sm">
+                              {record.status}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2">
+                              {record.slipUrl && (
+                                <>
+                                  <Button size="xs" color="gray" title="View Slip">
+                                    <FaEye className="w-3 h-3" />
+                                  </Button>
+                                  <Button size="xs" color="gray" title="Download Slip">
+                                    <FaDownload className="w-3 h-3" />
+                                  </Button>
+                                </>
+                              )}
+                              <DynamicProtectedComponent permission="payroll.edit">
+                                <Button size="xs" color="red" title="Delete Record">
+                                  <FaTrash className="w-3 h-3" />
+                                </Button>
+                              </DynamicProtectedComponent>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {getFilteredFinancialRecords().length > recordsPerPage && (
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Showing {((currentPage - 1) * recordsPerPage) + 1} to{" "}
+                      {Math.min(currentPage * recordsPerPage, getFilteredFinancialRecords().length)} of{" "}
+                      {getFilteredFinancialRecords().length} records
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        color="gray"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => prev - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        size="sm"
+                        color="gray"
+                        disabled={currentPage * recordsPerPage >= getFilteredFinancialRecords().length}
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg">
+                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Total Salary (YTD)</h4>
+                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                      ${financialRecords
+                        .filter(r => r.type === 'salary')
+                        .reduce((sum, r) => sum + r.amount, 0)
+                        .toLocaleString()}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg">
+                    <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Total Bonuses</h4>
+                    <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                      ${financialRecords
+                        .filter(r => r.type === 'bonus')
+                        .reduce((sum, r) => sum + r.amount, 0)
+                        .toLocaleString()}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-lg">
+                    <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">Current Salary</h4>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                      ${employee.base_salary?.toLocaleString() || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button onClick={handleAddFinancialRecord} className="bg-purple-600">
-            Add Record
+        </Card>
+
+        {/* Quick Actions Footer */}
+        <div className="mt-8 flex justify-between items-center">
+          <Button color="gray" onClick={() => navigate('/employees')}>
+            ← Back to Employees
           </Button>
-          <Button color="gray" onClick={() => setShowFinancialModal(false)}>
-            Cancel
-          </Button>
-        </Modal.Footer>
-      </Modal>
-    </div>
+          
+          <div className="flex gap-3">
+            <DynamicProtectedComponent permission="employees.edit">
+              <Button color="light">
+                Generate Report
+              </Button>
+            </DynamicProtectedComponent>
+            
+            <DynamicProtectedComponent permission="employees.edit">
+              <Button color="purple">
+                <FaEdit className="w-4 h-4 mr-2" />
+                Quick Edit
+              </Button>
+            </DynamicProtectedComponent>
+          </div>
+        </div>
+      </div>
+    </DynamicProtectedComponent>
   );
 };
 
-const Field = ({ label, value }: FieldProps) => (
-  <div>
-    <p className="text-xs text-gray-400 mb-1">{label}</p>
-    <p className="font-medium text-gray-800 text-sm">{value}</p>
-  </div>
-);
-
-export default ViewEmployeeDetails;
+export default EmployeeDetails;
