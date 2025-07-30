@@ -1,10 +1,8 @@
+import React from 'react';
+import AttendanceManagement from './AttendanceDashboard';
 
-import AttendanceDashboard from 'src/components/Attendance/AttendanceDashboard'
+const AttendanceView: React.FC = () => {
+  return <AttendanceManagement />;
+};
 
-const AttendanceView = () => {
-  return (
-    <AttendanceDashboard/>
-  )
-}
-
-export default AttendanceView
+export default AttendanceView;

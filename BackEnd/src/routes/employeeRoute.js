@@ -241,25 +241,25 @@ router.get('/check-id',
   checkPermission('employees.create'),
   asyncHandler(async (req, res) => {
     const db = getDB();
-    const { employee_id } = req.query;
+    const { employee_code } = req.query;
     
-    if (!employee_id) {
+    if (!employee_code) {
       return res.status(400).json({
         success: false,
-        message: 'Employee ID is required'
+        message: 'Employee code is required'
       });
     }
     
     const [existing] = await db.execute(`
       SELECT id FROM employees 
-      WHERE client_id = ? AND employee_id = ?
-    `, [req.user.clientId, employee_id]);
+      WHERE client_id = ? AND employee_code = ?
+    `, [req.user.clientId, employee_code]);
 
     res.status(200).json({
       success: true,
       data: {
         available: existing.length === 0,
-        employee_id
+        employee_code
       }
     });
   })
@@ -293,6 +293,239 @@ router.get('/check-email',
     });
   })
 );
+
+// =============================================
+// UPDATE EMPLOYEE
+// =============================================
+router.put('/:id', [
+  checkPermission('employees.edit'),
+  checkResourceOwnership('employee'),
+  // Validation middleware
+  body('first_name').optional().trim().isLength({ min: 1 }).withMessage('First name cannot be empty'),
+  body('last_name').optional().trim().isLength({ min: 1 }).withMessage('Last name cannot be empty'),
+  body('email').optional().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+  body('phone').optional().trim().isLength({ min: 10 }).withMessage('Phone number must be at least 10 digits'),
+  body('date_of_birth').optional().isISO8601().withMessage('Please enter a valid date'),
+  body('gender').optional().isIn(['male', 'female', 'other']).withMessage('Gender must be male, female, or other'),
+  body('employee_code').optional().trim().isLength({ min: 1 }).withMessage('Employee code cannot be empty'),
+  body('department_id').optional().isUUID().withMessage('Invalid department ID'),
+  body('designation_id').optional().isUUID().withMessage('Invalid designation ID'),
+  body('manager_id').optional().isUUID().withMessage('Invalid manager ID'),
+  body('hire_date').optional().isISO8601().withMessage('Please enter a valid hire date'),
+  body('employment_status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']).withMessage('Invalid employment status'),
+  body('employee_type').optional().isIn(['full_time', 'part_time', 'contract', 'intern']).withMessage('Invalid employee type'),
+  body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
+  body('marital_status').optional().isIn(['single', 'married', 'divorced', 'widowed']).withMessage('Invalid marital status')
+], asyncHandler(async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const db = getDB();
+    const employeeId = req.params.id;
+
+    console.log('🔄 Updating employee:', employeeId);
+    console.log('📝 Update data:', JSON.stringify(req.body, null, 2));
+
+    // Get current employee record
+    const [currentEmployee] = await db.execute(`
+      SELECT e.*, c.id as client_id
+      FROM employees e
+      JOIN clients c ON e.client_id = c.id
+      WHERE e.id = ? AND e.client_id = ?
+    `, [employeeId, req.user.clientId]);
+
+    if (currentEmployee.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    const current = currentEmployee[0];
+
+    // Check for duplicate employee_code if being updated
+    if (req.body.employee_code && req.body.employee_code !== current.employee_code) {
+      const [existingCode] = await db.execute(`
+        SELECT id FROM employees 
+        WHERE client_id = ? AND employee_code = ? AND id != ?
+      `, [req.user.clientId, req.body.employee_code, employeeId]);
+
+      if (existingCode.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee code already exists',
+          field: 'employee_code'
+        });
+      }
+    }
+
+    // Check for duplicate email if being updated
+    if (req.body.email && req.body.email !== current.email) {
+      const [existingEmail] = await db.execute(`
+        SELECT id FROM employees 
+        WHERE client_id = ? AND email = ? AND id != ?
+      `, [req.user.clientId, req.body.email, employeeId]);
+
+      if (existingEmail.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email address already exists',
+          field: 'email'
+        });
+      }
+    }
+
+    // Validate foreign key references if provided
+    if (req.body.department_id) {
+      const [department] = await db.execute(`
+        SELECT id FROM departments WHERE id = ? AND client_id = ?
+      `, [req.body.department_id, req.user.clientId]);
+
+      if (department.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid department selected',
+          field: 'department_id'
+        });
+      }
+    }
+
+    if (req.body.designation_id) {
+      const [designation] = await db.execute(`
+        SELECT id FROM designations WHERE id = ?
+      `, [req.body.designation_id]);
+
+      if (designation.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid designation selected',
+          field: 'designation_id'
+        });
+      }
+    }
+
+    if (req.body.manager_id) {
+      const [manager] = await db.execute(`
+        SELECT id FROM employees WHERE id = ? AND client_id = ? AND id != ?
+      `, [req.body.manager_id, req.user.clientId, employeeId]);
+
+      if (manager.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid manager selected',
+          field: 'manager_id'
+        });
+      }
+    }
+
+    // Build dynamic update query
+    const allowedFields = [
+      'first_name', 'last_name', 'email', 'phone', 'date_of_birth', 'gender',
+      'address', 'city', 'state', 'zip_code', 'nationality', 'marital_status',
+      'employee_code', 'department_id', 'designation_id', 'manager_id',
+      'hire_date', 'employment_status', 'employee_type', 'base_salary',
+      'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation'
+    ];
+
+    const updateFields = [];
+    const updateValues = [];
+
+    allowedFields.forEach(field => {
+      if (req.body.hasOwnProperty(field)) {
+        updateFields.push(`${field} = ?`);
+        updateValues.push(req.body[field]);
+      }
+    });
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields to update'
+      });
+    }
+
+    // Add updated_at timestamp
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(employeeId);
+
+    const updateQuery = `
+      UPDATE employees 
+      SET ${updateFields.join(', ')}
+      WHERE id = ? AND client_id = ?
+    `;
+
+    updateValues.push(req.user.clientId);
+
+    // Execute the update
+    const [updateResult] = await db.execute(updateQuery, updateValues);
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found or no changes made'
+      });
+    }
+
+    // Get updated employee record with related data
+    const [updatedEmployee] = await db.execute(`
+      SELECT 
+        e.*,
+        CONCAT(e.first_name, ' ', e.last_name) as full_name,
+        d.name as department_name,
+        des.title as designation_title,
+        CONCAT(m.first_name, ' ', m.last_name) as manager_name,
+        c.name as client_name
+      FROM employees e
+      LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN designations des ON e.designation_id = des.id
+      LEFT JOIN employees m ON e.manager_id = m.id
+      LEFT JOIN clients c ON e.client_id = c.id
+      WHERE e.id = ?
+    `, [employeeId]);
+
+    console.log('✅ Employee updated successfully');
+
+    res.status(200).json({
+      success: true,
+      message: 'Employee updated successfully',
+      data: {
+        employee: updatedEmployee[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('💥 Update employee error:', error);
+    
+    if (error.code === 'ER_DUP_ENTRY') {
+      if (error.sqlMessage.includes('email')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email address already exists',
+          field: 'email'
+        });
+      } else if (error.sqlMessage.includes('employee_code')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee code already exists',
+          field: 'employee_code'
+        });
+      }
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update employee',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}));
 
 // =============================================
 // GET SINGLE EMPLOYEE
@@ -350,35 +583,45 @@ router.get('/:id',
 // =============================================
 // CREATE EMPLOYEE
 // =============================================
-// Enhanced CREATE EMPLOYEE route
+
 router.post('/', 
   checkPermission('employees.create'),
   asyncHandler(async (req, res) => {
     try {
       const db = getDB();
+      
+      console.log('📝 Received request body:', JSON.stringify(req.body, null, 2));
+      
       const {
         // Personal Information
         first_name, last_name, email, phone, date_of_birth, gender,
         address, city, state, zip_code, nationality, marital_status,
         
         // Professional Information
-        employee_id, department_id, designation_id, manager_id,
+        employee_code, department_id, designation_id, manager_id,
         hire_date, employment_status = 'active', employee_type,
-        salary,
+        base_salary,
         
         // Emergency Contact
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation
       } = req.body;
 
+      console.log('🔍 Extracted employee_type:', employee_type);
+      console.log('🔍 Extracted department_id:', department_id);
+      console.log('🔍 Extracted designation_id:', designation_id);
+
       // Validation
       const requiredFields = {
         first_name, last_name, email, phone, date_of_birth, gender,
-        employee_id, department_id, designation_id, hire_date, employee_type,
+        employee_code, department_id, designation_id, hire_date, employee_type,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation
       };
 
+      console.log('✅ Required fields check:', requiredFields);
+
       for (const [field, value] of Object.entries(requiredFields)) {
         if (!value || value.toString().trim() === '') {
+          console.log(`❌ Missing required field: ${field} = "${value}"`);
           return res.status(400).json({
             success: false,
             message: `${field.replace('_', ' ')} is required`,
@@ -390,6 +633,7 @@ router.post('/',
       // Email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
+        console.log('❌ Invalid email format:', email);
         return res.status(400).json({
           success: false,
           message: 'Please enter a valid email address',
@@ -397,27 +641,31 @@ router.post('/',
         });
       }
 
-      // Check for duplicate employee ID
+      // Check for duplicate employee code
+      console.log('🔍 Checking for duplicate employee code...');
       const [existingId] = await db.execute(`
         SELECT id FROM employees 
-        WHERE client_id = ? AND employee_id = ?
-      `, [req.user.clientId, employee_id]);
+        WHERE client_id = ? AND employee_code = ?
+      `, [req.user.clientId, employee_code]);
 
       if (existingId.length > 0) {
+        console.log('❌ Duplicate employee ID found:', employee_code);
         return res.status(400).json({
           success: false,
-          message: 'Employee ID already exists',
-          field: 'employee_id'
+          message: 'Employee code already exists',
+          field: 'employee_code'
         });
       }
 
       // Check for duplicate email
+      console.log('🔍 Checking for duplicate email...');
       const [existingEmail] = await db.execute(`
         SELECT id FROM employees 
         WHERE client_id = ? AND email = ?
       `, [req.user.clientId, email]);
 
       if (existingEmail.length > 0) {
+        console.log('❌ Duplicate email found:', email);
         return res.status(400).json({
           success: false,
           message: 'Email address already exists',
@@ -426,12 +674,14 @@ router.post('/',
       }
 
       // Verify department exists
+      console.log('🔍 Verifying department exists:', department_id);
       const [deptCheck] = await db.execute(`
         SELECT id FROM departments 
         WHERE id = ? AND client_id = ? AND is_active = TRUE
       `, [department_id, req.user.clientId]);
 
       if (deptCheck.length === 0) {
+        console.log('❌ Department not found or inactive:', department_id);
         return res.status(400).json({
           success: false,
           message: 'Selected department not found',
@@ -440,12 +690,16 @@ router.post('/',
       }
 
       // Verify designation exists and belongs to department
+      console.log('🔍 Verifying designation exists:', designation_id);
       const [desigCheck] = await db.execute(`
         SELECT id FROM designations 
         WHERE id = ? AND department_id = ? AND client_id = ? AND is_active = TRUE
       `, [designation_id, department_id, req.user.clientId]);
 
       if (desigCheck.length === 0) {
+        console.log('❌ Designation not found or does not belong to department');
+        console.log('   Designation ID:', designation_id);
+        console.log('   Department ID:', department_id);
         return res.status(400).json({
           success: false,
           message: 'Selected designation not found or does not belong to the selected department',
@@ -456,28 +710,35 @@ router.post('/',
       // Generate UUID for employee
       const { v4: uuidv4 } = require('uuid');
       const employeeUuid = uuidv4();
+      
+      console.log('🔍 Generated employee UUID:', employeeUuid);
+
+      // Prepare employee data
+      const employeeData = [
+        employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
+        date_of_birth, gender, address || null, city || null, state || null, zip_code || null, 
+        nationality || null, marital_status || null, hire_date, department_id, designation_id, 
+        manager_id || null, employment_status, employee_type, base_salary || null,
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relation
+      ];
+
+      console.log('🔍 Employee data array:', employeeData);
 
       // Insert employee
       const insertQuery = `
         INSERT INTO employees (
-          id, client_id, employee_id, first_name, last_name, email, phone,
+          id, client_id, employee_code, first_name, last_name, email, phone,
           date_of_birth, gender, address, city, state, zip_code, nationality,
           marital_status, hire_date, department_id, designation_id, manager_id,
-          employment_status, employee_type, salary,
+          employment_status, employee_type, base_salary,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
           created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
-      const employeeData = [
-        employeeUuid, req.user.clientId, employee_id, first_name, last_name, email, phone,
-        date_of_birth, gender, address || null, city || null, state || null, zip_code || null, 
-        nationality || null, marital_status || null, hire_date, department_id, designation_id, 
-        manager_id || null, employment_status, employee_type, salary || null,
-        emergency_contact_name, emergency_contact_phone, emergency_contact_relation
-      ];
-
+      console.log('🔍 Executing insert query...');
       await db.execute(insertQuery, employeeData);
+      console.log('✅ Employee inserted successfully');
 
       // Get created employee with relations
       const [newEmployee] = await db.execute(`
@@ -494,6 +755,7 @@ router.post('/',
         WHERE e.id = ?
       `, [employeeUuid]);
 
+      console.log('✅ Employee creation successful');
       res.status(201).json({
         success: true,
         message: 'Employee created successfully',
@@ -503,7 +765,13 @@ router.post('/',
       });
 
     } catch (error) {
-      console.error('Create employee error:', error);
+      console.error('💥 Create employee error details:');
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+      console.error('Error errno:', error.errno);
+      console.error('Error sqlState:', error.sqlState);
+      console.error('Error sqlMessage:', error.sqlMessage);
+      console.error('Full error:', error);
       
       if (error.code === 'ER_DUP_ENTRY') {
         if (error.sqlMessage.includes('email')) {
@@ -512,18 +780,19 @@ router.post('/',
             message: 'Email address already exists',
             field: 'email'
           });
-        } else if (error.sqlMessage.includes('employee_id')) {
+        } else if (error.sqlMessage.includes('employee_code')) {
           return res.status(400).json({
             success: false,
-            message: 'Employee ID already exists',
-            field: 'employee_id'
+            message: 'Employee code already exists',
+            field: 'employee_code'
           });
         }
       }
       
       res.status(500).json({
         success: false,
-        message: 'Failed to create employee'
+        message: 'Failed to create employee',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   })
