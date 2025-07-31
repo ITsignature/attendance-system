@@ -27,7 +27,7 @@ import {
   HiOutlineSearch,
   HiOutlineX
 } from 'react-icons/hi';
-import { DynamicProtectedComponent } from '../RBACSystem/rbacExamples';
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 import apiService from '../../services/api';
 import { Employee, EmployeeFilters } from '../../types/employee';
 
@@ -119,7 +119,14 @@ const AllEmployees: React.FC = () => {
       
       if (response.success && response.data) {
         const data = response.data as EmployeesResponse;
-        setEmployees(data.employees);
+        console.log('📊 Employees data:', data.employees);
+
+      // Filter out terminated employees
+      const activeEmployees = data.employees.filter(
+        (emp) => emp.employment_status !== 'terminated'
+      );
+
+        setEmployees(activeEmployees);
         setPagination({
           currentPage: data.page,
           totalPages: data.totalPages,
@@ -127,6 +134,7 @@ const AllEmployees: React.FC = () => {
           recordsPerPage: data.limit
         });
         
+       
         // Extract unique departments
         const uniqueDepts = [...new Set(data.employees
           .map(emp => emp.department_name)
@@ -302,13 +310,15 @@ const AllEmployees: React.FC = () => {
       setShowBulkProgress(true);
       setBulkOperationProgress(0);
       
+
+      console.log("1111",selectedEmployees)
       // Bulk update to terminated status instead of delete
       const updates = selectedEmployees.map(id => ({
         id,
         data: { employment_status: 'terminated' as const }
       }));
       
-      const response = await apiService.bulkUpdateEmployees(updates);
+      const response = await apiService.bulkDeleteEmployees(selectedEmployees);
       
       if (response.success) {
         setBulkOperationProgress(100);

@@ -23,7 +23,7 @@ import {
   HiXCircle,
   HiExclamation
 } from 'react-icons/hi';
-import { DynamicProtectedComponent } from '../RBACSystem/rbacExamples';
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 import apiService, { AttendanceRecord, CreateAttendanceData, UpdateAttendanceData, AttendanceFilters } from '../../services/api';
 import { Employee } from '../../types/employee';
 

@@ -1,7 +1,7 @@
 // src/components/RBACSystem/rbacSystem.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiService, LoginResponse, User } from '../../services/api';
-
+import { Navigate, useLocation } from 'react-router-dom';
 // ========== TYPE DEFINITIONS ==========
 
 export interface Role {
@@ -191,56 +191,43 @@ export const DynamicRBACProvider: React.FC<DynamicRBACProviderProps> = ({ childr
 
 const initializeAuth = async () => {
   try {
-    setIsLoading(true); // ✅ Make sure this is set immediately
+    setIsLoading(true);
     setError(null);
 
-    // Check if user is already logged in
     const savedUser = localStorage.getItem('user');
     const savedToken = localStorage.getItem('accessToken');
     const savedRefreshToken = localStorage.getItem('refreshToken');
 
-    console.log('🔍 Checking localStorage:', { 
-      hasUser: !!savedUser, 
-      hasToken: !!savedToken, 
-      hasRefresh: !!savedRefreshToken 
-    });
-
-    if (savedUser && savedToken) {
+    // If we have a user, set it immediately (prevents redirect flicker)
+    if (savedUser) {
       try {
-        const user: User = JSON.parse(savedUser);
-        console.log('✅ Restoring user from localStorage:', user);
-        
-        // ✅ Set user IMMEDIATELY from localStorage
-        setCurrentUser(user);
-        
-        // Try to get fresh user data from API (optional refresh)
-        try {
-          console.log('🔄 Attempting to refresh user data...');
-          await refreshUserData();
-          console.log('✅ User data refreshed successfully');
-        } catch (error) {
-          console.warn('⚠️ Failed to refresh user data, using cached data:', error);
-          // Don't throw error here - cached data is fine
-        }
-      } catch (parseError) {
-        console.error('❌ Failed to parse saved user data:', parseError);
-        // Clear corrupted data
+        setCurrentUser(JSON.parse(savedUser));
+      } catch {
         localStorage.removeItem('user');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
       }
-    } else {
-      console.log('ℹ️ No saved user data found');
     }
-  } catch (error) {
-    console.error('❌ Auth initialization failed:', error);
-    setError('Failed to initialize authentication');
+
+    // If the access token is missing/expired but we have a refresh token, refresh now
+    if (!savedToken && savedRefreshToken) {
+      try {
+        await apiService.refreshToken();
+      } catch (e) {
+        console.warn('Refresh on init failed:', e);
+      }
+    }
+
+    // Try to pull fresh user (this will auto-refresh on 401 because of the apiCall change)
+    try {
+      await refreshUserData();
+    } catch (e) {
+      console.warn('Failed to refresh user data. Keeping cached user.', e);
+      // do NOT clear currentUser here; allow cached user to keep the app mounted
+    }
   } finally {
-    // ✅ CRITICAL: Always set loading to false when done
     setIsLoading(false);
-    console.log('✅ Auth initialization complete');
   }
 };
+
 
   // ========== DATA LOADING ==========
 
@@ -375,7 +362,10 @@ const initializeAuth = async () => {
       const response = await apiService.getCurrentUser();
       if (response.success && response.data) {
         setCurrentUser(response.data.user);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+
+        console.log("my data", response.data);
+       //  localStorage.setItem('user', JSON.stringify(response.data.user));
+         setCurrentUser(response.data.user);
       }
     } catch (error) {
       console.error('Failed to refresh user data:', error);
@@ -385,15 +375,194 @@ const initializeAuth = async () => {
 
   // ========== PERMISSION METHODS ==========
 
-  const hasPermission = (permission: string): boolean => {
-    if (!currentUser) return false;
+//   const hasPermission = (permission: string): boolean => {
+
+//     console.log("perms",permission);
+// //perms dashboard.view
+
+//     console.log("user",currentUser?.permissions);
+// /*
+// [
+//     {
+//         "key": "attendance.edit",
+//         "module": "attendance",
+//         "action": "edit",
+//         "name": "Edit Attendance",
+//         "description": "Modify attendance records"
+//     },
+//     {
+//         "key": "attendance.reports",
+//         "module": "attendance",
+//         "action": "reports",
+//         "name": "Attendance Reports",
+//         "description": "Generate attendance reports"
+//     },
+//     {
+//         "key": "attendance.view",
+//         "module": "attendance",
+//         "action": "view",
+//         "name": "View Attendance",
+//         "description": "View attendance records and reports"
+//     },
+//     {
+//         "key": "dashboard.view",
+//         "module": "dashboard",
+//         "action": "view",
+//         "name": "View Dashboard",
+//         "description": "Access to main dashboard and overview"
+//     },
+//     {
+//         "key": "employees.create",
+//         "module": "employees",
+//         "action": "create",
+//         "name": "Add Employees",
+//         "description": "Add new employees to the system"
+//     },
+//     {
+//         "key": "employees.delete",
+//         "module": "employees",
+//         "action": "delete",
+//         "name": "Delete Employees",
+//         "description": "Remove employees from system"
+//     },
+//     {
+//         "key": "employees.edit",
+//         "module": "employees",
+//         "action": "edit",
+//         "name": "Edit Employees",
+//         "description": "Modify employee information"
+//     },
+//     {
+//         "key": "employees.view",
+//         "module": "employees",
+//         "action": "view",
+//         "name": "View Employees",
+//         "description": "View employee list and profiles"
+//     },
+//     {
+//         "key": "leaves.approve",
+//         "module": "leaves",
+//         "action": "approve",
+//         "name": "Approve Leaves",
+//         "description": "Approve employee leave requests"
+//     },
+//     {
+//         "key": "leaves.reject",
+//         "module": "leaves",
+//         "action": "reject",
+//         "name": "Reject Leaves",
+//         "description": "Reject employee leave requests"
+//     },
+//     {
+//         "key": "leaves.view",
+//         "module": "leaves",
+//         "action": "view",
+//         "name": "View Leaves",
+//         "description": "View leave records and requests"
+//     },
+//     {
+//         "key": "payroll.edit",
+//         "module": "payroll",
+//         "action": "edit",
+//         "name": "Edit Payroll",
+//         "description": "Modify payroll records and salaries"
+//     },
+//     {
+//         "key": "payroll.process",
+//         "module": "payroll",
+//         "action": "process",
+//         "name": "Process Payroll",
+//         "description": "Process monthly payroll"
+//     },
+//     {
+//         "key": "payroll.reports",
+//         "module": "payroll",
+//         "action": "reports",
+//         "name": "Payroll Reports",
+//         "description": "Generate payroll reports"
+//     },
+//     {
+//         "key": "payroll.view",
+//         "module": "payroll",
+//         "action": "view",
+//         "name": "View Payroll",
+//         "description": "View payroll information and reports"
+//     },
+//     {
+//         "key": "rbac.assign",
+//         "module": "rbac",
+//         "action": "assign",
+//         "name": "Assign Roles",
+//         "description": "Assign roles to users"
+//     },
+//     {
+//         "key": "rbac.create",
+//         "module": "rbac",
+//         "action": "create",
+//         "name": "Create Roles",
+//         "description": "Create new custom roles"
+//     },
+//     {
+//         "key": "rbac.delete",
+//         "module": "rbac",
+//         "action": "delete",
+//         "name": "Delete Roles",
+//         "description": "Delete custom roles"
+//     },
+//     {
+//         "key": "rbac.edit",
+//         "module": "rbac",
+//         "action": "edit",
+//         "name": "Edit Roles",
+//         "description": "Modify existing roles"
+//     },
+//     {
+//         "key": "rbac.view",
+//         "module": "rbac",
+//         "action": "view",
+//         "name": "View Roles",
+//         "description": "View roles and permissions"
+//     },
+//     {
+//         "key": "settings.edit",
+//         "module": "settings",
+//         "action": "edit",
+//         "name": "Edit Settings",
+//         "description": "Modify system settings"
+//     },
+//     {
+//         "key": "settings.view",
+//         "module": "settings",
+//         "action": "view",
+//         "name": "View Settings",
+//         "description": "View system configuration"
+//     }
+// ]
+
+// */
+ 
+
+//     if (!currentUser) return false;
     
-    // Super admin has all permissions
-    if (currentUser.isSuperAdmin) return true;
+//     // Super admin has all permissions
+//     if (currentUser.isSuperAdmin) return true;
     
-    // Check if user has specific permission
-    return currentUser.permissions.includes(permission);
-  };
+//     // Check if user has specific permission
+//     return currentUser.permissions.includes(permission);
+//   };
+
+const hasPermission = (permission: string): boolean => {
+  if (!currentUser) return false;
+  if (!!currentUser.isSuperAdmin) return true;
+
+  // Handle object-based permissions (after refresh)
+  if (Array.isArray(currentUser.permissions) && typeof currentUser.permissions[0] === 'object') {
+    return currentUser.permissions.some((perm: any) => perm.key === permission);
+  }
+
+  // Handle string-based permissions (e.g., fresh login)
+  return currentUser.permissions.includes(permission);
+};
 
   const getAllPermissions = (): string[] => {
     return currentUser?.permissions || [];
@@ -577,13 +746,16 @@ export const DynamicProtectedRoute: React.FC<DynamicProtectedRouteProps> = ({
   }
 
   // Check if user is logged in
-  if (!currentUser) {
-    window.location.href = '/admin/login';
-    return null;
-  }
+if (!currentUser) {
+  return <Navigate to="/admin/login" replace />;
+}
 
   // Check if user has required permission
   if (!hasPermission(permission)) {
+    console.log('🚫 User does not have required permission:', permission);
+
+    //User does not have required permission: dashboard.view
+
     return fallback ? <>{fallback}</> : (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">

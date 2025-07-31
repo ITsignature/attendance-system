@@ -3,8 +3,7 @@
 import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
 import Loadable from 'src/layouts/full/shared/loadable/Loadable';
-import { DynamicProtectedRoute, UnauthorizedPage } from '../components/RBACSystem/rbacExamples';
-import { useDynamicRBAC } from '../components/RBACSystem/rbacSystem';
+import { useDynamicRBAC ,DynamicProtectedRoute } from '../components/RBACSystem/rbacSystem';
 
 /* *Layouts** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
@@ -18,6 +17,8 @@ const Attendance = Loadable(lazy(() => import('../components/Attendance/Attendan
 
 //Payroll
 const Payroll = Loadable(lazy(() => import('../components/Payroll/PayrollView')));
+
+const UnauthorizedPage = Loadable(lazy(() => import('../views/UnauthorizedPage')));
 
 //Employees
 const AllEmployees = Loadable(lazy(() => import('../components/Employees/AllEmployees')));
@@ -47,7 +48,7 @@ const Error = Loadable(lazy(() => import('../views/auth/error/Error')));
 const RoleManagement = Loadable(lazy(() => import('../components/RBACSystem/roleManagement')));
 const AdminUserManagement = Loadable(lazy(() => import('../components/RBACSystem/adminUserManagement')));
 const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLogin')));
-const RbacExamples = Loadable(lazy(() => import('../components/RBACSystem/rbacExamples')));
+
 
 // ==============================================
 // SINGLE AUTHENTICATION WRAPPER FOR ENTIRE APP
@@ -98,7 +99,7 @@ const AuthenticatedApp = ({ children }: { children: React.ReactNode }) => {
   // Logged in as admin - show the app
   console.log('✅ User authenticated, showing app for:', currentUser.name);
   return <>{children}</>;
-};
+};  
 
 // ==============================================
 // UPDATED ROUTER CONFIGURATION
@@ -277,15 +278,15 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/rbacexamples', 
-        exact: true, 
-        element: (
-          <DynamicProtectedRoute permission="dashboard.view">
-            <RbacExamples />
-          </DynamicProtectedRoute>
-        )
-      },
+      // { 
+      //   path: '/rbacexamples', 
+      //   exact: true, 
+      //   element: (
+      //     <DynamicProtectedRoute permission="dashboard.view">
+      //       <RbacExamples />
+      //     </DynamicProtectedRoute>
+      //   )
+      // },
       
       // Unauthorized page (for permission-denied within app)
       { 
@@ -324,5 +325,5 @@ const Router = [
   },
 ];
 
-const router = createBrowserRouter(Router, { basename: '/MatDash' });
+const router = createBrowserRouter(Router);
 export default router;
