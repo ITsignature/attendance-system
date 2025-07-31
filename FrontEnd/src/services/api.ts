@@ -92,6 +92,7 @@ export interface UpdateAttendanceData {
   work_type?: 'office' | 'remote' | 'hybrid';
   notes?: string;
 }
+
 class ApiService {
   private baseURL: string;
   private token: string | null = null;
@@ -143,7 +144,7 @@ private getHeaders(): HeadersInit {
 }
 
   // Generic API call method
-  private async apiCall<T>(
+  public async apiCall<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
