@@ -21,7 +21,7 @@ import {
   HiArrowRight,
   HiHome
 } from 'react-icons/hi';
-import { DynamicProtectedComponent } from '../RBACSystem/rbacExamples';
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 import apiService from '../../services/api';
 import FileUploadBox from './FileUploadBox';
 

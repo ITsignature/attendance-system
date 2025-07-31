@@ -8,13 +8,11 @@ import TodayAttendance from 'src/components/dashboard/TodayAttendance';
 import OnLeaveToday from 'src/components/dashboard/OnLeaveToday';
 
 const Dashboard = () => {
+
+  const user = localStorage.getItem('user');
+  console.log(user);
   return (
     <div className="grid grid-cols-12 gap-30">
-      {/* <div className="lg:col-span-4 col-span-12"> */}
-        {/* <div className="grid grid-cols-12 h-full items-stretch"> */}
-          {/* <div className="col-span-12 mb-30">
-            <NewCustomers />
-          </div> */}
           <div className="col-span-4">
             <TotalEmployees />
           </div>

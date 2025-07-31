@@ -801,32 +801,63 @@ router.post('/',
 // =============================================
 // DELETE EMPLOYEE
 // =============================================
-router.delete('/:id', 
+// router.delete('/:id', 
+//   checkPermission('employees.delete'),
+//   checkResourceOwnership('employee'),
+//   asyncHandler(async (req, res) => {
+//     const db = getDB();
+    
+//     const [result] = await db.execute(`
+//       UPDATE employees 
+//       SET employment_status = 'terminated', updated_at = NOW()
+//       WHERE id = ? AND client_id = ?
+//     `, [req.params.id, req.user.clientId]);
+
+//     if (result.affectedRows === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Employee not found'
+//       });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Employee terminated successfully'
+//     });
+//   })
+// );
+
+router.post('/bulk-delete',
   checkPermission('employees.delete'),
-  checkResourceOwnership('employee'),
   asyncHandler(async (req, res) => {
     const db = getDB();
-    
-    const [result] = await db.execute(`
-      UPDATE employees 
-      SET employment_status = 'terminated', updated_at = NOW()
-      WHERE id = ? AND client_id = ?
-    `, [req.params.id, req.user.clientId]);
+    const ids = req.body.ids; // Expecting an array of employee IDs
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: 'Employee not found'
+        message: 'A non-empty array of employee IDs is required.'
       });
     }
 
+    // Construct placeholders for the IN clause
+    const placeholders = ids.map(() => '?').join(', ');
+
+    // Append client_id for all rows
+    const params = [...ids, req.user.clientId];
+
+    const [result] = await db.execute(`
+      UPDATE employees 
+      SET employment_status = 'terminated', updated_at = NOW()
+      WHERE id IN (${placeholders}) AND client_id = ?
+    `, params);
+
     res.status(200).json({
       success: true,
-      message: 'Employee terminated successfully'
+      message: `Terminated ${result.affectedRows} employee(s).`
     });
   })
 );
-
 
 
 module.exports = router;
