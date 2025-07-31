@@ -9,7 +9,7 @@ export interface Role {
   name: string;
   description: string;
   access_level: 'basic' | 'moderate' | 'full';
-  is_system_role: boolean;
+  is_system_role: number;
   is_editable: boolean;
   is_active: boolean;
   permissions?: string[];
@@ -238,6 +238,8 @@ const initializeAuth = async () => {
       if (response.success && response.data) {
         console.log('✅ Roles loaded:', response.data.roles?.length || 0);
         setRoles(response.data.roles || []);
+        
+
       }
     } catch (error) {
       console.error('❌ Failed to load roles:', error);
@@ -252,6 +254,7 @@ const initializeAuth = async () => {
       if (response.success && response.data) {
         console.log('✅ Clients loaded:', response.data.clients?.length || 0);
         setClients(response.data.clients || []);
+        console.log("sam",response.data)
       }
     } catch (error) {
       console.error('❌ Failed to load clients:', error);
@@ -259,6 +262,7 @@ const initializeAuth = async () => {
     }
   };
 
+ 
   // ========== DATA LOADING ON USER LOGIN ==========
   useEffect(() => {
     const initializeData = async () => {
@@ -267,7 +271,7 @@ const initializeAuth = async () => {
         try {
           await Promise.all([
             loadRoles(),
-            // loadClients(), // Uncomment if you have client endpoints
+            loadClients(), // Uncomment if you have client endpoints
           ]);
         } catch (error) {
           console.error('Failed to initialize RBAC data:', error);
@@ -302,7 +306,7 @@ const initializeAuth = async () => {
         }
         
         // ✅ SAVE TO LOCALSTORAGE
-        localStorage.setItem('user', JSON.stringify(user));
+      //  localStorage.setItem('user', JSON.stringify(user));
         localStorage.setItem('accessToken', response.data.accessToken);
         localStorage.setItem('refreshToken', response.data.refreshToken);
         
@@ -364,7 +368,7 @@ const initializeAuth = async () => {
         setCurrentUser(response.data.user);
 
         console.log("my data", response.data);
-       //  localStorage.setItem('user', JSON.stringify(response.data.user));
+        // localStorage.setItem('user', JSON.stringify(response.data.user));
          setCurrentUser(response.data.user);
       }
     } catch (error) {
@@ -577,6 +581,7 @@ const hasPermission = (permission: string): boolean => {
   // ========== CLIENT MANAGEMENT ==========
 
   const setCurrentClient = (clientId: string) => {
+    console.log('🚀 Setting current client:', clientId);
     const client = clients.find(c => c.id === clientId);
     if (client) {
       setCurrentClientState(client);

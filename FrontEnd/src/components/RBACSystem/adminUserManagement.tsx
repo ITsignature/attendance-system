@@ -272,7 +272,7 @@ const AdminUserManagementPage: React.FC = () => {
   };
 
   // Filter users by current client (unless super admin)
-  const filteredUsers = currentUser?.isSuperAdmin 
+  const filteredUsers = currentUser?.is_super_admin 
     ? adminUsers 
     : adminUsers.filter(user => {
         // If currentClient is undefined, show all users for this user's client
@@ -280,9 +280,9 @@ const AdminUserManagementPage: React.FC = () => {
         return user.client_id === userClientId;
       });
 
-  console.log('🔍 Admin User Debug Info:');
+  console.log('🔍 Admin User Debug Info:',currentUser);
   console.log('- Your current user:', currentUser?.name, '| Email:', currentUser?.email);
-  console.log('- Are you super admin?', currentUser?.isSuperAdmin);
+  console.log('- Are you super admin?', currentUser?.is_super_admin);
   console.log('- Current client from context:', currentClient?.id, '| Client name:', currentClient?.name);
   console.log('- Current user client ID:', currentUser?.clientId);
   console.log('- Using client ID for filtering:', currentClient?.id || currentUser?.clientId);

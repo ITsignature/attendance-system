@@ -198,7 +198,7 @@ private async apiCall<T>(
     if (response.success && response.data) {
       this.setToken(response.data.accessToken);
       localStorage.setItem('refreshToken', response.data.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+     // localStorage.setItem('user', JSON.stringify(response.data.user));
     }
 
     return response as LoginResponse;

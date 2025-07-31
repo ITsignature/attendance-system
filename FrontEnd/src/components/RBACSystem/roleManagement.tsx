@@ -31,6 +31,7 @@ const RoleManagementPage: React.FC = () => {
     accessLevel: 'basic' as 'basic' | 'moderate' | 'full'
   });
 
+  console.log('🚀 Available permissions 123:', roles);
   // Load permissions when component mounts
   useEffect(() => {
     loadPermissions();
@@ -47,6 +48,7 @@ const RoleManagementPage: React.FC = () => {
     }
   };
 
+  
   // Check if user can manage roles
   if (!hasPermission('rbac.view')) {
     return (
@@ -333,6 +335,9 @@ const RoleManagementPage: React.FC = () => {
     ));
   };
 
+
+
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -367,12 +372,13 @@ const RoleManagementPage: React.FC = () => {
       {/* Roles Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {roles.map((role) => (
+          
           <Card key={role.id} className="hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
                   {role.name}
-                  {role.is_system_role && (
+                  {role.is_system_role === 1 && (
                     <Badge color="blue" size="sm" className="ml-2">System</Badge>
                   )}
                 </h3>
