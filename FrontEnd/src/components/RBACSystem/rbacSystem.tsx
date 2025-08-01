@@ -247,20 +247,24 @@ const initializeAuth = async () => {
     }
   };
 
-  const loadClients = async (): Promise<void> => {
-    try {
-      console.log('🔄 Loading clients from API...');
-      const response = await apiService.getClients();
-      if (response.success && response.data) {
-        console.log('✅ Clients loaded:', response.data.clients?.length || 0);
-        setClients(response.data.clients || []);
-        console.log("sam",response.data)
-      }
-    } catch (error) {
-      console.error('❌ Failed to load clients:', error);
-      // Don't set error for clients as it might not be available
-    }
-  };
+  // const loadClients = async (): Promise<void> => {
+
+  //   try {
+
+
+      
+  //     console.log('🔄 Loading clients from API...');
+  //     const response = await apiService.getClients();
+  //     if (response.success && response.data) {
+  //       console.log('✅ Clients loaded:', response.data.clients?.length || 0);
+  //       setClients(response.data.clients || []);
+  //       console.log("sam",response.data)
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Failed to load clients:', error);
+  //     // Don't set error for clients as it might not be available
+  //   }
+  // };
 
  
   // ========== DATA LOADING ON USER LOGIN ==========
@@ -271,7 +275,7 @@ const initializeAuth = async () => {
         try {
           await Promise.all([
             loadRoles(),
-            loadClients(), // Uncomment if you have client endpoints
+          //  loadClients(), // Uncomment if you have client endpoints
           ]);
         } catch (error) {
           console.error('Failed to initialize RBAC data:', error);

@@ -27,8 +27,8 @@ const EmployeeDetails = Loadable(lazy(() => import('../components/Employees/Empl
 const EditEmployeeDetails = Loadable(lazy(() => import('../components/Employees/EditEmployeeDetails')));
 
 //Departments
-const ViewDepartments = Loadable(lazy(() => import('../components/Departments/DepartmentsPage')));
-const EmployeesByDesignation = Loadable(lazy(() => import('../components/Departments/EmployeesByDesignation')));
+const ViewDepartments = Loadable(lazy(() => import('../components/Departments/EmployeesByDesignation')));
+const DepartmentManagement = Loadable(lazy(() => import('../components/Departments/DepartmentsPage')));
 
 //Leaves
 const LeavePage = Loadable(lazy(() => import('../components/Leaves/leavesPage')));
@@ -179,11 +179,11 @@ const Router = [
         )
       },
       { 
-        path: '/departments-employees', 
+        path: '/departments-manage', 
         exact: true, 
         element: (
           <DynamicProtectedRoute permission="employees.view">
-            <EmployeesByDesignation />
+            <DepartmentManagement />
           </DynamicProtectedRoute>
         )
       },

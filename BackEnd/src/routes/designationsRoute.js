@@ -15,7 +15,7 @@ router.get('/',
     const db = getDB();
     const { department_id } = req.query;
     
-    let whereClause = 'WHERE des.client_id = ? AND des.is_active = TRUE';
+    let whereClause = 'WHERE des.client_id = ? AND des.is_active = 1';
     let queryParams = [req.user.clientId];
     
     if (department_id) {
@@ -50,47 +50,121 @@ router.get('/',
 );
 
 // CREATE designation
-router.post('/', 
+router.post(
+  '/',
   checkPermission('employees.create'),
   asyncHandler(async (req, res) => {
-    const { title, department_id, salary_range_min, salary_range_max } = req.body;
+    const { title, department_id, responsibilities = null } = req.body;
     const db = getDB();
-    
-    // Validation
+    const clientId = req.user.clientId;
+
+    // 1. Validate required fields
     if (!title || !department_id) {
       return res.status(400).json({
         success: false,
-        message: 'Title and department_id are required'
+        message: 'Title and department_id are required.',
       });
     }
-    
-    // Check if department exists
+
+    // 2. Ensure department exists and belongs to this client
     const [deptCheck] = await db.execute(
-      'SELECT id FROM departments WHERE id = ? AND client_id = ?',
-      [department_id, req.user.clientId]
+      'SELECT id FROM departments WHERE id = ? AND client_id = ? AND is_active = TRUE',
+      [department_id, clientId]
     );
-    
     if (deptCheck.length === 0) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: 'Department not found'
+        message: 'Department not found.',
       });
     }
-    
-    // Insert new designation
-    const [result] = await db.execute(`
-      INSERT INTO designations (title, department_id, min_salary, max_salary, client_id, is_active)
-      VALUES (?, ?, ?, ?, ?, TRUE)
-    `, [title, department_id, salary_range_min || null, salary_range_max || null, req.user.clientId]);
-    
+
+    // 3. Check for duplicate designation title per client and department
+    const [existing] = await db.execute(
+      `SELECT id FROM designations
+       WHERE client_id = ? AND department_id = ? AND title = ? AND is_active = TRUE
+       LIMIT 1`,
+      [clientId, department_id, title]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'A designation with this title already exists in this department.',
+      });
+    }
+
+    // 4. Insert new designation
+    const [result] = await db.execute(
+      `
+      INSERT INTO designations (
+        id, client_id, title, department_id,
+        responsibilities, is_active, created_at, updated_at
+      ) VALUES (
+        UUID(), ?, ?, ?, ?, TRUE, NOW(), NOW()
+      )
+      `,
+      [clientId, title, department_id, responsibilities]
+    );
+
     res.status(201).json({
       success: true,
-      message: 'Designation created successfully',
+      message: 'Designation created successfully.',
       data: {
-        designationId: result.insertId
-      }
+        designationId: result.insertId || null,
+      },
     });
   })
 );
+
+
+
+
+// routes/designations.js
+router.delete(
+  '/:id',
+  checkPermission('employees.delete'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const designationId = req.params.id;
+    const clientId = req.user.clientId;
+
+    // 1️⃣ Check if designation exists and belongs to this client
+    const [existing] = await db.execute(
+      `SELECT id FROM designations WHERE id = ? AND client_id = ? AND is_active = TRUE LIMIT 1`,
+      [designationId, clientId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Designation not found or already inactive.',
+      });
+    }
+
+    // 2️⃣ Check if any employees are using this designation
+    const [inUse] = await db.execute(
+      `SELECT COUNT(*) AS count FROM employees WHERE designation_id = ? AND client_id = ?`,
+      [designationId, clientId]
+    );
+
+    if (inUse[0].count > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Cannot delete designation. It is assigned to one or more employees.',
+      });
+    }
+
+    // 3️⃣ Soft-delete the designation
+    await db.execute(
+      `UPDATE designations SET is_active = FALSE, updated_at = NOW() WHERE id = ? AND client_id = ?`,
+      [designationId, clientId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Designation deleted (soft) successfully.',
+    });
+  })
+);
+
 
 module.exports = router;

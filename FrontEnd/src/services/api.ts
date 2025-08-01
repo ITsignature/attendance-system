@@ -198,7 +198,7 @@ private async apiCall<T>(
     if (response.success && response.data) {
       this.setToken(response.data.accessToken);
       localStorage.setItem('refreshToken', response.data.refreshToken);
-     // localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('user', JSON.stringify(response.data.user));
     }
 
     return response as LoginResponse;
@@ -363,11 +363,67 @@ async exportEmployees(format: 'csv' | 'excel' = 'csv', filters?: EmployeeFilters
   return this.apiCall(`/api/employees/export${queryString}`);
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------------
 // Enhanced Department methods
+// ---------------------------------------------------------------------------------------------------------------------------------
+
 async getDepartments(): Promise<ApiResponse> {
   console.log('🔄 Fetching departments');
   return this.apiCall('/api/departments');
 }
+
+async getDepartmentsWithEmployees(): Promise<ApiResponse> {
+  console.log('🔄 Fetching departments');
+  return this.apiCall('/api/departments/with-employees');
+}
+
+async getDepartmentsWithDesignations(): Promise<ApiResponse> {
+  console.log('🔄 Fetching departments');
+  return this.apiCall('/api/departments/with-designations');
+}
+
+
+async createDepartment(deptData: {
+  name: string;
+  description?: string;
+  manager_id?: string | null;
+  budget?: number | null;
+}): Promise<ApiResponse> {
+  return this.apiCall('/api/departments', {
+    method: 'POST',
+    body: JSON.stringify(deptData),
+  });
+}
+
+
+async deleteDesignation(id: string): Promise<ApiResponse> {
+  console.log('🔄 Deleting designation:', id);
+  return this.apiCall(`/api/designations/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+
+
+async deleteDepartment(id: string): Promise<ApiResponse> {
+  console.log('🔄 Deleting department:', id);
+  return this.apiCall(`/api/departments/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+
+async createDesignation(deptData: {
+  title: string;
+  department_id: string;
+  responsibilities: string[];
+}): Promise<ApiResponse> {
+  return this.apiCall('/api/designations', {
+    method: 'POST',
+    body: JSON.stringify(deptData),
+  }); 
+}
+
 
 async getDesignations(departmentId?: string): Promise<ApiResponse> {
   const queryString = departmentId ? `?department_id=${departmentId}` : '';

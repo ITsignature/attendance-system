@@ -52,8 +52,8 @@ app.use('/api/', limiter);
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
-      'http://localhost:3000',
       'http://localhost:5173',
+      'http://localhost:3000',
       'http://localhost:5174'  // Add any other ports you use
     ];
     

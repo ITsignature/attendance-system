@@ -703,7 +703,9 @@ router.post('/admin-users', [
   body('department').optional().trim(),
   body('is_active').optional().isBoolean()
 ], asyncHandler(async (req, res) => {
-  console.log('🔍 Create admin user request:', req.body);
+
+
+  console.log('🔍 Create admin user request 1:', req.body);
   
   const errors = validationResult(req);
   if (!errors.isEmpty()) {

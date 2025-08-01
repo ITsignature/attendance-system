@@ -1,133 +1,194 @@
-// src/pages/EmployeesByDesignation.tsx
-import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  Table,
-  TextInput,
-  Badge,
-  Button,
-} from "flowbite-react";
-import { HiOutlineFilter, HiOutlinePlus } from "react-icons/hi";
+// src/pages/ManageDepartments.tsx
+import { useEffect, useState } from "react";
+import { Table, Button, TextInput, Badge, Textarea } from "flowbite-react";
+import { HiOutlinePlus, HiTrash } from "react-icons/hi";
+import apiService from "../../services/api";
 
-const mockEmployees = [
-  {
-    id: "345321231",
-    name: "Darlene Robertson",
-    designation: "Lead UI/UX Designer",
-    type: "Office",
-    status: "Permanent",
-    avatar: "/assets/images/avatars/avatar-1.jpg",
-  },
-  {
-    id: "987890345",
-    name: "Floyd Miles",
-    designation: "Lead UI/UX Designer",
-    type: "Office",
-    status: "Permanent",
-    avatar: "/assets/images/avatars/avatar-2.jpg",
-  },
-  {
-    id: "453367122",
-    name: "Cody Fisher",
-    designation: "Sr. UI/UX Designer",
-    type: "Remote",
-    status: "Permanent",
-    avatar: "/assets/images/avatars/avatar-3.jpg",
-  },
-  // Add more mock employees...
-];
+interface Department {
+  id: string;
+  name: string;
+  description?: string;
+}
 
-const EmployeesByDesignation = () => {
-  const { name } = useParams<{ name: string }>();
-  const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState("");
+interface Designation {
+  id: string;
+  designation_name: string;
+  responsibilities?: string;
+  department_id: string;
+}
 
-  const filteredEmployees = mockEmployees.filter(
-    (emp) =>
-      emp.designation.toLowerCase().includes(name?.toLowerCase() || "") &&
-      emp.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+const ManageDepartments = () => {
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
+  const [newDeptName, setNewDeptName] = useState("");
+  const [newDeptDesc, setNewDeptDesc] = useState("");
+  const [newDesigName, setNewDesigName] = useState("");
+  const [newDesigResp, setNewDesigResp] = useState("");
+  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const res = await apiService.getDepartmentsWithDesignations();
+      setDepartments(res.data.departments);
+      setDesignations(res.data.designations);
+      console.log("depatments data", res.data);
+    } catch (error) {
+      console.error("Failed to load data", error);
+    }
+  };
+
+  console.log("desa", departments);
+
+  const handleAddDepartment = async () => {
+    if (!newDeptName.trim()) return;
+    try {
+      await apiService.createDepartment({ name: newDeptName, description: newDeptDesc });
+      setNewDeptName("");
+      setNewDeptDesc("");
+      fetchData();
+    } catch (err) {
+      console.error("Failed to create department", err);
+    }
+  };
+
+  const handleAddDesignation = async () => {
+    if (!newDesigName.trim() || !selectedDeptId) return;
+    try {
+      await apiService.createDesignation({ title: newDesigName, responsibilities: newDesigResp, department_id: selectedDeptId });
+      setNewDesigName("");
+      setNewDesigResp("");
+      fetchData();
+    } catch (err) {
+      console.error("Failed to create designation", err);
+    }
+  };
+
+  const handleDeleteDepartment = async (id: string) => {
+    try {
+      await apiService.deleteDepartment(id);
+      fetchData();
+    } catch (err) {
+      console.error("Failed to delete department", err);
+    }
+  };
+
+  const handleDeleteDesignation = async (id: string) => {
+    try {
+      await apiService.deleteDesignation(id);
+      fetchData();
+    } catch (err) {
+      console.error("Failed to delete designation", err);
+    }
+  };
 
   return (
-    <div className="rounded-xl shadow-md dark:shadow-dark-md bg-white dark:bg-darkgray p-6 w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-        <TextInput
-          type="search"
-          placeholder="Search employee"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full sm:max-w-xs"
-        />
-        <div className="flex gap-2">
-          <Button color="purple" className="flex items-center gap-2" onClick={() => navigate("/add-employee")}>
-            <HiOutlinePlus className="text-lg" />
-            Add New Employee
-          </Button>
-          <Button color="gray" className="flex items-center gap-2">
-            <HiOutlineFilter className="text-lg" />
-            Filter
-          </Button>
-        </div>
-      </div>
+    <div className="p-6 rounded-xl shadow-md bg-white dark:bg-darkgray w-full">
+      <h2 className="text-2xl font-semibold mb-6">Manage Departments & Designations</h2>
 
-      <h2 className="text-2xl font-semibold mb-4">Employees: {name}</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Department Section */}
+        <div>
+          <div className="flex flex-col gap-2 mb-4">
+            <TextInput
+              placeholder="New department name"
+              value={newDeptName}
+              onChange={(e) => setNewDeptName(e.target.value)}
+            />
+            <Textarea
+              placeholder="Description (optional)"
+              value={newDeptDesc}
+              onChange={(e) => setNewDeptDesc(e.target.value)}
+              rows={2}
+            />
+            <Button color="purple" onClick={handleAddDepartment} className="w-max">
+              <HiOutlinePlus className="me-1" /> Add Department
+            </Button>
+          </div>
 
-      {filteredEmployees.length === 0 ? (
-        <p className="text-gray-500">No employees found for this designation.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <Table hoverable>
+          <Table striped={false} hoverable={false} className="w-full">
             <Table.Head>
-              <Table.HeadCell className="p-6">Employee Name</Table.HeadCell>
-              <Table.HeadCell>Employee ID</Table.HeadCell>
-              <Table.HeadCell>Designation</Table.HeadCell>
-              <Table.HeadCell>Type</Table.HeadCell>
-              <Table.HeadCell>Status</Table.HeadCell>
+              <Table.HeadCell>Department</Table.HeadCell>
               <Table.HeadCell>Actions</Table.HeadCell>
             </Table.Head>
-            <Table.Body className="divide-y divide-border dark:divide-darkborder">
-              {filteredEmployees.map((emp, index) => (
-                <Table.Row
-                  key={index}
-                  className="cursor-pointer hover:bg-gray-100"
-                  onClick={() => navigate(`/employee/${emp.id}`)}
-                  
-                >
-                  <Table.Cell className="whitespace-nowrap ps-6">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={emp.avatar}
-                        alt={emp.name}
-                        className="h-10 w-10 rounded-full object-cover"
-                      />
-                      <span className="text-sm font-medium">{emp.name}</span>
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>{emp.id}</Table.Cell>
-                  <Table.Cell>{emp.designation}</Table.Cell>
-                  <Table.Cell>{emp.type}</Table.Cell>
+            <Table.Body>
+              {departments.map((dept) => (
+                <Table.Row key={dept.id}>
                   <Table.Cell>
-                    <Badge color="lightsuccess" className="text-success">
-                      {emp.status}
+                    <Badge
+                      className="cursor-pointer text-sm"
+                      color={selectedDeptId === dept.id ? "purple" : "gray"}
+                      onClick={() => setSelectedDeptId(dept.id)}
+                    >
+                      {dept.name}
                     </Badge>
+                    {dept.description && <p className="text-sm text-gray-500 mt-1">{dept.description}</p>}
                   </Table.Cell>
-                  <Table.Cell className="flex gap-2 text-purple-600">
-                    <Button size="xs" color="light" onClick={(e:any) => e.stopPropagation()}>
-                      <HiOutlinePlus className="text-lg" />
+                  <Table.Cell>
+                    <Button size="xs" color="gray" onClick={() => handleDeleteDepartment(dept.id)}>
+                      <HiTrash />
                     </Button>
-                    <Button size="xs" color="light" onClick={(e:any) => e.stopPropagation()}>
-                      <HiOutlineFilter className="text-lg" />
-                    </Button>
-                    {/* Add your own action handlers here */}
                   </Table.Cell>
                 </Table.Row>
               ))}
             </Table.Body>
           </Table>
         </div>
-      )}
+
+        {/* Designation Section */}
+        <div>
+          <div className="flex flex-col gap-2 mb-4">
+            <TextInput
+              placeholder="New designation title"
+              value={newDesigName}
+              onChange={(e) => setNewDesigName(e.target.value)}
+              disabled={!selectedDeptId}
+            />
+            <Textarea
+              placeholder="Responsibilities (optional)"
+              value={newDesigResp}
+              onChange={(e) => setNewDesigResp(e.target.value)}
+              rows={2}
+              disabled={!selectedDeptId}
+            />
+            <Button color="purple" onClick={handleAddDesignation} disabled={!selectedDeptId} className="w-max">
+              <HiOutlinePlus className="me-1" /> Add Designation
+            </Button>
+          </div>
+
+          {selectedDeptId ? (
+            <Table striped={false} hoverable={false} className="w-full">
+              <Table.Head>
+                <Table.HeadCell>Designation</Table.HeadCell>
+                <Table.HeadCell>Responsibilities</Table.HeadCell>
+                <Table.HeadCell>Actions</Table.HeadCell>
+              </Table.Head>
+              <Table.Body>
+                {designations
+                  .filter((d) => d.department_id === selectedDeptId)
+                  .map((d) => (
+                    <Table.Row key={d.id}>
+                      <Table.Cell>{d.designation_name}</Table.Cell>
+                      <Table.Cell>{d.responsibilities || <span className="text-gray-400 italic">—</span>}</Table.Cell>
+                      <Table.Cell>
+                        <Button size="xs" color="gray" onClick={() => handleDeleteDesignation(d.id)}>
+                          <HiTrash />
+                        </Button>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+              </Table.Body>
+            </Table>
+          ) : (
+            <p className="text-gray-500">Select a department to view its designations.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
-export default EmployeesByDesignation;
+export default ManageDepartments;

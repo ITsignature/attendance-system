@@ -63,6 +63,8 @@ const AdminUserManagementPage: React.FC = () => {
       if (response.success && response.data) {
         console.log('✅ Admin users loaded:', response.data.users.length);
         setAdminUsers(response.data.users);
+
+        console.log(response.data);
       } else {
         console.error('❌ Failed to load admin users:', response.message);
         setError('Failed to load admin users');

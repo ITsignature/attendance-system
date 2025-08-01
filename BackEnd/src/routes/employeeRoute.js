@@ -833,6 +833,9 @@ router.post('/bulk-delete',
     const db = getDB();
     const ids = req.body.ids; // Expecting an array of employee IDs
 
+    console.log("check cli",req.body)
+    console.log("check cli",req.user.clientId);
+
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({
         success: false,
