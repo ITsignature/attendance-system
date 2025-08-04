@@ -1024,7 +1024,7 @@ router.post('/bulk-delete',
   checkPermission('employees.delete'),
   asyncHandler(async (req, res) => {
     const db = getDB();
-    const ids = req.body.ids; // Expecting an array of employee IDs
+    const ids = req.body.employee_ids; // Expecting an array of employee IDs
 
     console.log("check cli",req.body)
     console.log("check cli",req.user.clientId);
