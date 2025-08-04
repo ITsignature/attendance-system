@@ -68,13 +68,15 @@ class SettingsApiService {
     });
   }
 
-  // Bulk update settings
-  async updateSettings(settings: Record<string, any>): Promise<any> {
-    return apiService.apiCall('/api/settings', {
-      method: 'PUT',
-      body: JSON.stringify({ settings }),
-    });
-  }
+// Bulk update settings
+async updateSettings(settings: Record<string, any>): Promise<any> {
+  console.log('🔍 API: Sending bulk update with data:', { settings }); // ADD THIS LINE
+  
+  return apiService.apiCall('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ settings }),
+  });
+}
 
   // Delete setting (reset to default)
   async resetSetting(key: string): Promise<any> {

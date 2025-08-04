@@ -53,6 +53,11 @@ interface EmployeeFormData {
   employment_status: 'active' | 'inactive';
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant';
   salary: number | '';
+
+  // Work Schedule Information
+  in_time: string;
+  out_time: string;
+  follows_company_schedule: boolean;
 }
 
 // Validation errors interface
@@ -121,7 +126,12 @@ const AddEmployees: React.FC = () => {
     hire_date: '',
     employment_status: 'active',
     employee_type: 'permanent',
-    salary: ''
+    salary: '',
+
+    // Work Schedule Information
+    in_time: '',
+    out_time: '',
+    follows_company_schedule: true
   });
 
   // Steps configuration - Updated structure
@@ -147,6 +157,37 @@ const AddEmployees: React.FC = () => {
   useEffect(() => {
     loadReferenceData();
     generateEmployeeId();
+  }, []);
+
+  // Load company work schedule on component mount
+  useEffect(() => {
+    const loadCompanySchedule = async () => {
+      try {
+        const response = await apiService.apiCall('/api/settings');
+        if (response.success) {
+          const settings = response.data.settings;
+          const companyStartTime = settings.work_start_time?.value || '09:00';
+          const companyEndTime = settings.work_end_time?.value || '17:00';
+          
+          // Set initial times from database
+          setFormData(prev => ({
+            ...prev,
+            in_time: companyStartTime,
+            out_time: companyEndTime
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load company schedule:', error);
+        // Only fallback to hardcoded if API fails
+        setFormData(prev => ({
+          ...prev,
+          in_time: '09:00',
+          out_time: '17:00'
+        }));
+      }
+    };
+    
+    loadCompanySchedule();
   }, []);
 
   // Filter designations when department changes
@@ -218,16 +259,45 @@ const AddEmployees: React.FC = () => {
     }));
   };
 
+  // Handle company schedule checkbox change - FETCH FROM DATABASE
+  const handleCompanyScheduleChange = async (checked: boolean) => {
+    if (checked) {
+      // Fetch fresh company times from database when checkbox is checked
+      try {
+        const response = await apiService.apiCall('/api/settings');
+        if (response.success) {
+          const settings = response.data.settings;
+          setFormData(prev => ({
+            ...prev,
+            follows_company_schedule: true,
+            in_time: settings.work_start_time?.value || '09:00',
+            out_time: settings.work_end_time?.value || '17:00'
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load company schedule:', error);
+        // Only fallback if database fetch fails
+        setFormData(prev => ({
+          ...prev,
+          follows_company_schedule: true
+        }));
+      }
+    } else {
+      // Just update the checkbox, keep current times for manual editing
+      setFormData(prev => ({
+        ...prev,
+        follows_company_schedule: false
+      }));
+    }
+  };
+
   // Handle input changes
   const handleInputChange = useCallback((field: keyof EmployeeFormData, value: string | number) => {
-  console.log(`🔄 handleInputChange called:`, { field, value, type: typeof value });
+    console.log(`🔄 handleInputChange called:`, { field, value, type: typeof value });
 
     setFormData(prev => ({
-      
-
       ...prev,
       [field]: value
-      
     }));
 
     // Clear validation error when user starts typing
@@ -275,6 +345,25 @@ const AddEmployees: React.FC = () => {
         if (!formData.hire_date) errors.hire_date = 'Hire date is required';
         if (!formData.employment_status) errors.employment_status = 'Employment status is required';
         if (!formData.employee_type) errors.employee_type = 'Employment type is required';
+        
+        // Work Schedule Validation
+        if (!formData.in_time) {
+          errors.in_time = 'In time is required';
+        }
+        
+        if (!formData.out_time) {
+          errors.out_time = 'Out time is required';
+        }
+        
+        // Validate that out time is after in time
+        if (formData.in_time && formData.out_time) {
+          const inTime = new Date(`2000-01-01T${formData.in_time}`);
+          const outTime = new Date(`2000-01-01T${formData.out_time}`);
+          
+          if (outTime <= inTime) {
+            errors.out_time = 'Out time must be after in time';
+          }
+        }
         break;
 
       case 2: // Personal Documents
@@ -349,7 +438,12 @@ const AddEmployees: React.FC = () => {
         // Emergency Contact
         emergency_contact_name: formData.emergency_contact_name,
         emergency_contact_phone: formData.emergency_contact_phone,
-        emergency_contact_relation: formData.emergency_contact_relation
+        emergency_contact_relation: formData.emergency_contact_relation,
+        
+        // Work Schedule Information
+        in_time: formData.in_time,
+        out_time: formData.out_time,
+        follows_company_schedule: formData.follows_company_schedule
       };
 
       console.log('🚀 Submitting employee data:', submitData);
@@ -399,7 +493,11 @@ const AddEmployees: React.FC = () => {
       hire_date: '',
       employment_status: 'active',
       employee_type: 'permanent',
-      salary: ''
+      salary: '',
+      // Work Schedule Information
+      in_time: '',
+      out_time: '',
+      follows_company_schedule: true
     });
     setCurrentStep(0);
     setValidationErrors({});
@@ -874,6 +972,86 @@ const AddEmployees: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Work Schedule Section */}
+                <div className="col-span-full">
+                  <div className="border-t pt-6 mt-6">
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                      Work Schedule
+                    </h4>
+                    
+                    {/* Company Schedule Checkbox */}
+                    <div className="mb-4">
+                      <div className="flex items-center">
+                        <input
+                          id="follows_company_schedule"
+                          type="checkbox"
+                          checked={formData.follows_company_schedule}
+                          onChange={(e) => handleCompanyScheduleChange(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                        />
+                        <label htmlFor="follows_company_schedule" className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                          Use Company Standard Hours
+                        </label>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Company standard: {formData.in_time && formData.out_time ? `${formData.in_time} - ${formData.out_time}` : 'Loading...'}
+                      </p>
+                    </div>
+
+                    {/* Time Fields */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="in_time" value="In Time *" />
+                        <TextInput
+                          id="in_time"
+                          type="time"
+                          value={formData.in_time}
+                          onChange={(e) => handleInputChange('in_time', e.target.value)}
+                          disabled={formData.follows_company_schedule}
+                          color={validationErrors.in_time ? 'failure' : undefined}
+                          className={formData.follows_company_schedule ? 'opacity-60' : ''}
+                        />
+                        {validationErrors.in_time && (
+                          <p className="text-red-600 text-sm mt-1">{validationErrors.in_time}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="out_time" value="Out Time *" />
+                        <TextInput
+                          id="out_time"
+                          type="time"
+                          value={formData.out_time}
+                          onChange={(e) => handleInputChange('out_time', e.target.value)}
+                          disabled={formData.follows_company_schedule}
+                          color={validationErrors.out_time ? 'failure' : undefined}
+                          className={formData.follows_company_schedule ? 'opacity-60' : ''}
+                        />
+                        {validationErrors.out_time && (
+                          <p className="text-red-600 text-sm mt-1">{validationErrors.out_time}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {!formData.follows_company_schedule && (
+                      <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
+                        <div className="flex">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm text-yellow-700 dark:text-yellow-200">
+                              This employee has custom work hours different from company standard.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
                     Department Summary
@@ -1001,6 +1179,7 @@ const AddEmployees: React.FC = () => {
                     <p><strong>Department:</strong> {departments.find(d => d.id === formData.department_id)?.name || 'Not selected'}</p>
                     <p><strong>Designation:</strong> {designations.find(d => d.id === formData.designation_id)?.title || 'Not selected'}</p>
                     <p><strong>Employment Type:</strong> {formData.employee_type || 'Not selected'}</p>
+                    <p><strong>Work Schedule:</strong> {formData.in_time} - {formData.out_time} ({formData.follows_company_schedule ? 'Company Standard' : 'Custom'})</p>
                     <p><strong>Emergency Contact:</strong> {formData.emergency_contact_name} ({formData.emergency_contact_relation}) - {formData.emergency_contact_phone}</p>
                   </div>
                   <div className="mt-3 text-xs text-blue-600 dark:text-blue-400">

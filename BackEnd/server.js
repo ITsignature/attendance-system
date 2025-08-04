@@ -8,8 +8,7 @@ require('dotenv').config();
 
 // Import routes and middleware
 const authRoutes = require('./src/routes/authRoute');
-const employeeRoutes = require('./src/routes/employeeRoute');
-const attendanceRoutes = require('./src/routes/attendanceRoute');
+const { router: employeeRoutes } = require('./src/routes/employeeRoute');const attendanceRoutes = require('./src/routes/attendanceRoute');
 const leaveRoutes = require('./src/routes/leavesRoute');
 const payrollRoutes = require('./src/routes/payrollRoute');
 const dashboardRoutes = require('./src/routes/dashboardRoute');

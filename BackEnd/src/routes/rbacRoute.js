@@ -699,9 +699,28 @@ router.post('/admin-users', [
   body('name').trim().isLength({ min: 1 }),
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
-  body('role_id').isUUID(),
-  body('department').optional().trim(),
-  body('is_active').optional().isBoolean()
+  body('role_id').custom(async (value, { req }) => {
+  if (!value) {
+    throw new Error('Role ID is required');
+  }
+  
+  const db = getDB();
+  
+  // Check if role exists and user has access to assign it
+  const [roles] = await db.execute(`
+    SELECT * FROM roles 
+    WHERE id = ? AND is_active = TRUE
+    AND (client_id = ? OR client_id IS NULL OR ? = TRUE)
+  `, [value, req.user.clientId, req.user.isSuperAdmin]);
+  
+  if (roles.length === 0) {
+    throw new Error('Role not found or access denied');
+  }
+  
+  return true;
+}),  
+body('department').optional().trim(),
+body('is_active').optional().isBoolean()
 ], asyncHandler(async (req, res) => {
   console.log('🔍 Create admin user request:', req.body);
   
@@ -836,7 +855,26 @@ router.put('/admin-users/:id', [
   ensureClientAccess,
   body('name').optional().trim().isLength({ min: 1 }),
   body('email').optional().isEmail().normalizeEmail(),
-  body('role_id').optional().isUUID(),
+  body('role_id').optional().custom(async (value, { req }) => {
+  if (!value) {
+    return true; // Optional field, skip validation if not provided
+  }
+  
+  const db = getDB();
+  
+  // Check if role exists and user has access to assign it
+  const [roles] = await db.execute(`
+    SELECT * FROM roles 
+    WHERE id = ? AND is_active = TRUE
+    AND (client_id = ? OR client_id IS NULL OR ? = TRUE)
+  `, [value, req.user.clientId, req.user.isSuperAdmin]);
+  
+  if (roles.length === 0) {
+    throw new Error('Role not found or access denied');
+  }
+  
+  return true;
+}),
   body('department').optional().trim(),
   body('is_active').optional().isBoolean()
 ], asyncHandler(async (req, res) => {
@@ -1079,7 +1117,26 @@ router.delete('/admin-users/:id', [
 router.put('/admin-users/:id/assign-role', [
   checkPermission('rbac.assign'),
   ensureClientAccess,
-  body('role_id').isUUID()
+  body('role_id').custom(async (value, { req }) => {
+  if (!value) {
+    throw new Error('Role ID is required');
+  }
+  
+  const db = getDB();
+  
+  // Check if role exists and user has access to assign it
+  const [roles] = await db.execute(`
+    SELECT * FROM roles 
+    WHERE id = ? AND is_active = TRUE
+    AND (client_id = ? OR client_id IS NULL OR ? = TRUE)
+  `, [value, req.user.clientId, req.user.isSuperAdmin]);
+  
+  if (roles.length === 0) {
+    throw new Error('Role not found or access denied');
+  }
+  
+  return true;
+}),
 ], asyncHandler(async (req, res) => {
   console.log('🔍 Assign role request:', req.params.id, req.body.role_id);
   

@@ -373,10 +373,13 @@ router.put('/',
       });
     }
 
-    // Start transaction
-    await db.execute('START TRANSACTION');
+    // Get connection for transaction - THIS IS THE KEY FIX
+    const connection = await db.getConnection();
 
     try {
+      // Start transaction using connection instead of db.execute()
+      await connection.beginTransaction();
+
       const updatedSettings = {};
 
       for (const [key, value] of Object.entries(settings)) {
@@ -384,14 +387,14 @@ router.put('/',
         const jsonValue = JSON.stringify(value);
 
         // Check if setting exists for this client
-        const [existing] = await db.execute(`
+        const [existing] = await connection.execute(`
           SELECT id FROM system_settings 
           WHERE setting_key = ? AND client_id = ?
         `, [key, req.user.clientId]);
 
         if (existing.length > 0) {
           // Update existing setting
-          await db.execute(`
+          await connection.execute(`
             UPDATE system_settings 
             SET setting_value = ?, setting_type = ?
             WHERE setting_key = ? AND client_id = ?
@@ -399,7 +402,7 @@ router.put('/',
         } else {
           // Create new setting for this client
           const settingId = require('crypto').randomUUID();
-          await db.execute(`
+          await connection.execute(`
             INSERT INTO system_settings (id, client_id, setting_key, setting_value, setting_type, is_public)
             VALUES (?, ?, ?, ?, ?, ?)
           `, [settingId, req.user.clientId, key, jsonValue, settingType, false]);
@@ -411,7 +414,8 @@ router.put('/',
         };
       }
 
-      await db.execute('COMMIT');
+      // Commit transaction using connection
+      await connection.commit();
 
       res.status(200).json({
         success: true,
@@ -423,8 +427,12 @@ router.put('/',
       });
 
     } catch (error) {
-      await db.execute('ROLLBACK');
+      // Rollback transaction using connection
+      await connection.rollback();
       throw error;
+    } finally {
+      // Always release the connection back to the pool
+      connection.release();
     }
   })
 );

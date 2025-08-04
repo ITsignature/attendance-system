@@ -1,5 +1,3 @@
-// AllEmployees.tsx - Corrected with proper employment_status and employee_type values
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { 
@@ -59,7 +57,8 @@ const AllEmployees: React.FC = () => {
   const navigate = useNavigate();
   
   // State management
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // Store all employees
+  const [employees, setEmployees] = useState<Employee[]>([]); // Filtered employees for display
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,41 +99,33 @@ const AllEmployees: React.FC = () => {
   // Reference lists
   const [departments, setDepartments] = useState<string[]>([]);
 
-  // Load employees from backend (exclude terminated and resigned by default)
+  // FIXED: Load all employees once from backend
   const loadEmployees = useCallback(async (showLoader = true) => {
     try {
       if (showLoader) setLoading(true);
       else setRefreshing(true);
       setError(null);
       
-      // Always exclude terminated and resigned employees from the table
-      const adjustedFilters = {
-        ...filters,
-        exclude_terminated_resigned: true
-      };
+      console.log('🔄 Loading all employees...');
       
-      console.log('🔄 Loading employees with filters:', adjustedFilters);
-      
-      const response = await apiService.getEmployees(adjustedFilters);
+      // Fetch all employees without filters
+      const response = await apiService.getEmployees({
+        page: 1,
+        limit: 1000, // Get all employees
+        search: '',
+        department_id: '',
+        employment_status: '',
+        employee_type: '',
+        sortBy: 'first_name',
+        sortOrder: 'asc'
+      });
       
       if (response.success && response.data) {
         const data = response.data as EmployeesResponse;
-        console.log('📊 Employees data:', data.employees);
+        console.log('📊 All employees loaded:', data.employees.length);
 
-      // Filter out terminated employees
-      const activeEmployees = data.employees.filter(
-        (emp) => emp.employment_status !== 'terminated'
-      );
-
-        setEmployees(activeEmployees);
-        setPagination({
-          currentPage: data.page,
-          totalPages: data.totalPages,
-          totalRecords: data.total,
-          recordsPerPage: data.limit
-        });
+        setAllEmployees(data.employees);
         
-       
         // Extract unique departments
         const uniqueDepts = [...new Set(data.employees
           .map(emp => emp.department_name)
@@ -142,7 +133,7 @@ const AllEmployees: React.FC = () => {
         )];
         setDepartments(uniqueDepts);
         
-        console.log('✅ Employees loaded:', data.employees.length);
+        console.log('✅ All employees loaded successfully');
       } else {
         setError(response.message || 'Failed to load employees');
       }
@@ -153,49 +144,118 @@ const AllEmployees: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filters]);
+  }, []);
 
-  // Load employee statistics
-  const loadStats = useCallback(async () => {
-    try {
-      const response = await apiService.getEmployeeStats();
-      if (response.success && response.data) {
-        setStats(response.data);
-      }
-    } catch (err) {
-      console.warn('Failed to load employee stats:', err);
-      // Calculate stats from current employee data instead
-      if (employees.length > 0) {
-        const calculatedStats = {
-          total: employees.length,
-          active: employees.filter(emp => emp.employment_status === 'active').length,
-          inactive: employees.filter(emp => emp.employment_status === 'inactive').length,
-          terminated: employees.filter(emp => emp.employment_status === 'terminated').length,
-          resigned: employees.filter(emp => emp.employment_status === 'resigned').length,
-          permanent: employees.filter(emp => emp.employee_type === 'permanent').length,
-          contract: employees.filter(emp => emp.employee_type === 'contract').length,
-          intern: employees.filter(emp => emp.employee_type === 'intern').length,
-          consultant: employees.filter(emp => emp.employee_type === 'consultant').length,
-          by_department: []
-        };
-        setStats(calculatedStats);
-      }
+  // FIXED: Filter employees on frontend
+  const filterEmployees = useCallback(() => {
+    let filtered = [...allEmployees];
+
+    // Apply search filter
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
+      filtered = filtered.filter(emp => 
+        emp.first_name?.toLowerCase().includes(searchTerm) ||
+        emp.last_name?.toLowerCase().includes(searchTerm) ||
+        emp.email?.toLowerCase().includes(searchTerm) ||
+        emp.employee_code?.toLowerCase().includes(searchTerm)
+      );
     }
-  }, [employees]);
 
-  // Load data on mount and filter changes
+    // Apply status filter
+    if (filters.employment_status) {
+      filtered = filtered.filter(emp => emp.employment_status === filters.employment_status);
+    }
+
+    // Apply type filter
+    if (filters.employee_type) {
+      filtered = filtered.filter(emp => emp.employee_type === filters.employee_type);
+    }
+
+    // Apply department filter
+    if (filters.department_id) {
+      filtered = filtered.filter(emp => emp.department_name === filters.department_id);
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue = '';
+      let bValue = '';
+      
+      switch (filters.sortBy) {
+        case 'first_name':
+          aValue = a.first_name || '';
+          bValue = b.first_name || '';
+          break;
+        case 'hire_date':
+          aValue = a.hire_date || '';
+          bValue = b.hire_date || '';
+          break;
+        default:
+          aValue = a.first_name || '';
+          bValue = b.first_name || '';
+      }
+
+      if (filters.sortOrder === 'desc') {
+        return bValue.localeCompare(aValue);
+      }
+      return aValue.localeCompare(bValue);
+    });
+
+    // Apply pagination
+    const startIndex = (filters.page - 1) * filters.limit;
+    const endIndex = startIndex + filters.limit;
+    const paginatedEmployees = filtered.slice(startIndex, endIndex);
+
+    // Update employees and pagination
+    setEmployees(paginatedEmployees);
+    setPagination({
+      currentPage: filters.page,
+      totalPages: Math.ceil(filtered.length / filters.limit),
+      totalRecords: filtered.length,
+      recordsPerPage: filters.limit
+    });
+  }, [allEmployees, filters]);
+
+  // Load stats from all employees
+  const loadStats = useCallback(async () => {
+    if (allEmployees.length > 0) {
+      const calculatedStats = {
+        total: allEmployees.length,
+        active: allEmployees.filter(emp => emp.employment_status === 'active').length,
+        inactive: allEmployees.filter(emp => emp.employment_status === 'inactive').length,
+        terminated: allEmployees.filter(emp => emp.employment_status === 'terminated').length,
+        resigned: allEmployees.filter(emp => emp.employment_status === 'resigned').length,
+        permanent: allEmployees.filter(emp => emp.employee_type === 'permanent').length,
+        contract: allEmployees.filter(emp => emp.employee_type === 'contract').length,
+        intern: allEmployees.filter(emp => emp.employee_type === 'intern').length,
+        consultant: allEmployees.filter(emp => emp.employee_type === 'consultant').length,
+        by_department: []
+      };
+      setStats(calculatedStats);
+    }
+  }, [allEmployees]);
+
+  // Load data when filters change (but debounce search)
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Load all employees on mount
   useEffect(() => {
     loadEmployees();
-  }, [loadEmployees]);
+  }, []);
+
+  // Filter employees when allEmployees or filters change
+  useEffect(() => {
+    if (allEmployees.length > 0) {
+      filterEmployees();
+    }
+  }, [allEmployees, filterEmployees]);
 
   // Load stats after employees are loaded
   useEffect(() => {
-    if (employees.length > 0) {
-      loadStats();
-    }
-  }, [employees, loadStats]);
+    loadStats();
+  }, [allEmployees, loadStats]);
 
-  // Handle filter changes
+  // FIXED: Handle filter changes without causing re-renders
   const updateFilter = (key: keyof EmployeeFilters, value: any) => {
     setFilters(prev => ({
       ...prev,
@@ -458,13 +518,13 @@ const AllEmployees: React.FC = () => {
 
       {/* Search and Filters */}
       <div className="flex flex-col lg:flex-row gap-4 mb-6">
-        {/* Search */}
+        {/* FIXED: Search */}
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 flex items-center pl-3">
             <HiOutlineSearch className="w-4 h-4 text-gray-500" />
           </div>
           <TextInput
-            type="search"
+            type="text"
             placeholder="Search employees by name, email, or ID..."
             value={filters.search || ''}
             onChange={(e) => updateFilter('search', e.target.value)}
@@ -630,7 +690,7 @@ const AllEmployees: React.FC = () => {
         </Table>
       </div>
 
-      {/* Pagination */}
+      {/* FIXED: Pagination */}
       {pagination.totalPages > 1 && (
         <div className="flex items-center justify-between mt-6">
           <div className="text-sm text-gray-700 dark:text-gray-300">
@@ -647,16 +707,26 @@ const AllEmployees: React.FC = () => {
             >
               Previous
             </Button>
-            {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
-              <Button
-                key={page}
-                color={page === pagination.currentPage ? "purple" : "gray"}
-                size="sm"
-                onClick={() => handlePageChange(page)}
-              >
-                {page}
-              </Button>
-            ))}
+            {Array.from({ length: Math.min(pagination.totalPages, 10) }, (_, i) => {
+              let pageNum;
+              if (pagination.totalPages <= 10) {
+                pageNum = i + 1;
+              } else {
+                const start = Math.max(1, pagination.currentPage - 5);
+                pageNum = start + i;
+                if (pageNum > pagination.totalPages) return null;
+              }
+              return (
+                <Button
+                  key={pageNum}
+                  color={pageNum === pagination.currentPage ? "purple" : "gray"}
+                  size="sm"
+                  onClick={() => handlePageChange(pageNum)}
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
             <Button
               color="gray"
               size="sm"
