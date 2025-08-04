@@ -8,8 +8,7 @@ require('dotenv').config();
 
 // Import routes and middleware
 const authRoutes = require('./src/routes/authRoute');
-const employeeRoutes = require('./src/routes/employeeRoute');
-const attendanceRoutes = require('./src/routes/attendanceRoute');
+const { router: employeeRoutes } = require('./src/routes/employeeRoute');const attendanceRoutes = require('./src/routes/attendanceRoute');
 const leaveRoutes = require('./src/routes/leavesRoute');
 const payrollRoutes = require('./src/routes/payrollRoute');
 const dashboardRoutes = require('./src/routes/dashboardRoute');
@@ -17,6 +16,7 @@ const rbacRoutes = require('./src/routes/rbacRoute');
 const clientRoutes = require('./src/routes/clientsRoute');
 const departments = require('./src/routes/departmentsRoute');
 const designations = require('./src/routes/designationsRoute');
+const settingsRoutes = require('./src/routes/settingsRoute');
 
 
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
@@ -132,6 +132,7 @@ app.use('/api/rbac', rbacRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/departments', departments);
 app.use('/api/designations', designations);
+app.use('/api/settings', settingsRoutes);
 
 // =============================================
 // ERROR HANDLING

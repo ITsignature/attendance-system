@@ -156,92 +156,167 @@ const AdminUserManagementPage: React.FC = () => {
     }
   };
 
-  const handleSaveUser = async () => {
-    if (!formData.name.trim()) {
-      setError('Name is required');
-      return;
+const [fieldErrors, setFieldErrors] = useState<{
+  name?: string;
+  email?: string;
+  password?: string;
+  role_id?: string;
+}>({});
+
+const validateForm = () => {
+  const errors: { [key: string]: string } = {};
+
+  // Name validation
+  if (!formData.name.trim()) {
+    errors.name = 'Name is required';
+  }
+
+  // Email validation  
+  if (!formData.email.trim()) {
+    errors.email = 'Email is required';
+  } else {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
     }
+  }
 
-    if (!formData.email.trim()) {
-      setError('Email is required');
-      return;
+  // Password validation (for new users)
+  if (!selectedUser) {
+    if (!formData.password) {
+      errors.password = 'Password is required for new users';
+    } else if (formData.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters long';
     }
+  }
 
-    if (!selectedUser && !formData.password.trim()) {
-      setError('Password is required for new users');
-      return;
-    }
+  // Role validation
+  if (!formData.roleId) {
+    errors.role_id = 'Role is required';
+  }
 
-    if (!formData.roleId) {
-      setError('Role is required');
-      return;
-    }
+  return errors;
+};
 
-    setIsSubmitting(true);
-    clearMessages();
+const handleSaveUser = async () => {
+  // Clear previous field errors
+  setFieldErrors({});
+  
+  // Run frontend validation first
+  const validationErrors = validateForm();
+  if (Object.keys(validationErrors).length > 0) {
+    setFieldErrors(validationErrors);
+    return;
+  }
 
-    try {
-      if (selectedUser) {
-        // Update existing user
-        const updateData = {
-          name: formData.name.trim(),
-          email: formData.email.trim(),
-          role_id: formData.roleId,
-          department: formData.department.trim() || undefined,
-          is_active: formData.isActive
-        };
+  setIsSubmitting(true);
+  clearMessages();
 
-        console.log('🔄 Updating admin user:', selectedUser.id, updateData);
-        const response = await apiService.updateAdminUser(selectedUser.id, updateData);
-        
-        if (response.success) {
-          setSuccess('Admin user updated successfully');
-          setShowEditModal(false);
-          await loadAdminUsers();
-        } else {
-          setError(response.message || 'Failed to update admin user');
-        }
+  try {
+    if (selectedUser) {
+      // Update existing user
+      const updateData = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        role_id: formData.roleId,
+        department: formData.department.trim() || undefined,
+        is_active: formData.isActive
+      };
+
+      console.log('🔄 Updating admin user:', selectedUser.id, updateData);
+      const response = await apiService.updateAdminUser(selectedUser.id, updateData);
+      
+      if (response.success) {
+        setSuccess('Admin user updated successfully');
+        setShowEditModal(false);
+        setFieldErrors({});
+        await loadAdminUsers();
       } else {
-        // Create new user
-        const createData = {
-          name: formData.name.trim(),
-          email: formData.email.trim(),
-          password: formData.password,
-          role_id: formData.roleId,
-          department: formData.department.trim() || undefined,
-          is_active: formData.isActive
-        };
-
-        console.log('🆕 Creating admin user:', createData);
-        const response = await apiService.createAdminUser(createData);
-        
-        if (response.success) {
-          setSuccess('Admin user created successfully');
-          setShowCreateModal(false);
-          await loadAdminUsers();
-        } else {
-          setError(response.message || 'Failed to create admin user');
-        }
+        handleServerErrors(response);
       }
+    } else {
+      // Create new user
+      const createData = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        role_id: formData.roleId,
+        department: formData.department.trim() || undefined,
+        is_active: formData.isActive
+      };
 
-      // Reset form
-      setFormData({
-        name: '',
-        email: '',
-        password: '',
-        roleId: roles.length > 0 ? roles[0].id : '',
-        department: '',
-        isActive: true
-      });
-      setSelectedUser(null);
-
-    } catch (error: any) {
-      console.error('❌ Admin user operation failed:', error);
-      setError(error.message || `Failed to ${selectedUser ? 'update' : 'create'} admin user`);
-    } finally {
-      setIsSubmitting(false);
+      console.log('🆕 Creating admin user:', createData);
+      const response = await apiService.createAdminUser(createData);
+      
+      if (response.success) {
+        setSuccess('Admin user created successfully');
+        setShowCreateModal(false);
+        setFieldErrors({});
+        await loadAdminUsers();
+      } else {
+        handleServerErrors(response);
+      }
     }
-  };
+
+    // Reset form on success
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      roleId: roles.length > 0 ? roles[0].id : '',
+      department: '',
+      isActive: true
+    });
+    setSelectedUser(null);
+
+  } catch (error: any) {
+    console.error('❌ Admin user operation failed:', error);
+    
+    if (error.response?.data) {
+      handleServerErrors(error.response.data);
+    } else {
+      setError(error.message || `Failed to ${selectedUser ? 'update' : 'create'} admin user`);
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+const handleServerErrors = (responseData: any) => {
+  console.log('🔍 Server response:', responseData);
+  
+  if (responseData.errors && Array.isArray(responseData.errors)) {
+    // Map express-validator errors to specific fields
+    const newFieldErrors: { [key: string]: string } = {};
+    
+    responseData.errors.forEach((err: any) => {
+      if (err.param && err.msg) {
+        // Map backend field names to frontend field names
+        const fieldMap: { [key: string]: string } = {
+          'name': 'name',
+          'email': 'email', 
+          'password': 'password',
+          'role_id': 'role_id'
+        };
+        
+        const frontendField = fieldMap[err.param] || err.param;
+        newFieldErrors[frontendField] = err.msg;
+      }
+    });
+    
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+    } else {
+      // Fallback to general error if no field-specific errors
+      const errorMessages = responseData.errors.map((err: any) => err.msg || err.message).join('. ');
+      setError(errorMessages);
+    }
+  } else if (responseData.message) {
+    setError(responseData.message);
+  } else {
+    setError('Operation failed. Please try again.');
+  }
+};
 
   const getRoleInfo = (roleId: string) => {
     return roles.find(role => role.id === roleId);
@@ -521,131 +596,169 @@ const AdminUserManagementPage: React.FC = () => {
       </Card>
 
       {/* Create User Modal */}
-      <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="2xl">
-        <Modal.Header>Add New Admin User</Modal.Header>
-        <Modal.Body>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="userName" value="Full Name" />
-                <TextInput
-                  id="userName"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter full name"
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-              <div>
-                <Label htmlFor="userEmail" value="Email Address" />
-                <TextInput
-                  id="userEmail"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="Enter email address"
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-            </div>
+<Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="2xl">
+  <Modal.Header>Add New Admin User</Modal.Header>
+  <Modal.Body>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Name Field with Error */}
+        <div>
+          <Label htmlFor="userName" value="Full Name" />
+          <TextInput
+            id="userName"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Enter full name"
+            required
+            disabled={isSubmitting}
+            color={fieldErrors.name ? "failure" : undefined}
+          />
+          {fieldErrors.name && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-500">
+              {fieldErrors.name}
+            </p>
+          )}
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="userPassword" value="Password" />
-                <TextInput
-                  id="userPassword"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="Enter password"
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-              <div>
-                <Label htmlFor="userRole" value="Assign Role" />
-                <select
-                  id="userRole"
-                  value={formData.roleId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, roleId: e.target.value }))}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-                  required
-                  disabled={isSubmitting}
-                >
-                  <option value="">Select a role</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name} ({getAccessLevelText(role.access_level)} Access)
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+        {/* Email Field with Error */}
+        <div>
+          <Label htmlFor="userEmail" value="Email Address" />
+          <TextInput
+            id="userEmail"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            placeholder="Enter email address"
+            required
+            disabled={isSubmitting}
+            color={fieldErrors.email ? "failure" : undefined}
+          />
+          {fieldErrors.email && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-500">
+              {fieldErrors.email}
+            </p>
+          )}
+        </div>
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="userDepartment" value="Department" />
-                <TextInput
-                  id="userDepartment"
-                  value={formData.department}
-                  onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                  placeholder="Enter department (optional)"
-                  disabled={isSubmitting}
-                />
-              </div>
-              <div>
-                <Label htmlFor="userStatus" value="Status" />
-                <select
-                  id="userStatus"
-                  value={formData.isActive ? 'active' : 'inactive'}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.value === 'active' }))}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-                  disabled={isSubmitting}
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Password Field with Error */}
+        <div>
+          <Label htmlFor="userPassword" value="Password" />
+          <TextInput
+            id="userPassword"
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+            placeholder="Enter password (min 6 characters)"
+            required
+            disabled={isSubmitting}
+            color={fieldErrors.password ? "failure" : undefined}
+          />
+          {fieldErrors.password && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-500">
+              {fieldErrors.password}
+            </p>
+          )}
+        </div>
 
-            {formData.roleId && (
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <h4 className="font-medium text-blue-900 dark:text-blue-200 mb-2">
-                  Role Information:
-                </h4>
-                <p className="text-sm text-blue-800 dark:text-blue-300">
-                  <strong>{getRoleInfo(formData.roleId)?.name}</strong> - {getRoleInfo(formData.roleId)?.description}
-                </p>
-              </div>
-            )}
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button 
-            onClick={handleSaveUser} 
-            gradientDuoTone="purpleToBlue"
-            disabled={isSubmitting || !formData.name.trim() || !formData.email.trim() || !formData.password.trim() || !formData.roleId}
-          >
-            {isSubmitting ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Creating...
-              </div>
-            ) : (
-              'Create Admin User'
-            )}
-          </Button>
-          <Button 
-            color="gray" 
-            onClick={() => setShowCreateModal(false)}
+        {/* Role Field with Error */}
+        <div>
+          <Label htmlFor="userRole" value="Assign Role" />
+          <select
+            id="userRole"
+            value={formData.roleId}
+            onChange={(e) => setFormData(prev => ({ ...prev, roleId: e.target.value }))}
+            className={`bg-gray-50 border text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 ${
+              fieldErrors.role_id 
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                : 'border-gray-300'
+            }`}
+            required
             disabled={isSubmitting}
           >
-            Cancel
-          </Button>
-        </Modal.Footer>
-      </Modal>
+            <option value="">Select a role</option>
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name} ({getAccessLevelText(role.access_level)} Access)
+              </option>
+            ))}
+          </select>
+          {fieldErrors.role_id && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-500">
+              {fieldErrors.role_id}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Department Field */}
+      <div>
+        <Label htmlFor="userDepartment" value="Department" />
+        <TextInput
+          id="userDepartment"
+          value={formData.department}
+          onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+          placeholder="Enter department (optional)"
+          disabled={isSubmitting}
+        />
+      </div>
+
+      {/* Status Field */}
+      <div>
+        <Label htmlFor="userStatus" value="Status" />
+        <select
+          id="userStatus"
+          value={formData.isActive ? 'active' : 'inactive'}
+          onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.value === 'active' }))}
+          className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+          disabled={isSubmitting}
+        >
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      {/* Role Information */}
+      {formData.roleId && (
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <h4 className="font-medium text-blue-900 dark:text-blue-200 mb-2">
+            Role Information:
+          </h4>
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            <strong>{getRoleInfo(formData.roleId)?.name}</strong> - {getRoleInfo(formData.roleId)?.description}
+          </p>
+        </div>
+      )}
+    </div>
+  </Modal.Body>
+  <Modal.Footer>
+    <Button 
+      onClick={handleSaveUser} 
+      gradientDuoTone="purpleToBlue"
+      disabled={isSubmitting}
+    >
+      {isSubmitting ? (
+        <div className="flex items-center">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+          Creating...
+        </div>
+      ) : (
+        'Create Admin User'
+      )}
+    </Button>
+    <Button 
+      color="gray" 
+      onClick={() => {
+        setShowCreateModal(false);
+        setFieldErrors({}); // Clear errors when closing
+      }}
+      disabled={isSubmitting}
+    >
+      Cancel
+    </Button>
+  </Modal.Footer>
+</Modal>
 
       {/* Edit User Modal */}
       <Modal show={showEditModal} onClose={() => setShowEditModal(false)} size="2xl">

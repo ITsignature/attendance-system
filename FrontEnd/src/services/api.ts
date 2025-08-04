@@ -143,50 +143,31 @@ private getHeaders(): HeadersInit {
 }
 
   // Generic API call method
- // ApiService
-private async apiCall<T>(
-  endpoint: string,
-  options: RequestInit = {},
-  isRetry = false
-): Promise<ApiResponse<T>> {
-  const url = `${this.baseURL}${endpoint}`;
-  const config: RequestInit = {
-    headers: this.getHeaders(),
-    ...options,
-  };
+  public async apiCall<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const url = `${this.baseURL}${endpoint}`;
+      const config: RequestInit = {
+        headers: this.getHeaders(),
+        ...options,
+      };
 
-  try {
-    const resp = await fetch(url, config);
-    // Try to parse JSON even on errors to read message
-    let data: any = null;
-    try { data = await resp.json(); } catch {}
+      console.log('respone check')
+      const response = await fetch(url, config);
+      const data = await response.json();
 
-    if (!resp.ok) {
-      // If access token expired, try refresh once then retry original call
-      if (resp.status === 401 && !isRetry) {
-        console.warn('⚠️ 401 detected. Attempting token refresh...');
-        try {
-          await this.refreshToken();
-          // retry with fresh Authorization header
-          return this.apiCall<T>(endpoint, options, true);
-        } catch (e) {
-          console.error('🔒 Refresh failed. Clearing auth & redirecting.');
-          this.removeToken();
-          // optionally: window.location.href = '/admin/login';
-          throw e instanceof Error ? e : new Error('Unauthorized');
-        }
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
-      throw new Error(data?.message || `HTTP error! status: ${resp.status}`);
+
+      return data;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
     }
-
-    // resp.ok
-    return (data ?? { success: true }) as ApiResponse<T>;
-  } catch (err) {
-    console.error('API call failed:', err);
-    throw err;
   }
-}
-
 
   // Authentication methods
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -219,10 +200,7 @@ private async apiCall<T>(
   }
 
   async getCurrentUser(): Promise<ApiResponse<{ user: User }>> {
-
-    
     return this.apiCall('/auth/me');
-
   }
 
   async refreshToken(): Promise<ApiResponse<{ accessToken: string; refreshToken: string }>> {
@@ -327,20 +305,20 @@ async deleteEmployee(id: string): Promise<ApiResponse> {
 
 // Bulk operations
 async bulkDeleteEmployees(employeeIds: string[]): Promise<ApiResponse> {
-  console.log('🔄 Bulk updating employees status terminated:', employeeIds);
+  console.log('🔄 Bulk deleting employees:', employeeIds);
   return this.apiCall('/api/employees/bulk-delete', {
     method: 'POST',
-    body: JSON.stringify({ ids: employeeIds }),
+    body: JSON.stringify({ employee_ids: employeeIds }),
   });
 }
 
-// async bulkUpdateEmployees(updates: Array<{id: string, data: UpdateEmployeeData}>): Promise<ApiResponse> {
-//   console.log('🔄 Bulk updating employees:', updates);
-//   return this.apiCall('/api/employees/bulk-update', {
-//     method: 'PUT',
-//     body: JSON.stringify({ updates }),
-//   });
-// }
+async bulkUpdateEmployees(updates: Array<{id: string, data: UpdateEmployeeData}>): Promise<ApiResponse> {
+  console.log('🔄 Bulk updating employees:', updates);
+  return this.apiCall('/api/employees/bulk-update', {
+    method: 'PUT',
+    body: JSON.stringify({ updates }),
+  });
+}
 
 // Employee statistics
 async getEmployeeStats(): Promise<ApiResponse> {
