@@ -15,7 +15,7 @@ const Error = () => {
           <Button
             color={"primary"}
             as={Link}
-            to="/"
+            to="/dashboard"
             className="w-fit mt-6 mx-auto"
           >
             Go Back to Home

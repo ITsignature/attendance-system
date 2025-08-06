@@ -12,8 +12,11 @@ export const useSettings = () => {
       setError(null);
       const response = await settingsApi.getAllSettings();
       
+      console.log('response from hooks', response);
+
       if (response.success) {
         setSettings(response.data.settings);
+        console.log('✅ Settings fetched from use Settings:', response.data.settings);
       } else {
         setError('Failed to fetch settings');
       }

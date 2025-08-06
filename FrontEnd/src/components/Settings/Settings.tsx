@@ -34,17 +34,46 @@ const SettingsWithBackend = () => {
   const [saving, setSaving] = useState(false);
 
   // Convert backend settings to local format
+  // useEffect(() => {
+  //   if (settings && Object.keys(settings).length > 0) {
+  //     console.log('🔍 Converting backend settings to local format:', settings);
+  //     const converted: Record<string, any> = {};
+  //     Object.entries(settings).forEach(([key, setting]) => {
+  //       converted[key] = setting.value;
+  //     });
+  //     console.log('🔍 Converted settings:', converted);
+  //     setLocalSettings(converted);
+  //   }
+  // }, [settings]);
+
   useEffect(() => {
-    if (settings && Object.keys(settings).length > 0) {
-      console.log('🔍 Converting backend settings to local format:', settings);
-      const converted: Record<string, any> = {};
-      Object.entries(settings).forEach(([key, setting]) => {
-        converted[key] = setting.value;
-      });
-      console.log('🔍 Converted settings:', converted);
-      setLocalSettings(converted);
-    }
-  }, [settings]);
+  if (settings && Object.keys(settings).length > 0) {
+    console.log('🔍 Converting backend settings to local format:', settings);
+    
+    const converted: Record<string, any> = {};
+
+    const cleanValue = (val: any) => {
+      if (typeof val !== 'string') return val;
+
+      const trimmed = val.trim();
+
+      // Remove extra quotes like "\"08:30\"" → "08:30"
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        return trimmed.slice(1, -1);
+      }
+
+      return trimmed;
+    };
+
+    Object.entries(settings).forEach(([key, setting]) => {
+      converted[key] = cleanValue(setting.value);
+    });
+
+    console.log('🔍 Converted settings:', converted);
+    setLocalSettings(converted);
+  }
+}, [settings]);
+
 
     if (loading || localSettings === null) {
     return (

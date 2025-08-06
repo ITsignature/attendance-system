@@ -59,13 +59,13 @@ const SidebarContent = [
         href: '/Departments',
         permission: 'employees.view',
       },
-      {
-        id: uniqueId(),
-        title: 'Dept. Employees',
-        icon: IconUsers,
-        href: '/departments-employees',
-        permission: 'employees.view',
-      },
+      // {
+      //   id: uniqueId(),
+      //   title: 'Dept. Employees',
+      //   icon: IconUsers,
+      //   href: '/departments-employees',
+      //   permission: 'employees.view',
+      // },
       {
         id: uniqueId(),
         title: 'Leaves',

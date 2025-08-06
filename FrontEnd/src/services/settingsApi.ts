@@ -33,7 +33,10 @@ export interface SingleSettingResponse {
 class SettingsApiService {
   // Get all settings
   async getAllSettings(): Promise<SettingsResponse> {
+
+    console.log('🔄 Fetching all settings');
     return apiService.apiCall('/api/settings');
+
   }
 
   // Get specific setting
