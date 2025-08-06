@@ -112,6 +112,8 @@ const EmployeeDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [activeSidebarTab, setActiveSidebarTab] = useState("Profile");
+  const [showTerminateModal, setShowTerminateModal] = useState(false);
+  const [terminating, setTerminating] = useState(false);
   
   // Filter states
   const [attendanceMonth, setAttendanceMonth] = useState("2024-07");
@@ -329,6 +331,30 @@ const EmployeeDetails: React.FC = () => {
     }
   };
 
+  // Handle terminate employee
+  const handleTerminateEmployee = async () => {
+    if (!employee) return;
+    
+    try {
+      setTerminating(true);
+      const response = await apiService.updateEmployee(employee.id, {
+        employment_status: 'terminated'
+      });
+      
+      if (response.success) {
+        setEmployee(prev => prev ? { ...prev, employment_status: 'terminated' } : null);
+        setShowTerminateModal(false);
+      } else {
+        setError(response.message || 'Failed to terminate employee');
+      }
+    } catch (err: any) {
+      console.error('Failed to terminate employee:', err);
+      setError(err.message || 'Failed to terminate employee');
+    } finally {
+      setTerminating(false);
+    }
+  };
+
   // Helper functions
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -496,6 +522,17 @@ const EmployeeDetails: React.FC = () => {
                   Edit Profile
                 </Button>
               </DynamicProtectedComponent>
+              
+              <DynamicProtectedComponent permission="employees.delete">
+                <Button 
+                  color="failure" 
+                  onClick={() => setShowTerminateModal(true)}
+                  disabled={employee.employment_status === 'terminated'}
+                >
+                  <FaTrash className="w-4 h-4 mr-2" />
+                  {employee.employment_status === 'terminated' ? 'Terminated' : 'Terminate'}
+                </Button>
+              </DynamicProtectedComponent>
             </div>
           </div>
         </div>
@@ -576,7 +613,17 @@ const EmployeeDetails: React.FC = () => {
                     <Field label="Hire Date" value={formatDate(employee.hire_date)} />
                     <Field label="Employment Status" value={employee.employment_status} />
                     <Field label="Employee Type" value={employee.employee_type} />
-                    <Field label="Base Salary" value={employee.base_salary ? `$${employee.base_salary.toLocaleString()}` : undefined} />
+                    
+                    {/* Enhanced Base Salary Field */}
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800 shadow-md">
+                      <div className="flex items-center gap-2 mb-2">
+                        <HiCash className="w-5 h-5 text-purple-600" />
+                        <p className="text-sm font-bold text-purple-800 dark:text-purple-200">Base Salary (Monthly)</p>
+                      </div>
+                      <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                        {employee.base_salary ? `LKR ${employee.base_salary.toLocaleString()}` : 'Not specified'}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -701,7 +748,7 @@ const EmployeeDetails: React.FC = () => {
                   <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
                     <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Present Days</h4>
                     <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                      {attendance.filter(a => a.status === 'absent').length}
+                      {attendance.filter(a => a.status === 'present').length}
                     </p>
                   </div>
                   
@@ -886,7 +933,7 @@ const EmployeeDetails: React.FC = () => {
                             </Badge>
                           </td>
                           <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                            ${record.amount.toLocaleString()}
+                            LKR {record.amount.toLocaleString()}
                           </td>
                           <td className="px-6 py-4">
                             <div className="max-w-xs">
@@ -960,7 +1007,7 @@ const EmployeeDetails: React.FC = () => {
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg">
                     <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Total Salary (YTD)</h4>
                     <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                      ${financialRecords
+                      LKR {financialRecords
                         .filter(r => r.type === 'salary')
                         .reduce((sum, r) => sum + r.amount, 0)
                         .toLocaleString()}
@@ -970,17 +1017,17 @@ const EmployeeDetails: React.FC = () => {
                   <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg">
                     <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Total Bonuses</h4>
                     <p className="text-3xl font-bold text-green-900 dark:text-green-100">
-                      ${financialRecords
+                      LKR {financialRecords
                         .filter(r => r.type === 'bonus')
                         .reduce((sum, r) => sum + r.amount, 0)
                         .toLocaleString()}
                     </p>
                   </div>
                   
-                  <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-lg">
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800">
                     <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">Current Salary</h4>
                     <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
-                      ${employee.base_salary?.toLocaleString() || 'N/A'}
+                      LKR {employee.base_salary?.toLocaleString() || 'N/A'}
                     </p>
                   </div>
                 </div>
@@ -989,27 +1036,44 @@ const EmployeeDetails: React.FC = () => {
           </div>
         </Card>
 
-        {/* Quick Actions Footer */}
+        {/* Quick Actions Footer - REMOVED Quick Test and Generate Report buttons */}
         <div className="mt-8 flex justify-between items-center">
           <Button color="gray" onClick={() => navigate('/employees')}>
             ← Back to Employees
           </Button>
-          
-          <div className="flex gap-3">
-            <DynamicProtectedComponent permission="employees.edit">
-              <Button color="light">
-                Generate Report
-              </Button>
-            </DynamicProtectedComponent>
-            
-            <DynamicProtectedComponent permission="employees.edit">
-              <Button color="purple">
-                <FaEdit className="w-4 h-4 mr-2" />
-                Quick Edit
-              </Button>
-            </DynamicProtectedComponent>
-          </div>
         </div>
+
+        {/* Terminate Confirmation Modal */}
+        <Modal show={showTerminateModal} onClose={() => setShowTerminateModal(false)}>
+          <Modal.Header>Confirm Employee Termination</Modal.Header>
+          <Modal.Body>
+            <p>Are you sure you want to terminate <strong>{employee.first_name} {employee.last_name}</strong>? This will change their status to "Terminated" and they will no longer have access to the system.</p>
+            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+              <p className="text-sm text-red-700 dark:text-red-300">
+                <strong>Warning:</strong> This action cannot be undone. The employee will be marked as terminated in the system.
+              </p>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button 
+              color="failure" 
+              onClick={handleTerminateEmployee}
+              disabled={terminating}
+            >
+              {terminating ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Terminating...
+                </>
+              ) : (
+                'Terminate Employee'
+              )}
+            </Button>
+            <Button color="gray" onClick={() => setShowTerminateModal(false)} disabled={terminating}>
+              Cancel
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </div>
     </DynamicProtectedComponent>
   );

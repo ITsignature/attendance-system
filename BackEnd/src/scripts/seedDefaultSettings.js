@@ -8,7 +8,7 @@ const seedDefaultSettings = async () => {
     port: 3306,
     user: 'root',
     password: '',
-    database: 'attendance_system'  // Change this to match your database name
+    database: 'attendance_system'  
   });
 
   try {
@@ -156,6 +156,28 @@ const seedDefaultSettings = async () => {
         description: 'Overtime pay multiplier (e.g., 1.5 for time and a half)',
         is_public: false
       },
+      {
+        setting_key: 'full_day_minimum_hours',
+        setting_value: JSON.stringify(7),
+        setting_type: 'number',
+        description: 'Minimum hours worked to be considered full day',
+        is_public: true
+     },
+     {
+        setting_key: 'half_day_minimum_hours',
+        setting_value: JSON.stringify(4),
+        setting_type: 'number',
+        description: 'Minimum hours worked to be considered half day',
+        is_public: true
+   },
+    {
+      setting_key: 'short_leave_minimum_hours',
+      setting_value: JSON.stringify(1),
+      setting_type: 'number',
+      description: 'Minimum hours worked to be considered short leave',
+      is_public: true
+    },
+      
 
       // Payroll Settings
       {

@@ -31,6 +31,7 @@ const validateSettingKey = (key) => {
     // Attendance Settings
     'working_hours_per_day', 'work_start_time', 'work_end_time', 
     'late_threshold_minutes', 'overtime_rate_multiplier',
+    'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours',
     
     // Payroll Settings
     'payroll_cycle', 'salary_processing_date', 'tax_calculation_method',
@@ -55,7 +56,8 @@ const getSettingType = (key, value) => {
   const numberSettings = [
     'password_expiry_days', 'session_timeout_minutes', 'max_login_attempts',
     'working_hours_per_day', 'late_threshold_minutes', 'overtime_rate_multiplier',
-    'data_retention_years', 'account_lockout_duration'
+    'data_retention_years', 'account_lockout_duration',
+    'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours' 
   ];
   
   if (booleanSettings.includes(key)) {
@@ -333,7 +335,10 @@ router.put('/',
     body('settings').isObject().withMessage('Settings must be an object'),
     body('settings.*').notEmpty().withMessage('Setting values cannot be empty')
   ],
+
+  
   asyncHandler(async (req, res) => {
+    console.log("ccc",req.body)
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -349,6 +354,7 @@ router.put('/',
     // Validate all setting keys
     const invalidKeys = Object.keys(settings).filter(key => !validateSettingKey(key));
     if (invalidKeys.length > 0) {
+      console.log(invalidKeys);
       return res.status(400).json({
         success: false,
         message: 'Invalid setting keys',
@@ -501,7 +507,15 @@ router.get('/meta/categories',
       attendance: {
         name: 'Attendance Settings',
         description: 'Work schedule and attendance policies',
-        settings: ['working_hours_per_day', 'work_start_time', 'work_end_time', 'late_threshold_minutes', 'overtime_rate_multiplier']
+        settings: [
+          'working_hours_per_day', 
+          'work_start_time', 
+          'work_end_time', 
+          'late_threshold_minutes', 
+          'overtime_rate_multiplier',
+          'half_time_duration_minutes',     // NEW SETTING
+          'short_leave_duration_minutes'    // NEW SETTING
+        ]
       },
       payroll: {
         name: 'Payroll Settings',

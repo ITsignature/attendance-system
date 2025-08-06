@@ -1,4 +1,5 @@
 import { EmployeeFilters, CreateEmployeeData, UpdateEmployeeData } from '../types/employee';
+
 export interface LoginResponse {
 
   success: boolean;
@@ -418,124 +419,86 @@ async getManagers(departmentId?: string): Promise<ApiResponse> {
   // ========== ATTENDANCE METHODS ==========
   
   /**
-   * Get attendance records with filtering and pagination
-   */
-  async getAttendance(filters?: AttendanceFilters): Promise<ApiResponse> {
-    const queryString = filters ? '?' + new URLSearchParams(
-      Object.entries(filters).reduce((acc, [key, value]) => {
-        if (value !== undefined && value !== '') {
-          acc[key] = String(value);
-        }
-        return acc;
-      }, {} as Record<string, string>)
-    ).toString() : '';
-    
-    console.log('🔄 Fetching attendance records with filters:', filters);
-    return this.apiCall(`/api/attendance${queryString}`);
-  }
-
-  /**
-   * Create a new attendance record
-   */
-  async createAttendance(data: CreateAttendanceData): Promise<ApiResponse> {
-    console.log('🔄 Creating attendance record:', data);
-    
-    // Validate required fields
-    if (!data.employee_id || !data.date || !data.status) {
-      return {
-        success: false,
-        message: 'Employee ID, date, and status are required'
-      };
+ * Get attendance records with dual status filtering
+ */
+async getAttendanceRecords(filters: AttendanceFilters): Promise<ApiResponse> {
+  const params = new URLSearchParams();
+  
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      params.append(key, value.toString());
     }
+  });
 
-    return this.apiCall('/api/attendance', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  return this.apiCall(`/api/attendance?${params.toString()}`);
+}
+
+/**
+ * Create attendance record with dual status
+ */
+async createAttendanceRecord(data: AttendanceFormData): Promise<ApiResponse> {
+  return this.apiCall('/api/attendance', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Update attendance record with dual status
+ */
+async updateAttendanceRecord(id: string, data: Partial<AttendanceFormData>): Promise<ApiResponse> {
+  return this.apiCall(`/api/attendance/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Bulk update attendance statuses
+ */
+async bulkUpdateAttendanceStatus(data: {
+  date: string;
+  employee_ids: string[];
+  update_arrival?: boolean;
+  update_duration?: boolean;
+}): Promise<ApiResponse> {
+  return this.apiCall('/api/attendance/bulk-update-status', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Get employee schedule information
+ */
+async getEmployeeSchedule(employeeId: string): Promise<ApiResponse> {
+  return this.apiCall(`/api/attendance/employee-schedule/${employeeId}`);
+}
+
+/**
+ * Get attendance status badge styling
+ */
+getArrivalStatusColor(status: string): string {
+  switch (status) {
+    case 'on_time': return 'success';
+    case 'late': return 'warning';
+    case 'absent': return 'failure';
+    default: return 'gray';
   }
+}
 
-  /**
-   * Update an existing attendance record
-   */
-  async updateAttendance(attendanceId: string, data: UpdateAttendanceData): Promise<ApiResponse> {
-    console.log('🔄 Updating attendance record:', attendanceId, data);
-    
-    if (!attendanceId) {
-      return {
-        success: false,
-        message: 'Attendance ID is required'
-      };
-    }
-
-    return this.apiCall(`/api/attendance/${attendanceId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+/**
+ * Get work duration badge styling
+ */
+getWorkDurationColor(duration: string): string {
+  switch (duration) {
+    case 'full_day': return 'success';
+    case 'half_day': return 'info';
+    case 'short_leave': return 'warning';
+    case 'on_leave': return 'purple';
+    default: return 'gray';
   }
-
-  /**
-   * Get attendance records for a specific employee
-   */
-  async getEmployeeAttendance(employeeId: string, startDate?: string, endDate?: string): Promise<ApiResponse> {
-    console.log('🔄 Fetching employee attendance:', employeeId);
-    
-    const filters: AttendanceFilters = {
-      employeeId,
-      sortBy: 'date',
-      sortOrder: 'DESC'
-    };
-    
-    if (startDate) filters.startDate = startDate;
-    if (endDate) filters.endDate = endDate;
-    
-    return this.getAttendance(filters);
-  }
-
-  /**
-   * Get today's attendance summary
-   */
-  async getTodayAttendance(): Promise<ApiResponse> {
-    const today = new Date().toISOString().split('T')[0];
-    console.log('🔄 Fetching today\'s attendance:', today);
-    
-    return this.getAttendance({
-      startDate: today,
-      endDate: today,
-      sortBy: 'employee_name',
-      sortOrder: 'ASC'
-    });
-  }
-
-  /**
-   * Mark attendance for quick check-in/check-out
-   */
-  async quickCheckIn(employeeId: string): Promise<ApiResponse> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date();
-    const checkInTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
-    console.log('🔄 Quick check-in for employee:', employeeId);
-    
-    return this.createAttendance({
-      employee_id: employeeId,
-      date: today,
-      check_in_time: checkInTime,
-      status: 'present',
-      work_type: 'office'
-    });
-  }
-
-  async quickCheckOut(attendanceId: string): Promise<ApiResponse> {
-    const now = new Date();
-    const checkOutTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
-    console.log('🔄 Quick check-out for attendance:', attendanceId);
-    
-    return this.updateAttendance(attendanceId, {
-      check_out_time: checkOutTime
-    });
-  }
-
+}
 
   // RBAC methods
   async getRoles(): Promise<ApiResponse> {

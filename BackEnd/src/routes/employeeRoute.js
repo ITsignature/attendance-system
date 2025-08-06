@@ -529,265 +529,265 @@ router.get('/:id',
 // =============================================
 // CREATE EMPLOYEE
 // =============================================
-// router.post('/', 
-//   checkPermission('employees.create'),
-//   [
-//     // Personal Information Validations
-//     body('first_name').trim().isLength({ min: 1 }).withMessage('First name is required'),
-//     body('last_name').trim().isLength({ min: 1 }).withMessage('Last name is required'),
-//     body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
-//     body('phone').trim().isLength({ min: 10 }).withMessage('Phone number must be at least 10 digits'),
-//     body('date_of_birth').isISO8601().withMessage('Please enter a valid date of birth'),
-//     body('gender').isIn(['male', 'female', 'other']).withMessage('Gender must be male, female, or other'),
+router.post('/', 
+  checkPermission('employees.create'),
+  [
+    // Personal Information Validations
+    body('first_name').trim().isLength({ min: 1 }).withMessage('First name is required'),
+    body('last_name').trim().isLength({ min: 1 }).withMessage('Last name is required'),
+    body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+    body('phone').trim().isLength({ min: 10 }).withMessage('Phone number must be at least 10 digits'),
+    body('date_of_birth').isISO8601().withMessage('Please enter a valid date of birth'),
+    body('gender').isIn(['male', 'female', 'other']).withMessage('Gender must be male, female, or other'),
     
-//     // Professional Information Validations  
-//     body('employee_code').trim().isLength({ min: 1 }).withMessage('Employee code is required'),
-//     body('department_id').isUUID().withMessage('Invalid department ID'),
-//     body('designation_id').isUUID().withMessage('Invalid designation ID'),
-//      body('manager_id').optional({ values: 'falsy' }).isUUID().withMessage('Invalid manager ID'),
-//     body('hire_date').isISO8601().withMessage('Please enter a valid hire date'),
-//     body('employment_status').isIn(['active', 'inactive']).withMessage('Invalid employment status'),
-//     body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant']).withMessage('Invalid employee type'),
-//     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
+    // Professional Information Validations  
+    body('employee_code').trim().isLength({ min: 1 }).withMessage('Employee code is required'),
+    body('department_id').isUUID().withMessage('Invalid department ID'),
+    body('designation_id').isUUID().withMessage('Invalid designation ID'),
+     body('manager_id').optional({ values: 'falsy' }).isUUID().withMessage('Invalid manager ID'),
+    body('hire_date').isISO8601().withMessage('Please enter a valid hire date'),
+    body('employment_status').isIn(['active', 'inactive']).withMessage('Invalid employment status'),
+    body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant']).withMessage('Invalid employee type'),
+    body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
     
-//     // Emergency Contact Validations
-//     body('emergency_contact_name').trim().isLength({ min: 1 }).withMessage('Emergency contact name is required'),  
-//     body('emergency_contact_phone').trim().isLength({ min: 10 }).withMessage('Emergency contact phone is required'),
-//     body('emergency_contact_relation').trim().isLength({ min: 1 }).withMessage('Emergency contact relation is required'),
+    // Emergency Contact Validations
+    body('emergency_contact_name').trim().isLength({ min: 1 }).withMessage('Emergency contact name is required'),  
+    body('emergency_contact_phone').trim().isLength({ min: 10 }).withMessage('Emergency contact phone is required'),
+    body('emergency_contact_relation').trim().isLength({ min: 1 }).withMessage('Emergency contact relation is required'),
     
-//     // Work Schedule Validations - NEW
-//     body('in_time').isTime().withMessage('Valid in time is required'),
-//     body('out_time').isTime().withMessage('Valid out time is required'),
-//     body('follows_company_schedule').isBoolean().optional()
-//   ],
-//   asyncHandler(async (req, res) => {
+    // Work Schedule Validations - NEW
+    body('in_time').isTime().withMessage('Valid in time is required'),
+    body('out_time').isTime().withMessage('Valid out time is required'),
+    body('follows_company_schedule').isBoolean().optional()
+  ],
+  asyncHandler(async (req, res) => {
 
-//     console.log(req.body);
-//     // Check validation errors first
-//     const errors = validationResult(req);
-//     if (!errors.isEmpty()) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Validation failed',
-//         errors: errors.array()
-//       });
-//     }
+    console.log(req.body);
+    // Check validation errors first
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
 
-//     try {
-//       const db = getDB();
+    try {
+      const db = getDB();
       
-//       console.log('📝 Received request body:', JSON.stringify(req.body, null, 2));
+      console.log('📝 Received request body:', JSON.stringify(req.body, null, 2));
       
-//       const {
-//         // Personal Information
-//         first_name, last_name, email, phone, date_of_birth, gender,
-//         address, city, state, zip_code, nationality, marital_status,
+      const {
+        // Personal Information
+        first_name, last_name, email, phone, date_of_birth, gender,
+        address, city, state, zip_code, nationality, marital_status,
         
-//         // Professional Information
-//         employee_code, department_id, designation_id, manager_id,
-//         hire_date, employment_status = 'active', employee_type,
-//         base_salary,
+        // Professional Information
+        employee_code, department_id, designation_id, manager_id,
+        hire_date, employment_status = 'active', employee_type,
+        base_salary,
         
-//         // Emergency Contact
-//         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
+        // Emergency Contact
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
         
-//         // Work Schedule Information - NEW
-//         in_time, out_time, follows_company_schedule = true
-//       } = req.body;
+        // Work Schedule Information - NEW
+        in_time, out_time, follows_company_schedule = true
+      } = req.body;
 
-//       // Validation for time fields
-//       if (in_time && out_time) {
-//         const inTime = new Date(`2000-01-01T${in_time}`);
-//         const outTime = new Date(`2000-01-01T${out_time}`);
+      // Validation for time fields
+      if (in_time && out_time) {
+        const inTime = new Date(`2000-01-01T${in_time}`);
+        const outTime = new Date(`2000-01-01T${out_time}`);
         
-//         if (outTime <= inTime) {
-//           return res.status(400).json({
-//             success: false,
-//             message: 'Out time must be after in time',
-//             field: 'out_time'
-//           });
-//         }
-//       }
+        if (outTime <= inTime) {
+          return res.status(400).json({
+            success: false,
+            message: 'Out time must be after in time',
+            field: 'out_time'
+          });
+        }
+      }
 
-//       // If employee follows company schedule, ensure we have the latest company times
-//       let finalInTime = in_time;
-//       let finalOutTime = out_time;
+      // If employee follows company schedule, ensure we have the latest company times
+      let finalInTime = in_time;
+      let finalOutTime = out_time;
 
-//       if (follows_company_schedule) {
-//         console.log('🕒 Employee follows company schedule, fetching latest company times...');
+      if (follows_company_schedule) {
+        console.log('🕒 Employee follows company schedule, fetching latest company times...');
         
-//         // Fetch current company work schedule
-//         const [companySchedule] = await db.execute(`
-//           SELECT setting_key, setting_value
-//           FROM system_settings 
-//           WHERE setting_key IN ('work_start_time', 'work_end_time') 
-//           AND client_id = ? 
-//           ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END, client_id DESC
-//         `, [req.user.clientId]);
+        // Fetch current company work schedule
+        const [companySchedule] = await db.execute(`
+          SELECT setting_key, setting_value
+          FROM system_settings 
+          WHERE setting_key IN ('work_start_time', 'work_end_time') 
+          AND client_id = ? 
+          ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END, client_id DESC
+        `, [req.user.clientId]);
 
-//         // Parse company schedule
-//         const scheduleMap = {};
-//         companySchedule.forEach(setting => {
-//           try {
-//             scheduleMap[setting.setting_key] = JSON.parse(setting.setting_value);
-//           } catch (e) {
-//             scheduleMap[setting.setting_key] = setting.setting_value;
-//           }
-//         });
+        // Parse company schedule
+        const scheduleMap = {};
+        companySchedule.forEach(setting => {
+          try {
+            scheduleMap[setting.setting_key] = JSON.parse(setting.setting_value);
+          } catch (e) {
+            scheduleMap[setting.setting_key] = setting.setting_value;
+          }
+        });
 
 
-//         console.log('🕒 Fetched company schedule times:', scheduleMap);
+        console.log('🕒 Fetched company schedule times:', scheduleMap);
 
-//         // Use company times if available, otherwise use provided times as fallback
-//         finalInTime = scheduleMap.work_start_time || in_time || '09:00';
-//         finalOutTime = scheduleMap.work_end_time || out_time || '17:00';
+        // Use company times if available, otherwise use provided times as fallback
+        finalInTime = scheduleMap.work_start_time || in_time || '09:00';
+        finalOutTime = scheduleMap.work_end_time || out_time || '17:00';
 
-//         console.log('🕒 Using company schedule times:', { finalInTime, finalOutTime });
-//       } else {
-//         console.log('🕒 Using custom employee times:', { finalInTime, finalOutTime });
-//       }
+        console.log('🕒 Using company schedule times:', { finalInTime, finalOutTime });
+      } else {
+        console.log('🕒 Using custom employee times:', { finalInTime, finalOutTime });
+      }
 
-//       // Check for duplicate employee code
-//       console.log('🔍 Checking for duplicate employee code...');
-//       const [existingId] = await db.execute(`
-//         SELECT id FROM employees 
-//         WHERE client_id = ? AND employee_code = ?
-//       `, [req.user.clientId, employee_code]);
+      // Check for duplicate employee code
+      console.log('🔍 Checking for duplicate employee code...');
+      const [existingId] = await db.execute(`
+        SELECT id FROM employees 
+        WHERE client_id = ? AND employee_code = ?
+      `, [req.user.clientId, employee_code]);
 
-//       if (existingId.length > 0) {
-//         console.log('❌ Duplicate employee code found');
-//         return res.status(400).json({
-//           success: false,
-//           message: 'Employee code already exists',
-//           field: 'employee_code'
-//         });
-//       }
+      if (existingId.length > 0) {
+        console.log('❌ Duplicate employee code found');
+        return res.status(400).json({
+          success: false,
+          message: 'Employee code already exists',
+          field: 'employee_code'
+        });
+      }
 
-//       // Check for duplicate email
-//       console.log('🔍 Checking for duplicate email...');
-//       const [existingEmail] = await db.execute(`
-//         SELECT id FROM employees 
-//         WHERE client_id = ? AND email = ?
-//       `, [req.user.clientId, email]);
+      // Check for duplicate email
+      console.log('🔍 Checking for duplicate email...');
+      const [existingEmail] = await db.execute(`
+        SELECT id FROM employees 
+        WHERE client_id = ? AND email = ?
+      `, [req.user.clientId, email]);
 
-//       if (existingEmail.length > 0) {
-//         console.log('❌ Duplicate email found');
-//         return res.status(400).json({
-//           success: false,
-//           message: 'Email already exists',
-//           field: 'email'
-//         });
-//       }
+      if (existingEmail.length > 0) {
+        console.log('❌ Duplicate email found');
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists',
+          field: 'email'
+        });
+      }
 
-//       // Verify department exists
-//       const [deptCheck] = await db.execute(`
-//         SELECT id FROM departments WHERE id = ? AND client_id = ? AND is_active = TRUE
-//       `, [department_id, req.user.clientId]);
+      // Verify department exists
+      const [deptCheck] = await db.execute(`
+        SELECT id FROM departments WHERE id = ? AND client_id = ? AND is_active = TRUE
+      `, [department_id, req.user.clientId]);
 
-//       if (deptCheck.length === 0) {
-//         return res.status(400).json({
-//           success: false,
-//           message: 'Invalid department selected',
-//           field: 'department_id'
-//         });
-//       }
+      if (deptCheck.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid department selected',
+          field: 'department_id'
+        });
+      }
 
-//       // Verify designation exists and belongs to department
-//       const [desigCheck] = await db.execute(`
-//         SELECT id FROM designations 
-//         WHERE id = ? AND department_id = ? AND client_id = ? AND is_active = TRUE
-//       `, [designation_id, department_id, req.user.clientId]);
+      // Verify designation exists and belongs to department
+      const [desigCheck] = await db.execute(`
+        SELECT id FROM designations 
+        WHERE id = ? AND department_id = ? AND client_id = ? AND is_active = TRUE
+      `, [designation_id, department_id, req.user.clientId]);
 
-//       if (desigCheck.length === 0) {
-//         console.log('❌ Designation not found or does not belong to department');
-//         return res.status(400).json({
-//           success: false,
-//           message: 'Selected designation not found or does not belong to the selected department',
-//           field: 'designation_id'
-//         });
-//       }
+      if (desigCheck.length === 0) {
+        console.log('❌ Designation not found or does not belong to department');
+        return res.status(400).json({
+          success: false,
+          message: 'Selected designation not found or does not belong to the selected department',
+          field: 'designation_id'
+        });
+      }
 
-//       // Generate UUID for employee (using your existing method)
-//       const { v4: uuidv4 } = require('uuid');
-//       const employeeUuid = uuidv4();
+      // Generate UUID for employee (using your existing method)
+      const { v4: uuidv4 } = require('uuid');
+      const employeeUuid = uuidv4();
       
-//       console.log('🔍 Generated employee UUID:', employeeUuid);
+      console.log('🔍 Generated employee UUID:', employeeUuid);
 
-//       // Insert employee with work schedule fields - UPDATED QUERY
-//       console.log('💾 Inserting employee into database...');
-//       await db.execute(`
-//         INSERT INTO employees (
-//           id, client_id, employee_code, first_name, last_name, email, phone,
-//           date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
-//           hire_date, department_id, designation_id, manager_id, employee_type, 
-//           employment_status, base_salary,
-//           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-//           in_time, out_time, follows_company_schedule,
-//           created_at, updated_at
-//         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-//       `, [
-//         employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
-//         date_of_birth, gender, address || null, city || null, state || null, zip_code || null, 
-//         nationality || null, marital_status || null, hire_date, department_id, designation_id, 
-//         manager_id || null, employee_type, employment_status, base_salary || null,
-//         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-//         finalInTime, finalOutTime, follows_company_schedule
-//       ]);
+      // Insert employee with work schedule fields - UPDATED QUERY
+      console.log('💾 Inserting employee into database...');
+      await db.execute(`
+        INSERT INTO employees (
+          id, client_id, employee_code, first_name, last_name, email, phone,
+          date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
+          hire_date, department_id, designation_id, manager_id, employee_type, 
+          employment_status, base_salary,
+          emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
+          in_time, out_time, follows_company_schedule,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      `, [
+        employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
+        date_of_birth, gender, address || null, city || null, state || null, zip_code || null, 
+        nationality || null, marital_status || null, hire_date, department_id, designation_id, 
+        manager_id || null, employee_type, employment_status, base_salary || null,
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
+        finalInTime, finalOutTime, follows_company_schedule
+      ]);
 
-//       // Get created employee with relations (same as your existing code)
-//       const [newEmployee] = await db.execute(`
-//         SELECT 
-//           e.*,
-//           CONCAT(e.first_name, ' ', e.last_name) as full_name,
-//           d.name as department_name,
-//           des.title as designation_title,
-//           CONCAT(m.first_name, ' ', m.last_name) as manager_name
-//         FROM employees e
-//         LEFT JOIN departments d ON e.department_id = d.id
-//         LEFT JOIN designations des ON e.designation_id = des.id
-//         LEFT JOIN employees m ON e.manager_id = m.id
-//         WHERE e.id = ?
-//       `, [employeeUuid]);
+      // Get created employee with relations (same as your existing code)
+      const [newEmployee] = await db.execute(`
+        SELECT 
+          e.*,
+          CONCAT(e.first_name, ' ', e.last_name) as full_name,
+          d.name as department_name,
+          des.title as designation_title,
+          CONCAT(m.first_name, ' ', m.last_name) as manager_name
+        FROM employees e
+        LEFT JOIN departments d ON e.department_id = d.id
+        LEFT JOIN designations des ON e.designation_id = des.id
+        LEFT JOIN employees m ON e.manager_id = m.id
+        WHERE e.id = ?
+      `, [employeeUuid]);
 
-//       console.log('✅ Employee creation successful');
-//       res.status(201).json({
-//         success: true,
-//         message: 'Employee created successfully',
-//         data: {
-//           employee: newEmployee[0]
-//         }
-//       });
+      console.log('✅ Employee creation successful');
+      res.status(201).json({
+        success: true,
+        message: 'Employee created successfully',
+        data: {
+          employee: newEmployee[0]
+        }
+      });
 
-//     } catch (error) {
-//       console.error('💥 Create employee error details:');
-//       console.error('Error message:', error.message);
-//       console.error('Error code:', error.code);
-//       console.error('Full error:', error);
+    } catch (error) {
+      console.error('💥 Create employee error details:');
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+      console.error('Full error:', error);
       
-//       if (error.code === 'ER_DUP_ENTRY') {
-//         if (error.sqlMessage && error.sqlMessage.includes('email')) {
-//           return res.status(400).json({
-//             success: false,
-//             message: 'Email address already exists',
-//             field: 'email'
-//           });
-//         } else if (error.sqlMessage && error.sqlMessage.includes('employee_code')) {
-//           return res.status(400).json({
-//             success: false,
-//             message: 'Employee code already exists',
-//             field: 'employee_code'
-//           });
-//         }
-//       }
+      if (error.code === 'ER_DUP_ENTRY') {
+        if (error.sqlMessage && error.sqlMessage.includes('email')) {
+          return res.status(400).json({
+            success: false,
+            message: 'Email address already exists',
+            field: 'email'
+          });
+        } else if (error.sqlMessage && error.sqlMessage.includes('employee_code')) {
+          return res.status(400).json({
+            success: false,
+            message: 'Employee code already exists',
+            field: 'employee_code'
+          });
+        }
+      }
       
-//       res.status(500).json({
-//         success: false,
-//         message: 'Failed to create employee',
-//         error: process.env.NODE_ENV === 'development' ? error.message : undefined
-//       });
-//     }
-//   })
-// );
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create employee',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  })
+);
 // =============================================
 // BACKEND VALIDATION UPDATES
 // File: routes/employeeRoute.js

@@ -28,20 +28,34 @@ const SettingsWithBackend = () => {
   } = useSettings();
 
   const [activeSection, setActiveSection] = useState('general');
-  const [localSettings, setLocalSettings] = useState<Record<string, any>>({});
+  // FIX: Initialize with null instead of empty object
+  const [localSettings, setLocalSettings] = useState<Record<string, any> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Convert backend settings to local format
   useEffect(() => {
     if (settings && Object.keys(settings).length > 0) {
+      console.log('🔍 Converting backend settings to local format:', settings);
       const converted: Record<string, any> = {};
       Object.entries(settings).forEach(([key, setting]) => {
         converted[key] = setting.value;
       });
+      console.log('🔍 Converted settings:', converted);
       setLocalSettings(converted);
     }
   }, [settings]);
+
+    if (loading || localSettings === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading settings...</span>
+        </div>
+      </div>
+    );
+  }
 
   const settingSections = [
     { id: 'general', label: 'General', icon: Settings },
@@ -53,10 +67,27 @@ const SettingsWithBackend = () => {
     { id: 'integration', label: 'Integration', icon: Database }
   ];
 
-  const updateLocalSetting = (key: string, value: any) => {
-    setLocalSettings(prev => ({ ...prev, [key]: value }));
-    setHasChanges(true);
-  };
+const updateLocalSetting = (key: string, value: any) => {
+  console.log(`🔍 DEBUG updateLocalSetting - Key: "${key}", Value: "${value}", Type: ${typeof value}`);
+  
+  // Special handling for time inputs
+  if (key === 'work_start_time' || key === 'work_end_time') {
+    console.log(`⏰ DEBUG time input - Raw value: "${value}"`);
+    if (value === '' || value === null || value === undefined) {
+      console.log(`❌ DEBUG time input - Empty/null value detected for ${key}`);
+      // Don't update if empty - keep the existing value
+      return;
+    }
+  }
+  
+  setLocalSettings(prev => {
+    const newSettings = { ...prev, [key]: value };
+    console.log(`🔍 DEBUG - Updated local settings for ${key}:`, newSettings[key]);
+    return newSettings;
+  });
+  setHasChanges(true);
+};
+
 
 const handleSave = async () => {
   setSaving(true);
@@ -64,13 +95,31 @@ const handleSave = async () => {
     // Only send changed settings
     const changedSettings: Record<string, any> = {};
     Object.entries(localSettings).forEach(([key, value]) => {
-      if (settings[key]?.value !== value) {
+      const currentValue = settings[key]?.value;
+      const hasChanged = currentValue !== value;
+      
+      console.log(`🔍 DEBUG comparing ${key}:`, {
+        current: currentValue,
+        local: value,
+        changed: hasChanged,
+        currentType: typeof currentValue,
+        localType: typeof value
+      });
+      
+      if (hasChanged) {
+        // Additional validation for time fields
+        if ((key === 'work_start_time' || key === 'work_end_time') && 
+            (value === '' || value === null || value === undefined)) {
+          console.log(`❌ DEBUG - Skipping ${key} due to empty value`);
+          return;
+        }
         changedSettings[key] = value;
       }
     });
 
-    console.log('🔍 Changed settings to send:', changedSettings); // ADD THIS LINE
-    console.log('🔍 Current settings state:', settings); // ADD THIS LINE
+    console.log('🔍 Final changed settings to send:', changedSettings);
+    console.log('🔍 LocalSettings state:', localSettings);
+    console.log('🔍 Current settings state:', settings);
 
     if (Object.keys(changedSettings).length > 0) {
       const success = await updateMultipleSettings(changedSettings);
@@ -263,8 +312,7 @@ const handleSave = async () => {
       case 'attendance':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Attendance Settings</h3>
-            
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Attendance Settings</h3>          
             <div className="grid grid-cols-1 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -297,6 +345,8 @@ const handleSave = async () => {
                 <input
                   type="number"
                   step="0.5"
+                  min="0"
+                  max="24"
                   value={localSettings.working_hours_per_day || 8}
                   onChange={(e) => updateLocalSetting('working_hours_per_day', parseFloat(e.target.value))}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -309,10 +359,108 @@ const handleSave = async () => {
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  max="120"
                   value={localSettings.late_threshold_minutes || 15}
                   onChange={(e) => updateLocalSetting('late_threshold_minutes', parseInt(e.target.value))}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  How many minutes late before marked as "late"
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Overtime Rate Multiplier
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="3"
+                  value={localSettings.overtime_rate_multiplier || 1.5}
+                  onChange={(e) => updateLocalSetting('overtime_rate_multiplier', parseFloat(e.target.value))}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Multiplier for overtime pay calculation (e.g., 1.5 = 150% of regular rate)
+                </p>
+              </div>
+
+              {/* NEW ATTENDANCE SETTINGS */}
+              <div className="border-t pt-6 mt-6">
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                  Attendance Classification
+                </h4>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Full Day Minimum Hours
+                    </label>
+                    <input
+                    type="number"
+                    step="0.5"
+                    min="6"
+                    max="12"
+                    value={localSettings.full_day_minimum_hours || 7}
+                    onChange={(e) => updateLocalSetting('full_day_minimum_hours', parseFloat(e.target.value))}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Minimum hours to be considered full day (default: 7 hours)
+                    </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Half Day Minimum Hours
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="2"
+                    max="8"
+                    value={localSettings.half_day_minimum_hours || 4}
+                    onChange={(e) => updateLocalSetting('half_day_minimum_hours', parseFloat(e.target.value))}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Minimum hours to be considered half day (default: 4 hours)
+                  </p>
+                </div>
+
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Short Leave Minimum Hours
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="4"
+                      value={localSettings.short_leave_minimum_hours || 1}
+                      onChange={(e) => updateLocalSetting('short_leave_minimum_hours', parseFloat(e.target.value))}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Minimum hours to be considered short leave (default: 1 hour)
+                    </p>
+                 </div>
+                </div>
+
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <h5 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
+                    Work Duration Classification Rules
+                  </h5>
+                  <div className="text-sm text-blue-800 dark:text-blue-400 space-y-1">
+                    <p>• <strong>Less than {localSettings.short_leave_minimum_hours || 1} hours:</strong> Absent</p>
+                    <p>• <strong>{localSettings.short_leave_minimum_hours || 1} to {(localSettings.half_day_minimum_hours || 4) - 0.1} hours:</strong> Short Leave</p>
+                    <p>• <strong>{localSettings.half_day_minimum_hours || 4} to {(localSettings.full_day_minimum_hours || 7) - 0.1} hours:</strong> Half Day</p>
+                    <p>• <strong>{localSettings.full_day_minimum_hours || 7}+ hours:</strong> Full Day</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -351,6 +499,18 @@ const handleSave = async () => {
               <div className="flex items-center">
                 <input
                   type="checkbox"
+                  checked={localSettings.sms_notifications_enabled || false}
+                  onChange={(e) => updateLocalSetting('sms_notifications_enabled', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  Enable SMS Notifications
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
                   checked={localSettings.weekly_reports_enabled || false}
                   onChange={(e) => updateLocalSetting('weekly_reports_enabled', e.target.checked)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -358,6 +518,158 @@ const handleSave = async () => {
                 <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
                   Enable Weekly Reports
                 </label>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'payroll':
+        return (
+          <div className="space-y-6">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Payroll Settings</h3>
+            
+            <div className="grid grid-cols-1 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Payroll Cycle
+                </label>
+                <select
+                  value={localSettings.payroll_cycle || 'monthly'}
+                  onChange={(e) => updateLocalSetting('payroll_cycle', e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="bi-weekly">Bi-Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Salary Processing Date
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={localSettings.salary_processing_date || 25}
+                  onChange={(e) => updateLocalSetting('salary_processing_date', parseInt(e.target.value))}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Day of the month to process salaries
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Tax Calculation Method
+                </label>
+                <select
+                  value={localSettings.tax_calculation_method || 'standard'}
+                  onChange={(e) => updateLocalSetting('tax_calculation_method', e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="standard">Standard Deduction</option>
+                  <option value="itemized">Itemized Deduction</option>
+                  <option value="custom">Custom Method</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'privacy':
+        return (
+          <div className="space-y-6">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Privacy Settings</h3>
+            
+            <div className="grid grid-cols-1 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Data Retention (years)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={localSettings.data_retention_years || 7}
+                  onChange={(e) => updateLocalSetting('data_retention_years', parseInt(e.target.value))}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={localSettings.audit_logs_enabled || false}
+                  onChange={(e) => updateLocalSetting('audit_logs_enabled', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  Enable Audit Logs
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={localSettings.anonymize_data_enabled || false}
+                  onChange={(e) => updateLocalSetting('anonymize_data_enabled', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  Anonymize Sensitive Data
+                </label>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'integration':
+        return (
+          <div className="space-y-6">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Integration Settings</h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={localSettings.email_integration_enabled || false}
+                  onChange={(e) => updateLocalSetting('email_integration_enabled', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  Enable Email Integration
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={localSettings.calendar_sync_enabled || false}
+                  onChange={(e) => updateLocalSetting('calendar_sync_enabled', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  Enable Calendar Sync
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Backup Frequency
+                </label>
+                <select
+                  value={localSettings.backup_frequency || 'weekly'}
+                  onChange={(e) => updateLocalSetting('backup_frequency', e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
               </div>
             </div>
           </div>
