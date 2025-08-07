@@ -1,237 +1,256 @@
-import React, { useState } from "react";
-import { Button, Badge, Modal, Textarea, Select } from "flowbite-react";
-import { FaCheck, FaTimes, FaEye, FaArrowLeft } from "react-icons/fa";
+import React, { useState, useEffect } from "react";
+import { Table, Button, Badge, Alert, Spinner, Modal, TextInput, Textarea } from "flowbite-react";
+import { FaArrowLeft, FaCheck, FaTimes, FaEye, FaDownload, FaFilter } from "react-icons/fa";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLeaveManagement } from "../../hooks/useLeaves";
+import leaveApiService from "../../services/leaveApi";
+import { LeaveRequest } from "../../services/leaveApi";
 
-interface LeaveRequest {
-  id: number;
-  employeeId: string;
-  employeeName: string;
-  avatar: string;
-  department: string;
-  designation: string;
-  startDate: string;
-  endDate: string;
-  reason: string;
-  leaveType: string;
-  daysRequested: number;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  appliedDate: string;
-  approvedBy?: string;
-  approvedDate?: string;
-  rejectionReason?: string;
+// =============================================
+// INTERFACES
+// =============================================
+
+interface ApprovalModalData {
+  request: LeaveRequest;
+  isOpen: boolean;
+  type: 'approve' | 'reject';
 }
 
-const LeaveRequestsManagement = () => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showActionModal, setShowActionModal] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
-  const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
-  const [actionReason, setActionReason] = useState('');
+interface FilterState {
+  status: string;
+  department: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  employeeName: string;
+}
 
-  // Sample leave requests data
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
-    {
-      id: 1,
-      employeeId: 'EMP001',
-      employeeName: 'John Smith',
-      avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-      department: 'Engineering',
-      designation: 'Software Developer',
-      startDate: '2024-07-15',
-      endDate: '2024-07-17',
-      reason: 'Family vacation - Need to attend cousin\'s wedding out of town',
-      leaveType: 'Annual Leave',
-      daysRequested: 3,
-      status: 'Pending',
-      appliedDate: '2024-07-01'
-    },
-    {
-      id: 2,
-      employeeId: 'EMP002',
-      employeeName: 'Sarah Johnson',
-      avatar: 'https://randomuser.me/api/portraits/women/2.jpg',
-      department: 'Marketing',
-      designation: 'Marketing Manager',
-      startDate: '2024-07-20',
-      endDate: '2024-07-22',
-      reason: 'Medical appointment for routine checkup',
-      leaveType: 'Sick Leave',
-      daysRequested: 3,
-      status: 'Pending',
-      appliedDate: '2024-07-02'
-    },
-    {
-      id: 3,
-      employeeId: 'EMP003',
-      employeeName: 'Mike Davis',
-      avatar: 'https://randomuser.me/api/portraits/men/3.jpg',
-      department: 'Sales',
-      designation: 'Sales Executive',
-      startDate: '2024-07-25',
-      endDate: '2024-07-25',
-      reason: 'Personal work - Bank documentation',
-      leaveType: 'Personal Leave',
-      daysRequested: 1,
-      status: 'Pending',
-      appliedDate: '2024-07-05'
-    },
-    {
-      id: 4,
-      employeeId: 'EMP004',
-      employeeName: 'Emily Wilson',
-      avatar: 'https://randomuser.me/api/portraits/women/4.jpg',
-      department: 'HR',
-      designation: 'HR Coordinator',
-      startDate: '2024-08-01',
-      endDate: '2024-08-03',
-      reason: 'Sister\'s wedding ceremony',
-      leaveType: 'Annual Leave',
-      daysRequested: 3,
-      status: 'Pending',
-      appliedDate: '2024-07-08'
-    },
-    {
-      id: 5,
-      employeeId: 'EMP005',
-      employeeName: 'David Brown',
-      avatar: 'https://randomuser.me/api/portraits/men/5.jpg',
-      department: 'Finance',
-      designation: 'Accountant',
-      startDate: '2024-08-05',
-      endDate: '2024-08-07',
-      reason: 'Flu symptoms and fever',
-      leaveType: 'Sick Leave',
-      daysRequested: 3,
-      status: 'Pending',
-      appliedDate: '2024-07-10'
-    },
-    // Approved leaves
-    {
-      id: 6,
-      employeeId: 'EMP006',
-      employeeName: 'Lisa Garcia',
-      avatar: 'https://randomuser.me/api/portraits/women/6.jpg',
-      department: 'Design',
-      designation: 'UI/UX Designer',
-      startDate: '2024-06-20',
-      endDate: '2024-06-22',
-      reason: 'Annual vacation with family',
-      leaveType: 'Annual Leave',
-      daysRequested: 3,
-      status: 'Approved',
-      appliedDate: '2024-06-01',
-      approvedBy: 'Mark Williams',
-      approvedDate: '2024-06-03'
-    },
-    {
-      id: 7,
-      employeeId: 'EMP007',
-      employeeName: 'Robert Taylor',
-      avatar: 'https://randomuser.me/api/portraits/men/7.jpg',
-      department: 'Engineering',
-      designation: 'Senior Developer',
-      startDate: '2024-06-15',
-      endDate: '2024-06-16',
-      reason: 'Medical procedure',
-      leaveType: 'Sick Leave',
-      daysRequested: 2,
-      status: 'Approved',
-      appliedDate: '2024-06-05',
-      approvedBy: 'Mark Williams',
-      approvedDate: '2024-06-06'
-    },
-    // Rejected leaves
-    {
-      id: 8,
-      employeeId: 'EMP008',
-      employeeName: 'Jennifer Lee',
-      avatar: 'https://randomuser.me/api/portraits/women/8.jpg',
-      department: 'Sales',
-      designation: 'Sales Manager',
-      startDate: '2024-07-01',
-      endDate: '2024-07-05',
-      reason: 'Personal vacation',
-      leaveType: 'Annual Leave',
-      daysRequested: 5,
-      status: 'Rejected',
-      appliedDate: '2024-06-20',
-      approvedBy: 'Mark Williams',
-      approvedDate: '2024-06-22',
-      rejectionReason: 'Peak business period - cannot approve extended leave during quarter end'
-    }
-  ]);
+// =============================================
+// MAIN COMPONENT
+// =============================================
 
-  // Mock navigate function
-  const navigate = (path: string) => {
-    console.log('Navigate to:', path);
-  };
+const LeaveRequestsManagement: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Hook for leave management
+  const {
+    requests,
+    loading,
+    submitting,
+    error,
+    stats,
+    approveRequest,
+    rejectRequest,
+    bulkApprove,
+    exportData,
+    fetchRequests,
+    clearError
+  } = useLeaveManagement();
 
-  // Filter requests based on active tab
-  const filteredRequests = leaveRequests.filter(request => {
-    switch (activeTab) {
-      case 'pending':
-        return request.status === 'Pending';
-      case 'approved':
-        return request.status === 'Approved';
-      case 'rejected':
-        return request.status === 'Rejected';
-      default:
-        return false;
-    }
+  // Local state
+  const [activeTab, setActiveTab] = useState<string>(searchParams.get('filter') || 'pending');
+  const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
+  const [approvalModal, setApprovalModal] = useState<ApprovalModalData>({
+    request: {} as LeaveRequest,
+    isOpen: false,
+    type: 'approve'
+  });
+  const [comments, setComments] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    status: activeTab,
+    department: '',
+    leaveType: '',
+    startDate: '',
+    endDate: '',
+    employeeName: ''
   });
 
-  // Handle approve/reject actions
-  const handleAction = (request: LeaveRequest, action: 'approve' | 'reject') => {
-    setSelectedRequest(request);
-    setActionType(action);
-    setShowActionModal(true);
+  // =============================================
+  // EFFECTS
+  // =============================================
+
+  useEffect(() => {
+    // Update filters when tab changes
+    setFilters(prev => ({ ...prev, status: activeTab }));
+    fetchRequestsWithFilters();
+  }, [activeTab]);
+
+  useEffect(() => {
+    // Update URL when tab changes
+    setSearchParams({ filter: activeTab });
+  }, [activeTab, setSearchParams]);
+
+  // =============================================
+  // DATA FETCHING
+  // =============================================
+
+  const fetchRequestsWithFilters = async () => {
+    const filterParams: any = {};
+    
+    if (filters.status && filters.status !== 'all') {
+      filterParams.status = filters.status;
+    }
+    if (filters.department) {
+      filterParams.department_id = filters.department;
+    }
+    if (filters.leaveType) {
+      filterParams.leave_type_id = filters.leaveType;
+    }
+    if (filters.startDate) {
+      filterParams.start_date = filters.startDate;
+    }
+    if (filters.endDate) {
+      filterParams.end_date = filters.endDate;
+    }
+
+    await fetchRequests(filterParams);
   };
 
-  // Confirm action
-  const confirmAction = () => {
-    if (selectedRequest) {
-      const updatedRequests = leaveRequests.map(request => {
-        if (request.id === selectedRequest.id) {
-          return {
-            ...request,
-            status: actionType === 'approve' ? 'Approved' : 'Rejected' as 'Approved' | 'Rejected',
-            approvedBy: 'Mark Williams',
-            approvedDate: new Date().toISOString().split('T')[0],
-            ...(actionType === 'reject' && { rejectionReason: actionReason })
-          };
-        }
-        return request;
-      });
+  // =============================================
+  // HANDLERS
+  // =============================================
 
-      setLeaveRequests(updatedRequests);
-      setShowActionModal(false);
-      setActionReason('');
-      setSelectedRequest(null);
+  const handleApprove = (request: LeaveRequest) => {
+    setApprovalModal({
+      request,
+      isOpen: true,
+      type: 'approve'
+    });
+    setComments('');
+  };
+
+  const handleReject = (request: LeaveRequest) => {
+    setApprovalModal({
+      request,
+      isOpen: true,
+      type: 'reject'
+    });
+    setComments('');
+  };
+
+  const handleConfirmAction = async () => {
+    if (!approvalModal.request.id) return;
+
+    let success = false;
+    
+    if (approvalModal.type === 'approve') {
+      success = await approveRequest(approvalModal.request.id, comments);
+    } else {
+      if (!comments.trim()) {
+        alert('Rejection reason is required');
+        return;
+      }
+      success = await rejectRequest(approvalModal.request.id, comments);
+    }
+
+    if (success) {
+      setApprovalModal({ request: {} as LeaveRequest, isOpen: false, type: 'approve' });
+      setComments('');
+      setSelectedRequests([]);
     }
   };
 
-  // View details
-  const viewDetails = (request: LeaveRequest) => {
-    setSelectedRequest(request);
-    setShowDetailsModal(true);
+  const handleBulkApprove = async () => {
+    if (selectedRequests.length === 0) {
+      alert('Please select requests to approve');
+      return;
+    }
+
+    const success = await bulkApprove(selectedRequests, 'Bulk approved');
+    if (success) {
+      setSelectedRequests([]);
+    }
   };
 
-  // Get status badge
+  const handleSelectRequest = (requestId: string) => {
+    setSelectedRequests(prev => 
+      prev.includes(requestId) 
+        ? prev.filter(id => id !== requestId)
+        : [...prev, requestId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const filteredRequests = getFilteredRequests();
+    if (selectedRequests.length === filteredRequests.length) {
+      setSelectedRequests([]);
+    } else {
+      setSelectedRequests(filteredRequests.map(req => req.id));
+    }
+  };
+
+  const handleExport = async () => {
+    await exportData({
+      ...filters,
+      format: 'csv'
+    });
+  };
+
+  const handleFilterChange = (key: keyof FilterState, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const applyFilters = () => {
+    fetchRequestsWithFilters();
+    setShowFilters(false);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      status: activeTab,
+      department: '',
+      leaveType: '',
+      startDate: '',
+      endDate: '',
+      employeeName: ''
+    });
+    fetchRequestsWithFilters();
+  };
+
+  // =============================================
+  // UTILITY FUNCTIONS
+  // =============================================
+
+  const getFilteredRequests = (): LeaveRequest[] => {
+    let filtered = requests;
+
+    // Filter by active tab
+    if (activeTab !== 'all') {
+      filtered = filtered.filter(req => req.details.status === activeTab);
+    }
+
+    // Filter by employee name
+    if (filters.employeeName) {
+      const searchTerm = filters.employeeName.toLowerCase();
+      filtered = filtered.filter(req => 
+        req.employee.name.toLowerCase().includes(searchTerm) ||
+        req.employee.code.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    return filtered;
+  };
+
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Pending':
-        return <Badge color="warning" size="sm">Pending</Badge>;
-      case 'Approved':
-        return <Badge color="success" size="sm">Approved</Badge>;
-      case 'Rejected':
-        return <Badge color="failure" size="sm">Rejected</Badge>;
-      default:
-        return <Badge color="gray" size="sm">{status}</Badge>;
-    }
+    const config = {
+      pending: { color: 'warning', icon: '⏳' },
+      approved: { color: 'success', icon: '✅' },
+      rejected: { color: 'failure', icon: '❌' },
+      cancelled: { color: 'gray', icon: '🚫' }
+    };
+    
+    const { color, icon } = config[status as keyof typeof config] || { color: 'gray', icon: '❓' };
+    
+    return (
+      <Badge color={color} className="flex items-center gap-1">
+        <span>{icon}</span>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </Badge>
+    );
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -240,7 +259,6 @@ const LeaveRequestsManagement = () => {
     });
   };
 
-  // Calculate days between dates
   const calculateDays = (startDate: string, endDate: string) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -248,6 +266,200 @@ const LeaveRequestsManagement = () => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays;
   };
+
+  const canApproveOrReject = (status: string) => {
+    return status === 'pending';
+  };
+
+  const getUrgencyBadge = (startDate: string, status: string) => {
+    if (status !== 'pending') return null;
+    
+    const daysUntilStart = Math.ceil((new Date(startDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilStart <= 1) {
+      return <Badge color="red" size="xs">Urgent</Badge>;
+    } else if (daysUntilStart <= 7) {
+      return <Badge color="yellow" size="xs">High Priority</Badge>;
+    }
+    
+    return null;
+  };
+
+  // =============================================
+  // RENDER HELPERS
+  // =============================================
+
+  const renderFilters = () => (
+    <Modal show={showFilters} onClose={() => setShowFilters(false)}>
+      <Modal.Header>Advanced Filters</Modal.Header>
+      <Modal.Body>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Employee Name/Code
+              </label>
+              <TextInput
+                placeholder="Search by name or employee code"
+                value={filters.employeeName}
+                onChange={(e) => handleFilterChange('employeeName', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Department
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={filters.department}
+                onChange={(e) => handleFilterChange('department', e.target.value)}
+              >
+                <option value="">All Departments</option>
+                <option value="hr">Human Resources</option>
+                <option value="engineering">Engineering</option>
+                <option value="marketing">Marketing</option>
+                <option value="sales">Sales</option>
+                <option value="finance">Finance</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Leave Type
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={filters.leaveType}
+                onChange={(e) => handleFilterChange('leaveType', e.target.value)}
+              >
+                <option value="">All Leave Types</option>
+                <option value="annual">Annual Leave</option>
+                <option value="sick">Sick Leave</option>
+                <option value="personal">Personal Leave</option>
+                <option value="emergency">Emergency Leave</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Status
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={filters.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Start Date From
+              </label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={filters.startDate}
+                onChange={(e) => handleFilterChange('startDate', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Start Date To
+              </label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={filters.endDate}
+                onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <div className="flex justify-between w-full">
+          <Button color="gray" onClick={clearFilters}>
+            Clear All
+          </Button>
+          <div className="flex gap-2">
+            <Button color="gray" onClick={() => setShowFilters(false)}>
+              Cancel
+            </Button>
+            <Button color="blue" onClick={applyFilters}>
+              Apply Filters
+            </Button>
+          </div>
+        </div>
+      </Modal.Footer>
+    </Modal>
+  );
+
+  const renderApprovalModal = () => (
+    <Modal show={approvalModal.isOpen} onClose={() => setApprovalModal({ request: {} as LeaveRequest, isOpen: false, type: 'approve' })}>
+      <Modal.Header>
+        {approvalModal.type === 'approve' ? 'Approve' : 'Reject'} Leave Request
+      </Modal.Header>
+      <Modal.Body>
+        {approvalModal.request.employee && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+              <h4 className="font-medium text-gray-900 dark:text-white mb-2">Request Details</h4>
+              <div className="space-y-2 text-sm">
+                <div><strong>Employee:</strong> {approvalModal.request.employee.name}</div>
+                <div><strong>Leave Type:</strong> {approvalModal.request.leaveType.name}</div>
+                <div><strong>Duration:</strong> {leaveApiService.formatLeaveDuration(
+                  approvalModal.request.dates.start,
+                  approvalModal.request.dates.end,
+                  approvalModal.request.dates.daysRequested
+                )}</div>
+                <div><strong>Reason:</strong> {approvalModal.request.details.reason}</div>
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {approvalModal.type === 'approve' ? 'Comments (Optional)' : 'Rejection Reason (Required)'}
+              </label>
+              <Textarea
+                placeholder={approvalModal.type === 'approve' ? 'Add any comments...' : 'Please provide a reason for rejection...'}
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                rows={4}
+                required={approvalModal.type === 'reject'}
+              />
+            </div>
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <div className="flex justify-end gap-2">
+          <Button 
+            color="gray" 
+            onClick={() => setApprovalModal({ request: {} as LeaveRequest, isOpen: false, type: 'approve' })}
+          >
+            Cancel
+          </Button>
+          <Button 
+            color={approvalModal.type === 'approve' ? 'success' : 'failure'}
+            onClick={handleConfirmAction}
+            disabled={submitting || (approvalModal.type === 'reject' && !comments.trim())}
+          >
+            {submitting ? <Spinner size="sm" /> : null}
+            {approvalModal.type === 'approve' ? 'Approve' : 'Reject'}
+          </Button>
+        </div>
+      </Modal.Footer>
+    </Modal>
+  );
+
+  // =============================================
+  // MAIN RENDER
+  // =============================================
+
+  const filteredRequests = getFilteredRequests();
 
   return (
     <div className="p-6 rounded-xl shadow-md bg-white dark:bg-darkgray space-y-6">
@@ -265,19 +477,90 @@ const LeaveRequestsManagement = () => {
           </Button>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Leave Requests Management</h1>
         </div>
+        
+        <div className="flex items-center gap-2">
+          {selectedRequests.length > 0 && activeTab === 'pending' && (
+            <Button
+              color="success"
+              size="sm"
+              onClick={handleBulkApprove}
+              disabled={submitting}
+              className="flex items-center gap-2"
+            >
+              {submitting ? <Spinner size="sm" /> : <FaCheck />}
+              Bulk Approve ({selectedRequests.length})
+            </Button>
+          )}
+          
+          <Button
+            color="blue"
+            size="sm"
+            onClick={() => setShowFilters(true)}
+            className="flex items-center gap-2"
+          >
+            <FaFilter className="w-4 h-4" />
+            Filters
+          </Button>
+          
+          <Button
+            color="green"
+            size="sm"
+            onClick={handleExport}
+            className="flex items-center gap-2"
+          >
+            <FaDownload className="w-4 h-4" />
+            Export
+          </Button>
+        </div>
+      </div>
+
+      {/* Error Display */}
+      {error && (
+        <Alert color="failure" className="mb-4">
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <Button size="xs" color="failure" onClick={clearError}>
+              Dismiss
+            </Button>
+          </div>
+        </Alert>
+      )}
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+          <h3 className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Requests</h3>
+          <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">{stats.total}</p>
+        </div>
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+          <h3 className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pending</h3>
+          <p className="text-2xl font-bold text-yellow-800 dark:text-yellow-300">{stats.pending}</p>
+          {stats.urgent > 0 && (
+            <p className="text-xs text-red-600 dark:text-red-400">({stats.urgent} urgent)</p>
+          )}
+        </div>
+        <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+          <h3 className="text-sm font-medium text-green-600 dark:text-green-400">Approved</h3>
+          <p className="text-2xl font-bold text-green-800 dark:text-green-300">{stats.approved}</p>
+        </div>
+        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+          <h3 className="text-sm font-medium text-red-600 dark:text-red-400">Rejected</h3>
+          <p className="text-2xl font-bold text-red-800 dark:text-red-300">{stats.rejected}</p>
+        </div>
       </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700">
         <nav className="-mb-px flex space-x-8">
           {[
-            { key: 'pending', label: 'Pending Requests', count: leaveRequests.filter(r => r.status === 'Pending').length },
-            { key: 'approved', label: 'Approved Leaves', count: leaveRequests.filter(r => r.status === 'Approved').length },
-            { key: 'rejected', label: 'Rejected Leaves', count: leaveRequests.filter(r => r.status === 'Rejected').length }
+            { key: 'pending', label: 'Pending Requests', count: stats.pending },
+            { key: 'approved', label: 'Approved Leaves', count: stats.approved },
+            { key: 'rejected', label: 'Rejected Leaves', count: stats.rejected },
+            { key: 'all', label: 'All Requests', count: stats.total }
           ].map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key as any)}
+              onClick={() => setActiveTab(tab.key)}
               className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
                 activeTab === tab.key
                   ? 'border-purple-500 text-purple-600 dark:text-purple-400'
@@ -295,7 +578,12 @@ const LeaveRequestsManagement = () => {
 
       {/* Content */}
       <div className="space-y-4">
-        {filteredRequests.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Spinner size="xl" />
+            <span className="ml-2">Loading requests...</span>
+          </div>
+        ) : filteredRequests.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-6xl mb-4">📋</div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
@@ -303,227 +591,140 @@ const LeaveRequestsManagement = () => {
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
               {activeTab === 'pending' && "All caught up! No pending requests to review."}
-              {activeTab === 'approved' && "No approved leave requests to display."}
-              {activeTab === 'rejected' && "No rejected leave requests to display."}
+              {activeTab === 'approved' && "No approved leave requests found."}
+              {activeTab === 'rejected' && "No rejected leave requests found."}
+              {activeTab === 'all' && "No leave requests found."}
             </p>
           </div>
         ) : (
-          <div className="grid gap-4">
-            {filteredRequests.map((request) => (
-              <div key={request.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <img
-                      src={request.avatar}
-                      alt={request.employeeName}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {request.employeeName}
-                        </h3>
-                        {getStatusBadge(request.status)}
+          <div className="overflow-x-auto">
+            <Table>
+              <Table.Head>
+                <Table.HeadCell className="p-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedRequests.length === filteredRequests.length && filteredRequests.length > 0}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                </Table.HeadCell>
+                <Table.HeadCell>Employee</Table.HeadCell>
+                <Table.HeadCell>Leave Type</Table.HeadCell>
+                <Table.HeadCell>Duration</Table.HeadCell>
+                <Table.HeadCell>Status</Table.HeadCell>
+                <Table.HeadCell>Applied</Table.HeadCell>
+                <Table.HeadCell>Actions</Table.HeadCell>
+              </Table.Head>
+              <Table.Body className="divide-y">
+                {filteredRequests.map((request) => (
+                  <Table.Row key={request.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                    <Table.Cell className="p-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedRequests.includes(request.id)}
+                        onChange={() => handleSelectRequest(request.id)}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                          {request.employee.avatar ? (
+                            <img 
+                              src={request.employee.avatar} 
+                              alt={request.employee.name}
+                              className="w-10 h-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+                              <span className="text-gray-600 dark:text-gray-300 font-medium text-sm">
+                                {request.employee.name.split(' ').map(n => n[0]).join('')}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            {request.employee.name}
+                          </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {request.employee.code} • {request.employee.department}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                        {request.designation} • {request.department} • {request.employeeId}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{request.leaveType.name}</span>
+                        {request.leaveType.isPaid && (
+                          <Badge color="green" size="xs">Paid</Badge>
+                        )}
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div>
+                        <p className="font-medium">
+                          {formatDate(request.dates.start)} - {formatDate(request.dates.end)}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {request.dates.daysRequested} day{request.dates.daysRequested > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(request.details.status)}
+                        {getUrgencyBadge(request.dates.start, request.details.status)}
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <p className="text-sm">
+                        {formatDate(request.details.appliedAt)}
                       </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                        <div>
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Leave Period</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {formatDate(request.startDate)} - {formatDate(request.endDate)}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {request.daysRequested} day{request.daysRequested > 1 ? 's' : ''} • {request.leaveType}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Reason</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                            {request.reason}
-                          </p>
-                        </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="xs"
+                          color="blue"
+                          onClick={() => navigate(`/leave-request/${request.id}`)}
+                        >
+                          <FaEye className="w-3 h-3" />
+                        </Button>
+                        
+                        {canApproveOrReject(request.details.status) && (
+                          <>
+                            <Button
+                              size="xs"
+                              color="success"
+                              onClick={() => handleApprove(request)}
+                              disabled={submitting}
+                            >
+                              <FaCheck className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="xs"
+                              color="failure"
+                              onClick={() => handleReject(request)}
+                              disabled={submitting}
+                            >
+                              <FaTimes className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
                       </div>
-                      
-                      {request.status === 'Approved' && request.approvedBy && (
-                        <div className="mt-3 text-sm text-green-600 dark:text-green-400">
-                          ✓ Approved by {request.approvedBy} on {formatDate(request.approvedDate!)}
-                        </div>
-                      )}
-                      
-                      {request.status === 'Rejected' && request.rejectionReason && (
-                        <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                          <p className="text-sm font-medium text-red-700 dark:text-red-400">Rejection Reason:</p>
-                          <p className="text-sm text-red-600 dark:text-red-400">{request.rejectionReason}</p>
-                          <p className="text-xs text-red-500 mt-1">
-                            Rejected by {request.approvedBy} on {formatDate(request.approvedDate!)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      size="sm"
-                      color="gray"
-                      onClick={() => viewDetails(request)}
-                      className="flex items-center gap-2"
-                    >
-                      <FaEye className="w-3 h-3" />
-                      View
-                    </Button>
-                    
-                    {request.status === 'Pending' && (
-                      <>
-                        <Button
-                          size="sm"
-                          color="success"
-                          onClick={() => handleAction(request, 'approve')}
-                          className="flex items-center gap-2"
-                        >
-                          <FaCheck className="w-3 h-3" />
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          color="failure"
-                          onClick={() => handleAction(request, 'reject')}
-                          className="flex items-center gap-2"
-                        >
-                          <FaTimes className="w-3 h-3" />
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
           </div>
         )}
       </div>
 
-      {/* View Details Modal */}
-      <Modal show={showDetailsModal} onClose={() => setShowDetailsModal(false)} size="2xl">
-        <Modal.Header>Leave Request Details</Modal.Header>
-        <Modal.Body>
-          {selectedRequest && (
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <img
-                  src={selectedRequest.avatar}
-                  alt={selectedRequest.employeeName}
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-                <div>
-                  <h3 className="text-xl font-semibold">{selectedRequest.employeeName}</h3>
-                  <p className="text-gray-600">{selectedRequest.designation}</p>
-                  <p className="text-sm text-gray-500">{selectedRequest.department} • {selectedRequest.employeeId}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-semibold mb-2">Leave Information</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Type:</span> {selectedRequest.leaveType}</div>
-                    <div><span className="font-medium">Start Date:</span> {formatDate(selectedRequest.startDate)}</div>
-                    <div><span className="font-medium">End Date:</span> {formatDate(selectedRequest.endDate)}</div>
-                    <div><span className="font-medium">Days:</span> {selectedRequest.daysRequested}</div>
-                    <div><span className="font-medium">Applied On:</span> {formatDate(selectedRequest.appliedDate)}</div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-semibold mb-2">Status Information</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Status:</span> {getStatusBadge(selectedRequest.status)}</div>
-                    {selectedRequest.approvedBy && (
-                      <>
-                        <div><span className="font-medium">Processed By:</span> {selectedRequest.approvedBy}</div>
-                        <div><span className="font-medium">Processed On:</span> {formatDate(selectedRequest.approvedDate!)}</div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-2">Reason for Leave</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                  {selectedRequest.reason}
-                </p>
-              </div>
-
-              {selectedRequest.rejectionReason && (
-                <div>
-                  <h4 className="font-semibold mb-2 text-red-600">Rejection Reason</h4>
-                  <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-                    {selectedRequest.rejectionReason}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button color="gray" onClick={() => setShowDetailsModal(false)}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Action Confirmation Modal */}
-      <Modal show={showActionModal} onClose={() => setShowActionModal(false)} size="md">
-        <Modal.Header>
-          {actionType === 'approve' ? 'Approve Leave Request' : 'Reject Leave Request'}
-        </Modal.Header>
-        <Modal.Body>
-          {selectedRequest && (
-            <div className="space-y-4">
-              <p>
-                Are you sure you want to {actionType} the leave request for{' '}
-                <strong>{selectedRequest.employeeName}</strong>?
-              </p>
-              
-              <div className="bg-gray-50 p-3 rounded-lg text-sm">
-                <div><strong>Period:</strong> {formatDate(selectedRequest.startDate)} - {formatDate(selectedRequest.endDate)}</div>
-                <div><strong>Days:</strong> {selectedRequest.daysRequested}</div>
-                <div><strong>Reason:</strong> {selectedRequest.reason}</div>
-              </div>
-
-              {actionType === 'reject' && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Reason for Rejection <span className="text-red-500">*</span>
-                  </label>
-                  <Textarea
-                    value={actionReason}
-                    onChange={(e) => setActionReason(e.target.value)}
-                    placeholder="Please provide a reason for rejecting this leave request..."
-                    rows={3}
-                    required
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button
-            color={actionType === 'approve' ? 'success' : 'failure'}
-            onClick={confirmAction}
-            disabled={actionType === 'reject' && !actionReason.trim()}
-          >
-            {actionType === 'approve' ? 'Approve' : 'Reject'}
-          </Button>
-          <Button color="gray" onClick={() => setShowActionModal(false)}>
-            Cancel
-          </Button>
-        </Modal.Footer>
-      </Modal>
+      {/* Modals */}
+      {renderFilters()}
+      {renderApprovalModal()}
     </div>
   );
 };

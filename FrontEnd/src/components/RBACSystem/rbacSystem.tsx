@@ -191,39 +191,86 @@ export const DynamicRBACProvider: React.FC<DynamicRBACProviderProps> = ({ childr
 
 const initializeAuth = async () => {
   try {
+    console.log('🚀 Starting auth initialization...');
     setIsLoading(true);
     setError(null);
 
+    // Check if user is already logged in
     const savedUser = localStorage.getItem('user');
     const savedToken = localStorage.getItem('accessToken');
     const savedRefreshToken = localStorage.getItem('refreshToken');
 
-    // If we have a user, set it immediately (prevents redirect flicker)
-    if (savedUser) {
+    console.log('🔍 Checking localStorage:', { 
+      hasUser: !!savedUser, 
+      hasToken: !!savedToken, 
+      hasRefresh: !!savedRefreshToken 
+    });
+
+    if (savedUser && savedToken) {
       try {
-        setCurrentUser(JSON.parse(savedUser));
-      } catch {
+        const user: User = JSON.parse(savedUser);
+        console.log('✅ Restoring user from localStorage:', user);
+        
+        // ✅ CRITICAL: Set user state IMMEDIATELY
+        setCurrentUser(user);
+        
+        // 🔧 FIX: Set current client from user data
+        if (user.clientId && user.clientName) {
+          const clientFromUser = {
+            id: user.clientId,
+            name: user.clientName,
+            description: '',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          console.log('✅ Setting current client from user data:', clientFromUser);
+          setCurrentClientState(clientFromUser);
+        }
+        
+        console.log('✅ User and client state set, starting background refresh...');
+        
+        // Run background tasks without blocking
+        setTimeout(async () => {
+          try {
+            console.log('🔄 Attempting to refresh user data...');
+            await refreshUserData();
+            console.log('✅ User data refreshed successfully');
+            
+            // Load RBAC data AFTER user is confirmed
+            console.log('🚀 Initializing RBAC data for user:', user.name);
+            await loadRoles();
+            await loadClients();
+            await loadAdminUsers();
+            console.log('✅ RBAC data loaded successfully');
+            
+          } catch (error) {
+            console.warn('⚠️ Background refresh failed, using cached data:', error);
+          }
+        }, 100); // Small delay to let user state propagate
+        
+      } catch (parseError) {
+        console.error('❌ Failed to parse saved user data:', parseError);
+        // Clear corrupted data
         localStorage.removeItem('user');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setCurrentUser(null);
+        setCurrentClientState(null);
       }
+    } else {
+      console.log('ℹ️ No saved user data found');
+      setCurrentUser(null);
+      setCurrentClientState(null);
     }
-
-    // If the access token is missing/expired but we have a refresh token, refresh now
-    if (!savedToken && savedRefreshToken) {
-      try {
-        await apiService.refreshToken();
-      } catch (e) {
-        console.warn('Refresh on init failed:', e);
-      }
-    }
-
-    // Try to pull fresh user (this will auto-refresh on 401 because of the apiCall change)
-    try {
-      await refreshUserData();
-    } catch (e) {
-      console.warn('Failed to refresh user data. Keeping cached user.', e);
-      // do NOT clear currentUser here; allow cached user to keep the app mounted
-    }
+  } catch (error) {
+    console.error('❌ Auth initialization failed:', error);
+    setError('Failed to initialize authentication');
+    setCurrentUser(null);
+    setCurrentClientState(null);
   } finally {
+    // ✅ CRITICAL: Set loading to false AFTER user is set
+    console.log('✅ Auth initialization complete');
     setIsLoading(false);
   }
 };

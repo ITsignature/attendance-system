@@ -1,5 +1,13 @@
 import { EmployeeFilters, CreateEmployeeData, UpdateEmployeeData } from '../types/employee';
 
+import { 
+  LeaveType, 
+  LeaveRequest, 
+  CreateLeaveRequestData, 
+  CreateLeaveTypeData,
+  LeaveRequestFilters 
+} from './leaveApi';
+
 export interface LoginResponse {
 
   success: boolean;
@@ -644,6 +652,178 @@ async assignRoleToUser(userId: string, roleId: string): Promise<ApiResponse> {
 async healthCheck(): Promise<ApiResponse> {
     return this.apiCall('/health');
   }
+
+// =============================================
+// LEAVE MANAGEMENT METHODS
+// =============================================
+
+// Leave Types
+async getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
+  return this.apiCall('/api/leaves/types');
+}
+
+async createLeaveType(data: CreateLeaveTypeData): Promise<ApiResponse> {
+  return this.apiCall('/api/leaves/types', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async updateLeaveType(id: string, data: Partial<CreateLeaveTypeData>): Promise<ApiResponse> {
+  return this.apiCall(`/api/leaves/types/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+async deleteLeaveType(id: string): Promise<ApiResponse> {
+  return this.apiCall(`/api/leaves/types/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// Leave Requests - Employee
+async getMyLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+  const queryParams = new URLSearchParams();
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+  }
+
+  const url = `/api/leaves/my-requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  return this.apiCall(url);
+}
+
+async submitLeaveRequest(data: CreateLeaveRequestData): Promise<ApiResponse> {
+  return this.apiCall('/api/leaves/request', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+async cancelLeaveRequest(requestId: string): Promise<ApiResponse> {
+  return this.apiCall(`/api/leaves/requests/${requestId}/cancel`, {
+    method: 'PUT',
+  });
+}
+
+// Leave Requests - Manager/HR
+async getAllLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+  const queryParams = new URLSearchParams();
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+  }
+
+  const url = `/api/leaves/requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  return this.apiCall(url);
+}
+
+async approveLeaveRequest(requestId: string, comments?: string): Promise<ApiResponse> {
+  return this.apiCall(`/api/leaves/requests/${requestId}/approve`, {
+    method: 'PUT',
+    body: JSON.stringify({ comments }),
+  });
+}
+
+async rejectLeaveRequest(requestId: string, comments: string): Promise<ApiResponse> {
+  return this.apiCall(`/api/leaves/requests/${requestId}/reject`, {
+    method: 'PUT',
+    body: JSON.stringify({ comments }),
+  });
+}
+
+async bulkApproveRequests(requestIds: string[], comments?: string): Promise<ApiResponse> {
+  return this.apiCall('/api/leaves/requests/bulk-approve', {
+    method: 'POST',
+    body: JSON.stringify({ request_ids: requestIds, comments }),
+  });
+}
+
+// Dashboard & Analytics
+async getLeaveDashboard(date?: string): Promise<ApiResponse> {
+  const url = `/api/leaves/dashboard${date ? `?date=${date}` : ''}`;
+  return this.apiCall(url);
+}
+
+async getEmployeeLeaveBalance(employeeId: string, year?: number): Promise<ApiResponse> {
+  const url = `/api/leaves/balance/${employeeId}${year ? `?year=${year}` : ''}`;
+  return this.apiCall(url);
+}
+
+async getLeaveAnalytics(filters?: {
+  start_date?: string;
+  end_date?: string;
+  department_id?: string;
+  leave_type_id?: string;
+}): Promise<ApiResponse> {
+  const queryParams = new URLSearchParams();
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+  }
+
+  const url = `/api/leaves/analytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  return this.apiCall(url);
+}
+
+// Export
+async exportLeaveData(filters?: {
+  start_date?: string;
+  end_date?: string;
+  format?: 'json' | 'csv' | 'xlsx';
+  status?: string;
+  department_id?: string;
+}): Promise<ApiResponse> {
+  const queryParams = new URLSearchParams();
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+  }
+
+  const url = `/api/leaves/export${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  
+  if (filters?.format === 'csv') {
+    // For CSV downloads, handle blob response
+    try {
+      const response = await fetch(`${this.baseURL}${url}`, {
+        headers: this.getHeaders(),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `leave-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      
+      return { success: true, message: 'Export downloaded successfully' };
+    } catch (error) {
+      throw error;
+    }
+  } else {
+    return this.apiCall(url);
+  }
+}
 
 // =============================================
 // UTILITY METHODS FOR ATTENDANCE

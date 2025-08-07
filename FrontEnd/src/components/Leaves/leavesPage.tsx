@@ -1,166 +1,260 @@
-import React, { useState } from "react";
-import { Table, Button, Badge } from "flowbite-react";
-import { useNavigate } from "react-router";
+import React, { useState, useEffect } from "react";
+import { Button, Badge, Alert, Spinner, Card } from "flowbite-react";
+import { useNavigate } from "react-router-dom";
 import { DynamicProtectedComponent } from "../RBACSystem/rbacSystem";
+import { useLeaveDashboard } from "../../hooks/useLeaves";
+import leaveApiService from "../../services/leaveApi";
 
-const leaveData = [
-  {
-    id: 1,
-    name: "Darlene Robertson",
-    reason: "Personal reasons",
-    avatar: "https://randomuser.me/api/portraits/women/1.jpg",
-  },
-  {
-    id: 2,
-    name: "Floyd Miles",
-    reason: "Medical appointment",
-    avatar: "https://randomuser.me/api/portraits/men/2.jpg",
-  },
-  {
-    id: 3,
-    name: "Cody Fisher",
-    reason: "Family emergency",
-    avatar: "https://randomuser.me/api/portraits/men/3.jpg",
-  },
-  {
-    id: 4,
-    name: "Dianne Russell",
-    reason: "Sick leave",
-    avatar: "https://randomuser.me/api/portraits/women/4.jpg",
-  },
-  {
-    id: 5,
-    name: "Savannah Nguyen",
-    reason: "Urgent personal work",
-    avatar: "https://randomuser.me/api/portraits/women/5.jpg",
-  },
-  {
-    id: 6,
-    name: "Jacob Jones",
-    reason: "Attending a wedding",
-    avatar: "https://randomuser.me/api/portraits/men/6.jpg",
-  },
-  {
-    id: 7,
-    name: "Marvin McKinney",
-    reason: "Funeral",
-    avatar: "https://randomuser.me/api/portraits/men/7.jpg",
-  },
-  {
-    id: 8,
-    name: "Brooklyn Simmons",
-    reason: "Travel commitment",
-    avatar: "https://randomuser.me/api/portraits/women/8.jpg",
-  },
-  {
-    id: 9,
-    name: "Kristin Watson",
-    reason: "Childcare",
-    avatar: "https://randomuser.me/api/portraits/women/9.jpg",
-  },
-  {
-    id: 10,
-    name: "Kathryn Murphy",
-    reason: "Rest due to illness",
-    avatar: "https://randomuser.me/api/portraits/women/10.jpg",
-  },
-  {
-    id: 11,
-    name: "Arlene McCoy",
-    reason: "Sick leave",
-    avatar: "https://randomuser.me/api/portraits/women/11.jpg",
-  },
-  {
-    id: 12,
-    name: "Devon Lane",
-    reason: "Family emergency",
-    avatar: "https://randomuser.me/api/portraits/men/12.jpg",
-  },
-];
+// =============================================
+// INTERFACES
+// =============================================
 
-// Sample pending leave requests for counter
-const pendingLeaveRequests = [
-  {
-    id: 1,
-    employeeName: "John Smith",
-    startDate: "2024-07-15",
-    endDate: "2024-07-17",
-    reason: "Family vacation",
-    status: "Pending",
-    daysRequested: 3
-  },
-  {
-    id: 2,
-    employeeName: "Sarah Johnson",
-    startDate: "2024-07-20",
-    endDate: "2024-07-22",
-    reason: "Medical appointment",
-    status: "Pending",
-    daysRequested: 3
-  },
-  {
-    id: 3,
-    employeeName: "Mike Davis",
-    startDate: "2024-07-25",
-    endDate: "2024-07-25",
-    reason: "Personal work",
-    status: "Pending",
-    daysRequested: 1
-  },
-  {
-    id: 4,
-    employeeName: "Emily Wilson",
-    startDate: "2024-08-01",
-    endDate: "2024-08-03",
-    reason: "Wedding ceremony",
-    status: "Pending",
-    daysRequested: 3
-  },
-  {
-    id: 5,
-    employeeName: "David Brown",
-    startDate: "2024-08-05",
-    endDate: "2024-08-07",
-    reason: "Sick leave",
-    status: "Pending",
-    daysRequested: 3
-  }
-];
+interface Employee {
+  id: string;
+  name: string;
+  code: string;
+  avatar: string;
+  department: string;
+  leave: {
+    type: string;
+    isPaid: boolean;
+    startDate: string;
+    endDate: string;
+    days: number;
+    reason: string;
+  };
+}
 
-const LeavePage = () => {
-  const currentDate = new Date();
-  const [selectedDate, setSelectedDate] = useState(currentDate.toISOString().split('T')[0]);
+// =============================================
+// MAIN COMPONENT
+// =============================================
+
+const LeavePage: React.FC = () => {
   const navigate = useNavigate();
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  // Use the dashboard hook
+  const { dashboard, loading, error, refresh, clearError } = useLeaveDashboard(true, 300000); // Auto-refresh every 5 minutes
 
-  // Count pending leave requests
-  const pendingRequestsCount = pendingLeaveRequests.filter(request => request.status === "Pending").length;
+  // Local state for UI
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Format date for display
-  const formatDate = (dateString:any) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+  // =============================================
+  // HANDLERS
+  // =============================================
+
+  const handleDateChange = async (newDate: string) => {
+    setSelectedDate(newDate);
+    await refresh(newDate);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refresh(selectedDate);
+    setRefreshing(false);
+  };
+
+  const handleCreateLeaveRequest = () => {
+    navigate("/leave-request/new");
+  };
+
+  // =============================================
+  // UTILITY FUNCTIONS
+  // =============================================
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
   };
 
+  const getLeaveTypeColor = (leaveType: string) => {
+    const colors: Record<string, string> = {
+      'Annual Leave': 'blue',
+      'Sick Leave': 'red',
+      'Personal Leave': 'purple',
+      'Emergency Leave': 'yellow',
+      'Maternity Leave': 'pink'
+    };
+    return colors[leaveType] || 'gray';
+  };
+
+  const getPendingRequestsCount = () => {
+    return dashboard?.summary.pendingRequestsCount || 0;
+  };
+
+  const getUrgentRequestsCount = () => {
+    return dashboard?.summary.urgentPendingCount || 0;
+  };
+
+  // =============================================
+  // RENDER HELPERS
+  // =============================================
+
+  const renderLoadingState = () => (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center">
+        <Spinner size="xl" className="mb-4" />
+        <p className="text-gray-500 dark:text-gray-400">Loading leave information...</p>
+      </div>
+    </div>
+  );
+
+  const renderErrorState = () => (
+    <Alert color="failure" className="mb-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-medium">Failed to load leave data</h3>
+          <p className="text-sm mt-1">{error}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" color="failure" onClick={clearError}>
+            Dismiss
+          </Button>
+          <Button size="sm" color="gray" onClick={handleRefresh}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    </Alert>
+  );
+
+  const renderEmployeeCard = (employee: Employee) => (
+    <Card key={employee.id} className="mb-4">
+      <div className="flex items-center space-x-4">
+        <div className="flex-shrink-0">
+          {employee.avatar ? (
+            <img 
+              src={employee.avatar} 
+              alt={employee.name}
+              className="w-12 h-12 rounded-full"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+              <span className="text-gray-600 dark:text-gray-300 font-medium">
+                {employee.name.split(' ').map(n => n[0]).join('')}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                {employee.name}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {employee.code} • {employee.department}
+              </p>
+            </div>
+            <Badge 
+              color={getLeaveTypeColor(employee.leave.type)}
+              size="sm"
+            >
+              {employee.leave.type}
+            </Badge>
+          </div>
+          <div className="mt-2">
+            <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+              <span className="font-medium">
+                {leaveApiService.formatLeaveDuration(
+                  employee.leave.startDate, 
+                  employee.leave.endDate, 
+                  employee.leave.days
+                )}
+              </span>
+              {employee.leave.isPaid && (
+                <Badge color="green" size="xs" className="ml-2">
+                  Paid
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+              {employee.leave.reason}
+            </p>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+
+  const renderDepartmentSummary = () => {
+    if (!dashboard?.departmentSummary) return null;
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {dashboard.departmentSummary.map((dept, index) => (
+          <Card key={index}>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">
+              {dept.department || 'No Department'}
+            </h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Total Employees:</span>
+                <span className="font-medium">{dept.totalEmployees}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">On Leave:</span>
+                <span className="font-medium text-red-600">{dept.employeesOnLeave}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Pending:</span>
+                <span className="font-medium text-yellow-600">{dept.pendingRequests}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Availability:</span>
+                <span className={`font-medium ${dept.availabilityPercentage >= 90 ? 'text-green-600' : dept.availabilityPercentage >= 70 ? 'text-yellow-600' : 'text-red-600'}`}>
+                  {dept.availabilityPercentage}%
+                </span>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
+  // =============================================
+  // MAIN RENDER
+  // =============================================
+
+  if (loading && !dashboard) {
+    return renderLoadingState();
+  }
+
   return (
     <div className="p-6 rounded-xl shadow-md bg-white dark:bg-darkgray space-y-6">
-      {/* UPDATED: Header with Navigation Buttons on Left and Date Picker on Right */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Error Display */}
+      {error && renderErrorState()}
+
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         {/* Left: Action Buttons */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          {/* Create Leave Request Button - For all employees */}
+          <DynamicProtectedComponent permission="leaves.request">
+            <Button
+              color="purple"
+              className="flex items-center gap-2"
+              onClick={handleCreateLeaveRequest}
+            >
+              ➕ Request Leave
+            </Button>
+          </DynamicProtectedComponent>
+
+          {/* My Leave Requests Button */}
           <Button
-            color="purple"
+            color="blue"
             className="flex items-center gap-2"
-            onClick={() => navigate("/holidays")}
+            onClick={() => navigate("/my-leave-requests")}
           >
-            📅 Holidays
+            📋 My Requests
           </Button>
-          
-          {/* UPDATED: Leave Requests Button - Only for users who can APPROVE OR REJECT leaves */}
+
+          {/* Leave Requests Management Button - Only for managers/HR */}
           <DynamicProtectedComponent 
             permissions={["leaves.approve", "leaves.reject"]}
             requireAll={false}
@@ -170,21 +264,32 @@ const LeavePage = () => {
               className="flex items-center gap-2 relative"
               onClick={() => navigate("/leave-requests")}
             >
-              📝 Leave Requests
-              {pendingRequestsCount > 0 && (
+              📝 Manage Requests
+              {getPendingRequestsCount() > 0 && (
                 <Badge 
                   color="red" 
                   size="sm"
                   className="ml-2 bg-red-500 text-white rounded-full px-2 py-1 text-xs font-bold min-w-[20px] h-5 flex items-center justify-center"
                 >
-                  {pendingRequestsCount}
+                  {getPendingRequestsCount()}
                 </Badge>
               )}
             </Button>
           </DynamicProtectedComponent>
+
+          {/* Analytics Button - For managers/HR */}
+          <DynamicProtectedComponent permission="leaves.reports">
+            <Button
+              color="green"
+              className="flex items-center gap-2"
+              onClick={() => navigate("/leave-analytics")}
+            >
+              📊 Analytics
+            </Button>
+          </DynamicProtectedComponent>
         </div>
 
-        {/* Right: Calendar Date Picker */}
+        {/* Right: Date Picker and Refresh */}
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Select Date:
@@ -192,9 +297,17 @@ const LeavePage = () => {
           <input
             type="date"
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={(e) => handleDateChange(e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
+          <Button
+            size="sm"
+            color="gray"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? <Spinner size="sm" /> : '🔄'}
+          </Button>
         </div>
       </div>
 
@@ -206,143 +319,56 @@ const LeavePage = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
             <h3 className="text-sm font-medium text-blue-600 dark:text-blue-400">On Leave</h3>
-            <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{leaveData.length}</p>
+            <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">
+              {dashboard?.summary.onLeaveCount || 0}
+            </p>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-orange-600 dark:text-orange-400">Pending Requests</h3>
-            <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{pendingRequestsCount}</p>
+            <h3 className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pending Requests</h3>
+            <p className="text-2xl font-bold text-yellow-800 dark:text-yellow-300">
+              {getPendingRequestsCount()}
+            </p>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-green-600 dark:text-green-400">Available Employees</h3>
-            <p className="text-2xl font-bold text-green-800 dark:text-green-200">{50 - leaveData.length}</p>
+            <h3 className="text-sm font-medium text-red-600 dark:text-red-400">Urgent Requests</h3>
+            <p className="text-2xl font-bold text-red-800 dark:text-red-300">
+              {getUrgentRequestsCount()}
+            </p>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-purple-600 dark:text-purple-400">Total Employees</h3>
-            <p className="text-2xl font-bold text-purple-800 dark:text-purple-200">50</p>
+            <h3 className="text-sm font-medium text-green-600 dark:text-green-400">Available</h3>
+            <p className="text-2xl font-bold text-green-800 dark:text-green-300">
+              {dashboard?.departmentSummary.reduce((acc, dept) => acc + (dept.totalEmployees - dept.employeesOnLeave), 0) || 0}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* UPDATED: PROTECTED Quick Actions */}
-      <div className="flex flex-wrap gap-2">
-        {/* UPDATED: View All Requests - Only for users who can approve or reject */}
-        <DynamicProtectedComponent 
-          permissions={["leaves.approve", "leaves.reject"]}
-          requireAll={false}
-        >
-          <Button size="sm" color="gray" onClick={() => navigate("/leave-requests")}>
-            🔍 View All Requests
-          </Button>
-        </DynamicProtectedComponent>
-        
-        <Button size="sm" color="gray" onClick={() => navigate("/holidays")}>
-          📅 Manage Holidays
-        </Button>
-        
-        {/* UPDATED: Leave Reports - Only for users who can approve or reject */}
-        <DynamicProtectedComponent 
-          permissions={["leaves.approve", "leaves.reject"]}
-          requireAll={false}
-        >
-          <Button size="sm" color="gray">
-            📊 Leave Reports
-          </Button>
-        </DynamicProtectedComponent>
-        
-        <DynamicProtectedComponent permission="settings.view">
-          <Button size="sm" color="gray">
-            ⚙️ Leave Policies
-          </Button>
-        </DynamicProtectedComponent>
-      </div>
-
-      {/* Leave Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Employees Currently on Leave</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Showing {leaveData.length} employees who are on leave on {formatDate(selectedDate)}
-          </p>
+      {/* Department Summary */}
+      <DynamicProtectedComponent permission="leaves.view">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Department Overview
+          </h3>
+          {renderDepartmentSummary()}
         </div>
-        
-        <div className="overflow-x-auto">
-          <Table>
-            <Table.Head>
-              <Table.HeadCell>Employee Name</Table.HeadCell>
-              <Table.HeadCell>Leave Reason</Table.HeadCell>
-              <Table.HeadCell>Status</Table.HeadCell>
-              {/* PROTECTED: Actions column only for managers/HR who can approve */}
-              <DynamicProtectedComponent permission="leaves.approve">
-                <Table.HeadCell>Actions</Table.HeadCell>
-              </DynamicProtectedComponent>
-            </Table.Head>
-            <Table.Body className="divide-y">
-              {leaveData.map((emp, index) => (
-                <Table.Row 
-                  key={index}
-                  className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                  onClick={() => navigate(`/employee/${emp.id}`)}
-                >
-                  <Table.Cell>
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={emp.avatar}
-                        alt={emp.name}
-                        className="h-10 w-10 rounded-full object-cover ring-2 ring-gray-200 dark:ring-gray-600"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-white">{emp.name}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">Employee ID: EMP{String(emp.id).padStart(3, '0')}</div>
-                      </div>
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="text-gray-900 dark:text-white">{emp.reason}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Selected date</div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge color="warning" size="sm">On Leave</Badge>
-                  </Table.Cell>
-                  
-                  {/* PROTECTED: Action buttons only for managers/HR who can approve */}
-                  <DynamicProtectedComponent permission="leaves.approve">
-                    <Table.Cell>
-                      <div className="flex gap-2">
-                        <Button 
-                          size="xs" 
-                          color="blue"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/leave-details/${emp.id}`);
-                          }}
-                        >
-                          View Details
-                        </Button>
-                        <Button 
-                          size="xs" 
-                          color="gray"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Handle contact employee
-                            alert(`Contacting ${emp.name}...`);
-                          }}
-                        >
-                          Contact
-                        </Button>
-                      </div>
-                    </Table.Cell>
-                  </DynamicProtectedComponent>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
-        </div>
+      </DynamicProtectedComponent>
 
-        {leaveData.length === 0 && (
+      {/* Employees on Leave Today */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Employees on Leave Today ({dashboard?.summary.onLeaveCount || 0})
+        </h3>
+
+        {dashboard?.onLeaveToday && dashboard.onLeaveToday.length > 0 ? (
+          <div className="space-y-4">
+            {dashboard.onLeaveToday.map(renderEmployeeCard)}
+          </div>
+        ) : (
           <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">🎉</div>
+            <div className="text-gray-400 text-6xl mb-4">🏢</div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              No one is on leave on this date!
+              All Hands on Deck!
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
               All employees are available and working on {formatDate(selectedDate)}.
@@ -353,7 +379,7 @@ const LeavePage = () => {
 
       {/* PROTECTED: Pending Requests Alert - Only for users who can approve leaves */}
       <DynamicProtectedComponent permission="leaves.approve">
-        {pendingRequestsCount > 0 && (
+        {getPendingRequestsCount() > 0 && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 rounded-r-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -363,14 +389,17 @@ const LeavePage = () => {
                     Action Required
                   </h3>
                   <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                    You have {pendingRequestsCount} pending leave request{pendingRequestsCount > 1 ? 's' : ''} waiting for approval.
+                    You have {getPendingRequestsCount()} pending leave request{getPendingRequestsCount() > 1 ? 's' : ''} waiting for approval.
+                    {getUrgentRequestsCount() > 0 && (
+                      <span className="font-medium"> {getUrgentRequestsCount()} of them are urgent (starting within 7 days).</span>
+                    )}
                   </p>
                 </div>
               </div>
               <Button 
                 size="sm" 
                 color="warning"
-                onClick={() => navigate("/leave-requests")}
+                onClick={() => navigate("/leave-requests?filter=pending")}
               >
                 Review Now
               </Button>
@@ -417,6 +446,46 @@ const LeavePage = () => {
           </div>
         </div>
       </DynamicProtectedComponent>
+
+      {/* Upcoming Leaves Preview */}
+      {dashboard?.upcomingLeaves && dashboard.upcomingLeaves.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Upcoming Leaves (Next 30 Days)
+          </h3>
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <div className="space-y-2">
+              {dashboard.upcomingLeaves.slice(0, 5).map((leave, index) => (
+                <div key={index} className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                  <div>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {leave.employeeName}
+                    </span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                      ({leave.department})
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      {leaveApiService.formatLeaveDuration(leave.startDate, leave.endDate, leave.days)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {leave.leaveType}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {dashboard.upcomingLeaves.length > 5 && (
+                <div className="text-center pt-2">
+                  <Button size="xs" color="gray" onClick={() => navigate("/leave-calendar")}>
+                    View All ({dashboard.upcomingLeaves.length - 5} more)
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
