@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
+  Modal,
   Table, 
   Button, 
   TextInput, 
@@ -21,6 +22,7 @@ import {
 } from 'react-icons/hi';
 import apiService from '../../services/api';
 import AttendanceForm from './AttendanceForm';
+import { set } from 'lodash';
 
 // Types
 interface AttendanceRecord {
@@ -77,6 +79,11 @@ const AttendanceView: React.FC = () => {
     recordsPerPage: 10
   });
 
+/* add after the other useState hooks */
+  const [showDelete, setShowDelete] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<AttendanceRecord | null>(null);
+  
+
   // Load data on component mount and filter changes
   useEffect(() => {
     loadAttendanceRecords();
@@ -98,11 +105,14 @@ const AttendanceView: React.FC = () => {
         }
       });
 
-      const response = await apiService.apiCall(`/api/attendance?${params.toString()}`);
+      const response = await apiService.getAttendanceRecords(params);
+
+      console.log('📊 Attendance records response:', response);
 
       if (response.success) {
         setAttendanceRecords(response.data.attendance);
         setPagination(response.data.pagination);
+        console.log('📊 Attendance records:', attendanceRecords);
       }
     } catch (error) {
       console.error('Failed to load attendance records:', error);
@@ -111,11 +121,14 @@ const AttendanceView: React.FC = () => {
     }
   };
 
+  
+
   const loadEmployees = async () => {
     try {
       const response = await apiService.apiCall('/api/employees');
       if (response.success) {
         setEmployees(response.data.employees);
+
       }
     } catch (error) {
       console.error('Failed to load employees:', error);
@@ -191,6 +204,57 @@ const AttendanceView: React.FC = () => {
       year: 'numeric'
     });
   };
+
+
+  /**
+ * 2.25  → "2 h 15 m"
+ * 0.50 → "30 m"
+ * 1    → "1 h"
+ */
+const toHrsMins = (decimal?: number) => {
+  if (!decimal || decimal <= 0) return '';
+  const totalMinutes = Math.round(decimal * 60);   // 0.47 h → 28.2 m → 28
+  const hrs  = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+
+  if (hrs && mins) return `${hrs}h ${mins}m`;
+  if (hrs)         return `${hrs}h`;
+  return           `${mins}m`;
+};
+
+/* minutesBetween("08:30:00","08:32:00") → 2  (positive = late, negative = early) */
+const minutesBetween = (sched?: string, actual?: string) => {
+  if (!sched || !actual) return 0;
+  const s = new Date(`2000-01-01T${sched}`);
+  const a = new Date(`2000-01-01T${actual}`);
+  return Math.round((a.getTime() - s.getTime()) / 60000);
+};
+
+/* 62 → "1h 2m", 2 → "2m", 0 → ""  */
+const minsToHrsMins = (mins: number) => {
+  if (mins <= 0) return '';                 // on-time or early → show nothing
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h && m ? `${h}h ${m}m`
+       : h      ? `${h}h`
+       :          `${m}m`;
+};
+
+/** quick PATCH to /api/attendance/:id */
+const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') => {
+  try {
+    await apiService.apiCall(`/api/attendance/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ work_duration: value }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    loadAttendanceRecords();                    // refresh table
+  } catch (err) {
+    console.error('Failed to update work_duration', err);
+    alert('Could not save work-duration, please try again.');
+  }
+};
+
 
   return (
     <div className="p-6">
@@ -330,25 +394,68 @@ const AttendanceView: React.FC = () => {
                         <div className="flex items-center text-sm">
                           <HiClock className="mr-1 h-3 w-3 text-red-500" />
                           {formatTime(record.check_out_time)}
-                        </div>
+                        </div>  
                       </Table.Cell>
                       
                       <Table.Cell>
+
+                          {/* inline lateness calc */}
+                      {(() => {
+                        if (!record.scheduled_in_time || !record.check_in_time) return null;
+
+                        const diffMin =
+                          (new Date(`2000-01-01T${record.check_in_time}`).getTime() -
+                          new Date(`2000-01-01T${record.scheduled_in_time}`).getTime()) / 60000;
+
+                        if (diffMin <= 0) return null;                      // on-time or early
+
+                        const hrs = Math.floor(diffMin / 60);
+                        const min = Math.round(diffMin % 60);
+                        const label = hrs ? `${hrs}h ${min}m` : `${min}m`;
+
+                        return (
+                          <div className="text-xs text-orange-600">
+                            {label} 
+                          </div>
+                        );
+                      })()}
                         {getArrivalStatusBadge(record.arrival_status)}
                       </Table.Cell>
                       
-                      <Table.Cell>
-                        {getWorkDurationBadge(record.work_duration)}
-                      </Table.Cell>
+                     <Table.Cell>
+                      {record.work_duration
+                        ? getWorkDurationBadge(record.work_duration)       /* normal badge */
+                        : (
+                            <Select
+                              sizing="sm"                   /* ← flowbite prop */
+                              value=""                      /* placeholder */
+                              onChange={(e) =>
+                                setWorkDuration(
+                                  record.id,
+                                  e.target.value as 'half_day' | 'short_leave'
+                                )
+                              }
+                              className="w-32 text-xs font-medium text-red-600
+                                        dark:bg-red-900/30 dark:border-red-600 dark:text-red-300"
+                            >
+                              <option value="" disabled>Action Required</option>
+                              <option value="half_day">Half Day</option>
+                              <option value="short_leave">Short Leave</option>
+                            </Select>
+                          )
+                      }
+                    </Table.Cell>
+
+
                       
                       <Table.Cell>
                         <div className="space-y-1">
                           <div className="font-semibold">
-                            {record.total_hours ? `${record.total_hours}h` : 'N/A'}
+                            {record.total_hours ? `${toHrsMins(record.total_hours)}` : 'N/A'}
                           </div>
                           {(record.overtime_hours || 0) > 0 && (
                             <div className="text-sm text-orange-600">
-                              OT: {record.overtime_hours}h
+                               OT: {toHrsMins(record.overtime_hours)}
                             </div>
                           )}
                         </div>
@@ -357,17 +464,23 @@ const AttendanceView: React.FC = () => {
                       <Table.Cell>
                         <div className="flex space-x-2">
                           <Button
-                            size="sm"
-                            color="warning"
-                            onClick={() => handleEdit(record)}
-                          >
-                            <HiPencil className="h-4 w-4" />
-                          </Button>
+                          size="sm"
+                          color="warning"
+                          onClick={() => {
+                            setEditingRecord(record);   // opens edit modal via <AttendanceForm>
+                            setShowForm(true);
+                          }}
+                        >
+                          <HiPencil className="h-4 w-4" />
+                        </Button>
                           <Button
-                            size="sm"
-                            color="failure"
-                            onClick={() => handleDelete(record.id)}
-                          >
+                              size="sm"
+                              color="failure"
+                              onClick={() => {
+                                setRecordToDelete(record);
+                                setShowDelete(true);        // opens confirmation modal
+                              }}
+                            >
                             <HiTrash className="h-4 w-4" />
                           </Button>
                         </div>
@@ -396,6 +509,48 @@ const AttendanceView: React.FC = () => {
         )}
       </Card>
 
+      <Modal show={showDelete} size="md" onClose={() => setShowDelete(false)} popup>
+  <Modal.Header />
+  <Modal.Body>
+    <div className="text-center space-y-4">
+      <HiTrash className="mx-auto h-12 w-12 text-red-600" />
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+        Delete this attendance record?
+      </h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {recordToDelete?.employee_name} — {formatDate(recordToDelete?.date || '')}
+      </p>
+
+      <div className="flex justify-center gap-4 mt-6">
+        <Button
+          color="failure"
+          onClick={async () => {
+            if (!recordToDelete) return;
+            try {
+              await apiService.apiCall(`/api/attendance/${recordToDelete.id}`, {
+                method: 'DELETE'
+              });
+              loadAttendanceRecords();
+            } catch (err) {
+              console.error('Delete failed', err);
+              alert('Failed to delete record.');
+            } finally {
+              setShowDelete(false);
+              setRecordToDelete(null);
+            }
+          }}
+        >
+          Delete
+        </Button>
+        <Button color="gray" onClick={() => setShowDelete(false)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  </Modal.Body>
+</Modal>
+
+
       {/* Attendance Form Modal */}
       {showForm && (
         <AttendanceForm
@@ -414,7 +569,9 @@ const AttendanceView: React.FC = () => {
         />
       )}
     </div>
+    
   );
+  
 };
 
 export default AttendanceView;

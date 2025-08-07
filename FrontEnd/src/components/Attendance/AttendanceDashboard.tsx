@@ -43,6 +43,8 @@ const AttendanceDashboard: React.FC = () => {
       if (response.success) {
         setStats(response.data);
       }
+
+      console.log("stats",stats);
     } catch (error) {
       console.error('Failed to load attendance stats:', error);
     } finally {
@@ -65,6 +67,7 @@ const AttendanceDashboard: React.FC = () => {
       </div>
     );
   }
+  
 
   return (
     <div className="space-y-6">

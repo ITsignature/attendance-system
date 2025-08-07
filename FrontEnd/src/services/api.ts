@@ -421,7 +421,7 @@ async getManagers(departmentId?: string): Promise<ApiResponse> {
   /**
  * Get attendance records with dual status filtering
  */
-async getAttendanceRecords(filters: AttendanceFilters): Promise<ApiResponse> {
+async getAttendanceRecords(filters: URLSearchParams): Promise<ApiResponse> {
   const params = new URLSearchParams();
   
   Object.entries(filters).forEach(([key, value]) => {
@@ -447,15 +447,17 @@ async createAttendanceRecord(data: AttendanceFormData): Promise<ApiResponse> {
  * Update attendance record with dual status
  */
 async updateAttendanceRecord(id: string, data: Partial<AttendanceFormData>): Promise<ApiResponse> {
+
+  console.log('🔄 Updating attendance record:', id,"data",data);
   return this.apiCall(`/api/attendance/${id}`, {
-    method: 'PUT',
+    method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
 /**
  * Bulk update attendance statuses
- */
+ */ 
 async bulkUpdateAttendanceStatus(data: {
   date: string;
   employee_ids: string[];

@@ -120,6 +120,9 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     setCalculationInfo(null);
   }, [editingRecord, isOpen]);
 
+
+  console.log('🔍 FORM DATA:', formData);
+  
   const handleInputChange = (field: keyof AttendanceFormData, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -143,43 +146,66 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     return Math.max(0, hours - (formData.break_duration || 0));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-    try {
-      const submitData = { ...formData };
-      
-      // Remove auto-calculated fields if auto-calculate is enabled
-      if (autoCalculateEnabled) {
-        delete submitData.arrival_status;
-        delete submitData.work_duration;
+  try {
+    /* helper functions */
+    const padSeconds = (t) => (t && t.length === 5 ? `${t}:00` : t);  // "17:30" → "17:30:00"
+    const stripEmpty = (v) => (v === '' ? undefined : v);
+
+    /* 1️⃣ build payload with ONLY changed keys */
+    const payload = {};
+    Object.keys(formData).forEach((k) => {
+      let v = formData[k];
+
+      /* strip seconds + empty strings for time fields */
+      if (k === 'check_in_time' || k === 'check_out_time') v = padSeconds(v);
+      v = stripEmpty(v);
+
+      /* include key only if value changed vs original */
+      if (
+        editingRecord && v !== undefined &&
+        v !== editingRecord[k]
+      ) {
+        payload[k] = v;
       }
 
-      const url = editingRecord 
-        ? `/api/attendance/${editingRecord.id}` 
-        : '/api/attendance';
-      
-      const method = editingRecord ? 'PUT' : 'POST';
-
-      const response = await apiService.apiCall(url, {
-        method,
-        body: JSON.stringify(submitData)
-      });
-
-      if (response.success) {
-        setCalculationInfo(response.data.calculation_info);
-        onSuccess();
-      } else {
-        setError(response.message || 'Failed to save attendance record');
+      /* on create → send everything except empty strings */
+      if (!editingRecord && v !== undefined) {
+        payload[k] = v;
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to save attendance record');
-    } finally {
-      setLoading(false);
+    });
+
+    /* 2️⃣ remove auto-calculated fields when that option is enabled */
+    if (autoCalculateEnabled) {
+      delete payload.arrival_status;
+      delete payload.work_duration;
     }
-  };
+
+    /* 3️⃣ call correct endpoint */
+    let response;
+    if (editingRecord) {
+      response = await apiService.updateAttendanceRecord(editingRecord.id, payload);
+    } else {
+      response = await apiService.createAttendanceRecord(payload); // POST helper
+    }
+
+    /* 4️⃣ handle server reply */
+    if (response.success) {
+      setCalculationInfo(response.data.calculation_info);
+      onSuccess();
+    } else {
+      setError(response.message || 'Failed to save attendance record');
+    }
+  } catch (err) {
+    setError(err.message || 'Failed to save attendance record');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const totalHours = calculateHours();
 
@@ -197,36 +223,39 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
             </Alert>
           )}
 
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="employee_id" value="Employee *" />
-              <Select
-                id="employee_id"
-                value={formData.employee_id}
-                onChange={(e) => handleInputChange('employee_id', e.target.value)}
-                required
-              >
-                <option value="">Select Employee</option>
-                {employees.map((emp: any) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.first_name} {emp.last_name} ({emp.employee_code})
-                  </option>
-                ))}
-              </Select>
-            </div>
+      {/* Basic Information */}
+{!editingRecord ? (
+  /* CREATE MODE – employee & date selectable */
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <Label htmlFor="employee_id" value="Employee *" />
+      <Select
+        id="employee_id"
+        required
+        value={formData.employee_id}
+        onChange={(e) => handleInputChange('employee_id', e.target.value)}
+      >
+        <option value="">Select Employee</option>
+        {employees.map((emp: any) => (
+          <option key={emp.id} value={emp.id}>
+            {emp.first_name} {emp.last_name} ({emp.employee_code})
+          </option>
+        ))}
+      </Select>
+    </div>
 
-            <div>
-              <Label htmlFor="date" value="Date *" />
-              <TextInput
-                id="date"
-                type="date"
-                value={formData.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-                required
-              />
-            </div>
-          </div>
+    <div>
+      <Label htmlFor="date" value="Date *" />
+      <TextInput
+        id="date"
+        type="date"
+        required
+        value={formData.date}
+        onChange={(e) => handleInputChange('date', e.target.value)}
+      />
+    </div>
+  </div>
+  ) : null /* EDIT MODE – hide the two inputs */ }
 
           {/* Time Information */}
           <Card>
@@ -301,7 +330,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
 
             {!autoCalculateEnabled && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                {/* <div>
                   <Label htmlFor="arrival_status" value="Arrival Status" />
                   <Select
                     id="arrival_status"
@@ -313,7 +342,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
                     <option value="late">Late</option>
                     <option value="absent">Absent</option>
                   </Select>
-                </div>
+                </div> */}
 
                 <div>
                   <Label htmlFor="work_duration" value="Work Duration" />

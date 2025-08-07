@@ -107,25 +107,25 @@ router.get('/',
 
        // Get all settings for the client
     const [settings] = await db.execute(`
-     SELECT 
-  setting_key,
-  setting_value,
-  setting_type,
-  description,
-  is_public,
-  updated_at
-FROM (
-  SELECT *,
-         ROW_NUMBER() OVER (PARTITION BY setting_key ORDER BY 
-                            CASE WHEN client_id IS NULL THEN 1 ELSE 0 END) as rn
-  FROM system_settings
-  WHERE client_id = ? OR client_id IS NULL
-) as ranked
-WHERE rn = 1
-ORDER BY setting_key ASC
+        SELECT 
+      setting_key,
+      setting_value,
+      setting_type,
+      description,
+      is_public,
+      updated_at
+    FROM (
+      SELECT *,
+            ROW_NUMBER() OVER (PARTITION BY setting_key ORDER BY 
+                                CASE WHEN client_id IS NULL THEN 1 ELSE 0 END) as rn
+      FROM system_settings
+      WHERE client_id = ? OR client_id IS NULL
+    ) as ranked
+    WHERE rn = 1
+    ORDER BY setting_key ASC
     `, [req.user.clientId]);
 
-    console.log('📊 Settings response:', settings);
+    // console.log('📊 Settings response:', settings);
     // Convert JSON values and format response
     const formattedSettings = settings.reduce((acc, setting) => {
       let value = setting.setting_value;
@@ -145,8 +145,8 @@ ORDER BY setting_key ASC
       return acc;
     }, {});
 
-    console.log('📊 Formatted settings response:', formattedSettings);
-    console.log('📊 Total settings:', settings.length);
+    // console.log('📊 Formatted settings response:', formattedSettings);
+    // console.log('📊 Total settings:', settings.length);
 
     res.status(200).json({
       success: true,
