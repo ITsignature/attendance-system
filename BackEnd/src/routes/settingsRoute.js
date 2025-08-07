@@ -359,119 +359,190 @@ router.put('/:key',
 // =============================================
 // BULK UPDATE SETTINGS
 // =============================================
-router.put('/', 
+router.put('/', [
   checkPermission('settings.edit'),
-  [
-    body('settings').isObject().withMessage('Settings must be an object'),
-    body('settings.*').notEmpty().withMessage('Setting values cannot be empty')
-  ],
-
-  
-  asyncHandler(async (req, res) => {
-    console.log("ccc",req.body)
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const db = getDB();
-    const { settings } = req.body;
-    
-    // Validate all setting keys
-    const invalidKeys = Object.keys(settings).filter(key => !validateSettingKey(key));
-    if (invalidKeys.length > 0) {
-      console.log(invalidKeys);
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid setting keys',
-        invalid_keys: invalidKeys
-      });
-    }
-
-    // Validate all values
-    const validationErrors = [];
-    Object.entries(settings).forEach(([key, value]) => {
-      const settingType = getSettingType(key, value);
-      if (!validateSettingValue(key, value, settingType)) {
-        validationErrors.push(`Invalid value for ${key}: expected ${settingType}`);
-      }
+  body('settings').isObject().withMessage('Settings must be an object')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
     });
+  }
 
-    if (validationErrors.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: validationErrors
-      });
-    }
-
-    // Get connection for transaction - THIS IS THE KEY FIX
-    const connection = await db.getConnection();
-
-    try {
-      // Start transaction using connection instead of db.execute()
-      await connection.beginTransaction();
-
-      const updatedSettings = {};
-
-      for (const [key, value] of Object.entries(settings)) {
-        const settingType = getSettingType(key, value);
-        const jsonValue = JSON.stringify(value);
-
-        // Check if setting exists for this client
-        const [existing] = await connection.execute(`
-          SELECT id FROM system_settings 
-          WHERE setting_key = ? AND client_id = ?
-        `, [key, req.user.clientId]);
-
-        if (existing.length > 0) {
-          // Update existing setting
-          await connection.execute(`
-            UPDATE system_settings 
-            SET setting_value = ?, setting_type = ?
-            WHERE setting_key = ? AND client_id = ?
-          `, [jsonValue, settingType, key, req.user.clientId]);
-        } else {
-          // Create new setting for this client
-          const settingId = require('crypto').randomUUID();
-          await connection.execute(`
-            INSERT INTO system_settings (id, client_id, setting_key, setting_value, setting_type, is_public)
-            VALUES (?, ?, ?, ?, ?, ?)
-          `, [settingId, req.user.clientId, key, jsonValue, settingType, false]);
-        }
-
-        updatedSettings[key] = {
-          value: value,
-          type: settingType
-        };
+  const db = getDB();
+  const settings = req.body.settings;
+  
+  // Check if work schedule settings are being updated
+  const scheduleSettings = ['work_start_time', 'work_end_time'];
+  const hasScheduleChanges = scheduleSettings.some(key => settings.hasOwnProperty(key));
+  
+  let scheduleUpdateInfo = null;
+  
+  try {
+    // Start transaction for consistency
+    await db.execute('START TRANSACTION');
+    
+    // Update settings first
+    for (const [key, value] of Object.entries(settings)) {
+      if (!validateSettingKey(key)) {
+        await db.execute('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Invalid setting key: ${key}`
+        });
       }
 
-      // Commit transaction using connection
-      await connection.commit();
+      const settingType = getSettingType(key, value);
+      
+      if (!validateSettingValue(key, value, settingType)) {
+        await db.execute('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Invalid value for setting: ${key}`
+        });
+      }
 
-      res.status(200).json({
-        success: true,
-        message: 'Settings updated successfully',
-        data: {
-          updated_settings: updatedSettings,
-          total_updated: Object.keys(settings).length
-        }
-      });
+      const jsonValue = JSON.stringify(value);
 
-    } catch (error) {
-      // Rollback transaction using connection
-      await connection.rollback();
-      throw error;
-    } finally {
-      // Always release the connection back to the pool
-      connection.release();
+      // Check if setting exists
+      const [existing] = await db.execute(`
+        SELECT id FROM system_settings 
+        WHERE setting_key = ? AND client_id = ?
+      `, [key, req.user.clientId]);
+
+      if (existing.length > 0) {
+        // Update existing
+        await db.execute(`
+          UPDATE system_settings 
+          SET setting_value = ?, setting_type = ?, updated_at = NOW()
+          WHERE setting_key = ? AND client_id = ?
+        `, [jsonValue, settingType, key, req.user.clientId]);
+      } else {
+        // Insert new
+        const settingId = require('crypto').randomUUID();
+        await db.execute(`
+          INSERT INTO system_settings (id, client_id, setting_key, setting_value, setting_type, is_public, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, FALSE, NOW(), NOW())
+        `, [settingId, req.user.clientId, key, jsonValue, settingType]);
+      }
     }
-  })
-);
+
+    // CASCADE UPDATE: If work schedule changed, update all employees who follow company schedule
+    if (hasScheduleChanges) {
+      console.log('🔄 Work schedule changed, updating employees who follow company schedule...');
+      
+      // Get the new schedule values
+      const newStartTime = settings.work_start_time;
+      const newEndTime = settings.work_end_time;
+      
+      // If only one time is being updated, get the other from database
+      let finalStartTime = newStartTime;
+      let finalEndTime = newEndTime;
+      
+      if (!finalStartTime || !finalEndTime) {
+        const [currentSchedule] = await db.execute(`
+          SELECT setting_key, setting_value 
+          FROM system_settings 
+          WHERE setting_key IN ('work_start_time', 'work_end_time') 
+          AND client_id = ?
+        `, [req.user.clientId]);
+        
+        currentSchedule.forEach(setting => {
+          try {
+            const value = JSON.parse(setting.setting_value);
+            if (setting.setting_key === 'work_start_time' && !finalStartTime) {
+              finalStartTime = value;
+            }
+            if (setting.setting_key === 'work_end_time' && !finalEndTime) {
+              finalEndTime = value;
+            }
+          } catch (e) {
+            console.warn(`Failed to parse setting value for ${setting.setting_key}`);
+          }
+        });
+      }
+      
+      // Validate the final times
+      if (finalStartTime && finalEndTime) {
+        const startTime = new Date(`2000-01-01T${finalStartTime}:00`);
+        const endTime = new Date(`2000-01-01T${finalEndTime}:00`);
+        
+        if (endTime <= startTime) {
+          await db.execute('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            message: 'Work end time must be after start time',
+            field: 'work_end_time'
+          });
+        }
+      }
+      
+      // Update all employees who follow company schedule
+      const updateFields = [];
+      const updateValues = [];
+      
+      if (finalStartTime) {
+        updateFields.push('in_time = ?');
+        updateValues.push(finalStartTime);
+      }
+      
+      if (finalEndTime) {
+        updateFields.push('out_time = ?');
+        updateValues.push(finalEndTime);
+      }
+      
+      if (updateFields.length > 0) {
+        updateFields.push('updated_at = NOW()');
+        updateValues.push(req.user.clientId);
+        
+        const [result] = await db.execute(`
+          UPDATE employees 
+          SET ${updateFields.join(', ')}
+          WHERE client_id = ? AND follows_company_schedule = TRUE AND employment_status != 'terminated'
+        `, updateValues);
+        
+        scheduleUpdateInfo = {
+          employees_updated: result.affectedRows,
+          new_start_time: finalStartTime,
+          new_end_time: finalEndTime
+        };
+        
+        console.log(`✅ Updated ${result.affectedRows} employees with new company schedule`);
+      }
+    }
+
+    // Commit transaction
+    await db.execute('COMMIT');
+    
+    const response = {
+      success: true,
+      message: 'Settings updated successfully',
+      data: {
+        updated_settings: Object.keys(settings)
+      }
+    };
+    
+    // Add schedule update info if applicable
+    if (scheduleUpdateInfo) {
+      response.data.schedule_cascade_update = scheduleUpdateInfo;
+      response.message += ` and ${scheduleUpdateInfo.employees_updated} employee schedules updated`;
+    }
+    
+    res.status(200).json(response);
+
+  } catch (error) {
+    await db.execute('ROLLBACK');
+    console.error('Error updating settings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update settings',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}));
 
 // =============================================
 // DELETE SETTING (Reset to system default)

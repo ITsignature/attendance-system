@@ -88,9 +88,38 @@ const getWorkDurationSettings = async (clientId, db) => {
 };
 
 /**
+ * Helper function to normalize time format for consistent parsing
+ */
+const normalizeTimeFormat = (timeString) => {
+  if (!timeString) return null;
+  
+  // Remove any extra whitespace
+  timeString = timeString.trim();
+  
+  // If already has seconds (HH:MM:SS), extract just HH:MM
+  if (timeString.includes(':') && timeString.split(':').length === 3) {
+    const parts = timeString.split(':');
+    return `${parts[0]}:${parts[1]}`;
+  }
+  
+  // If it's just HH:MM, return as is
+  if (timeString.includes(':') && timeString.split(':').length === 2) {
+    return timeString;
+  }
+  
+  // If no colons, assume it's invalid
+  return null;
+};
+
+/**
  * Determine arrival status based on check-in time and employee schedule
  */
 const determineArrivalStatus = (checkInTime, schedule, requestedArrivalStatus = null) => {
+  console.log('🔍 ARRIVAL STATUS DEBUG:');
+  console.log('  Raw checkInTime:', checkInTime);
+  console.log('  Raw schedule.start_time:', schedule.start_time);
+  console.log('  late_threshold_minutes:', schedule.late_threshold_minutes);
+  
   // If manually provided, use it (except for auto-calculated ones)
   if (requestedArrivalStatus && ['absent'].includes(requestedArrivalStatus)) {
     return requestedArrivalStatus;
@@ -101,24 +130,45 @@ const determineArrivalStatus = (checkInTime, schedule, requestedArrivalStatus = 
     return 'absent';
   }
   
-  // Parse times
-  const scheduledStart = new Date(`2000-01-01T${schedule.start_time}:00`);
-  const actualCheckIn = new Date(`2000-01-01T${checkInTime}:00`);
+  // FIXED: Normalize both time formats to HH:MM
+  const normalizedCheckIn = normalizeTimeFormat(checkInTime);
+  const normalizedScheduledStart = normalizeTimeFormat(schedule.start_time);
+  
+  console.log('  Normalized checkInTime:', normalizedCheckIn);
+  console.log('  Normalized scheduledStart:', normalizedScheduledStart);
+  
+  if (!normalizedCheckIn || !normalizedScheduledStart) {
+    console.log('  ❌ Invalid time format detected');
+    return 'late'; // Default to late if we can't parse times
+  }
+  
+  // Parse times with consistent format
+  const scheduledStart = new Date(`2000-01-01T${normalizedScheduledStart}:00`);
+  const actualCheckIn = new Date(`2000-01-01T${normalizedCheckIn}:00`);
+  
+  console.log('  scheduledStart Date object:', scheduledStart);
+  console.log('  actualCheckIn Date object:', actualCheckIn);
   
   // Calculate if late (in minutes)
   const timeDiffMs = actualCheckIn - scheduledStart;
   const timeDiffMinutes = timeDiffMs / (1000 * 60);
   
+  console.log('  timeDiffMs:', timeDiffMs);
+  console.log('  timeDiffMinutes:', timeDiffMinutes);
+  console.log('  late_threshold_minutes:', schedule.late_threshold_minutes);
+  
   // Determine arrival status
   if (timeDiffMinutes <= 0) {
+    console.log('  ✅ Result: on_time (early or exact)');
     return 'on_time'; // On time or early
   } else if (timeDiffMinutes <= schedule.late_threshold_minutes) {
+    console.log('  ✅ Result: on_time (within threshold)');
     return 'on_time'; // Within acceptable threshold
   } else {
+    console.log('  ❌ Result: late');
     return 'late'; // Arrived after threshold
   }
 };
-
 /**
  * Determine work duration based on hours worked and settings
  */
