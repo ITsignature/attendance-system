@@ -109,29 +109,6 @@ const normalizeTimeFormat = (timeString) => {
   return null;
 };
 
-/**
- * Helper function to normalize time format for consistent parsing
- */
-const normalizeTimeFormat = (timeString) => {
-  if (!timeString) return null;
-  
-  // Remove any extra whitespace
-  timeString = timeString.trim();
-  
-  // If already has seconds (HH:MM:SS), extract just HH:MM
-  if (timeString.includes(':') && timeString.split(':').length === 3) {
-    const parts = timeString.split(':');
-    return `${parts[0]}:${parts[1]}`;
-  }
-  
-  // If it's just HH:MM, return as is
-  if (timeString.includes(':') && timeString.split(':').length === 2) {
-    return timeString;
-  }
-  
-  // If no colons, assume it's invalid
-  return null;
-};
 
 /**
  * Determine arrival status based on check-in time and employee schedule
