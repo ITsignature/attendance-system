@@ -54,7 +54,8 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:3000',
-      'http://localhost:5174'  // Add any other ports you use
+      'http://localhost:5174',
+      '*'  // Add any other ports you use
     ];
     
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -67,7 +68,7 @@ const corsOptions = {
     }
   },
   credentials: true, // If you're using cookies/sessions
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS','PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization','X-Client-ID','X-Requested-With']
 };
 

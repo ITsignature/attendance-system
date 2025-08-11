@@ -74,6 +74,39 @@ const SettingsWithBackend = () => {
   }
 }, [settings]);
 
+/* ─── auto-compute working_hours_per_day ───────────────────────── */
+useEffect(() => {
+  if (!localSettings) return;
+
+  const { work_start_time: s, work_end_time: e } = localSettings;
+
+  if (s && e) {
+    let diff = hhmmToMinutes(e) - hhmmToMinutes(s);
+    if (diff < 0) diff += 24 * 60;              // handles overnight shifts
+
+    // round to nearest 0.5 hours (30 min steps)
+    const hours = Math.round(diff / 30) / 2;
+
+    if (hours !== localSettings.working_hours_per_day) {
+      setLocalSettings((prev) => ({
+        ...prev,
+        working_hours_per_day: hours
+      }));
+      setHasChanges(true);                       // mark as dirty so the Save bar appears
+    }
+  } else if (localSettings.working_hours_per_day !== null) {
+    // if either time cleared, reset hours field
+    setLocalSettings((prev) => ({
+      ...prev,
+      working_hours_per_day: null
+    }));
+    setHasChanges(true);
+  }
+}, [
+  localSettings?.work_start_time,
+  localSettings?.work_end_time
+]);
+
 
     if (loading || localSettings === null) {
     return (
@@ -210,6 +243,15 @@ const handleSave = async () => {
     }
   };
 
+
+  /* helper: "08:30" → minutes since midnight */
+const hhmmToMinutes = (t) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
+
+  
   // Render different setting sections
   const renderSettingSection = () => {
     switch (activeSection) {
@@ -349,7 +391,7 @@ const handleSave = async () => {
                 </label>
                 <input
                   type="time"
-                  value={localSettings.work_start_time || '09:00'}
+                  value={localSettings.work_start_time || null}
                   onChange={(e) => updateLocalSetting('work_start_time', e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
@@ -361,7 +403,7 @@ const handleSave = async () => {
                 </label>
                 <input
                   type="time"
-                  value={localSettings.work_end_time || '17:00'}
+                  value={localSettings.work_end_time || null}
                   onChange={(e) => updateLocalSetting('work_end_time', e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
@@ -376,9 +418,10 @@ const handleSave = async () => {
                   step="0.5"
                   min="0"
                   max="24"
-                  value={localSettings.working_hours_per_day || 8}
+                  value={localSettings.working_hours_per_day || ''}
                   onChange={(e) => updateLocalSetting('working_hours_per_day', parseFloat(e.target.value))}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  readOnly
                 />
               </div>
 
