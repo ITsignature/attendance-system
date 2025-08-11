@@ -21,6 +21,7 @@ import {
 import apiService from '../../services/api';
 import AttendanceForm from './AttendanceForm';
 import { set } from 'lodash';
+import ResolveWorkDurationModal from './ResolveWorkDurationModal'
 
 // Types
 interface AttendanceRecord {
@@ -77,11 +78,19 @@ const AttendanceView: React.FC = () => {
     recordsPerPage: 10
   });
 
+
+  const [showResolve, setShowResolve] = useState(false);
+  const [resolveRecord, setResolveRecord] = useState<AttendanceRecord | null>(null);
 /* add after the other useState hooks */
   const [showDelete, setShowDelete] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<AttendanceRecord | null>(null);
   
 
+  // open handler
+  const openResolve = (rec: AttendanceRecord) => {
+    setResolveRecord(rec);
+    setShowResolve(true);
+  };
   // Load data on component mount and filter changes
   useEffect(() => {
     loadAttendanceRecords();
@@ -91,35 +100,61 @@ const AttendanceView: React.FC = () => {
     loadEmployees();
   }, []);
 
-  const loadAttendanceRecords = async () => {
-    try {
-      setLoading(true);
+  // const loadAttendanceRecords = async () => {
+  //   try {
+  //     setLoading(true);
       
-      // Build query parameters
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          params.append(key, value.toString());
-        }
-      });
+  //     // Build query parameters
+  //     const params = new URLSearchParams();
+  //     Object.entries(filters).forEach(([key, value]) => {
+  //       if (value !== undefined && value !== null && value !== '') {
+  //         params.append(key, value.toString());
+  //       }
+  //     });
 
-      const response = await apiService.getAttendanceRecords(params);
+  //     const response = await apiService.getAttendanceRecords(params);
 
-      console.log('📊 Attendance records response:', response);
+  //     console.log('📊 Attendance records response:', response);
 
-      if (response.success) {
-        setAttendanceRecords(response.data.attendance);
-        setPagination(response.data.pagination);
-        console.log('📊 Attendance records:', attendanceRecords);
+  //     if (response.success) {
+  //       setAttendanceRecords(response.data.attendance);
+  //       setPagination(response.data.pagination);
+  //       console.log('📊 Attendance records:', attendanceRecords);
+  //     }
+  //   } catch (error) {
+  //     console.error('Failed to load attendance records:', error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  const loadAttendanceRecords = async () => {
+  try {
+    setLoading(true);
+
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, String(value));
       }
-    } catch (error) {
-      console.error('Failed to load attendance records:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
 
-  
+    const qs = params.toString(); // <-- important
+    console.log('GET /api/attendance?' + qs);
+
+    const response = await apiService.getAttendanceRecords(qs); // <-- pass string
+
+    if (response.success) {
+      setAttendanceRecords(response.data.attendance);
+      setPagination(response.data.pagination);
+    }
+  } catch (e) {
+    console.error('Failed to load attendance records:', e);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const loadEmployees = async () => {
     try {
@@ -175,25 +210,24 @@ const AttendanceView: React.FC = () => {
     const colors: { [key: string]: string } = {
       'on_time': 'success',
       'late': 'warning', 
-      'absent': 'failure'
+      // 'absent': 'failure'
     };
     return <Badge color={colors[status] || 'gray'}>{status.replace('_', ' ')}</Badge>;
   };
 
-  // FIXED: Added null safety checks
-  const getWorkDurationBadge = (duration: string | null | undefined) => {
-    if (!duration) {
-      return <Badge color="gray">Unknown</Badge>;
-    }
-    
-    const colors: { [key: string]: string } = {
-      'full_day': 'success',
-      'half_day': 'info',
-      'short_leave': 'warning',
-      'on_leave': 'purple'
-    };
-    return <Badge color={colors[duration] || 'gray'}>{duration.replace('_', ' ')}</Badge>;
+// null-safe badge
+const getWorkDurationBadge = (duration?: string | null) => {
+  const label = duration ? duration.replace(/_/g, ' ') : 'Action required';
+  const colorMap: Record<string, any> = {
+    full_day: 'success',
+    half_day: 'info',
+    short_leave: 'warning',
+    on_leave: 'purple',
   };
+  const color = duration ? (colorMap[duration] ?? 'gray') : 'warning';
+  return <Badge color={color}>{label}</Badge>;
+};
+
 
   const formatTime = (time?: string) => {
     if (!time) return 'Not recorded';
@@ -327,7 +361,7 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
               <option value="">All Arrival Status</option>
               <option value="on_time">On Time</option>
               <option value="late">Late</option>
-              <option value="absent">Absent</option>
+              {/* <option value="absent">Absent</option> */}
             </Select>
           </div>
 
@@ -341,7 +375,7 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
               <option value="full_day">Full Day</option>
               <option value="half_day">Half Day</option>
               <option value="short_leave">Short Leave</option>
-              <option value="on_leave">On Leave</option>
+              {/* <option value="on_leave">On Leave</option> */}
             </Select>
           </div>
 
@@ -428,31 +462,22 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
                         );
                       })()}
                         {getArrivalStatusBadge(record.arrival_status)}
+                  
+                  
                       </Table.Cell>
                       
-                     <Table.Cell>
-                      {record.work_duration
-                        ? getWorkDurationBadge(record.work_duration)       /* normal badge */
-                        : (
-                            <Select
-                              sizing="sm"                   /* ← flowbite prop */
-                              value=""                      /* placeholder */
-                              onChange={(e) =>
-                                setWorkDuration(
-                                  record.id,
-                                  e.target.value as 'half_day' | 'short_leave'
-                                )
-                              }
-                              className="w-32 text-xs font-medium text-red-600
-                                        dark:bg-red-900/30 dark:border-red-600 dark:text-red-300"
-                            >
-                              <option value="" disabled>Action Required</option>
-                              <option value="half_day">Half Day</option>
-                              <option value="short_leave">Short Leave</option>
-                            </Select>
-                          )
-                      }
-                    </Table.Cell>
+              <Table.Cell>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={() => openResolve(record)}
+                onKeyDown={(e) => e.key === 'Enter' && openResolve(record)}
+                className="inline-block cursor-pointer"
+                title="Click to change work duration"
+              >
+                {getWorkDurationBadge(record.work_duration)}
+              </span>
+            </Table.Cell>
 
 
                       
@@ -517,6 +542,15 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
         )}
       </Card>
 
+
+      // place the modal once at the end of the page JSX:
+<ResolveWorkDurationModal
+  open={showResolve}
+  record={resolveRecord}
+  onClose={() => setShowResolve(false)}
+  onSaved={loadAttendanceRecords}
+/>
+
       <Modal show={showDelete} size="md" onClose={() => setShowDelete(false)} popup>
   <Modal.Header />
   <Modal.Body>
@@ -559,6 +593,7 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
 </Modal>
 
 
+
       {/* Attendance Form Modal */}
       {showForm && (
         <AttendanceForm
@@ -577,6 +612,8 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
         />
       )}
     </div>
+
+    
     
   );
   

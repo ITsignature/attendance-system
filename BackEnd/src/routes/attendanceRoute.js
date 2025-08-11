@@ -59,6 +59,9 @@ const getEmployeeSchedule = async (employeeId, clientId, db) => {
   };
 };  
 
+
+
+
 /**
  * Get work duration thresholds from settings
  */
@@ -66,10 +69,11 @@ const getWorkDurationSettings = async (clientId, db) => {
   const [settings] = await db.execute(`
     SELECT setting_key, setting_value
     FROM system_settings 
-    WHERE setting_key IN ('full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'working_hours_per_day') 
+    WHERE setting_key IN ('working_hours_per_day', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'working_hours_per_day') 
     AND client_id = ? 
     ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END, client_id DESC
   `, [clientId]);
+  
 
   const settingsMap = {};
   settings.forEach(setting => {
@@ -765,6 +769,7 @@ router.patch(
       return res.status(404).json({ success:false, message:'Record not found' });
     }
 
+    
     const schedule         = await getEmployeeSchedule(current.employee_id, req.user.clientId, db);
     const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
 

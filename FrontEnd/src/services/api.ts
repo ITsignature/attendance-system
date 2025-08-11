@@ -1,15 +1,16 @@
+// services/api.ts
 import { EmployeeFilters, CreateEmployeeData, UpdateEmployeeData } from '../types/employee';
-
-import { 
-  LeaveType, 
-  LeaveRequest, 
-  CreateLeaveRequestData, 
+import {
+  LeaveType,
+  LeaveRequest,
+  CreateLeaveRequestData,
   CreateLeaveTypeData,
-  LeaveRequestFilters 
+  LeaveRequestFilters
 } from './leaveApi';
 
-export interface LoginResponse {
+/* ----------------------------- Shared Types ----------------------------- */
 
+export interface LoginResponse {
   success: boolean;
   message: string;
   data: {
@@ -52,55 +53,59 @@ export interface User {
   permissions: string[];
 }
 
+/** Filters your backend `/api/attendance` actually supports */
 export interface AttendanceFilters {
   page?: number;
   limit?: number;
   employeeId?: string;
-  startDate?: string;
-  endDate?: string;
-  status?: string;
-  sortBy?: string;
-  sortOrder?: string;
+  startDate?: string;          // YYYY-MM-DD
+  endDate?: string;            // YYYY-MM-DD
+  arrival_status?: 'on_time' | 'late' | 'absent';
+  work_duration?: 'full_day' | 'half_day' | 'short_leave' | 'on_leave' | '';
+  sortBy?: string;             // e.g. 'date'
+  sortOrder?: 'ASC' | 'DESC';
 }
 
+/** Row shape (kept close to your server payload) */
 export interface AttendanceRecord {
   id: string;
   employee_id: string;
   date: string;
-  check_in_time?: string;
-  check_out_time?: string;
-  total_hours?: number;
-  overtime_hours?: number;
-  break_duration?: number;
-  status: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
+  check_in_time?: string | null;
+  check_out_time?: string | null;
+  total_hours?: number | null;
+  overtime_hours?: number | null;
+  break_duration?: number | null;
+  status?: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave'; // (legacy)
+  arrival_status?: 'on_time' | 'late' | 'absent';
+  work_duration?: 'full_day' | 'half_day' | 'short_leave' | 'on_leave' | '' | null;
   work_type?: 'office' | 'remote' | 'hybrid';
-  notes?: string;
+  notes?: string | null;
   employee_name?: string;
   employee_code?: string;
   department_name?: string;
+  scheduled_in_time?: string | null;
+  scheduled_out_time?: string | null;
+  follows_company_schedule?: 0 | 1 | boolean;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface CreateAttendanceData {
+/** Form shape used by your create/update attendance (dual status) */
+export interface AttendanceFormData {
   employee_id: string;
-  date: string;
-  check_in_time?: string;
-  check_out_time?: string;
-  status: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
-  work_type?: 'office' | 'remote' | 'hybrid';
+  date: string; // YYYY-MM-DD
+  check_in_time?: string;   // "HH:MM" or "HH:MM:SS"
+  check_out_time?: string;  // "HH:MM" or "HH:MM:SS"
+  arrival_status?: 'on_time' | 'late' | 'absent';
+  work_duration?: 'full_day' | 'half_day' | 'short_leave' | 'on_leave' | '';
   break_duration?: number;
+  work_type?: 'office' | 'remote' | 'hybrid';
   notes?: string;
 }
 
-export interface UpdateAttendanceData {
-  check_in_time?: string;
-  check_out_time?: string;
-  break_duration?: number;
-  status?: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
-  work_type?: 'office' | 'remote' | 'hybrid';
-  notes?: string;
-}
+/* ------------------------------ Api Service ----------------------------- */
+
 class ApiService {
   private baseURL: string;
   private token: string | null = null;
@@ -110,13 +115,11 @@ class ApiService {
     this.token = localStorage.getItem('accessToken');
   }
 
-  // Set authentication token
   setToken(token: string) {
     this.token = token;
     localStorage.setItem('accessToken', token);
   }
 
-  // Remove authentication token
   removeToken() {
     this.token = null;
     localStorage.removeItem('accessToken');
@@ -124,38 +127,47 @@ class ApiService {
     localStorage.removeItem('user');
   }
 
-  // Get headers with authentication
-  // Update your existing getHeaders() method to include this:
-private getHeaders(): HeadersInit {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  /** Build headers including tenant header */
+  private getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
 
-  if (this.token) {
-    headers['Authorization'] = `Bearer ${this.token}`;
-  }
-
-  // ADD THIS SECTION for multi-tenant support
-  const userData = localStorage.getItem('user');
-  if (userData) {
-    try {
-      const user = JSON.parse(userData);
-      if (user.clientId) {
-        headers['X-Client-ID'] = user.clientId;
-      }
-    } catch (error) {
-      console.warn('Failed to parse user data for client ID');
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
+
+    // Multi-tenant support
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        if (user.clientId) headers['X-Client-ID'] = user.clientId;
+      } catch {
+        console.warn('Failed to parse user data for client ID');
+      }
+    }
+
+    return headers;
   }
 
-  return headers;
-}
+  /** Primitive -> string, null/undefined/'' -> skip */
+  private static toQueryString(input?: string | URLSearchParams | Record<string, any>): string {
+    if (!input) return '';
 
-  // Generic API call method
-  public async apiCall<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
+    if (typeof input === 'string') return input.replace(/^\?/, '');
+    if (input instanceof URLSearchParams) return input.toString();
+
+    const params = new URLSearchParams();
+    Object.entries(input).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      params.append(key, String(value));
+    });
+    return params.toString();
+  }
+
+  /** Generic API call */
+  public async apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseURL}${endpoint}`;
       const config: RequestInit = {
@@ -163,12 +175,11 @@ private getHeaders(): HeadersInit {
         ...options,
       };
 
-      console.log('respone check')
-      const response = await fetch(url, config);
-      const data = await response.json();
+      const res = await fetch(url, config);
+      const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      if (!res.ok) {
+        throw new Error(data?.message || `HTTP ${res.status}`);
       }
 
       return data;
@@ -178,7 +189,8 @@ private getHeaders(): HeadersInit {
     }
   }
 
-  // Authentication methods
+  /* ----------------------------- Auth Methods ---------------------------- */
+
   async login(email: string, password: string): Promise<LoginResponse> {
     const response = await this.apiCall<LoginResponse['data']>('/auth/login', {
       method: 'POST',
@@ -196,13 +208,10 @@ private getHeaders(): HeadersInit {
 
   async logout(): Promise<ApiResponse> {
     try {
-      const response = await this.apiCall('/auth/logout', {
-        method: 'POST',
-      });
+      const response = await this.apiCall('/auth/logout', { method: 'POST' });
       this.removeToken();
       return response;
     } catch (error) {
-      // Even if logout fails on server, clear local storage
       this.removeToken();
       throw error;
     }
@@ -214,14 +223,12 @@ private getHeaders(): HeadersInit {
 
   async refreshToken(): Promise<ApiResponse<{ accessToken: string; refreshToken: string }>> {
     const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
+    if (!refreshToken) throw new Error('No refresh token available');
 
-    const response = await this.apiCall<{ accessToken: string; refreshToken: string }>('/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken }),
-    });
+    const response = await this.apiCall<{ accessToken: string; refreshToken: string }>(
+      '/auth/refresh',
+      { method: 'POST', body: JSON.stringify({ refreshToken }) }
+    );
 
     if (response.success && response.data) {
       this.setToken(response.data.accessToken);
@@ -231,583 +238,303 @@ private getHeaders(): HeadersInit {
     return response;
   }
 
-  // Dashboard methods
+  /* --------------------------- Dashboard Methods ------------------------- */
+
   async getDashboardOverview(): Promise<ApiResponse> {
     return this.apiCall('/api/dashboard/overview');
   }
 
-// Enhanced Employee methods
-async getEmployees(params?: EmployeeFilters): Promise<ApiResponse> {
-  const queryString = params ? '?' + new URLSearchParams(
-    Object.entries(params).reduce((acc, [key, value]) => {
-      if (value !== undefined && value !== '') {
-        acc[key] = String(value);
+  /* ---------------------------- Employee Methods ------------------------- */
+
+  async getEmployees(params?: EmployeeFilters): Promise<ApiResponse> {
+    const qs = ApiService.toQueryString(params);
+    console.log('🔄 Fetching employees:', qs ? `?${qs}` : '');
+    return this.apiCall(`/api/employees${qs ? `?${qs}` : ''}`);
+  }
+
+  async getEmployee(id: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/employees/${id}`);
+  }
+
+  async createEmployee(employeeData: any): Promise<ApiResponse> {
+    // ... (unchanged from your version)
+    const requiredFields = [
+      'first_name', 'last_name', 'email', 'phone', 'date_of_birth',
+      'gender', 'employee_code', 'department_id', 'designation_id',
+      'hire_date', 'employee_type', 'emergency_contact_name',
+      'emergency_contact_phone', 'emergency_contact_relation'
+    ];
+    for (const field of requiredFields) {
+      if (!employeeData[field] || employeeData[field].toString().trim() === '') {
+        throw new Error(`${field.replace('_', ' ')} is required`);
       }
-      return acc;
-    }, {} as Record<string, string>)
-  ).toString() : '';
-  
-  console.log('🔄 Fetching employees:', queryString);
-  return this.apiCall(`/api/employees${queryString}`);
-}
-
-async getEmployee(id: string): Promise<ApiResponse> {
-  console.log('🔄 Fetching employee:', id);
-  return this.apiCall(`/api/employees/${id}`);
-}
-
-async createEmployee(employeeData: any): Promise<ApiResponse> {
-  console.log('🔄 Creating employee:', employeeData);
-  
-  // Client-side validation
-  const requiredFields = [
-    'first_name', 'last_name', 'email', 'phone', 'date_of_birth', 
-    'gender', 'employee_code', 'department_id', 'designation_id', 
-    'hire_date', 'employee_type', 'emergency_contact_name', 
-    'emergency_contact_phone', 'emergency_contact_relation'
-  ];
-  
-  for (const field of requiredFields) {
-    if (!employeeData[field] || employeeData[field].toString().trim() === '') {
-      console.log(`❌ Missing required field: ${field} = "${employeeData[field]}"`);
-      throw new Error(`${field.replace('_', ' ')} is required`);
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(employeeData.email)) {
+      throw new Error('Please enter a valid email address');
+    }
+    return this.apiCall('/api/employees', { method: 'POST', body: JSON.stringify(employeeData) });
   }
-  
-  // Email validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(employeeData.email)) {
-    throw new Error('Please enter a valid email address');
+
+  async checkEmployeeIdAvailability(employeeId: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/employees/check-id?employee_id=${encodeURIComponent(employeeId)}`);
   }
-  
-  return this.apiCall('/api/employees', {
-    method: 'POST',
-    body: JSON.stringify(employeeData),
-  });
-}
+  async checkEmailAvailability(email: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/employees/check-email?email=${encodeURIComponent(email)}`);
+  }
+  async updateEmployee(id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
+    return this.apiCall(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) });
+  }
+  async deleteEmployee(id: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/employees/${id}`, { method: 'DELETE' });
+  }
+  async bulkDeleteEmployees(employeeIds: string[]): Promise<ApiResponse> {
+    return this.apiCall('/api/employees/bulk-delete', {
+      method: 'POST', body: JSON.stringify({ employee_ids: employeeIds }),
+    });
+  }
+  async bulkUpdateEmployees(updates: Array<{ id: string; data: UpdateEmployeeData }>): Promise<ApiResponse> {
+    return this.apiCall('/api/employees/bulk-update', {
+      method: 'PUT', body: JSON.stringify({ updates }),
+    });
+  }
+  async getEmployeeStats(): Promise<ApiResponse> {
+    return this.apiCall('/api/employees/stats');
+  }
+  async exportEmployees(format: 'csv' | 'excel' = 'csv', filters?: EmployeeFilters): Promise<ApiResponse> {
+    const qs = ApiService.toQueryString({ ...(filters || {}), format });
+    return this.apiCall(`/api/employees/export?${qs}`);
+  }
 
-// Check if employee ID is unique
-async checkEmployeeIdAvailability(employeeId: string): Promise<ApiResponse> {
-  console.log('🔄 Checking employee ID availability:', employeeId);
-  return this.apiCall(`/api/employees/check-id?employee_id=${encodeURIComponent(employeeId)}`);
-}
+  /* --------------------------- Department/Role/etc ----------------------- */
+  async getDepartments(): Promise<ApiResponse> { return this.apiCall('/api/departments'); }
+  async getDepartmentsWithEmployees(): Promise<ApiResponse> { return this.apiCall('/api/departments/with-employees'); }
+  async getDepartmentsWithDesignations(): Promise<ApiResponse> { return this.apiCall('/api/departments/with-designations'); }
 
-// Check if email is unique
-async checkEmailAvailability(email: string): Promise<ApiResponse> {
-  console.log('🔄 Checking email availability:', email);
-  return this.apiCall(`/api/employees/check-email?email=${encodeURIComponent(email)}`);
-}
-async updateEmployee(id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
-  console.log('🔄 Updating employee:', id, employeeData);
-  return this.apiCall(`/api/employees/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(employeeData),
-  });
-}
+  async createDepartment(deptData: {
+    name: string; description?: string; manager_id?: string | null; budget?: number | null;
+  }): Promise<ApiResponse> {
+    return this.apiCall('/api/departments', { method: 'POST', body: JSON.stringify(deptData) });
+  }
 
-async deleteEmployee(id: string): Promise<ApiResponse> {
-  console.log('🔄 Deleting employee:', id);
-  return this.apiCall(`/api/employees/${id}`, {
-    method: 'DELETE',
-  });
-}
+  async deleteDesignation(id: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/designations/${id}`, { method: 'DELETE' });
+  }
+  async deleteDepartment(id: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/departments/${id}`, { method: 'DELETE' });
+  }
+  async createDesignation(deptData: { title: string; department_id: string; responsibilities: string[]; }): Promise<ApiResponse> {
+    return this.apiCall('/api/designations', { method: 'POST', body: JSON.stringify(deptData) });
+  }
+  async getDesignations(departmentId?: string): Promise<ApiResponse> {
+    const qs = departmentId ? `?department_id=${departmentId}` : '';
+    return this.apiCall(`/api/designations${qs}`);
+  }
+  async getManagers(departmentId?: string): Promise<ApiResponse> {
+    const qs = departmentId ? `?department_id=${departmentId}` : '';
+    return this.apiCall(`/api/employees/managers${qs}`);
+  }
 
-// Bulk operations
-async bulkDeleteEmployees(employeeIds: string[]): Promise<ApiResponse> {
-  console.log('🔄 Bulk deleting employees:', employeeIds);
-  return this.apiCall('/api/employees/bulk-delete', {
-    method: 'POST',
-    body: JSON.stringify({ employee_ids: employeeIds }),
-  });
-}
+  /* ---------------------------- Attendance APIs -------------------------- */
 
-async bulkUpdateEmployees(updates: Array<{id: string, data: UpdateEmployeeData}>): Promise<ApiResponse> {
-  console.log('🔄 Bulk updating employees:', updates);
-  return this.apiCall('/api/employees/bulk-update', {
-    method: 'PUT',
-    body: JSON.stringify({ updates }),
-  });
-}
-
-// Employee statistics
-async getEmployeeStats(): Promise<ApiResponse> {
-  console.log('🔄 Fetching employee statistics');
-  return this.apiCall('/api/employees/stats');
-}
-
-// Export employees
-async exportEmployees(format: 'csv' | 'excel' = 'csv', filters?: EmployeeFilters): Promise<ApiResponse> {
-  const queryString = filters ? '?' + new URLSearchParams(
-    Object.entries({...filters, format}).reduce((acc, [key, value]) => {
-      if (value !== undefined && value !== '') {
-        acc[key] = String(value);
-      }
-      return acc;
-    }, {} as Record<string, string>)
-  ).toString() : `?format=${format}`;
-  
-  console.log('🔄 Exporting employees:', format);
-  return this.apiCall(`/api/employees/export${queryString}`);
-}
-
-// ---------------------------------------------------------------------------------------------------------------------------------
-// Enhanced Department methods
-// ---------------------------------------------------------------------------------------------------------------------------------
-
-async getDepartments(): Promise<ApiResponse> {
-  console.log('🔄 Fetching departments');
-  return this.apiCall('/api/departments');
-}
-
-async getDepartmentsWithEmployees(): Promise<ApiResponse> {
-  console.log('🔄 Fetching departments');
-  return this.apiCall('/api/departments/with-employees');
-}
-
-async getDepartmentsWithDesignations(): Promise<ApiResponse> {
-  console.log('🔄 Fetching departments');
-  return this.apiCall('/api/departments/with-designations');
-}
-
-
-async createDepartment(deptData: {
-  name: string;
-  description?: string;
-  manager_id?: string | null;
-  budget?: number | null;
-}): Promise<ApiResponse> {
-  return this.apiCall('/api/departments', {
-    method: 'POST',
-    body: JSON.stringify(deptData),
-  });
-}
-
-
-async deleteDesignation(id: string): Promise<ApiResponse> {
-  console.log('🔄 Deleting designation:', id);
-  return this.apiCall(`/api/designations/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-
-
-async deleteDepartment(id: string): Promise<ApiResponse> {
-  console.log('🔄 Deleting department:', id);
-  return this.apiCall(`/api/departments/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-
-async createDesignation(deptData: {
-  title: string;
-  department_id: string;
-  responsibilities: string[];
-}): Promise<ApiResponse> {
-  return this.apiCall('/api/designations', {
-    method: 'POST',
-    body: JSON.stringify(deptData),
-  }); 
-}
-
-
-async getDesignations(departmentId?: string): Promise<ApiResponse> {
-  const queryString = departmentId ? `?department_id=${departmentId}` : '';
-  console.log('🔄 Fetching designations');
-  return this.apiCall(`/api/designations${queryString}`);
-}
-
-async getManagers(departmentId?: string): Promise<ApiResponse> {
-  const queryString = departmentId ? `?department_id=${departmentId}` : '';
-  console.log('🔄 Fetching managers');
-  return this.apiCall(`/api/employees/managers${queryString}`);
-}
-
-  // ========== ATTENDANCE METHODS ==========
-  
   /**
- * Get attendance records with dual status filtering
- */
-async getAttendanceRecords(filters: URLSearchParams): Promise<ApiResponse> {
-  const params = new URLSearchParams();
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      params.append(key, value.toString());
+   * Get attendance records — accepts:
+   *  - object (AttendanceFilters)
+   *  - URLSearchParams
+   *  - string (already-built query string)
+   */
+  async getAttendanceRecords(filters?: AttendanceFilters | URLSearchParams | string): Promise<ApiResponse<{
+    attendance: AttendanceRecord[];
+    pagination: { currentPage: number; totalPages: number; totalRecords: number; recordsPerPage: number; };
+  }>> {
+    const qs = ApiService.toQueryString(filters);
+    const url = `/api/attendance${qs ? `?${qs}` : ''}`;
+    console.log('🔄 Fetching attendance:', url);
+    return this.apiCall(url);
+  }
+
+  /** Create attendance record (dual statuses supported) */
+  async createAttendanceRecord(data: AttendanceFormData): Promise<ApiResponse> {
+    return this.apiCall('/api/attendance', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  /** PATCH update attendance record (send only changed fields) */
+  async updateAttendanceRecord(id: string, data: Partial<AttendanceFormData>): Promise<ApiResponse> {
+    console.log('🔄 Updating attendance record:', id, 'data:', data);
+    return this.apiCall(`/api/attendance/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  /** Bulk update flags */
+  async bulkUpdateAttendanceStatus(data: {
+    date: string;
+    employee_ids: string[];
+    update_arrival?: boolean;
+    update_duration?: boolean;
+  }): Promise<ApiResponse> {
+    return this.apiCall('/api/attendance/bulk-update-status', {
+      method: 'POST', body: JSON.stringify(data),
+    });
+  }
+
+  async getEmployeeSchedule(employeeId: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/attendance/employee-schedule/${employeeId}`);
+  }
+
+  getArrivalStatusColor(status: string): string {
+    switch (status) {
+      case 'on_time': return 'success';
+      case 'late': return 'warning';
+      case 'absent': return 'failure';
+      default: return 'gray';
     }
-  });
-
-  return this.apiCall(`/api/attendance?${params.toString()}`);
-}
-
-/**
- * Create attendance record with dual status
- */
-async createAttendanceRecord(data: AttendanceFormData): Promise<ApiResponse> {
-  return this.apiCall('/api/attendance', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-/**
- * Update attendance record with dual status
- */
-async updateAttendanceRecord(id: string, data: Partial<AttendanceFormData>): Promise<ApiResponse> {
-
-  console.log('🔄 Updating attendance record:', id,"data",data);
-  return this.apiCall(`/api/attendance/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-/**
- * Bulk update attendance statuses
- */ 
-async bulkUpdateAttendanceStatus(data: {
-  date: string;
-  employee_ids: string[];
-  update_arrival?: boolean;
-  update_duration?: boolean;
-}): Promise<ApiResponse> {
-  return this.apiCall('/api/attendance/bulk-update-status', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-/**
- * Get employee schedule information
- */
-async getEmployeeSchedule(employeeId: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/attendance/employee-schedule/${employeeId}`);
-}
-
-/**
- * Get attendance status badge styling
- */
-getArrivalStatusColor(status: string): string {
-  switch (status) {
-    case 'on_time': return 'success';
-    case 'late': return 'warning';
-    case 'absent': return 'failure';
-    default: return 'gray';
   }
-}
-
-/**
- * Get work duration badge styling
- */
-getWorkDurationColor(duration: string): string {
-  switch (duration) {
-    case 'full_day': return 'success';
-    case 'half_day': return 'info';
-    case 'short_leave': return 'warning';
-    case 'on_leave': return 'purple';
-    default: return 'gray';
-  }
-}
-
-  // RBAC methods
-  async getRoles(): Promise<ApiResponse> {
-    return this.apiCall('/api/rbac/roles');
+  getWorkDurationColor(duration: string): string {
+    switch (duration) {
+      case 'full_day': return 'success';
+      case 'half_day': return 'info';
+      case 'short_leave': return 'warning';
+      case 'on_leave': return 'purple';
+      default: return 'gray';
+    }
   }
 
-  async getPermissions(): Promise<ApiResponse> {
-    return this.apiCall('/api/rbac/permissions');
-  }
+  /* ---------------------------- RBAC / Clients --------------------------- */
 
+  async getRoles(): Promise<ApiResponse> { return this.apiCall('/api/rbac/roles'); }
+  async getPermissions(): Promise<ApiResponse> { return this.apiCall('/api/rbac/permissions'); }
   async createRole(roleData: {
-    name: string;
-    description?: string;
-    access_level: 'basic' | 'moderate' | 'full';
-    permissions: string[];
+    name: string; description?: string; access_level: 'basic' | 'moderate' | 'full'; permissions: string[];
   }): Promise<ApiResponse> {
-    return this.apiCall('/api/rbac/roles', {
-      method: 'POST',
-      body: JSON.stringify(roleData),
-    });
+    return this.apiCall('/api/rbac/roles', { method: 'POST', body: JSON.stringify(roleData) });
   }
-
   async updateRole(roleId: string, roleData: {
-    name?: string;
-    description?: string;
-    access_level?: 'basic' | 'moderate' | 'full';
-    permissions?: string[];
+    name?: string; description?: string; access_level?: 'basic' | 'moderate' | 'full'; permissions?: string[];
   }): Promise<ApiResponse> {
-    return this.apiCall(`/api/rbac/roles/${roleId}`, {
-      method: 'PUT',
-      body: JSON.stringify(roleData),
-    });
+    return this.apiCall(`/api/rbac/roles/${roleId}`, { method: 'PUT', body: JSON.stringify(roleData) });
   }
-
   async deleteRole(roleId: string): Promise<ApiResponse> {
-    return this.apiCall(`/api/rbac/roles/${roleId}`, {
-      method: 'DELETE',
-    });
+    return this.apiCall(`/api/rbac/roles/${roleId}`, { method: 'DELETE' });
   }
-
   async getRole(roleId: string): Promise<ApiResponse> {
     return this.apiCall(`/api/rbac/roles/${roleId}`);
   }
 
-  // Client methods
-  async getClients(): Promise<ApiResponse> {
-    return this.apiCall('/api/clients');
-  }
-
+  async getClients(): Promise<ApiResponse> { return this.apiCall('/api/clients'); }
   async createClient(clientData: {
-    name: string;
-    description?: string;
-    contact_email?: string;
-    phone?: string;
-    address?: string;
+    name: string; description?: string; contact_email?: string; phone?: string; address?: string;
   }): Promise<ApiResponse> {
-    return this.apiCall('/api/clients', {
-      method: 'POST',
-      body: JSON.stringify(clientData),
-    });
+    return this.apiCall('/api/clients', { method: 'POST', body: JSON.stringify(clientData) });
   }
-
   async updateClient(clientId: string, clientData: {
-    name?: string;
-    description?: string;
-    contact_email?: string;
-    phone?: string;
-    address?: string;
+    name?: string; description?: string; contact_email?: string; phone?: string; address?: string;
   }): Promise<ApiResponse> {
-    return this.apiCall(`/api/clients/${clientId}`, {
-      method: 'PUT',
-      body: JSON.stringify(clientData),
-    });
+    return this.apiCall(`/api/clients/${clientId}`, { method: 'PUT', body: JSON.stringify(clientData) });
   }
-
   async deleteClient(clientId: string): Promise<ApiResponse> {
-    return this.apiCall(`/api/clients/${clientId}`, {
-      method: 'DELETE',
+    return this.apiCall(`/api/clients/${clientId}`, { method: 'DELETE' });
+  }
+
+  /* ------------------------- Admin User Management ----------------------- */
+
+  async getAdminUsers(): Promise<ApiResponse> { return this.apiCall('/api/rbac/admin-users'); }
+  async getAdminUser(userId: string): Promise<ApiResponse> { return this.apiCall(`/api/rbac/admin-users/${userId}`); }
+  async createAdminUser(userData: {
+    name: string; email: string; password: string; role_id: string;
+    department?: string; client_id?: string; is_active?: boolean; is_super_admin?: boolean;
+  }): Promise<ApiResponse> {
+    return this.apiCall('/api/rbac/admin-users', { method: 'POST', body: JSON.stringify(userData) });
+  }
+  async updateAdminUser(userId: string, userData: {
+    name?: string; email?: string; role_id?: string; department?: string; is_active?: boolean;
+  }): Promise<ApiResponse> {
+    return this.apiCall(`/api/rbac/admin-users/${userId}`, { method: 'PUT', body: JSON.stringify(userData) });
+  }
+  async deleteAdminUser(userId: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/rbac/admin-users/${userId}`, { method: 'DELETE' });
+  }
+  async assignRoleToUser(userId: string, roleId: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/rbac/admin-users/${userId}/assign-role`, {
+      method: 'PUT', body: JSON.stringify({ role_id: roleId }),
     });
   }
 
-// =============================================
-// ADMIN USER MANAGEMENT METHODS
-// =============================================
+  /* -------------------------- Health / Leaves APIs ----------------------- */
 
-// Get all admin users
-async getAdminUsers(): Promise<ApiResponse> {
-  return this.apiCall('/api/rbac/admin-users');
-}
+  async healthCheck(): Promise<ApiResponse> { return this.apiCall('/health'); }
 
-// Get single admin user
-async getAdminUser(userId: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/rbac/admin-users/${userId}`);
-}
-
-// Create admin user
-async createAdminUser(userData: {
-  name: string;
-  email: string;
-  password: string;
-  role_id: string;
-  department?: string;
-  client_id?: string;
-  is_active?: boolean;
-  is_super_admin?: boolean;
-}): Promise<ApiResponse> {
-  return this.apiCall('/api/rbac/admin-users', {
-    method: 'POST',
-    body: JSON.stringify(userData),
-  });
-}
-
-// Update admin user
-async updateAdminUser(userId: string, userData: {
-  name?: string;
-  email?: string;
-  role_id?: string;
-  department?: string;
-  is_active?: boolean;
-}): Promise<ApiResponse> {
-  return this.apiCall(`/api/rbac/admin-users/${userId}`, {
-    method: 'PUT',
-    body: JSON.stringify(userData),
-  });
-}
-
-// Delete admin user
-async deleteAdminUser(userId: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/rbac/admin-users/${userId}`, {
-    method: 'DELETE',
-  });
-}
-
-// Assign role to user (alternative method)
-async assignRoleToUser(userId: string, roleId: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/rbac/admin-users/${userId}/assign-role`, {
-    method: 'PUT',
-    body: JSON.stringify({ role_id: roleId }),
-  });
-}
-
-  // Health check
-async healthCheck(): Promise<ApiResponse> {
-    return this.apiCall('/health');
+  // Leave Types
+  async getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> { return this.apiCall('/api/leaves/types'); }
+  async createLeaveType(data: CreateLeaveTypeData): Promise<ApiResponse> {
+    return this.apiCall('/api/leaves/types', { method: 'POST', body: JSON.stringify(data) });
+  }
+  async updateLeaveType(id: string, data: Partial<CreateLeaveTypeData>): Promise<ApiResponse> {
+    return this.apiCall(`/api/leaves/types/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+  async deleteLeaveType(id: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/leaves/types/${id}`, { method: 'DELETE' });
   }
 
-// =============================================
-// LEAVE MANAGEMENT METHODS
-// =============================================
+  // Leave Requests - Employee
+  async getMyLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+    const qs = ApiService.toQueryString(filters);
+    return this.apiCall(`/api/leaves/my-requests${qs ? `?${qs}` : ''}`);
+  }
+  async submitLeaveRequest(data: CreateLeaveRequestData): Promise<ApiResponse> {
+    return this.apiCall('/api/leaves/request', { method: 'POST', body: JSON.stringify(data) });
+  }
+  async cancelLeaveRequest(requestId: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/leaves/requests/${requestId}/cancel`, { method: 'PUT' });
+  }
 
-// Leave Types
-async getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
-  return this.apiCall('/api/leaves/types');
-}
-
-async createLeaveType(data: CreateLeaveTypeData): Promise<ApiResponse> {
-  return this.apiCall('/api/leaves/types', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-async updateLeaveType(id: string, data: Partial<CreateLeaveTypeData>): Promise<ApiResponse> {
-  return this.apiCall(`/api/leaves/types/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
-}
-
-async deleteLeaveType(id: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/leaves/types/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-// Leave Requests - Employee
-async getMyLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
-  const queryParams = new URLSearchParams();
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
-      }
+  // Leave Requests - Manager/HR
+  async getAllLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+    const qs = ApiService.toQueryString(filters);
+    return this.apiCall(`/api/leaves/requests${qs ? `?${qs}` : ''}`);
+  }
+  async approveLeaveRequest(requestId: string, comments?: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/leaves/requests/${requestId}/approve`, {
+      method: 'PUT', body: JSON.stringify({ comments }),
+    });
+  }
+  async rejectLeaveRequest(requestId: string, comments: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/leaves/requests/${requestId}/reject`, {
+      method: 'PUT', body: JSON.stringify({ comments }),
+    });
+  }
+  async bulkApproveRequests(requestIds: string[], comments?: string): Promise<ApiResponse> {
+    return this.apiCall('/api/leaves/requests/bulk-approve', {
+      method: 'POST', body: JSON.stringify({ request_ids: requestIds, comments }),
     });
   }
 
-  const url = `/api/leaves/my-requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  return this.apiCall(url);
-}
-
-async submitLeaveRequest(data: CreateLeaveRequestData): Promise<ApiResponse> {
-  return this.apiCall('/api/leaves/request', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-async cancelLeaveRequest(requestId: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/leaves/requests/${requestId}/cancel`, {
-    method: 'PUT',
-  });
-}
-
-// Leave Requests - Manager/HR
-async getAllLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
-  const queryParams = new URLSearchParams();
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
-      }
-    });
+  // Dashboard & Analytics
+  async getLeaveDashboard(date?: string): Promise<ApiResponse> {
+    return this.apiCall(`/api/leaves/dashboard${date ? `?date=${date}` : ''}`);
+  }
+  async getEmployeeLeaveBalance(employeeId: string, year?: number): Promise<ApiResponse> {
+    return this.apiCall(`/api/leaves/balance/${employeeId}${year ? `?year=${year}` : ''}`);
+  }
+  async getLeaveAnalytics(filters?: {
+    start_date?: string; end_date?: string; department_id?: string; leave_type_id?: string;
+  }): Promise<ApiResponse> {
+    const qs = ApiService.toQueryString(filters);
+    return this.apiCall(`/api/leaves/analytics${qs ? `?${qs}` : ''}`);
   }
 
-  const url = `/api/leaves/requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  return this.apiCall(url);
-}
+  // Export
+  async exportLeaveData(filters?: {
+    start_date?: string;
+    end_date?: string;
+    format?: 'json' | 'csv' | 'xlsx';
+    status?: string;
+    department_id?: string;
+  }): Promise<ApiResponse> {
+    const qs = ApiService.toQueryString(filters);
+    const url = `/api/leaves/export${qs ? `?${qs}` : ''}`;
 
-async approveLeaveRequest(requestId: string, comments?: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/leaves/requests/${requestId}/approve`, {
-    method: 'PUT',
-    body: JSON.stringify({ comments }),
-  });
-}
-
-async rejectLeaveRequest(requestId: string, comments: string): Promise<ApiResponse> {
-  return this.apiCall(`/api/leaves/requests/${requestId}/reject`, {
-    method: 'PUT',
-    body: JSON.stringify({ comments }),
-  });
-}
-
-async bulkApproveRequests(requestIds: string[], comments?: string): Promise<ApiResponse> {
-  return this.apiCall('/api/leaves/requests/bulk-approve', {
-    method: 'POST',
-    body: JSON.stringify({ request_ids: requestIds, comments }),
-  });
-}
-
-// Dashboard & Analytics
-async getLeaveDashboard(date?: string): Promise<ApiResponse> {
-  const url = `/api/leaves/dashboard${date ? `?date=${date}` : ''}`;
-  return this.apiCall(url);
-}
-
-async getEmployeeLeaveBalance(employeeId: string, year?: number): Promise<ApiResponse> {
-  const url = `/api/leaves/balance/${employeeId}${year ? `?year=${year}` : ''}`;
-  return this.apiCall(url);
-}
-
-async getLeaveAnalytics(filters?: {
-  start_date?: string;
-  end_date?: string;
-  department_id?: string;
-  leave_type_id?: string;
-}): Promise<ApiResponse> {
-  const queryParams = new URLSearchParams();
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
-      }
-    });
-  }
-
-  const url = `/api/leaves/analytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  return this.apiCall(url);
-}
-
-// Export
-async exportLeaveData(filters?: {
-  start_date?: string;
-  end_date?: string;
-  format?: 'json' | 'csv' | 'xlsx';
-  status?: string;
-  department_id?: string;
-}): Promise<ApiResponse> {
-  const queryParams = new URLSearchParams();
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
-      }
-    });
-  }
-
-  const url = `/api/leaves/export${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  
-  if (filters?.format === 'csv') {
-    // For CSV downloads, handle blob response
-    try {
-      const response = await fetch(`${this.baseURL}${url}`, {
-        headers: this.getHeaders(),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Export failed');
-      }
-      
+    if (filters?.format === 'csv') {
+      const response = await fetch(`${this.baseURL}${url}`, { headers: this.getHeaders() });
+      if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -817,84 +544,64 @@ async exportLeaveData(filters?: {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(downloadUrl);
-      
       return { success: true, message: 'Export downloaded successfully' };
-    } catch (error) {
-      throw error;
     }
-  } else {
+
     return this.apiCall(url);
   }
-}
 
-// =============================================
-// UTILITY METHODS FOR ATTENDANCE
-// =============================================
+  /* ---------------------------- UI Utilities ----------------------------- */
 
-/**
- * Format time for display (12-hour format)
- */
-formatTime(time?: string): string {
-  if (!time) return 'Not Recorded';
-  
-  try {
-    const [hours, minutes] = time.split(':');
-    const hour24 = parseInt(hours);
-    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
-    const ampm = hour24 < 12 ? 'AM' : 'PM';
-    return `${hour12}:${minutes} ${ampm}`;
-  } catch (error) {
-    return time;
+  formatTime(time?: string): string {
+    if (!time) return 'Not Recorded';
+    try {
+      const [hours, minutes] = time.split(':');
+      const hour24 = parseInt(hours);
+      const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+      const ampm = hour24 < 12 ? 'AM' : 'PM';
+      return `${hour12}:${minutes} ${ampm}`;
+    } catch {
+      return time;
+    }
+  }
+
+  formatDate(date: string): string {
+    try {
+      return new Date(date).toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return date;
+    }
+  }
+
+  calculateHours(checkIn?: string, checkOut?: string): number {
+    if (!checkIn || !checkOut) return 0;
+    try {
+      const checkInTime = new Date(`2000-01-01 ${checkIn}`);
+      const checkOutTime = new Date(`2000-01-01 ${checkOut}`);
+      const diffMs = checkOutTime.getTime() - checkInTime.getTime();
+      return Math.max(0, diffMs / (1000 * 60 * 60));
+    } catch {
+      return 0;
+    }
+  }
+
+  getStatusBadgeColor(status: string): string {
+    switch ((status || '').toLowerCase()) {
+      case 'present': return 'success';
+      case 'late': return 'warning';
+      case 'absent': return 'failure';
+      case 'half_day': return 'info';
+      case 'on_leave': return 'purple';
+      default: return 'gray';
+    }
   }
 }
 
-/**
- * Format date for display
- */
-formatDate(date: string): string {
-  try {
-    return new Date(date).toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  } catch (error) {
-    return date;
-  }
-}
-
-/**
- * Calculate working hours between two times
- */
-calculateHours(checkIn?: string, checkOut?: string): number {
-  if (!checkIn || !checkOut) return 0;
-  
-  try {
-    const checkInTime = new Date(`2000-01-01 ${checkIn}`);
-    const checkOutTime = new Date(`2000-01-01 ${checkOut}`);
-    const diffMs = checkOutTime.getTime() - checkInTime.getTime();
-    return Math.max(0, diffMs / (1000 * 60 * 60));
-  } catch (error) {
-    return 0;
-  }
-}
-
-/**
- * Get attendance status badge color for UI
- */
-getStatusBadgeColor(status: string): string {
-  switch (status.toLowerCase()) {
-    case 'present': return 'success';
-    case 'late': return 'warning';
-    case 'absent': return 'failure';
-    case 'half_day': return 'info';
-    case 'on_leave': return 'purple';
-    default: return 'gray';
-  }
-}
-}
-
-// Create and export a singleton instance
+/* Singleton */
 export const apiService = new ApiService();
 export default apiService;
