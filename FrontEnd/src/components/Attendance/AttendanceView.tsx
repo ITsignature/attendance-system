@@ -1,5 +1,3 @@
-// components/Attendance/AttendanceView.tsx
-
 import React, { useState, useEffect } from 'react';
 import { 
   Table, 
@@ -155,7 +153,12 @@ const AttendanceView: React.FC = () => {
     }
   };
 
-  const getArrivalStatusBadge = (status: string) => {
+  // FIXED: Added null safety checks
+  const getArrivalStatusBadge = (status: string | null | undefined) => {
+    if (!status) {
+      return <Badge color="gray">Unknown</Badge>;
+    }
+    
     const colors: { [key: string]: string } = {
       'on_time': 'success',
       'late': 'warning', 
@@ -164,7 +167,12 @@ const AttendanceView: React.FC = () => {
     return <Badge color={colors[status] || 'gray'}>{status.replace('_', ' ')}</Badge>;
   };
 
-  const getWorkDurationBadge = (duration: string) => {
+  // FIXED: Added null safety checks
+  const getWorkDurationBadge = (duration: string | null | undefined) => {
+    if (!duration) {
+      return <Badge color="gray">Unknown</Badge>;
+    }
+    
     const colors: { [key: string]: string } = {
       'full_day': 'success',
       'half_day': 'info',
@@ -307,8 +315,8 @@ const AttendanceView: React.FC = () => {
                     <Table.Row key={record.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
                       <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                         <div>
-                          <div className="font-semibold">{record.employee_name}</div>
-                          <div className="text-sm text-gray-500">{record.employee_code}</div>
+                          <div className="font-semibold">{record.employee_name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{record.employee_code || 'N/A'}</div>
                         </div>
                       </Table.Cell>
                       

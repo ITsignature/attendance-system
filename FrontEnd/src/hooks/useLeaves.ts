@@ -101,12 +101,14 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.getLeaveTypes();
       
       if (response.success && response.data) {
-        setLeaveTypes(response.data);
+        setLeaveTypes(Array.isArray(response.data) ? response.data : []);
       } else {
         setError(response.message || 'Failed to fetch leave types');
+        setLeaveTypes([]);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch leave types');
+      setLeaveTypes([]);
     } finally {
       setLoading(false);
     }
@@ -120,16 +122,26 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.getAllLeaveRequests(filters);
       
       if (response.success && response.data) {
-        setLeaveRequests(response.data);
+        // FIXED: Handle both data structures from backend
+        const requests = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data.requests || []);
         
+        setLeaveRequests(requests);
+        
+        // Handle pagination from either structure
         if (response.pagination) {
           setPagination(response.pagination);
+        } else if (response.data.pagination) {
+          setPagination(response.data.pagination);
         }
       } else {
         setError(response.message || 'Failed to fetch leave requests');
+        setLeaveRequests([]); // FIXED: Ensure it's always an array
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch leave requests');
+      setLeaveRequests([]); // FIXED: Ensure it's always an array
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -144,16 +156,26 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.getMyLeaveRequests(filters);
       
       if (response.success && response.data) {
-        setMyLeaveRequests(response.data);
+        // FIXED: Handle both data structures from backend
+        const requests = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data.requests || []);
         
+        setMyLeaveRequests(requests);
+        
+        // Handle pagination from either structure
         if (response.pagination) {
           setPagination(response.pagination);
+        } else if (response.data.pagination) {
+          setPagination(response.data.pagination);
         }
       } else {
         setError(response.message || 'Failed to fetch my leave requests');
+        setMyLeaveRequests([]); // FIXED: Ensure it's always an array
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch my leave requests');
+      setMyLeaveRequests([]); // FIXED: Ensure it's always an array
     } finally {
       setLoading(false);
     }
@@ -233,11 +255,16 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.approveLeaveRequest(requestId, comments);
       
       if (response.success) {
-        // Update the request in local state
+        // Update the request in local state - FIXED: Handle different data structures
         setLeaveRequests(prev => 
           prev.map(req => 
             req.id === requestId 
-              ? { ...req, details: { ...req.details, status: 'approved', reviewerComments: comments } }
+              ? { 
+                  ...req, 
+                  status: 'approved',
+                  reviewer_comments: comments,
+                  details: req.details ? { ...req.details, status: 'approved', reviewerComments: comments } : undefined
+                }
               : req
           )
         );
@@ -268,11 +295,16 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.rejectLeaveRequest(requestId, comments);
       
       if (response.success) {
-        // Update the request in local state
+        // Update the request in local state - FIXED: Handle different data structures
         setLeaveRequests(prev => 
           prev.map(req => 
             req.id === requestId 
-              ? { ...req, details: { ...req.details, status: 'rejected', reviewerComments: comments } }
+              ? { 
+                  ...req, 
+                  status: 'rejected',
+                  reviewer_comments: comments,
+                  details: req.details ? { ...req.details, status: 'rejected', reviewerComments: comments } : undefined
+                }
               : req
           )
         );
@@ -298,11 +330,15 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.cancelLeaveRequest(requestId);
       
       if (response.success) {
-        // Update the request in local state
+        // Update the request in local state - FIXED: Handle different data structures
         setMyLeaveRequests(prev => 
           prev.map(req => 
             req.id === requestId 
-              ? { ...req, details: { ...req.details, status: 'cancelled' } }
+              ? { 
+                  ...req, 
+                  status: 'cancelled',
+                  details: req.details ? { ...req.details, status: 'cancelled' } : undefined
+                }
               : req
           )
         );
@@ -397,11 +433,16 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.bulkApproveRequests(requestIds, comments);
       
       if (response.success) {
-        // Update multiple requests in local state
+        // Update multiple requests in local state - FIXED: Handle different data structures
         setLeaveRequests(prev => 
           prev.map(req => 
             requestIds.includes(req.id)
-              ? { ...req, details: { ...req.details, status: 'approved', reviewerComments: comments } }
+              ? { 
+                  ...req, 
+                  status: 'approved',
+                  reviewer_comments: comments,
+                  details: req.details ? { ...req.details, status: 'approved', reviewerComments: comments } : undefined
+                }
               : req
           )
         );
@@ -450,18 +491,48 @@ export const useLeaves = (): UseLeavesReturn => {
       setRefreshing(true);
       setError(null);
       
-      // Fetch all data concurrently
+      // Fetch all data concurrently - call the API service directly to avoid dependency issues
       await Promise.allSettled([
-        fetchLeaveTypes(),
-        fetchLeaveDashboard(),
-        fetchLeaveRequests()
+        (async () => {
+          try {
+            const response = await leaveApiService.getLeaveTypes();
+            if (response.success && response.data) {
+              setLeaveTypes(Array.isArray(response.data) ? response.data : []);
+            }
+          } catch (error) {
+            console.error('Failed to fetch leave types:', error);
+          }
+        })(),
+        (async () => {
+          try {
+            const response = await leaveApiService.getLeaveDashboard();
+            if (response.success && response.data) {
+              setDashboard(response.data);
+            }
+          } catch (error) {
+            console.error('Failed to fetch dashboard:', error);
+          }
+        })(),
+        (async () => {
+          try {
+            const response = await leaveApiService.getAllLeaveRequests();
+            if (response.success && response.data) {
+              const requests = Array.isArray(response.data) 
+                ? response.data 
+                : (response.data.requests || []);
+              setLeaveRequests(requests);
+            }
+          } catch (error) {
+            console.error('Failed to fetch leave requests:', error);
+          }
+        })()
       ]);
     } catch (err: any) {
       setError(err.message || 'Failed to refresh data');
     } finally {
       setRefreshing(false);
     }
-  }, [fetchLeaveTypes, fetchLeaveDashboard, fetchLeaveRequests]);
+  }, []); // No dependencies needed since we call API service directly
 
   // =============================================
   // RETURN HOOK INTERFACE
@@ -578,29 +649,55 @@ export const useLeaveManagement = () => {
     clearError
   } = useLeaves();
 
-  // Auto-fetch data on mount
-  useEffect(() => {
-    refreshAll();
-  }, []);
+  const [initialized, setInitialized] = useState(false);
 
-  // Helper function to get pending requests
+  // Auto-fetch data on mount - FIXED: Use initialized flag to prevent infinite loop
+  useEffect(() => {
+    if (!initialized) {
+      setInitialized(true);
+      refreshAll();
+    }
+  }, [initialized, refreshAll]);
+
+  // Helper function to get pending requests - FIXED: Handle different data structures
   const getPendingRequests = useCallback(() => {
-    return leaveRequests.filter(req => req.details.status === 'pending');
+    // FIXED: Ensure leaveRequests is an array before filtering
+    if (!Array.isArray(leaveRequests)) {
+      console.warn('leaveRequests is not an array:', leaveRequests);
+      return [];
+    }
+    
+    return leaveRequests.filter(req => {
+      // FIXED: Handle different data structures
+      const status = req.status || req.details?.status;
+      return status === 'pending';
+    });
   }, [leaveRequests]);
 
-  // Helper function to get urgent requests (starting within 7 days)
+  // Helper function to get urgent requests (starting within 7 days) - FIXED: Handle different data structures
   const getUrgentRequests = useCallback(() => {
+    // FIXED: Ensure leaveRequests is an array before filtering
+    if (!Array.isArray(leaveRequests)) {
+      console.warn('leaveRequests is not an array:', leaveRequests);
+      return [];
+    }
+    
     const sevenDaysFromNow = new Date();
     sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
     
-    return leaveRequests.filter(req => 
-      req.details.status === 'pending' && 
-      new Date(req.dates.start) <= sevenDaysFromNow
-    );
+    return leaveRequests.filter(req => {
+      // FIXED: Handle different data structures
+      const status = req.status || req.details?.status;
+      const startDate = req.start_date || req.dates?.start;
+      
+      return status === 'pending' && 
+             startDate && 
+             new Date(startDate) <= sevenDaysFromNow;
+    });
   }, [leaveRequests]);
 
   return {
-    requests: leaveRequests,
+    requests: Array.isArray(leaveRequests) ? leaveRequests : [], // FIXED: Always return array
     dashboard,
     leaveTypes,
     loading,
@@ -622,13 +719,17 @@ export const useLeaveManagement = () => {
     getPendingRequests,
     getUrgentRequests,
     
-    // Statistics
+    // Statistics - FIXED: Handle different data structures
     stats: {
-      total: leaveRequests.length,
+      total: Array.isArray(leaveRequests) ? leaveRequests.length : 0,
       pending: getPendingRequests().length,
       urgent: getUrgentRequests().length,
-      approved: leaveRequests.filter(req => req.details.status === 'approved').length,
-      rejected: leaveRequests.filter(req => req.details.status === 'rejected').length
+      approved: Array.isArray(leaveRequests) 
+        ? leaveRequests.filter(req => (req.status || req.details?.status) === 'approved').length 
+        : 0,
+      rejected: Array.isArray(leaveRequests) 
+        ? leaveRequests.filter(req => (req.status || req.details?.status) === 'rejected').length 
+        : 0
     }
   };
 };
