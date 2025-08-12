@@ -1,39 +1,36 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Badge, Alert, Spinner, Modal, TextInput, Textarea } from "flowbite-react";
-import { FaArrowLeft, FaCheck, FaTimes, FaEye, FaDownload, FaFilter } from "react-icons/fa";
+import { Table, Button, Badge, Alert, Spinner, Modal, Textarea, Select } from "flowbite-react";
+import { FaArrowLeft, FaCheck, FaTimes, FaEye, FaFilter, FaPlus } from "react-icons/fa";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLeaveManagement } from "../../hooks/useLeaves";
-import leaveApiService from "../../services/leaveApi";
 import { LeaveRequest } from "../../services/leaveApi";
+import LeaveRequestForm from "./LeaveRequestForm";
 
 // =============================================
-// INTERFACES
+// INTERFACES (SIMPLIFIED)
 // =============================================
 
 interface ApprovalModalData {
-  request: LeaveRequest;
+  request: LeaveRequest | null;
   isOpen: boolean;
   type: 'approve' | 'reject';
 }
 
-interface FilterState {
+interface SimpleFilters {
   status: string;
-  department: string;
-  leaveType: string;
   startDate: string;
   endDate: string;
-  employeeName: string;
 }
 
 // =============================================
-// MAIN COMPONENT
+// MAIN COMPONENT (SIMPLIFIED)
 // =============================================
 
 const LeaveRequestsManagement: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // Hook for leave management
+  // Hook for leave management (using cleaned hook)
   const {
     requests,
     loading,
@@ -42,75 +39,47 @@ const LeaveRequestsManagement: React.FC = () => {
     stats,
     approveRequest,
     rejectRequest,
-    bulkApprove,
-    exportData,
     fetchRequests,
     clearError
   } = useLeaveManagement();
 
-  // Local state
+  // Local state (SIMPLIFIED)
   const [activeTab, setActiveTab] = useState<string>(searchParams.get('filter') || 'pending');
-  const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<SimpleFilters>({
+    status: '',
+    startDate: '',
+    endDate: ''
+  });
+  
+  // Approval/Rejection modal
   const [approvalModal, setApprovalModal] = useState<ApprovalModalData>({
-    request: {} as LeaveRequest,
+    request: null,
     isOpen: false,
     type: 'approve'
   });
   const [comments, setComments] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
-    status: activeTab,
-    department: '',
-    leaveType: '',
-    startDate: '',
-    endDate: '',
-    employeeName: ''
-  });
 
   // =============================================
   // EFFECTS
   // =============================================
 
   useEffect(() => {
-    // Update filters when tab changes
-    setFilters(prev => ({ ...prev, status: activeTab }));
-    fetchRequestsWithFilters();
-  }, [activeTab]);
-
-  useEffect(() => {
-    // Update URL when tab changes
-    setSearchParams({ filter: activeTab });
-  }, [activeTab, setSearchParams]);
+    // Fetch requests when tab or filters change
+    const filterParams = {
+      status: activeTab === 'all' ? '' : activeTab,
+      ...filters
+    };
+    fetchRequests(filterParams);
+  }, [activeTab, filters, fetchRequests]);
 
   // =============================================
-  // DATA FETCHING
+  // HANDLERS (SIMPLIFIED)
   // =============================================
 
-  const fetchRequestsWithFilters = async () => {
-    const filterParams: any = {};
-    
-    if (filters.status && filters.status !== 'all') {
-      filterParams.status = filters.status;
-    }
-    if (filters.department) {
-      filterParams.department_id = filters.department;
-    }
-    if (filters.leaveType) {
-      filterParams.leave_type_id = filters.leaveType;
-    }
-    if (filters.startDate) {
-      filterParams.start_date = filters.startDate;
-    }
-    if (filters.endDate) {
-      filterParams.end_date = filters.endDate;
-    }
-
-    await fetchRequests(filterParams);
+  const handleCreateRequest = () => {
+    navigate("/leave-request/new");
   };
-
-  // =============================================
-  // HANDLERS
-  // =============================================
 
   const handleApprove = (request: LeaveRequest) => {
     setApprovalModal({
@@ -131,12 +100,12 @@ const LeaveRequestsManagement: React.FC = () => {
   };
 
   const handleConfirmAction = async () => {
-    if (!approvalModal.request.id) return;
+    if (!approvalModal.request?.id) return;
 
     let success = false;
     
     if (approvalModal.type === 'approve') {
-      success = await approveRequest(approvalModal.request.id, comments);
+      success = await approveRequest(approvalModal.request.id, comments || undefined);
     } else {
       if (!comments.trim()) {
         alert('Rejection reason is required');
@@ -146,276 +115,158 @@ const LeaveRequestsManagement: React.FC = () => {
     }
 
     if (success) {
-      setApprovalModal({ request: {} as LeaveRequest, isOpen: false, type: 'approve' });
+      setApprovalModal({ request: null, isOpen: false, type: 'approve' });
       setComments('');
-      setSelectedRequests([]);
     }
   };
 
-  const handleBulkApprove = async () => {
-    if (selectedRequests.length === 0) {
-      alert('Please select requests to approve');
-      return;
-    }
-
-    const success = await bulkApprove(selectedRequests, 'Bulk approved');
-    if (success) {
-      setSelectedRequests([]);
-    }
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setSearchParams({ filter: tab });
   };
 
-  const handleSelectRequest = (requestId: string) => {
-    setSelectedRequests(prev => 
-      prev.includes(requestId) 
-        ? prev.filter(id => id !== requestId)
-        : [...prev, requestId]
-    );
-  };
-
-  const handleSelectAll = () => {
-    const filteredRequests = getFilteredRequests();
-    if (selectedRequests.length === filteredRequests.length) {
-      setSelectedRequests([]);
-    } else {
-      setSelectedRequests(filteredRequests.map(req => req.id));
-    }
-  };
-
-  const handleExport = async () => {
-    await exportData({
-      ...filters,
-      format: 'csv'
-    });
-  };
-
-  const handleFilterChange = (key: keyof FilterState, value: string) => {
+  const handleFilterChange = (key: keyof SimpleFilters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const applyFilters = () => {
-    fetchRequestsWithFilters();
-    setShowFilters(false);
   };
 
   const clearFilters = () => {
     setFilters({
-      status: activeTab,
-      department: '',
-      leaveType: '',
+      status: '',
       startDate: '',
-      endDate: '',
-      employeeName: ''
+      endDate: ''
     });
-    fetchRequestsWithFilters();
   };
 
   // =============================================
-  // UTILITY FUNCTIONS
+  // UTILITY FUNCTIONS (SIMPLIFIED)
   // =============================================
 
-  const getFilteredRequests = (): LeaveRequest[] => {
-    let filtered = requests;
-
-    // Filter by active tab
-    if (activeTab !== 'all') {
-      filtered = filtered.filter(req => req.details.status === activeTab);
-    }
-
-    // Filter by employee name
-    if (filters.employeeName) {
-      const searchTerm = filters.employeeName.toLowerCase();
-      filtered = filtered.filter(req => 
-        req.employee.name.toLowerCase().includes(searchTerm) ||
-        req.employee.code.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    return filtered;
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
   };
 
   const getStatusBadge = (status: string) => {
-    const config = {
-      pending: { color: 'warning', icon: '⏳' },
-      approved: { color: 'success', icon: '✅' },
-      rejected: { color: 'failure', icon: '❌' },
-      cancelled: { color: 'gray', icon: '🚫' }
+    const statusConfig = {
+      pending: { color: 'warning', label: 'Pending' },
+      approved: { color: 'success', label: 'Approved' },
+      rejected: { color: 'failure', label: 'Rejected' },
+      cancelled: { color: 'gray', label: 'Cancelled' }
     };
     
-    const { color, icon } = config[status as keyof typeof config] || { color: 'gray', icon: '❓' };
+    const config = statusConfig[status as keyof typeof statusConfig] || { color: 'gray', label: status };
     
     return (
-      <Badge color={color} className="flex items-center gap-1">
-        <span>{icon}</span>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <Badge color={config.color as any} size="sm">
+        {config.label}
       </Badge>
     );
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const calculateDays = (startDate: string, endDate: string) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
   };
 
   const canApproveOrReject = (status: string) => {
     return status === 'pending';
   };
 
-  const getUrgencyBadge = (startDate: string, status: string) => {
-    if (status !== 'pending') return null;
+  const getFilteredRequests = () => {
+    if (!Array.isArray(requests)) return [];
     
-    const daysUntilStart = Math.ceil((new Date(startDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysUntilStart <= 1) {
-      return <Badge color="red" size="xs">Urgent</Badge>;
-    } else if (daysUntilStart <= 7) {
-      return <Badge color="yellow" size="xs">High Priority</Badge>;
-    }
-    
-    return null;
+    return requests.filter(request => {
+      const status = request.status || request.details?.status || '';
+      
+      // Tab filter
+      if (activeTab !== 'all' && status !== activeTab) {
+        return false;
+      }
+      
+      return true;
+    });
   };
 
   // =============================================
-  // RENDER HELPERS
+  // RENDER FUNCTIONS
   // =============================================
 
+  const renderTabs = () => (
+    <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+      <nav className="-mb-px flex space-x-8">
+        {[
+          { key: 'pending', label: 'Pending', count: stats.pending },
+          { key: 'approved', label: 'Approved', count: stats.approved },
+          { key: 'rejected', label: 'Rejected', count: stats.rejected },
+          { key: 'all', label: 'All', count: stats.total }
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => handleTabChange(tab.key)}
+            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+              activeTab === tab.key
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            {tab.label}
+            {tab.count > 0 && (
+              <span className="ml-2 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300 py-0.5 px-2 rounded-full text-xs">
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+
   const renderFilters = () => (
-    <Modal show={showFilters} onClose={() => setShowFilters(false)}>
-      <Modal.Header>Advanced Filters</Modal.Header>
-      <Modal.Body>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Employee Name/Code
-              </label>
-              <TextInput
-                placeholder="Search by name or employee code"
-                value={filters.employeeName}
-                onChange={(e) => handleFilterChange('employeeName', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Department
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filters.department}
-                onChange={(e) => handleFilterChange('department', e.target.value)}
-              >
-                <option value="">All Departments</option>
-                <option value="hr">Human Resources</option>
-                <option value="engineering">Engineering</option>
-                <option value="marketing">Marketing</option>
-                <option value="sales">Sales</option>
-                <option value="finance">Finance</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Leave Type
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filters.leaveType}
-                onChange={(e) => handleFilterChange('leaveType', e.target.value)}
-              >
-                <option value="">All Leave Types</option>
-                <option value="annual">Annual Leave</option>
-                <option value="sick">Sick Leave</option>
-                <option value="personal">Personal Leave</option>
-                <option value="emergency">Emergency Leave</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Status
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-              >
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Start Date From
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filters.startDate}
-                onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Start Date To
-              </label>
-              <input
-                type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filters.endDate}
-                onChange={(e) => handleFilterChange('endDate', e.target.value)}
-              />
-            </div>
+    <div className={`mb-4 ${showFilters ? 'block' : 'hidden'}`}>
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Start Date
+            </label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => handleFilterChange('startDate', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
           </div>
-        </div>
-      </Modal.Body>
-      <Modal.Footer>
-        <div className="flex justify-between w-full">
-          <Button color="gray" onClick={clearFilters}>
-            Clear All
-          </Button>
-          <div className="flex gap-2">
-            <Button color="gray" onClick={() => setShowFilters(false)}>
-              Cancel
-            </Button>
-            <Button color="blue" onClick={applyFilters}>
-              Apply Filters
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              End Date
+            </label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <Button color="gray" onClick={clearFilters}>
+              Clear Filters
             </Button>
           </div>
         </div>
-      </Modal.Footer>
-    </Modal>
+      </div>
+    </div>
   );
 
   const renderApprovalModal = () => (
-    <Modal show={approvalModal.isOpen} onClose={() => setApprovalModal({ request: {} as LeaveRequest, isOpen: false, type: 'approve' })}>
+    <Modal show={approvalModal.isOpen} onClose={() => setApprovalModal({ request: null, isOpen: false, type: 'approve' })}>
       <Modal.Header>
         {approvalModal.type === 'approve' ? 'Approve' : 'Reject'} Leave Request
       </Modal.Header>
       <Modal.Body>
-        {approvalModal.request.employee && (
+        {approvalModal.request && (
           <div className="space-y-4">
             <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
               <h4 className="font-medium text-gray-900 dark:text-white mb-2">Request Details</h4>
               <div className="space-y-2 text-sm">
-                <div><strong>Employee:</strong> {approvalModal.request.employee.name}</div>
-                <div><strong>Leave Type:</strong> {approvalModal.request.leaveType.name}</div>
-                <div><strong>Duration:</strong> {leaveApiService.formatLeaveDuration(
-                  approvalModal.request.dates.start,
-                  approvalModal.request.dates.end,
-                  approvalModal.request.dates.daysRequested
-                )}</div>
-                <div><strong>Reason:</strong> {approvalModal.request.details.reason}</div>
+                <div><strong>Employee:</strong> {approvalModal.request.employee?.name || 'N/A'}</div>
+                <div><strong>Leave Type:</strong> {approvalModal.request.leaveType?.name || 'N/A'}</div>
+                <div><strong>Duration:</strong> {formatDate(approvalModal.request.start_date || '')} - {formatDate(approvalModal.request.end_date || '')}</div>
+                <div><strong>Days:</strong> {approvalModal.request.days_requested || 'N/A'}</div>
+                <div><strong>Reason:</strong> {approvalModal.request.reason || 'N/A'}</div>
               </div>
             </div>
             
@@ -438,7 +289,7 @@ const LeaveRequestsManagement: React.FC = () => {
         <div className="flex justify-end gap-2">
           <Button 
             color="gray" 
-            onClick={() => setApprovalModal({ request: {} as LeaveRequest, isOpen: false, type: 'approve' })}
+            onClick={() => setApprovalModal({ request: null, isOpen: false, type: 'approve' })}
           >
             Cancel
           </Button>
@@ -463,57 +314,6 @@ const LeaveRequestsManagement: React.FC = () => {
 
   return (
     <div className="p-6 rounded-xl shadow-md bg-white dark:bg-darkgray space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Button
-            color="gray"
-            size="sm"
-            onClick={() => navigate('/leaves')}
-            className="flex items-center gap-2"
-          >
-            <FaArrowLeft className="w-4 h-4" />
-            Back to Leaves
-          </Button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Leave Requests Management</h1>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {selectedRequests.length > 0 && activeTab === 'pending' && (
-            <Button
-              color="success"
-              size="sm"
-              onClick={handleBulkApprove}
-              disabled={submitting}
-              className="flex items-center gap-2"
-            >
-              {submitting ? <Spinner size="sm" /> : <FaCheck />}
-              Bulk Approve ({selectedRequests.length})
-            </Button>
-          )}
-          
-          <Button
-            color="blue"
-            size="sm"
-            onClick={() => setShowFilters(true)}
-            className="flex items-center gap-2"
-          >
-            <FaFilter className="w-4 h-4" />
-            Filters
-          </Button>
-          
-          <Button
-            color="green"
-            size="sm"
-            onClick={handleExport}
-            className="flex items-center gap-2"
-          >
-            <FaDownload className="w-4 h-4" />
-            Export
-          </Button>
-        </div>
-      </div>
-
       {/* Error Display */}
       {error && (
         <Alert color="failure" className="mb-4">
@@ -526,173 +326,128 @@ const LeaveRequestsManagement: React.FC = () => {
         </Alert>
       )}
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Requests</h3>
-          <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">{stats.total}</p>
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Button
+            color="gray"
+            size="sm"
+            onClick={() => navigate("/leaves")}
+          >
+            <FaArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </Button>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Leave Requests Management
+          </h1>
         </div>
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pending</h3>
-          <p className="text-2xl font-bold text-yellow-800 dark:text-yellow-300">{stats.pending}</p>
-          {stats.urgent > 0 && (
-            <p className="text-xs text-red-600 dark:text-red-400">({stats.urgent} urgent)</p>
-          )}
-        </div>
-        <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-green-600 dark:text-green-400">Approved</h3>
-          <p className="text-2xl font-bold text-green-800 dark:text-green-300">{stats.approved}</p>
-        </div>
-        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-red-600 dark:text-red-400">Rejected</h3>
-          <p className="text-2xl font-bold text-red-800 dark:text-red-300">{stats.rejected}</p>
+
+        <div className="flex items-center gap-3">
+          {/* CREATE NEW REQUEST BUTTON - PRIMARY ADMIN ACTION */}
+          <Button
+            color="purple"
+            className="flex items-center gap-2"
+            onClick={handleCreateRequest}
+          >
+            <FaPlus className="w-4 h-4" />
+            Create New Request
+          </Button>
+
+          <Button
+            color="gray"
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <FaFilter className="w-4 h-4 mr-2" />
+            Filters
+          </Button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
-          {[
-            { key: 'pending', label: 'Pending Requests', count: stats.pending },
-            { key: 'approved', label: 'Approved Leaves', count: stats.approved },
-            { key: 'rejected', label: 'Rejected Leaves', count: stats.rejected },
-            { key: 'all', label: 'All Requests', count: stats.total }
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                activeTab === tab.key
-                  ? 'border-purple-500 text-purple-600 dark:text-purple-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400'
-              }`}
-            >
-              {tab.label}
-              <Badge color={activeTab === tab.key ? 'purple' : 'gray'} size="sm">
-                {tab.count}
-              </Badge>
-            </button>
-          ))}
-        </nav>
-      </div>
+      {renderTabs()}
 
-      {/* Content */}
-      <div className="space-y-4">
+      {/* Filters */}
+      {renderFilters()}
+
+      {/* Table */}
+      <div className="overflow-x-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Spinner size="xl" />
-            <span className="ml-2">Loading requests...</span>
           </div>
         ) : filteredRequests.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-6xl mb-4">📋</div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              No {activeTab} requests found
+              No {activeTab !== 'all' ? activeTab : ''} requests found
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
-              {activeTab === 'pending' && "All caught up! No pending requests to review."}
-              {activeTab === 'approved' && "No approved leave requests found."}
-              {activeTab === 'rejected' && "No rejected leave requests found."}
-              {activeTab === 'all' && "No leave requests found."}
+              {activeTab === 'pending' ? 'All caught up! No pending requests to review.' : 'No requests match your current filter.'}
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <Table.Head>
-                <Table.HeadCell className="p-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedRequests.length === filteredRequests.length && filteredRequests.length > 0}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                </Table.HeadCell>
-                <Table.HeadCell>Employee</Table.HeadCell>
-                <Table.HeadCell>Leave Type</Table.HeadCell>
-                <Table.HeadCell>Duration</Table.HeadCell>
-                <Table.HeadCell>Status</Table.HeadCell>
-                <Table.HeadCell>Applied</Table.HeadCell>
-                <Table.HeadCell>Actions</Table.HeadCell>
-              </Table.Head>
-              <Table.Body className="divide-y">
-                {filteredRequests.map((request) => (
+          <Table hoverable>
+            <Table.Head>
+              <Table.HeadCell>Employee</Table.HeadCell>
+              <Table.HeadCell>Leave Type</Table.HeadCell>
+              <Table.HeadCell>Duration</Table.HeadCell>
+              <Table.HeadCell>Days</Table.HeadCell>
+              <Table.HeadCell>Status</Table.HeadCell>
+              <Table.HeadCell>Applied Date</Table.HeadCell>
+              <Table.HeadCell>Actions</Table.HeadCell>
+            </Table.Head>
+            <Table.Body className="divide-y">
+              {filteredRequests.map((request) => {
+                const status = request.status || request.details?.status || '';
+                
+                return (
                   <Table.Row key={request.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                    <Table.Cell className="p-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedRequests.includes(request.id)}
-                        onChange={() => handleSelectRequest(request.id)}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0">
-                          {request.employee.avatar ? (
-                            <img 
-                              src={request.employee.avatar} 
-                              alt={request.employee.name}
-                              className="w-10 h-10 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                              <span className="text-gray-600 dark:text-gray-300 font-medium text-sm">
-                                {request.employee.name.split(' ').map(n => n[0]).join('')}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            {request.employee.name}
-                          </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {request.employee.code} • {request.employee.department}
-                          </p>
-                        </div>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{request.leaveType.name}</span>
-                        {request.leaveType.isPaid && (
-                          <Badge color="green" size="xs">Paid</Badge>
-                        )}
-                      </div>
-                    </Table.Cell>
                     <Table.Cell>
                       <div>
-                        <p className="font-medium">
-                          {formatDate(request.dates.start)} - {formatDate(request.dates.end)}
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {request.dates.daysRequested} day{request.dates.daysRequested > 1 ? 's' : ''}
-                        </p>
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          {request.employee?.name || 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {request.employee?.code || ''} • {request.employee?.department || ''}
+                        </div>
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <div className="flex items-center gap-2">
-                        {getStatusBadge(request.details.status)}
-                        {getUrgencyBadge(request.dates.start, request.details.status)}
+                      <span className="text-sm text-gray-900 dark:text-white">
+                        {request.leaveType?.name || request.leave_type_name || 'N/A'}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="text-sm">
+                        <div>{formatDate(request.start_date || request.dates?.start || '')}</div>
+                        <div className="text-gray-500">to {formatDate(request.end_date || request.dates?.end || '')}</div>
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <p className="text-sm">
-                        {formatDate(request.details.appliedAt)}
-                      </p>
+                      <span className="text-sm font-medium">
+                        {request.days_requested || request.dates?.daysRequested || 'N/A'}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {getStatusBadge(status)}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-sm text-gray-500">
+                        {formatDate(request.applied_at || request.details?.appliedAt || '')}
+                      </span>
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex items-center gap-1">
                         <Button
                           size="xs"
                           color="blue"
-                          onClick={() => navigate(`/leave-request/${request.id}`)}
+                          onClick={() => console.log('View details:', request.id)}
                         >
                           <FaEye className="w-3 h-3" />
                         </Button>
                         
-                        {canApproveOrReject(request.details.status) && (
+                        {canApproveOrReject(status) && (
                           <>
                             <Button
                               size="xs"
@@ -715,15 +470,14 @@ const LeaveRequestsManagement: React.FC = () => {
                       </div>
                     </Table.Cell>
                   </Table.Row>
-                ))}
-              </Table.Body>
-            </Table>
-          </div>
+                );
+              })}
+            </Table.Body>
+          </Table>
         )}
       </div>
 
-      {/* Modals */}
-      {renderFilters()}
+      {/* Approval Modal */}
       {renderApprovalModal()}
     </div>
   );

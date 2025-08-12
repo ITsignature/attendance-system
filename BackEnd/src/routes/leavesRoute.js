@@ -291,7 +291,7 @@ router.post('/request',
         errors: errors.array()
       });
     }
-
+    console.log('🔍 Create leave request request body:', req.body);
     const db = getDB();
     const {
       employee_id,
@@ -378,7 +378,7 @@ router.post('/request',
         INSERT INTO leave_requests (
           id, employee_id, leave_type_id, start_date, end_date,
           days_requested, reason, supporting_documents, status, 
-          created_by, applied_at
+          reviewed_by, reviewed_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
       `, [
         requestId, employee_id, leave_type_id, start_date, end_date,
@@ -456,13 +456,13 @@ router.put('/requests/:id/approve',
 
       // Update request status
       await db.execute(`
-        UPDATE leave_requests 
-        SET status = 'approved', 
-            reviewed_by = ?, 
-            reviewed_at = NOW(), 
-            reviewer_comments = ?
-        WHERE id = ?
-      `, [reviewerId, comments, requestId]);
+  UPDATE leave_requests 
+  SET status = 'approved', 
+      reviewed_by = ?, 
+      reviewed_at = NOW(), 
+      reviewer_comments = ?
+  WHERE id = ?
+`, [reviewerId, comments || null, requestId]);
 
       res.json({
         success: true,
@@ -533,7 +533,7 @@ router.put('/requests/:id/reject',
             reviewed_at = NOW(), 
             reviewer_comments = ?
         WHERE id = ?
-      `, [reviewerId, comments, requestId]);
+      `, [reviewerId, comments||null, requestId]);
 
       res.json({
         success: true,

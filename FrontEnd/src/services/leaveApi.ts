@@ -50,22 +50,22 @@ export interface LeaveRequest {
   };
 }
 
-export interface LeaveBalance {
-  leaveType: {
-    id: string;
-    name: string;
-    description: string;
-    isPaid: boolean;
-    maxConsecutiveDays: number;
-  };
-  balance: {
-    allocated: number;
-    used: number;
-    pending: number;
-    remaining: number;
-    utilizationPercentage: number;
-  };
-}
+// export interface LeaveBalance {
+//   leaveType: {
+//     id: string;
+//     name: string;
+//     description: string;
+//     isPaid: boolean;
+//     maxConsecutiveDays: number;
+//   };
+//   balance: {
+//     allocated: number;
+//     used: number;
+//     pending: number;
+//     remaining: number;
+//     utilizationPercentage: number;
+//   };
+// }
 
 export interface LeaveDashboard {
   date: string;
@@ -123,12 +123,14 @@ export interface CreateLeaveTypeData {
 }
 
 export interface CreateLeaveRequestData {
+  employee_id: string; // ← ADD this field (admin selects employee)
   leave_type_id: string;
   start_date: string;
   end_date: string;
   days_requested: number;
   reason: string;
   supporting_documents?: any[];
+  notes?: string; // ← ADD this field (admin notes)
 }
 
 export interface LeaveRequestFilters {
@@ -231,56 +233,56 @@ class LeaveApiService {
   /**
    * Get current user's leave requests
    */
-  async getMyLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
-    try {
-      const queryParams = new URLSearchParams();
-      if (filters) {
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            queryParams.append(key, value.toString());
-          }
-        });
-      }
+  // async getMyLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+  //   try {
+  //     const queryParams = new URLSearchParams();
+  //     if (filters) {
+  //       Object.entries(filters).forEach(([key, value]) => {
+  //         if (value !== undefined && value !== null) {
+  //           queryParams.append(key, value.toString());
+  //         }
+  //       });
+  //     }
 
-      const url = `/api/leaves/my-requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await apiService.apiCall(url);
-      return response;
-    } catch (error) {
-      console.error('Failed to fetch my leave requests:', error);
-      throw error;
-    }
-  }
+  //     const url = `/api/leaves/my-requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  //     const response = await apiService.apiCall(url);
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Failed to fetch my leave requests:', error);
+  //     throw error;
+  //   }
+  // }
 
   /**
    * Submit a new leave request
    */
-  async submitLeaveRequest(data: CreateLeaveRequestData): Promise<ApiResponse> {
-    try {
-      const response = await apiService.apiCall('/api/leaves/request', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-      return response;
-    } catch (error) {
-      console.error('Failed to submit leave request:', error);
-      throw error;
-    }
-  }
+  // async submitLeaveRequest(data: CreateLeaveRequestData): Promise<ApiResponse> {
+  //   try {
+  //     const response = await apiService.apiCall('/api/leaves/request', {
+  //       method: 'POST',
+  //       body: JSON.stringify(data),
+  //     });
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Failed to submit leave request:', error);
+  //     throw error;
+  //   }
+  // }
 
   /**
    * Cancel a leave request
    */
-  async cancelLeaveRequest(requestId: string): Promise<ApiResponse> {
-    try {
-      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/cancel`, {
-        method: 'PUT',
-      });
-      return response;
-    } catch (error) {
-      console.error('Failed to cancel leave request:', error);
-      throw error;
-    }
-  }
+  // async cancelLeaveRequest(requestId: string): Promise<ApiResponse> {
+  //   try {
+  //     const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/cancel`, {
+  //       method: 'PUT',
+  //     });
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Failed to cancel leave request:', error);
+  //     throw error;
+  //   }
+  // }
 
   // =============================================
   // LEAVE REQUESTS - MANAGER/HR ACTIONS
@@ -308,6 +310,22 @@ class LeaveApiService {
       throw error;
     }
   }
+
+  /**
+ * Admin creates leave request for an employee
+ */
+async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id: string }): Promise<ApiResponse> {
+  try {
+    const response = await apiService.apiCall('/api/leaves/request', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  } catch (error) {
+    console.error('Failed to create leave request for employee:', error);
+    throw error;
+  }
+}
 
   /**
    * Approve a leave request
@@ -344,18 +362,18 @@ class LeaveApiService {
   /**
    * Bulk approve multiple leave requests
    */
-  async bulkApproveRequests(requestIds: string[], comments?: string): Promise<ApiResponse> {
-    try {
-      const response = await apiService.apiCall('/api/leaves/requests/bulk-approve', {
-        method: 'POST',
-        body: JSON.stringify({ request_ids: requestIds, comments }),
-      });
-      return response;
-    } catch (error) {
-      console.error('Failed to bulk approve requests:', error);
-      throw error;
-    }
-  }
+  // async bulkApproveRequests(requestIds: string[], comments?: string): Promise<ApiResponse> {
+  //   try {
+  //     const response = await apiService.apiCall('/api/leaves/requests/bulk-approve', {
+  //       method: 'POST',
+  //       body: JSON.stringify({ request_ids: requestIds, comments }),
+  //     });
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Failed to bulk approve requests:', error);
+  //     throw error;
+  //   }
+  // }
 
   // =============================================
   // DASHBOARD & ANALYTICS
@@ -378,44 +396,44 @@ class LeaveApiService {
   /**
    * Get leave balance for an employee
    */
-  async getEmployeeLeaveBalance(employeeId: string, year?: number): Promise<ApiResponse<LeaveBalance[]>> {
-    try {
-      const url = `/api/leaves/balance/${employeeId}${year ? `?year=${year}` : ''}`;
-      const response = await apiService.apiCall(url);
-      return response;
-    } catch (error) {
-      console.error('Failed to fetch employee leave balance:', error);
-      throw error;
-    }
-  }
+  // async getEmployeeLeaveBalance(employeeId: string, year?: number): Promise<ApiResponse<LeaveBalance[]>> {
+  //   try {
+  //     const url = `/api/leaves/balance/${employeeId}${year ? `?year=${year}` : ''}`;
+  //     const response = await apiService.apiCall(url);
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Failed to fetch employee leave balance:', error);
+  //     throw error;
+  //   }
+  // }
 
   /**
    * Get leave analytics
    */
-  async getLeaveAnalytics(filters?: {
-    start_date?: string;
-    end_date?: string;
-    department_id?: string;
-    leave_type_id?: string;
-  }): Promise<ApiResponse> {
-    try {
-      const queryParams = new URLSearchParams();
-      if (filters) {
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            queryParams.append(key, value.toString());
-          }
-        });
-      }
+  // async getLeaveAnalytics(filters?: {
+  //   start_date?: string;
+  //   end_date?: string;
+  //   department_id?: string;
+  //   leave_type_id?: string;
+  // }): Promise<ApiResponse> {
+  //   try {
+  //     const queryParams = new URLSearchParams();
+  //     if (filters) {
+  //       Object.entries(filters).forEach(([key, value]) => {
+  //         if (value !== undefined && value !== null) {
+  //           queryParams.append(key, value.toString());
+  //         }
+  //       });
+  //     }
 
-      const url = `/api/leaves/analytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await apiService.apiCall(url);
-      return response;
-    } catch (error) {
-      console.error('Failed to fetch leave analytics:', error);
-      throw error;
-    }
-  }
+  //     const url = `/api/leaves/analytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  //     const response = await apiService.apiCall(url);
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Failed to fetch leave analytics:', error);
+  //     throw error;
+  //   }
+  // }
 
   // =============================================
   // EXPORT FUNCTIONALITY
@@ -424,54 +442,54 @@ class LeaveApiService {
   /**
    * Export leave data
    */
-  async exportLeaveData(filters?: {
-    start_date?: string;
-    end_date?: string;
-    format?: 'json' | 'csv' | 'xlsx';
-    status?: string;
-    department_id?: string;
-  }): Promise<ApiResponse> {
-    try {
-      const queryParams = new URLSearchParams();
-      if (filters) {
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            queryParams.append(key, value.toString());
-          }
-        });
-      }
+  // async exportLeaveData(filters?: {
+  //   start_date?: string;
+  //   end_date?: string;
+  //   format?: 'json' | 'csv' | 'xlsx';
+  //   status?: string;
+  //   department_id?: string;
+  // }): Promise<ApiResponse> {
+  //   try {
+  //     const queryParams = new URLSearchParams();
+  //     if (filters) {
+  //       Object.entries(filters).forEach(([key, value]) => {
+  //         if (value !== undefined && value !== null) {
+  //           queryParams.append(key, value.toString());
+  //         }
+  //       });
+  //     }
 
-      const url = `/api/leaves/export${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  //     const url = `/api/leaves/export${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       
-      if (filters?.format === 'csv') {
-        // For CSV downloads, we need to handle blob response
-        const response = await fetch(`${apiService['baseURL']}${url}`, {
-          headers: apiService['getHeaders'](),
-        });
+  //     if (filters?.format === 'csv') {
+  //       // For CSV downloads, we need to handle blob response
+  //       const response = await fetch(`${apiService['baseURL']}${url}`, {
+  //         headers: apiService['getHeaders'](),
+  //       });
         
-        if (!response.ok) {
-          throw new Error('Export failed');
-        }
+  //       if (!response.ok) {
+  //         throw new Error('Export failed');
+  //       }
         
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `leave-export-${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(downloadUrl);
+  //       const blob = await response.blob();
+  //       const downloadUrl = window.URL.createObjectURL(blob);
+  //       const link = document.createElement('a');
+  //       link.href = downloadUrl;
+  //       link.download = `leave-export-${new Date().toISOString().split('T')[0]}.csv`;
+  //       document.body.appendChild(link);
+  //       link.click();
+  //       link.remove();
+  //       window.URL.revokeObjectURL(downloadUrl);
         
-        return { success: true, message: 'Export downloaded successfully' };
-      } else {
-        return await apiService.apiCall(url);
-      }
-    } catch (error) {
-      console.error('Failed to export leave data:', error);
-      throw error;
-    }
-  }
+  //       return { success: true, message: 'Export downloaded successfully' };
+  //     } else {
+  //       return await apiService.apiCall(url);
+  //     }
+  //   } catch (error) {
+  //     console.error('Failed to export leave data:', error);
+  //     throw error;
+  //   }
+  // }
 
   // =============================================
   // HELPER METHODS

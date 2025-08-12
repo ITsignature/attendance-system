@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import leaveApiService, { 
   LeaveType, 
   LeaveRequest, 
-  LeaveBalance, 
   LeaveDashboard,
   LeaveRequestFilters,
   CreateLeaveRequestData,
@@ -10,15 +9,13 @@ import leaveApiService, {
 } from '../services/leaveApi';
 
 // =============================================
-// HOOK INTERFACES
+// HOOK INTERFACES (ADMIN-ONLY)
 // =============================================
 
 interface UseLeavesReturn {
   // Data
   leaveTypes: LeaveType[];
   leaveRequests: LeaveRequest[];
-  myLeaveRequests: LeaveRequest[];
-  leaveBalance: LeaveBalance[];
   dashboard: LeaveDashboard | null;
   
   // Loading states
@@ -40,21 +37,16 @@ interface UseLeavesReturn {
   // Actions
   fetchLeaveTypes: () => Promise<void>;
   fetchLeaveRequests: (filters?: LeaveRequestFilters) => Promise<void>;
-  fetchMyLeaveRequests: (filters?: LeaveRequestFilters) => Promise<void>;
   fetchLeaveDashboard: (date?: string) => Promise<void>;
-  fetchLeaveBalance: (employeeId: string, year?: number) => Promise<void>;
   
-  submitLeaveRequest: (data: CreateLeaveRequestData) => Promise<boolean>;
   approveLeaveRequest: (requestId: string, comments?: string) => Promise<boolean>;
   rejectLeaveRequest: (requestId: string, comments: string) => Promise<boolean>;
-  cancelLeaveRequest: (requestId: string) => Promise<boolean>;
   
   createLeaveType: (data: CreateLeaveTypeData) => Promise<boolean>;
   updateLeaveType: (id: string, data: Partial<CreateLeaveTypeData>) => Promise<boolean>;
   deleteLeaveType: (id: string) => Promise<boolean>;
   
-  bulkApproveRequests: (requestIds: string[], comments?: string) => Promise<boolean>;
-  exportLeaveData: (filters?: any) => Promise<void>;
+  createLeaveRequestForEmployee: (data: CreateLeaveRequestData & { employee_id: string }) => Promise<boolean>;
   
   // Utility functions
   clearError: () => void;
@@ -62,15 +54,13 @@ interface UseLeavesReturn {
 }
 
 // =============================================
-// MAIN HOOK
+// MAIN HOOK (ADMIN-ONLY)
 // =============================================
 
 export const useLeaves = (): UseLeavesReturn => {
-  // Data states
+  // Data states (REMOVED: myLeaveRequests, leaveBalance)
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [myLeaveRequests, setMyLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [leaveBalance, setLeaveBalance] = useState<LeaveBalance[]>([]);
   const [dashboard, setDashboard] = useState<LeaveDashboard | null>(null);
   
   // Loading states
@@ -90,7 +80,7 @@ export const useLeaves = (): UseLeavesReturn => {
   });
 
   // =============================================
-  // FETCH FUNCTIONS
+  // FETCH FUNCTIONS (ADMIN-ONLY)
   // =============================================
 
   const fetchLeaveTypes = useCallback(async () => {
@@ -102,6 +92,7 @@ export const useLeaves = (): UseLeavesReturn => {
       
       if (response.success && response.data) {
         setLeaveTypes(Array.isArray(response.data) ? response.data : []);
+        console.log('✅ Leave types loaded:', response.data.length);
       } else {
         setError(response.message || 'Failed to fetch leave types');
         setLeaveTypes([]);
@@ -122,7 +113,7 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.getAllLeaveRequests(filters);
       
       if (response.success && response.data) {
-        // FIXED: Handle both data structures from backend
+        // Handle both data structures from backend
         const requests = Array.isArray(response.data) 
           ? response.data 
           : (response.data.requests || []);
@@ -137,49 +128,16 @@ export const useLeaves = (): UseLeavesReturn => {
         }
       } else {
         setError(response.message || 'Failed to fetch leave requests');
-        setLeaveRequests([]); // FIXED: Ensure it's always an array
+        setLeaveRequests([]);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch leave requests');
-      setLeaveRequests([]); // FIXED: Ensure it's always an array
+      setLeaveRequests([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [refreshing]);
-
-  const fetchMyLeaveRequests = useCallback(async (filters?: LeaveRequestFilters) => {
-    try {
-      setError(null);
-      setLoading(true);
-      
-      const response = await leaveApiService.getMyLeaveRequests(filters);
-      
-      if (response.success && response.data) {
-        // FIXED: Handle both data structures from backend
-        const requests = Array.isArray(response.data) 
-          ? response.data 
-          : (response.data.requests || []);
-        
-        setMyLeaveRequests(requests);
-        
-        // Handle pagination from either structure
-        if (response.pagination) {
-          setPagination(response.pagination);
-        } else if (response.data.pagination) {
-          setPagination(response.data.pagination);
-        }
-      } else {
-        setError(response.message || 'Failed to fetch my leave requests');
-        setMyLeaveRequests([]); // FIXED: Ensure it's always an array
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch my leave requests');
-      setMyLeaveRequests([]); // FIXED: Ensure it's always an array
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const fetchLeaveDashboard = useCallback(async (date?: string) => {
     try {
@@ -201,51 +159,9 @@ export const useLeaves = (): UseLeavesReturn => {
     }
   }, [refreshing]);
 
-  const fetchLeaveBalance = useCallback(async (employeeId: string, year?: number) => {
-    try {
-      setError(null);
-      setLoading(true);
-      
-      const response = await leaveApiService.getEmployeeLeaveBalance(employeeId, year);
-      
-      if (response.success && response.data) {
-        setLeaveBalance(response.data.leaveBalance || []);
-      } else {
-        setError(response.message || 'Failed to fetch leave balance');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch leave balance');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // =============================================
-  // ACTION FUNCTIONS
+  // ACTION FUNCTIONS (ADMIN-ONLY)
   // =============================================
-
-  const submitLeaveRequest = useCallback(async (data: CreateLeaveRequestData): Promise<boolean> => {
-    try {
-      setError(null);
-      setSubmitting(true);
-      
-      const response = await leaveApiService.submitLeaveRequest(data);
-      
-      if (response.success) {
-        // Refresh my requests
-        await fetchMyLeaveRequests();
-        return true;
-      } else {
-        setError(response.message || 'Failed to submit leave request');
-        return false;
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit leave request');
-      return false;
-    } finally {
-      setSubmitting(false);
-    }
-  }, [fetchMyLeaveRequests]);
 
   const approveLeaveRequest = useCallback(async (requestId: string, comments?: string): Promise<boolean> => {
     try {
@@ -255,16 +171,15 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.approveLeaveRequest(requestId, comments);
       
       if (response.success) {
-        // Update the request in local state - FIXED: Handle different data structures
+        // Update the request in local state
         setLeaveRequests(prev => 
           prev.map(req => 
             req.id === requestId 
               ? { 
                   ...req, 
-                  status: 'approved',
-                  reviewer_comments: comments,
-                  details: req.details ? { ...req.details, status: 'approved', reviewerComments: comments } : undefined
-                }
+                  status: 'approved' as const,
+                  reviewer_comments: comments
+                } as LeaveRequest
               : req
           )
         );
@@ -295,16 +210,15 @@ export const useLeaves = (): UseLeavesReturn => {
       const response = await leaveApiService.rejectLeaveRequest(requestId, comments);
       
       if (response.success) {
-        // Update the request in local state - FIXED: Handle different data structures
+        // Update the request in local state
         setLeaveRequests(prev => 
           prev.map(req => 
             req.id === requestId 
               ? { 
                   ...req, 
-                  status: 'rejected',
-                  reviewer_comments: comments,
-                  details: req.details ? { ...req.details, status: 'rejected', reviewerComments: comments } : undefined
-                }
+                  status: 'rejected' as const,
+                  reviewer_comments: comments
+                } as LeaveRequest
               : req
           )
         );
@@ -316,40 +230,6 @@ export const useLeaves = (): UseLeavesReturn => {
       }
     } catch (err: any) {
       setError(err.message || 'Failed to reject leave request');
-      return false;
-    } finally {
-      setSubmitting(false);
-    }
-  }, []);
-
-  const cancelLeaveRequest = useCallback(async (requestId: string): Promise<boolean> => {
-    try {
-      setError(null);
-      setSubmitting(true);
-      
-      const response = await leaveApiService.cancelLeaveRequest(requestId);
-      
-      if (response.success) {
-        // Update the request in local state - FIXED: Handle different data structures
-        setMyLeaveRequests(prev => 
-          prev.map(req => 
-            req.id === requestId 
-              ? { 
-                  ...req, 
-                  status: 'cancelled',
-                  details: req.details ? { ...req.details, status: 'cancelled' } : undefined
-                }
-              : req
-          )
-        );
-        
-        return true;
-      } else {
-        setError(response.message || 'Failed to cancel leave request');
-        return false;
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to cancel leave request');
       return false;
     } finally {
       setSubmitting(false);
@@ -425,58 +305,29 @@ export const useLeaves = (): UseLeavesReturn => {
     }
   }, []);
 
-  const bulkApproveRequests = useCallback(async (requestIds: string[], comments?: string): Promise<boolean> => {
+  // NEW: Admin creates leave request for employee
+  const createLeaveRequestForEmployee = useCallback(async (data: CreateLeaveRequestData & { employee_id: string }): Promise<boolean> => {
     try {
       setError(null);
       setSubmitting(true);
       
-      const response = await leaveApiService.bulkApproveRequests(requestIds, comments);
+      const response = await leaveApiService.submitLeaveRequestForEmployee(data);
       
       if (response.success) {
-        // Update multiple requests in local state - FIXED: Handle different data structures
-        setLeaveRequests(prev => 
-          prev.map(req => 
-            requestIds.includes(req.id)
-              ? { 
-                  ...req, 
-                  status: 'approved',
-                  reviewer_comments: comments,
-                  details: req.details ? { ...req.details, status: 'approved', reviewerComments: comments } : undefined
-                }
-              : req
-          )
-        );
-        
-        // Refresh dashboard if needed
-        if (dashboard) {
-          await fetchLeaveDashboard();
-        }
-        
+        // Refresh requests after creating
+        await fetchLeaveRequests();
         return true;
       } else {
-        setError(response.message || 'Failed to bulk approve requests');
+        setError(response.message || 'Failed to create leave request');
         return false;
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to bulk approve requests');
+      setError(err.message || 'Failed to create leave request');
       return false;
     } finally {
       setSubmitting(false);
     }
-  }, [dashboard, fetchLeaveDashboard]);
-
-  const exportLeaveData = useCallback(async (filters?: any): Promise<void> => {
-    try {
-      setError(null);
-      setSubmitting(true);
-      
-      await leaveApiService.exportLeaveData(filters);
-    } catch (err: any) {
-      setError(err.message || 'Failed to export leave data');
-    } finally {
-      setSubmitting(false);
-    }
-  }, []);
+  }, [fetchLeaveRequests]);
 
   // =============================================
   // UTILITY FUNCTIONS
@@ -491,7 +342,7 @@ export const useLeaves = (): UseLeavesReturn => {
       setRefreshing(true);
       setError(null);
       
-      // Fetch all data concurrently - call the API service directly to avoid dependency issues
+      // Fetch admin data concurrently (REMOVED: myLeaveRequests)
       await Promise.allSettled([
         (async () => {
           try {
@@ -532,18 +383,16 @@ export const useLeaves = (): UseLeavesReturn => {
     } finally {
       setRefreshing(false);
     }
-  }, []); // No dependencies needed since we call API service directly
+  }, []);
 
   // =============================================
-  // RETURN HOOK INTERFACE
+  // RETURN HOOK INTERFACE (ADMIN-ONLY)
   // =============================================
 
   return {
-    // Data
+    // Data (REMOVED: myLeaveRequests, leaveBalance)
     leaveTypes,
     leaveRequests,
-    myLeaveRequests,
-    leaveBalance,
     dashboard,
     
     // Loading states
@@ -557,23 +406,20 @@ export const useLeaves = (): UseLeavesReturn => {
     // Pagination
     pagination,
     
-    // Fetch functions
+    // Fetch functions (REMOVED: fetchMyLeaveRequests, fetchLeaveBalance)
     fetchLeaveTypes,
     fetchLeaveRequests,
-    fetchMyLeaveRequests,
     fetchLeaveDashboard,
-    fetchLeaveBalance,
     
-    // Action functions
-    submitLeaveRequest,
+    // Action functions (REMOVED: submitLeaveRequest, cancelLeaveRequest, bulkApproveRequests, exportLeaveData)
     approveLeaveRequest,
     rejectLeaveRequest,
-    cancelLeaveRequest,
     createLeaveType,
     updateLeaveType,
     deleteLeaveType,
-    bulkApproveRequests,
-    exportLeaveData,
+    
+    // NEW: Admin function
+    createLeaveRequestForEmployee,
     
     // Utility functions
     clearError,
@@ -582,51 +428,11 @@ export const useLeaves = (): UseLeavesReturn => {
 };
 
 // =============================================
-// SPECIALIZED HOOKS
+// SPECIALIZED HOOKS (ADMIN-ONLY)
 // =============================================
 
 /**
- * Hook for employee leave management (simplified interface)
- */
-export const useMyLeaves = () => {
-  const {
-    myLeaveRequests,
-    leaveBalance,
-    leaveTypes,
-    loading,
-    submitting,
-    error,
-    fetchMyLeaveRequests,
-    fetchLeaveBalance,
-    fetchLeaveTypes,
-    submitLeaveRequest,
-    cancelLeaveRequest,
-    clearError
-  } = useLeaves();
-
-  // Auto-fetch data on mount
-  useEffect(() => {
-    fetchMyLeaveRequests();
-    fetchLeaveTypes();
-  }, [fetchMyLeaveRequests, fetchLeaveTypes]);
-
-  return {
-    requests: myLeaveRequests,
-    balance: leaveBalance,
-    leaveTypes,
-    loading,
-    submitting,
-    error,
-    submitRequest: submitLeaveRequest,
-    cancelRequest: cancelLeaveRequest,
-    refreshRequests: fetchMyLeaveRequests,
-    getBalance: fetchLeaveBalance,
-    clearError
-  };
-};
-
-/**
- * Hook for manager/HR leave management
+ * Hook for admin leave management (simplified)
  */
 export const useLeaveManagement = () => {
   const {
@@ -643,15 +449,14 @@ export const useLeaveManagement = () => {
     fetchLeaveTypes,
     approveLeaveRequest,
     rejectLeaveRequest,
-    bulkApproveRequests,
-    exportLeaveData,
+    createLeaveRequestForEmployee,
     refreshAll,
     clearError
   } = useLeaves();
 
   const [initialized, setInitialized] = useState(false);
 
-  // Auto-fetch data on mount - FIXED: Use initialized flag to prevent infinite loop
+  // Auto-fetch data on mount
   useEffect(() => {
     if (!initialized) {
       setInitialized(true);
@@ -659,47 +464,21 @@ export const useLeaveManagement = () => {
     }
   }, [initialized, refreshAll]);
 
-  // Helper function to get pending requests - FIXED: Handle different data structures
+  // Helper function to get pending requests
   const getPendingRequests = useCallback(() => {
-    // FIXED: Ensure leaveRequests is an array before filtering
-    if (!Array.isArray(leaveRequests)) {
-      console.warn('leaveRequests is not an array:', leaveRequests);
-      return [];
-    }
+    if (!Array.isArray(leaveRequests)) return [];
     
     return leaveRequests.filter(req => {
-      // FIXED: Handle different data structures
       const status = req.status || req.details?.status;
       return status === 'pending';
     });
   }, [leaveRequests]);
 
-  // Helper function to get urgent requests (starting within 7 days) - FIXED: Handle different data structures
-  const getUrgentRequests = useCallback(() => {
-    // FIXED: Ensure leaveRequests is an array before filtering
-    if (!Array.isArray(leaveRequests)) {
-      console.warn('leaveRequests is not an array:', leaveRequests);
-      return [];
-    }
-    
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-    
-    return leaveRequests.filter(req => {
-      // FIXED: Handle different data structures
-      const status = req.status || req.details?.status;
-      const startDate = req.start_date || req.dates?.start;
-      
-      return status === 'pending' && 
-             startDate && 
-             new Date(startDate) <= sevenDaysFromNow;
-    });
-  }, [leaveRequests]);
-
   return {
-    requests: Array.isArray(leaveRequests) ? leaveRequests : [], // FIXED: Always return array
-    dashboard,
+    // Data
+    requests: Array.isArray(leaveRequests) ? leaveRequests : [],
     leaveTypes,
+    dashboard, // Basic dashboard only
     loading,
     submitting,
     refreshing,
@@ -709,21 +488,18 @@ export const useLeaveManagement = () => {
     // Actions
     approveRequest: approveLeaveRequest,
     rejectRequest: rejectLeaveRequest,
-    bulkApprove: bulkApproveRequests,
-    exportData: exportLeaveData,
-    refresh: refreshAll,
+    createRequestForEmployee: createLeaveRequestForEmployee, // NEW
     fetchRequests: fetchLeaveRequests,
+    refresh: refreshAll,
     clearError,
     
     // Helper functions
     getPendingRequests,
-    getUrgentRequests,
     
-    // Statistics - FIXED: Handle different data structures
+    // Simple statistics
     stats: {
       total: Array.isArray(leaveRequests) ? leaveRequests.length : 0,
       pending: getPendingRequests().length,
-      urgent: getUrgentRequests().length,
       approved: Array.isArray(leaveRequests) 
         ? leaveRequests.filter(req => (req.status || req.details?.status) === 'approved').length 
         : 0,
@@ -735,7 +511,7 @@ export const useLeaveManagement = () => {
 };
 
 /**
- * Hook for leave dashboard only
+ * Hook for simple leave dashboard (optional)
  */
 export const useLeaveDashboard = (autoRefresh = false, refreshInterval = 300000) => {
   const {

@@ -4,6 +4,7 @@ import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
 import Loadable from 'src/layouts/full/shared/loadable/Loadable';
 import { useDynamicRBAC ,DynamicProtectedRoute } from '../components/RBACSystem/rbacSystem';
+import LeaveRequestForm from '../components/Leaves/LeaveRequestForm';
 
 /* *Layouts** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
@@ -34,6 +35,8 @@ const DepartmentManagement = Loadable(lazy(() => import('../components/Departmen
 const LeavePage = Loadable(lazy(() => import('../components/Leaves/leavesPage')));
 const HolidayPage = Loadable(lazy(() => import('../components/Leaves/holidaysPage')));
 const LeaveRequestsManagement = Loadable(lazy(() => import('../components/Leaves/LeaveRequests')));
+const createLeaveRequestForEmployee = Loadable(lazy(() => import('../components/Leaves/LeaveRequestForm')));
+
 
 // Icons
 const Solar = Loadable(lazy(() => import('../views/icons/Solar')));
@@ -227,6 +230,24 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
+      { 
+  path: '/leave-request/new', 
+  exact: true, 
+  element: (
+    <DynamicProtectedRoute permission="leaves.approve">
+      <LeaveRequestForm />
+    </DynamicProtectedRoute>
+  )
+},
+// { 
+//   path: '/leave-request/:id', 
+//   exact: true, 
+//   element: (
+//     <DynamicProtectedRoute permission="leaves.view">
+//       <LeaveRequestDetails />
+//     </DynamicProtectedRoute>
+//   )
+// }
       
       // Payroll Management
       { 
