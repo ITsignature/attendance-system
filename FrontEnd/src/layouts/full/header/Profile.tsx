@@ -3,8 +3,11 @@ import { Button, Dropdown } from "flowbite-react";
 import { Icon } from "@iconify/react";
 import user1 from "/src/assets/images/profile/user-1.jpg";
 import { Link } from "react-router";
+import { useDynamicRBAC } from '../../../components/RBACSystem/rbacSystem';
 
 const Profile = () => {
+  const {logout} = useDynamicRBAC();
+
   return (
     <div className="relative group/menu">
       <Dropdown
@@ -49,7 +52,7 @@ const Profile = () => {
           My Task
         </Dropdown.Item>
         <div className="p-3 pt-0">
-        <Button as={Link}  size={'sm'}  to="/admin/login" className="mt-2 border border-primary text-primary bg-transparent hover:bg-lightprimary outline-none focus:outline-none">Logout</Button>
+        <Button as={Link}  size={'sm'} onClick={logout}  to="/admin/login" className="mt-2 border border-primary text-primary bg-transparent hover:bg-lightprimary outline-none focus:outline-none">Logout</Button>
         </div>
       </Dropdown>
     </div>

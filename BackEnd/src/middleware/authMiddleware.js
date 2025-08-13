@@ -42,6 +42,7 @@ const authenticate = asyncHandler(async (req, res, next) => {
 
     const session = sessions[0];
     
+    
     // Check if user is still active
     if (!session.user_active) {
       return res.status(401).json({

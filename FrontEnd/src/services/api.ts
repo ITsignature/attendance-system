@@ -110,6 +110,12 @@ class ApiService {
   private baseURL: string;
   private token: string | null = null;
 
+    // 🔽 NEW: single-flight refresh coordination
+  private refreshPromise: Promise<void> | null = null;
+
+  // 🔽 NEW: proactive refresh timer
+  private refreshTimer: number | null = null;
+
   constructor() {
     this.baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
     this.token = localStorage.getItem('accessToken');
@@ -120,12 +126,21 @@ class ApiService {
     localStorage.setItem('accessToken', token);
   }
 
-  removeToken() {
-    this.token = null;
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+ removeToken() {
+  this.token = null;
+
+  // NEW: clear scheduled refresh
+  if (this.refreshTimer) {
+    window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
   }
+
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+  localStorage.removeItem('accessTokenExpiresIn');
+}
+
 
   /** Build headers including tenant header */
   private getHeaders(): HeadersInit {
@@ -167,76 +182,231 @@ class ApiService {
   }
 
   /** Generic API call */
-  public async apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  // public async apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  //   try {
+  //     const url = `${this.baseURL}${endpoint}`;
+  //     const config: RequestInit = {
+  //       headers: this.getHeaders(),
+  //       ...options,
+  //     };
+
+  //     const res = await fetch(url, config);
+  //     const data = await res.json();
+
+  //     if (!res.ok) {
+  //       throw new Error(data?.message || `HTTP ${res.status}`);
+  //     }
+
+  //     return data;
+  //   } catch (error) {
+  //     console.error('API call failed:', error);
+  //     throw error;
+  //   }
+  // }
+
+
+  public async apiCall<T>(endpoint: string, options: RequestInit = {}, _retryOn401 = true): Promise<ApiResponse<T>> {
+  const url = `${this.baseURL}${endpoint}`;
+  const config: RequestInit = { headers: this.getHeaders(), ...options };
+
+  // First attempt
+  let res = await fetch(url, config);
+
+  // If expired/unauthorized, try single-flight refresh + retry ONCE
+  if (res.status === 401 && _retryOn401) {
     try {
-      const url = `${this.baseURL}${endpoint}`;
-      const config: RequestInit = {
-        headers: this.getHeaders(),
-        ...options,
-      };
-
-      const res = await fetch(url, config);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.message || `HTTP ${res.status}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('API call failed:', error);
-      throw error;
+      await this.queueRefresh(); // runs one refresh for all callers
+      const retryConfig: RequestInit = { headers: this.getHeaders(), ...options };
+      res = await fetch(url, retryConfig);
+    } catch (e) {
+      // refresh failed -> hard logout + bubble error
+      this.removeToken();
+      throw e;
     }
   }
+
+  // Parse JSON safely
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    // non-JSON error responses
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // non-JSON success (rare)
+    return { success: true, message: 'ok', data: undefined } as ApiResponse<T>;
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) this.removeToken(); // hard fail path
+    throw new Error(data?.message || `HTTP ${res.status}`);
+  }
+
+  return data;
+}
 
   /* ----------------------------- Auth Methods ---------------------------- */
 
+  // async login(email: string, password: string): Promise<LoginResponse> {
+  //   const response = await this.apiCall<LoginResponse['data']>('/auth/login', {
+  //     method: 'POST',
+  //     body: JSON.stringify({ email, password }),
+  //   });
+
+  //   if (response.success && response.data) {
+  //     this.setToken(response.data.accessToken);
+  //     localStorage.setItem('refreshToken', response.data.refreshToken);
+  //     localStorage.setItem('user', JSON.stringify(response.data.user));
+  //   }
+
+  //   return response as LoginResponse;
+  // }
+
+  // async logout(): Promise<ApiResponse> {
+  //   try {
+  //     const response = await this.apiCall('/auth/logout', { method: 'POST' });
+  //     this.removeToken();
+  //     return response;
+  //   } catch (error) {
+  //     this.removeToken();
+  //     throw error;
+  //   }
+  // }
+
   async login(email: string, password: string): Promise<LoginResponse> {
-    const response = await this.apiCall<LoginResponse['data']>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
+  const response = await this.apiCall<LoginResponse['data']>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
 
-    if (response.success && response.data) {
-      this.setToken(response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-    }
+  if (response.success && response.data) {
+    this.setToken(response.data.accessToken);
+    localStorage.setItem('refreshToken', response.data.refreshToken);
+    //localStorage.setItem('user', JSON.stringify(response.data.user));
 
-    return response as LoginResponse;
-  }
-
-  async logout(): Promise<ApiResponse> {
-    try {
-      const response = await this.apiCall('/auth/logout', { method: 'POST' });
-      this.removeToken();
-      return response;
-    } catch (error) {
-      this.removeToken();
-      throw error;
+    // NEW: schedule proactive refresh if backend returns expiresIn
+    const secs =
+      typeof response.data.expiresIn === 'string'
+        ? parseInt(response.data.expiresIn, 10)
+        : Number(response.data.expiresIn);
+    if (!Number.isNaN(secs)) {
+      localStorage.setItem('accessTokenExpiresIn', String(secs));
+      this.scheduleTokenRefresh(secs);
     }
   }
+
+  return response as LoginResponse;
+}
+
 
   async getCurrentUser(): Promise<ApiResponse<{ user: User }>> {
     return this.apiCall('/auth/me');
   }
 
-  async refreshToken(): Promise<ApiResponse<{ accessToken: string; refreshToken: string }>> {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) throw new Error('No refresh token available');
+  // async refreshToken(): Promise<ApiResponse<{ accessToken: string; refreshToken: string }>> {
+  //   const refreshToken = localStorage.getItem('refreshToken');
+  //   if (!refreshToken) throw new Error('No refresh token available');
 
-    const response = await this.apiCall<{ accessToken: string; refreshToken: string }>(
-      '/auth/refresh',
-      { method: 'POST', body: JSON.stringify({ refreshToken }) }
-    );
+  //   const response = await this.apiCall<{ accessToken: string; refreshToken: string }>(
+  //     '/auth/refresh',
+  //     { method: 'POST', body: JSON.stringify({ refreshToken }) }
+  //   );
 
-    if (response.success && response.data) {
-      this.setToken(response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
-    }
+  //   if (response.success && response.data) {
+  //     this.setToken(response.data.accessToken);
+  //     localStorage.setItem('refreshToken', response.data.refreshToken);
+  //   }
 
-    return response;
+  //   return response;
+  // }
+
+  // services/api.ts
+async refreshToken(): Promise<ApiResponse<{ accessToken: string; refreshToken: string; expiresIn?: number | string }>> {
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) throw new Error('No refresh token available');
+
+  const url = `${this.baseURL}/auth/refresh`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, // ⛔️ no Authorization header
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    // ensure we clear tokens if refresh is invalid
+    this.removeToken();
+    throw new Error(data?.message || `HTTP ${res.status}`);
   }
+
+  // Expected shape: { success, data: { accessToken, refreshToken, expiresIn? } }
+  if (data?.success && data?.data) {
+    const { accessToken, refreshToken: newRefresh, expiresIn } = data.data;
+    
+    console.log('New Refreshed token', accessToken);
+
+    this.setToken(accessToken);
+    if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
+
+    // store/schedule expiry if provided
+    if (expiresIn) {
+      const secs =
+        typeof expiresIn === 'string' ? parseInt(expiresIn, 10) : Number(expiresIn);
+
+        console.log("secs",secs);
+
+      if (!Number.isNaN(secs)) {
+        localStorage.setItem('accessTokenExpiresIn', String(secs));
+        this.scheduleTokenRefresh(secs);
+      }
+    }
+  }
+
+  return data;
+}
+
+
+
+
+  // services/api.ts (inside class)
+private scheduleTokenRefresh(expiresInSeconds?: number) {
+  // clear any existing timer
+  if (this.refreshTimer) {
+    window.clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+  if (!expiresInSeconds) return;
+
+  // refresh 60s before expiry (never < 5s)
+  const refreshInMs = Math.max((expiresInSeconds - 60) * 1000, 5000);
+  this.refreshTimer = window.setTimeout(async () => {
+    try {
+      await this.queueRefresh(); // will no-op if already refreshing
+    } catch {
+      // ignore here; the next actual API call will force logout if needed
+    }
+  }, refreshInMs);
+}
+
+
+// services/api.ts (inside class)
+private async queueRefresh(): Promise<void> {
+  if (this.refreshPromise) {
+    return this.refreshPromise; // another request already kicked it off
+  }
+  this.refreshPromise = (async () => {
+    try {
+      const res = await this.refreshToken(); // will throw if it fails
+      if (!res.success || !res.data) {
+        throw new Error(res.message || 'Refresh failed');
+      }
+      // success handled inside refreshToken() (it sets tokens)
+    } finally {
+      this.refreshPromise = null;
+    }
+  })();
+  return this.refreshPromise;
+}
+
 
   /* --------------------------- Dashboard Methods ------------------------- */
 
