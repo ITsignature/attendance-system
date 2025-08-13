@@ -769,6 +769,7 @@ router.patch(
       return res.status(404).json({ success:false, message:'Record not found' });
     }
 
+    console.log('🔍 Debug - Current record:', current);
     
     const schedule         = await getEmployeeSchedule(current.employee_id, req.user.clientId, db);
     const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
@@ -806,13 +807,37 @@ router.patch(
           undefined               // force auto
         );
 
-    /* work_duration:
-       - honour explicit work_duration (except empty string)
-       - otherwise auto based on totalHours
-    */
-    const workDuration = req.body.work_duration !== undefined && req.body.work_duration !== ''
+        console.log('req.body', req.body);
+
+const [rows] = await db.execute(
+  `SELECT leave_type
+     FROM leave_requests
+    WHERE employee_id = ?
+      AND DATE(?) BETWEEN DATE(start_date) AND DATE(end_date)
+      AND status = 'approved'
+    LIMIT 1`,
+  [current.employee_id, current.date] // 'YYYY-MM-DD'
+);
+
+const leaveRow = rows[0] || null;
+
+// Decide final workDuration:
+// if an approved leave exists → use its leave_type directly;
+// else use your existing precedence (explicit body value > auto).
+let workDuration;
+
+if (leaveRow) {
+  workDuration = leaveRow.leave_type
+} else {
+  workDuration =
+    (req.body.work_duration !== undefined && req.body.work_duration !== '')
       ? req.body.work_duration
       : determineWorkDuration(totalHours, durationSettings, undefined);
+}
+
+// (optional) log
+console.log('final workDuration:', workDuration);
+
 
     /* ───────── 4. build UPDATE SET list (only cols that changed) ───────── */
     const cols = [];

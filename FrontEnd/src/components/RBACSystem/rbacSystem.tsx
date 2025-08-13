@@ -252,6 +252,8 @@ const initializeAuth = async () => {
       } catch (parseError) {
         console.error('❌ Failed to parse saved user data:', parseError);
         // Clear corrupted data
+        
+
         localStorage.removeItem('user');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
@@ -357,7 +359,7 @@ const initializeAuth = async () => {
         }
         
         // ✅ SAVE TO LOCALSTORAGE
-      //  localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('user', JSON.stringify(user));
         localStorage.setItem('accessToken', response.data.accessToken);
         localStorage.setItem('refreshToken', response.data.refreshToken);
         

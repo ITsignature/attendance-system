@@ -59,17 +59,27 @@ interface AttendanceFilters {
   sortOrder: 'ASC' | 'DESC';
 }
 
+
+
 const AttendanceView: React.FC = () => {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [employees, setEmployees] = useState([]);
+    const todayStr = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; // YYYY-MM-DD (local)
+};
+
   const [filters, setFilters] = useState<AttendanceFilters>({
     page: 1,
     limit: 10,
     sortBy: 'date',
-    sortOrder: 'DESC'
+    sortOrder: 'DESC',
+    startDate: todayStr(),
+    endDate: todayStr(),
   });
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -128,6 +138,7 @@ const AttendanceView: React.FC = () => {
   //   }
   // };
 
+
   const loadAttendanceRecords = async () => {
   try {
     setLoading(true);
@@ -168,13 +179,28 @@ const AttendanceView: React.FC = () => {
     }
   };
 
+  // const handleFilterChange = (key: string, value: string) => {
+  //   setFilters(prev => ({
+  //     ...prev,
+  //     [key]: value,
+  //     page: 1 // Reset to first page when filtering
+  //   }));
+  // };
+
   const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value,
-      page: 1 // Reset to first page when filtering
-    }));
-  };
+  setFilters(prev => {
+    let next = { ...prev, [key]: value, page: 1 };
+
+    // ensure start <= end
+    if (key === 'startDate' && next.endDate && value > next.endDate) {
+      next.endDate = value;
+    }
+    if (key === 'endDate' && next.startDate && value < next.startDate) {
+      next.startDate = value;
+    }
+    return next;
+  });
+};
 
   const handlePageChange = (page: number) => {
     setFilters(prev => ({ ...prev, page }));
