@@ -99,26 +99,39 @@ const LeaveRequestsManagement: React.FC = () => {
     setComments('');
   };
 
-  const handleConfirmAction = async () => {
-    if (!approvalModal.request?.id) return;
+const handleConfirmAction = async () => {
+  if (!approvalModal.request?.id) return;
 
-    let success = false;
+  let success = false;
+  
+  if (approvalModal.type === 'approve') {
+    success = await approveRequest(approvalModal.request.id, comments || undefined);
+  } else {
+    // Enhanced validation for rejection
+    if (!comments.trim()) {
+      alert('Rejection reason is required');
+      return;
+    }
     
-    if (approvalModal.type === 'approve') {
-      success = await approveRequest(approvalModal.request.id, comments || undefined);
-    } else {
-      if (!comments.trim()) {
-        alert('Rejection reason is required');
-        return;
-      }
-      success = await rejectRequest(approvalModal.request.id, comments);
+    // Add minimum character validation
+    if (comments.trim().length < 10) {
+      alert('Rejection reason must be at least 10 characters long');
+      return;
     }
+    
+    if (comments.trim().length > 500) {
+      alert('Rejection reason cannot exceed 500 characters');
+      return;
+    }
+    
+    success = await rejectRequest(approvalModal.request.id, comments);
+  }
 
-    if (success) {
-      setApprovalModal({ request: null, isOpen: false, type: 'approve' });
-      setComments('');
-    }
-  };
+  if (success) {
+    setApprovalModal({ request: null, isOpen: false, type: 'approve' });
+    setComments('');
+  }
+};
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -262,8 +275,8 @@ const LeaveRequestsManagement: React.FC = () => {
             <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
               <h4 className="font-medium text-gray-900 dark:text-white mb-2">Request Details</h4>
               <div className="space-y-2 text-sm">
-                <div><strong>Employee:</strong> {approvalModal.request.employee?.name || 'N/A'}</div>
-                <div><strong>Leave Type:</strong> {approvalModal.request.leaveType?.name || 'N/A'}</div>
+                <div><strong>Employee:</strong> {approvalModal.request.employee_name || 'N/A'}</div>
+                <div><strong>Leave Type:</strong> {approvalModal.request.leave_type_name || 'N/A'}</div>
                 <div><strong>Duration:</strong> {formatDate(approvalModal.request.start_date || '')} - {formatDate(approvalModal.request.end_date || '')}</div>
                 <div><strong>Days:</strong> {approvalModal.request.days_requested || 'N/A'}</div>
                 <div><strong>Reason:</strong> {approvalModal.request.reason || 'N/A'}</div>
@@ -406,16 +419,16 @@ const LeaveRequestsManagement: React.FC = () => {
                     <Table.Cell>
                       <div>
                         <div className="font-medium text-gray-900 dark:text-white">
-                          {request.employee?.name || 'N/A'}
+                          {request.employee_name || 'N/A'}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {request.employee?.code || ''} • {request.employee?.department || ''}
+                          {request.employee_code || ''} {request.employee?.department || ''}
                         </div>
                       </div>
                     </Table.Cell>
                     <Table.Cell>
                       <span className="text-sm text-gray-900 dark:text-white">
-                        {request.leaveType?.name || request.leave_type_name || 'N/A'}
+                        {request.leave_type_name || request.leave_type_name || 'N/A'}
                       </span>
                     </Table.Cell>
                     <Table.Cell>

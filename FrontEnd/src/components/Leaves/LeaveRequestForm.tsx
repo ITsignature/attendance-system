@@ -256,8 +256,8 @@ const LeaveRequestForm: React.FC = () => {
         end_date: formData.end_date,
         reason: formData.reason.trim(),
         days_requested: calculatedDays,
-        notes: formData.admin_notes.trim(), // Admin notes become "notes" in the API
-        supporting_documents: formData.supporting_documents
+        notes: formData.admin_notes.trim() || null, // Admin notes become "notes" in the API
+        supporting_documents: formData.supporting_documents?.length > 0 ? formData.supporting_documents : null
       };
 
       console.log('🚀 Submitting admin leave request:', submitData);
@@ -291,7 +291,7 @@ const LeaveRequestForm: React.FC = () => {
       }
 
     } catch (error: any) {
-      console.error('Failed to create leave request:', error);
+      console.error('Failed to create leave requestt:', error);
       setErrors({ general: error.message || 'Failed to create leave request. Please try again.' });
     } finally {
       setSubmitLoading(false);

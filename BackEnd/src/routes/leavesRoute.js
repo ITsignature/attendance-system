@@ -291,7 +291,8 @@ router.post('/request',
         errors: errors.array()
       });
     }
-    console.log('🔍 Create leave request request body:', req.body);
+    console.log('🔍 Create leave request  body:', req.body);
+
     const db = getDB();
     const {
       employee_id,
@@ -314,6 +315,7 @@ router.post('/request',
         FROM employees 
         WHERE id = ? AND client_id = ?
       `, [employee_id, clientId]);
+      console.log('employee:' , employee)
 
       if (employee.length === 0) {
         return res.status(400).json({
@@ -321,6 +323,7 @@ router.post('/request',
           message: 'Employee not found or does not belong to your organization'
         });
       }
+      
 
       if (employee[0].employment_status !== 'active') {
         return res.status(400).json({
@@ -346,6 +349,7 @@ router.post('/request',
         FROM leave_types 
         WHERE id = ? AND client_id = ? AND is_active = TRUE
       `, [leave_type_id, clientId]);
+      console.log('leave:' , leaveType)
 
       if (leaveType.length === 0) {
         return res.status(400).json({
@@ -362,6 +366,7 @@ router.post('/request',
         AND status IN ('pending', 'approved')
         AND NOT (end_date < ? OR start_date > ?)
       `, [employee_id, start_date, end_date]);
+      console.log('overlapping:' , overlapping)
 
       if (overlapping.length > 0) {
         return res.status(400).json({
@@ -373,6 +378,9 @@ router.post('/request',
       // Create leave request
       const requestId = uuidv4();
       const combinedReason = notes ? `${reason}\n\nAdmin Notes: ${notes}` : reason;
+
+      console.log(requestId, employee_id, leave_type_id, start_date, end_date,
+        days_requested, combinedReason, supporting_documents, adminUserId);
       
       await db.execute(`
         INSERT INTO leave_requests (
@@ -382,7 +390,7 @@ router.post('/request',
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
       `, [
         requestId, employee_id, leave_type_id, start_date, end_date,
-        days_requested, combinedReason, supporting_documents, adminUserId
+        days_requested, combinedReason, supporting_documents
       ]);
 
       res.status(201).json({
