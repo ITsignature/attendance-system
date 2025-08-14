@@ -27,20 +27,36 @@ const authenticate = asyncHandler(async (req, res, next) => {
     // Check if token exists in sessions table (for logout functionality)
     const db = getDB();
     const [sessions] = await db.execute(`
-      SELECT us.*, au.is_active as user_active 
-      FROM user_sessions us
-      JOIN admin_users au ON us.admin_user_id = au.id
-      WHERE us.token_jti = ? AND us.is_active = TRUE AND us.expires_at > NOW()
-    `, [decoded.jti]);
+    SELECT us.*, au.is_active as user_active 
+    FROM user_sessions us
+    JOIN admin_users au ON us.admin_user_id = au.id
+    WHERE us.token_jti = ? AND us.is_active = TRUE
+  `, [decoded.jti]);
 
-    if (sessions.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired token'
-      });
-    }
+  if (sessions.length === 0) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
 
-    const session = sessions[0];
+  const session = sessions[0];
+
+  console.log("session",session);
+  
+  // If session expired, mark inactive and return error
+  if (new Date(session.expires_at) <= new Date()) {
+    await db.execute(`
+      UPDATE user_sessions 
+      SET is_active = FALSE
+      WHERE id = ?
+    `, [session.id]);
+
+    return res.status(401).json({
+      success: false,
+      message: 'Expired token'
+    });
+  }
     
     // Check if user is still active
     if (!session.user_active) {

@@ -152,8 +152,8 @@ router.post('/login', [
     // Store session in database
     const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     await db.execute(`
-      INSERT INTO user_sessions (admin_user_id, client_id, token_jti, ip_address, user_agent, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO user_sessions (admin_user_id, client_id, token_jti, ip_address, user_agent, expires_at,created_at)
+      VALUES (?, ?, ?, ?, ?, ?,NOW())
     `, [
       user.id,
       user.client_id,

@@ -8,7 +8,8 @@ require('dotenv').config();
 
 // Import routes and middleware
 const authRoutes = require('./src/routes/authRoute');
-const { router: employeeRoutes } = require('./src/routes/employeeRoute');const attendanceRoutes = require('./src/routes/attendanceRoute');
+const { router: employeeRoutes } = require('./src/routes/employeeRoute');
+const attendanceRoutes = require('./src/routes/attendanceRoute');
 const leaveRoutes = require('./src/routes/leavesRoute');
 const payrollRoutes = require('./src/routes/payrollRoute');
 const dashboardRoutes = require('./src/routes/dashboardRoute');
@@ -17,11 +18,12 @@ const clientRoutes = require('./src/routes/clientsRoute');
 const departments = require('./src/routes/departmentsRoute');
 const designations = require('./src/routes/designationsRoute');
 const settingsRoutes = require('./src/routes/settingsRoute');
+const sessionCleanup = require('./src/services/sessionCleanup');
 
 
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
 const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
-const { connectDB } = require('./src/config/database');
+const { connectDB, closeDB } = require('./src/config/database');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -101,7 +103,13 @@ app.use('/uploads', express.static('uploads'));
 // =============================================
 // DATABASE CONNECTION
 // =============================================
-connectDB();
+connectDB().then(() => {
+  // Start session cleanup service after database is connected
+  // sessionCleanup.start(30);  
+}).catch(err => {
+  console.error('Database connection failed:', err);
+  process.exit(1);
+});
 
 // =============================================
 // HEALTH CHECK ENDPOINT
@@ -155,22 +163,28 @@ app.use(errorHandler);
 // =============================================
 // GRACEFUL SHUTDOWN
 // =============================================
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
+const gracefulShutdown = async (signal) => {  
+  console.log(`${signal} received. Shutting down gracefully...`);
+  
+  // Stop session cleanup service
+  sessionCleanup.stop(); 
+  
+  server.close(async () => {
+    // Close database connection
+    await closeDB();  
     console.log('Process terminated');
     process.exit(0);
   });
-});
+  
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000);
+};
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Process terminated');
-    process.exit(0);
-  });
-});
-
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));  
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));    
 // =============================================
 // START SERVER
 // =============================================
@@ -184,6 +198,7 @@ const server = app.listen(PORT, () => {
 📊 Database: ${process.env.DB_NAME}@${process.env.DB_HOST}
 🛡️  RBAC: Multi-tenant with role switching
 📁 Uploads: ${process.env.UPLOAD_PATH}
+🔄 Session Cleanup: Running every 30 minutes 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   `);
 });

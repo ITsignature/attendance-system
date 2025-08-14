@@ -378,8 +378,8 @@ router.post('/request',
         INSERT INTO leave_requests (
           id, employee_id, leave_type_id, start_date, end_date,
           days_requested, reason, supporting_documents, status, 
-          reviewed_by, reviewed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
+          applied_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
       `, [
         requestId, employee_id, leave_type_id, start_date, end_date,
         days_requested, combinedReason, supporting_documents, adminUserId
