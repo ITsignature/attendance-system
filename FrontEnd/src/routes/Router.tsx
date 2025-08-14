@@ -51,6 +51,7 @@ const Error = Loadable(lazy(() => import('../views/auth/error/Error')));
 const RoleManagement = Loadable(lazy(() => import('../components/RBACSystem/roleManagement')));
 const AdminUserManagement = Loadable(lazy(() => import('../components/RBACSystem/adminUserManagement')));
 const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLogin')));
+const ManualAttendance =Loadable(lazy(() => import('../components/Attendance/ManualAttendance')));
 
 
 // ==============================================
@@ -198,6 +199,16 @@ const Router = [
         element: (
           <DynamicProtectedRoute permission="attendance.view">
             <Attendance />
+          </DynamicProtectedRoute>
+        )
+      },
+
+        { 
+        path: '/manual-attendance', 
+        exact: true, 
+        element: (
+          <DynamicProtectedRoute permission="attendance.view">
+            <ManualAttendance />
           </DynamicProtectedRoute>
         )
       },

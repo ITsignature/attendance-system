@@ -206,7 +206,7 @@ const initializeAuth = async () => {
       hasRefresh: !!savedRefreshToken 
     });
 
-    if (savedUser && savedToken) {
+    if (savedUser && savedToken &&savedRefreshToken) {
       try {
         const user: User = JSON.parse(savedUser);
         console.log('✅ Restoring user from localStorage:', user);
@@ -429,7 +429,6 @@ const initializeAuth = async () => {
       throw error;
     }
   };
-
 
 const hasPermission = (permission: string): boolean => {
   if (!currentUser) return false;
