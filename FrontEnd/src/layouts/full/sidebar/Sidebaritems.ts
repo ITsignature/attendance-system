@@ -38,13 +38,13 @@ const SidebarContent = [
         href: '/employees',
         permission: 'employees.view',
       },
-      {
-        id: uniqueId(),
-        title: 'Add Employee',
-        icon: IconUserPlus,
-        href: '/add-employee',
-        permission: 'employees.create',
-      },
+      // {
+      //   id: uniqueId(),
+      //   title: 'Add Employee',
+      //   icon: IconUserPlus,
+      //   href: '/add-employee',
+      //   permission: 'employees.create',
+      // },
       {
         id: uniqueId(),
         title: 'Attendance',

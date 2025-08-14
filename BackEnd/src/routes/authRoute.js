@@ -296,6 +296,8 @@ router.post('/refresh', asyncHandler(async (req, res) => {
 router.post('/logout', authenticate, asyncHandler(async (req, res) => {
   try {
     const db = getDB();
+
+    console.log('🔍 Debug - Session JTI:', req.user.sessionJti);
     
     // Deactivate current session
     await db.execute(`
