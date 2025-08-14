@@ -22,6 +22,7 @@ import apiService from '../../services/api';
 import AttendanceForm from './AttendanceForm';
 import { set } from 'lodash';
 import ResolveWorkDurationModal from './ResolveWorkDurationModal'
+import {Link} from 'react-router-dom';
 
 // Types
 interface AttendanceRecord {
@@ -171,6 +172,7 @@ const AttendanceView: React.FC = () => {
     try {
       const response = await apiService.apiCall('/api/employees');
       if (response.success) {
+        console.log('📊 Employees:', response.data.employees);
         setEmployees(response.data.employees);
 
       }
@@ -178,6 +180,10 @@ const AttendanceView: React.FC = () => {
       console.error('Failed to load employees:', error);
     }
   };
+
+
+// load non attendant employee
+
 
   // const handleFilterChange = (key: string, value: string) => {
   //   setFilters(prev => ({
@@ -336,10 +342,15 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
             Track employee arrival times and work duration
           </p>
         </div>
+        <div className="flex gap-2">
+          <Button color="purple" as={Link} to="/manual-attendance">
+        Manual Attendance Sheet
+      </Button>
         <Button onClick={() => setShowForm(true)}>
           <HiPlus className="mr-2 h-4 w-4" />
           Add Attendance
         </Button>
+        </div>
       </div>
 
       {/* Filters */}

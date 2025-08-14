@@ -1082,4 +1082,11 @@ const getEmployeeWorkHours = async (employeeId, clientId, db) => {
 };
 
 
+
+
+//Get employee not in today attendance table
+
+  
+
+
 module.exports = { router, getEmployeeWorkHours };

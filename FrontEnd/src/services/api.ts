@@ -7,7 +7,7 @@ import {
   CreateLeaveTypeData,
   LeaveRequestFilters
 } from './leaveApi';
-
+import { useDynamicRBAC } from '../components/RBACSystem/rbacSystem';
 /* ----------------------------- Shared Types ----------------------------- */
 
 export interface LoginResponse {
@@ -107,6 +107,8 @@ export interface AttendanceFormData {
 /* ------------------------------ Api Service ----------------------------- */
 
 class ApiService {
+  
+
   private baseURL: string;
   private token: string | null = null;
 
@@ -127,6 +129,8 @@ class ApiService {
   }
 
  removeToken() {
+  const {logout} = useDynamicRBAC();
+
   this.token = null;
 
   // NEW: clear scheduled refresh
@@ -139,6 +143,8 @@ class ApiService {
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
   localStorage.removeItem('accessTokenExpiresIn');
+
+  logout();
 }
 
 
@@ -237,7 +243,8 @@ class ApiService {
   }
 
   if (!res.ok) {
-    if (res.status === 401) this.removeToken(); // hard fail path
+    // if (res.status === 401) this.removeToken(); // hard fail path
+    this.removeToken();   
     throw new Error(data?.message || `HTTP ${res.status}`);
   }
 
@@ -720,6 +727,13 @@ private async queueRefresh(): Promise<void> {
     return this.apiCall(url);
   }
 
+
+
+
+
+
+
+
   /* ---------------------------- UI Utilities ----------------------------- */
 
   formatTime(time?: string): string {
@@ -771,6 +785,7 @@ private async queueRefresh(): Promise<void> {
     }
   }
 }
+
 
 /* Singleton */
 export const apiService = new ApiService();

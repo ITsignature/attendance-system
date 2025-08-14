@@ -26,28 +26,6 @@ const { connectDB } = require('./src/config/database');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// =============================================
-// SECURITY MIDDLEWARE
-// =============================================
-
-// Helmet for security headers
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS), // 100 requests per window
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: process.env.RATE_LIMIT_WINDOW + ' minutes'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/', limiter);
-
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
@@ -73,6 +51,30 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// =============================================
+// SECURITY MIDDLEWARE
+// =============================================
+
+// Helmet for security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS), // 100 requests per window
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: process.env.RATE_LIMIT_WINDOW + ' minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', limiter);
+
+
 
 // =============================================
 // GENERAL MIDDLEWARE
