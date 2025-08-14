@@ -15,8 +15,11 @@ const validateLeaveRequest = [
   body('leave_type_id').isUUID().withMessage('Valid leave type ID is required'),
   body('start_date').isISO8601().withMessage('Valid start date is required'),
   body('end_date').isISO8601().withMessage('Valid end date is required'),
+  body('leave_duration').isIn(['full_day', 'half_day', 'short_leave']).withMessage('Valid leave duration is required'),
+  body('start_time').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
+  body('end_time').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
   body('reason').trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be between 10-500 characters'),
-  body('days_requested').isInt({ min: 1 }).withMessage('Days requested must be a positive integer'),
+  body('days_requested').isFloat({ min: 0.25, max: 365 }).withMessage('Days requested must be between 0.25 and 365'),
 ];
 
 const validateDateRange = [
@@ -113,7 +116,7 @@ router.get('/my-requests',
         params.push(status);
       }
 
-      // Get leave requests
+      // Get leave requests with duration information
       const [requests] = await db.execute(`
         SELECT 
           lr.id,
@@ -121,6 +124,9 @@ router.get('/my-requests',
           lt.name as leave_type_name,
           lr.start_date,
           lr.end_date,
+          lr.leave_duration,
+          lr.start_time,
+          lr.end_time,
           lr.days_requested,
           lr.reason,
           lr.status,
@@ -278,8 +284,11 @@ router.post('/request',
     body('leave_type_id').isUUID().withMessage('Valid leave type ID is required'),
     body('start_date').isISO8601().withMessage('Valid start date is required'),
     body('end_date').isISO8601().withMessage('Valid end date is required'),
+    body('leave_duration').isIn(['full_day', 'half_day', 'short_leave']).withMessage('Valid leave duration is required'),
+    body('start_time').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
+    body('end_time').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
     body('reason').trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be between 10-500 characters'),
-    body('days_requested').isInt({ min: 1 }).withMessage('Days requested must be a positive integer'),
+    body('days_requested').isFloat({ min: 0.25, max: 365 }).withMessage('Days requested must be between 0.25 and 365'),
     body('notes').optional().trim().isLength({ max: 500 }).withMessage('Notes too long')
   ],
   asyncHandler(async (req, res) => {
@@ -291,7 +300,6 @@ router.post('/request',
         errors: errors.array()
       });
     }
-    console.log('🔍 Create leave request  body:', req.body);
 
     const db = getDB();
     const {
@@ -299,6 +307,9 @@ router.post('/request',
       leave_type_id,
       start_date,
       end_date,
+      leave_duration = 'full_day',
+      start_time = null,
+      end_time = null,
       reason,
       days_requested,
       supporting_documents = null,
@@ -315,7 +326,6 @@ router.post('/request',
         FROM employees 
         WHERE id = ? AND client_id = ?
       `, [employee_id, clientId]);
-      console.log('employee:' , employee)
 
       if (employee.length === 0) {
         return res.status(400).json({
@@ -323,7 +333,6 @@ router.post('/request',
           message: 'Employee not found or does not belong to your organization'
         });
       }
-      
 
       if (employee[0].employment_status !== 'active') {
         return res.status(400).json({
@@ -336,10 +345,26 @@ router.post('/request',
       const startDate = new Date(start_date);
       const endDate = new Date(end_date);
 
-      if (startDate >= endDate) {
+      // For half-day and short leave, start and end date must be the same
+      if (leave_duration !== 'full_day' && start_date !== end_date) {
         return res.status(400).json({
           success: false,
-          message: 'End date must be after start date'
+          message: 'Half-day and short leaves must be on the same date'
+        });
+      }
+
+      // Validate time fields for short leave
+      if (leave_duration === 'short_leave' && (!start_time || !end_time)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Start time and end time are required for short leave'
+        });
+      }
+
+      if (startDate > endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'End date must be on or after start date'
         });
       }
 
@@ -349,7 +374,6 @@ router.post('/request',
         FROM leave_types 
         WHERE id = ? AND client_id = ? AND is_active = TRUE
       `, [leave_type_id, clientId]);
-      console.log('leave:' , leaveType)
 
       if (leaveType.length === 0) {
         return res.status(400).json({
@@ -360,37 +384,52 @@ router.post('/request',
 
       // Check for overlapping requests
       const [overlapping] = await db.execute(`
-        SELECT id, start_date, end_date, status 
+        SELECT id, start_date, end_date, status, leave_duration
         FROM leave_requests 
         WHERE employee_id = ? 
         AND status IN ('pending', 'approved')
         AND NOT (end_date < ? OR start_date > ?)
       `, [employee_id, start_date, end_date]);
-      console.log('overlapping:' , overlapping)
 
       if (overlapping.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Employee has overlapping leave request from ${overlapping[0].start_date} to ${overlapping[0].end_date}`
-        });
+        // For half-day, check if the overlapping request is also half-day on a different period
+        if (leave_duration === 'half_day' && overlapping[0].leave_duration === 'half_day' 
+            && overlapping[0].start_date === start_date) {
+          return res.status(400).json({
+            success: false,
+            message: `Employee already has a half-day leave on ${start_date}`
+          });
+        } else if (overlapping.length > 0 && leave_duration !== 'half_day') {
+          return res.status(400).json({
+            success: false,
+            message: `Employee has overlapping leave request from ${overlapping[0].start_date} to ${overlapping[0].end_date}`
+          });
+        }
+      }
+
+      // Calculate actual days based on duration
+      let calculatedDays = days_requested;
+      if (leave_duration === 'half_day') {
+        calculatedDays = 0.5;
+      } else if (leave_duration === 'short_leave') {
+        calculatedDays = 0.25; // Quarter day for short leave
       }
 
       // Create leave request
       const requestId = uuidv4();
       const combinedReason = notes ? `${reason}\n\nAdmin Notes: ${notes}` : reason;
 
-      console.log(requestId, employee_id, leave_type_id, start_date, end_date,
-        days_requested, combinedReason, supporting_documents, adminUserId);
-      
       await db.execute(`
         INSERT INTO leave_requests (
           id, employee_id, leave_type_id, start_date, end_date,
+          leave_duration, start_time, end_time,
           days_requested, reason, supporting_documents, status, 
           applied_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
       `, [
         requestId, employee_id, leave_type_id, start_date, end_date,
-        days_requested, combinedReason, supporting_documents
+        leave_duration, start_time, end_time,
+        calculatedDays, combinedReason, supporting_documents
       ]);
 
       res.status(201).json({
@@ -400,9 +439,12 @@ router.post('/request',
           id: requestId,
           employee_name: `${employee[0].first_name} ${employee[0].last_name}`,
           leave_type: leaveType[0].name,
+          leave_duration,
           start_date,
           end_date,
-          days_requested
+          start_time,
+          end_time,
+          days_requested: calculatedDays
         }
       });
     } catch (error) {
@@ -415,7 +457,6 @@ router.post('/request',
     }
   })
 );
-
 // PUT /api/leaves/requests/:id/approve - Approve leave request
 router.put('/requests/:id/approve',
   checkPermission('leaves.approve'),

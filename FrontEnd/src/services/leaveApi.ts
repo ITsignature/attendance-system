@@ -7,65 +7,56 @@ import apiService from './api';
 export interface LeaveType {
   id: string;
   name: string;
-  description: string;
-  maxDaysPerYear: number;
-  maxConsecutiveDays: number;
-  isPaid: boolean;
-  requiresApproval: boolean;
-  approvalHierarchy: any[];
-  noticePeriodDays: number;
-  isActive: boolean;
-  createdAt: string;
+  description?: string;
+  max_days_per_year?: number;
+  max_consecutive_days?: number;
+  is_paid: boolean;
+  requires_approval: boolean;
+  notice_period_days?: number;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface LeaveRequest {
   id: string;
-  employee: {
-    id: string;
-    name: string;
-    code: string;
-    email: string;
-    avatar: string;
-    department: string;
-    designation: string;
-  };
-  leaveType: {
-    id: string;
-    name: string;
-    isPaid: boolean;
-  };
-  dates: {
-    start: string;
-    end: string;
-    daysRequested: number;
-  };
-  details: {
-    reason: string;
-    status: 'pending' | 'approved' | 'rejected' | 'cancelled';
-    appliedAt: string;
-    reviewedAt?: string;
-    reviewerComments?: string;
-    reviewerName?: string;
-    supportingDocuments?: any[];
-  };
+  employee_id: string;
+  employee_name?: string;
+  employee_code?: string;
+  leave_type_id: string;
+  leave_type_name?: string;
+  start_date: string;
+  end_date: string;
+  leave_duration: 'full_day' | 'half_day' | 'short_leave'; // NEW
+  start_time?: string | null; // NEW
+  end_time?: string | null; // NEW
+  days_requested: number; // Now supports decimals
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  applied_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+  reviewer_name?: string;
+  reviewer_comments?: string;
+  supporting_documents?: string[] | null;
+  department_name?: string;
 }
 
-// export interface LeaveBalance {
-//   leaveType: {
-//     id: string;
-//     name: string;
-//     description: string;
-//     isPaid: boolean;
-//     maxConsecutiveDays: number;
-//   };
-//   balance: {
-//     allocated: number;
-//     used: number;
-//     pending: number;
-//     remaining: number;
-//     utilizationPercentage: number;
-//   };
-// }
+export interface CreateLeaveRequestData {
+  leave_type_id: string;
+  start_date: string;
+  end_date: string;
+  leave_duration: 'full_day' | 'half_day' | 'short_leave'; // NEW
+  start_time?: string | null; // NEW - required for short_leave
+  end_time?: string | null; // NEW - required for short_leave
+  reason: string;
+  days_requested: number; // Now supports decimals
+  supporting_documents?: string[] | null;
+  notes?: string | null;
+}
+
+export interface CreateLeaveRequestForEmployeeData extends CreateLeaveRequestData {
+  employee_id: string;
+}
 
 export interface LeaveDashboard {
   date: string;
