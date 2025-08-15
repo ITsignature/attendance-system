@@ -58,50 +58,51 @@ export interface CreateLeaveRequestForEmployeeData extends CreateLeaveRequestDat
   employee_id: string;
 }
 
+export interface LeaveRequestFilters {
+  start_date?: string;
+  end_date?: string;
+  status?: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  department_id?: string;
+  employee_id?: string;
+  leave_type_id?: string;
+  leave_duration?: 'full_day' | 'half_day' | 'short_leave'; // NEW
+  limit?: number;
+  offset?: number;
+}
+
 export interface LeaveDashboard {
-  date: string;
   summary: {
     onLeaveCount: number;
     pendingRequestsCount: number;
-    urgentPendingCount: number;
+    upcomingLeavesCount: number;
+    approvedThisMonthCount: number;
   };
   onLeaveToday: Array<{
     id: string;
     name: string;
-    code: string;
-    avatar: string;
-    department: string;
-    leave: {
-      type: string;
-      isPaid: boolean;
-      startDate: string;
-      endDate: string;
-      days: number;
-      reason: string;
-    };
+    employee_code: string;
+    profile_image?: string;
+    start_date: string;
+    end_date: string;
+    leave_duration: 'full_day' | 'half_day' | 'short_leave'; // NEW
+    leave_type: string;
+    reason: string;
+    department?: string;
   }>;
-  monthlyStats: Record<string, {
-    count: number;
-    totalDays: number;
-  }>;
-  upcomingLeaves: Array<{
-    employeeName: string;
-    employeeCode: string;
-    department: string;
-    startDate: string;
-    endDate: string;
-    days: number;
-    leaveType: string;
-  }>;
-  departmentSummary: Array<{
-    department: string;
-    totalEmployees: number;
-    employeesOnLeave: number;
-    pendingRequests: number;
-    availabilityPercentage: number;
-  }>;
+  pendingRequests: LeaveRequest[];
+  upcomingLeaves: LeaveRequest[];
 }
 
+export interface LeaveBalance {
+  employee_id: string;
+  leave_type_id: string;
+  leave_type_name: string;
+  year: number;
+  total_allocated: number;
+  used: number; // Now supports decimals for half-day/short leaves
+  pending: number; // Now supports decimals
+  available: number; // Now supports decimals
+}
 export interface CreateLeaveTypeData {
   name: string;
   description?: string;
@@ -113,46 +114,17 @@ export interface CreateLeaveTypeData {
   approval_hierarchy?: any[];
 }
 
-export interface CreateLeaveRequestData {
-  employee_id: string; // ← ADD this field (admin selects employee)
-  leave_type_id: string;
-  start_date: string;
-  end_date: string;
-  days_requested: number;
-  reason: string;
-  supporting_documents?: any[];
-  notes?: string; // ← ADD this field (admin notes)
-}
-
-export interface LeaveRequestFilters {
-  start_date?: string;
-  end_date?: string;
-  status?: 'pending' | 'approved' | 'rejected' | 'cancelled';
-  department_id?: string;
-  employee_id?: string;
-  leave_type_id?: string;
-  limit?: number;
-  offset?: number;
-}
-
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  pagination?: {
-    total: number;
-    limit: number;
-    offset: number;
-    pages: number;
-  };
-}
-
 // =============================================
 // LEAVE API SERVICE CLASS
 // =============================================
 
 class LeaveApiService {
 
+  private apiService: any;
+
+  constructor(apiService: any) {
+    this.apiService = apiService;
+  }
   // =============================================
   // LEAVE TYPES
   // =============================================
@@ -162,13 +134,14 @@ class LeaveApiService {
    */
   async getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
     try {
-      const response = await apiService.apiCall('/api/leaves/types');
+      const response = await this.apiService.apiCall('/api/leaves/types');
       return response;
     } catch (error) {
       console.error('Failed to fetch leave types:', error);
       throw error;
     }
   }
+
 
   /**
    * Create a new leave type
@@ -294,7 +267,7 @@ class LeaveApiService {
       }
 
       const url = `/api/leaves/requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await apiService.apiCall(url);
+      const response = await this.apiService.apiCall(url);
       return response;
     } catch (error) {
       console.error('Failed to fetch leave requests:', error);
@@ -302,28 +275,47 @@ class LeaveApiService {
     }
   }
 
-  /**
- * Admin creates leave request for an employee
- */
-async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id: string }): Promise<ApiResponse> {
-  try {
-    const response = await apiService.apiCall('/api/leaves/request', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return response;
-  } catch (error) {
-    console.error('Failed to create leave request for employee:', error);
-    throw error;
-  }
-}
+ /**
+   * Submit a leave request for an employee (admin action)
+   * Now supports leave_duration, start_time, and end_time
+   */
+  async submitLeaveRequestForEmployee(data: CreateLeaveRequestForEmployeeData): Promise<ApiResponse> {
+    try {
+      // Validate time fields for short leave
+      if (data.leave_duration === 'short_leave' && (!data.start_time || !data.end_time)) {
+        throw new Error('Start time and end time are required for short leave');
+      }
 
-  /**
+      // Calculate days based on duration
+      let calculatedDays = data.days_requested;
+      if (data.leave_duration === 'half_day') {
+        calculatedDays = 0.5;
+      } else if (data.leave_duration === 'short_leave') {
+        calculatedDays = 0.25;
+      }
+
+      const requestData = {
+        ...data,
+        days_requested: calculatedDays
+      };
+
+      const response = await this.apiService.apiCall('/api/leaves/request', {
+        method: 'POST',
+        body: JSON.stringify(requestData),
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to create leave request for employee:', error);
+      throw error;
+    }
+  }
+
+/**
    * Approve a leave request
    */
   async approveLeaveRequest(requestId: string, comments?: string): Promise<ApiResponse> {
     try {
-      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/approve`, {
+      const response = await this.apiService.apiCall(`/api/leaves/requests/${requestId}/approve`, {
         method: 'PUT',
         body: JSON.stringify({ comments }),
       });
@@ -334,12 +326,12 @@ async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id
     }
   }
 
-  /**
+/**
    * Reject a leave request
    */
   async rejectLeaveRequest(requestId: string, comments: string): Promise<ApiResponse> {
     try {
-      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/reject`, {
+      const response = await this.apiService.apiCall(`/api/leaves/requests/${requestId}/reject`, {
         method: 'PUT',
         body: JSON.stringify({ comments }),
       });
@@ -376,7 +368,7 @@ async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id
   async getLeaveDashboard(date?: string): Promise<ApiResponse<LeaveDashboard>> {
     try {
       const url = `/api/leaves/dashboard${date ? `?date=${date}` : ''}`;
-      const response = await apiService.apiCall(url);
+      const response = await this.apiService.apiCall(url);
       return response;
     } catch (error) {
       console.error('Failed to fetch leave dashboard:', error);
@@ -387,16 +379,16 @@ async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id
   /**
    * Get leave balance for an employee
    */
-  // async getEmployeeLeaveBalance(employeeId: string, year?: number): Promise<ApiResponse<LeaveBalance[]>> {
-  //   try {
-  //     const url = `/api/leaves/balance/${employeeId}${year ? `?year=${year}` : ''}`;
-  //     const response = await apiService.apiCall(url);
-  //     return response;
-  //   } catch (error) {
-  //     console.error('Failed to fetch employee leave balance:', error);
-  //     throw error;
-  //   }
-  // }
+  async getLeaveBalance(employeeId?: string): Promise<ApiResponse<LeaveBalance[]>> {
+    try {
+      const url = `/api/leaves/balance${employeeId ? `?employee_id=${employeeId}` : ''}`;
+      const response = await this.apiService.apiCall(url);
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch leave balance:', error);
+      throw error;
+    }
+  }
 
   /**
    * Get leave analytics
@@ -508,16 +500,64 @@ async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id
   /**
    * Format leave duration for display
    */
-  formatLeaveDuration(startDate: string, endDate: string, days: number): string {
-    const start = new Date(startDate).toLocaleDateString();
-    const end = new Date(endDate).toLocaleDateString();
-    
-    if (days === 1) {
-      return `${start} (1 day)`;
-    } else if (startDate === endDate) {
-      return `${start} (1 day)`;
+  /**
+   * Helper function to format leave duration display
+   */
+  formatLeaveDuration(duration: 'full_day' | 'half_day' | 'short_leave'): string {
+    switch (duration) {
+      case 'full_day':
+        return 'Full Day';
+      case 'half_day':
+        return 'Half Day';
+      case 'short_leave':
+        return 'Short Leave';
+      default:
+        return duration;
+    }
+  }
+
+  /**
+   * Helper function to get badge color for leave duration
+   */
+  getDurationBadgeColor(duration: 'full_day' | 'half_day' | 'short_leave'): string {
+    switch (duration) {
+      case 'full_day':
+        return 'success';
+      case 'half_day':
+        return 'info';
+      case 'short_leave':
+        return 'warning';
+      default:
+        return 'gray';
+    }
+  }
+
+  /**
+   * Calculate actual leave days based on duration
+   */
+  calculateLeaveDays(
+    startDate: string, 
+    endDate: string, 
+    duration: 'full_day' | 'half_day' | 'short_leave'
+  ): number {
+    if (duration === 'half_day') {
+      return 0.5;
+    } else if (duration === 'short_leave') {
+      return 0.25;
     } else {
-      return `${start} to ${end} (${days} days)`;
+      // Calculate business days for full day leaves
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      let days = 0;
+      
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dayOfWeek = d.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip weekends
+          days++;
+        }
+      }
+      
+      return days;
     }
   }
 
@@ -582,6 +622,13 @@ async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id
   }
 }
 
-// Create and export singleton instance
-const leaveApiService = new LeaveApiService();
-export default leaveApiService;
+// Export default instance
+export default LeaveApiService;
+
+// Type definition for API response
+interface ApiResponse<T = any> {
+  success: boolean;
+  message: string;
+  data?: T;
+  error?: string;
+}
