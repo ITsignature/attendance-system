@@ -7,7 +7,7 @@ import {
   CreateLeaveTypeData,
   LeaveRequestFilters
 } from './leaveApi';
-import { useDynamicRBAC } from '../components/RBACSystem/rbacSystem';
+
 /* ----------------------------- Shared Types ----------------------------- */
 
 export interface LoginResponse {
@@ -128,8 +128,9 @@ class ApiService {
     localStorage.setItem('accessToken', token);
   }
 
+  
  removeToken() {
-  const {logout} = useDynamicRBAC();
+ 
 
   this.token = null;
 
@@ -140,11 +141,11 @@ class ApiService {
   }
 
   localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
+  // localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
   localStorage.removeItem('accessTokenExpiresIn');
 
-  logout();
+  
 }
 
 
@@ -728,6 +729,94 @@ private async queueRefresh(): Promise<void> {
   }
 
 
+
+  /* -------------------- Manual Attendance helpers -------------------- */
+
+private normalizeTime(t?: string) {
+  // Accept "HH:MM" and "HH:MM:SS" and return "HH:MM:SS" or undefined
+  if (!t) return undefined;
+  const parts = t.split(':');
+  if (parts.length === 2) return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}:00`;
+  if (parts.length === 3) return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}:${parts[2].padStart(2,'0')}`;
+  return undefined;
+}
+
+/** List attendance for a single date (used by Manual Sheet) */
+async listAttendanceByDate(date: string) {
+  return this.getAttendanceRecords({
+    page: 1,
+    limit: 10000,
+    startDate: date,
+    endDate: date,
+    sortBy: 'employee_id',
+    sortOrder: 'ASC',
+  });
+}
+
+/** Create a new attendance row (manual sheet) */
+async createAttendanceRow(input: {
+  employee_id: string;
+  date: string;                        // YYYY-MM-DD
+  check_in_time?: string;              // HH:MM or HH:MM:SS
+  check_out_time?: string;
+  work_type?: 'office' | 'remote' | 'hybrid';
+  notes?: string;
+}) {
+  const body = {
+    employee_id: input.employee_id,
+    date: input.date,
+    check_in_time: this.normalizeTime(input.check_in_time),
+    check_out_time: this.normalizeTime(input.check_out_time),
+    work_type: input.work_type ?? undefined,
+    // If your backend actually expects "work_location", this line makes it work too:
+    work_location: input.work_type ?? undefined,
+    notes: input.notes ?? undefined,
+  };
+  return this.apiCall<{ id: string }>('/api/attendance', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/** Update an existing attendance row (manual sheet) */
+async updateAttendanceRow(id: string, patch: {
+  check_in_time?: string;
+  check_out_time?: string;
+  work_type?: 'office' | 'remote' | 'hybrid';
+  notes?: string;
+}) {
+  const body = {
+    check_in_time: this.normalizeTime(patch.check_in_time),
+    check_out_time: this.normalizeTime(patch.check_out_time),
+    work_type: patch.work_type ?? undefined,
+    // If backend uses "work_location", send both
+    work_location: patch.work_type ?? undefined,
+    notes: patch.notes ?? undefined,
+  };
+  return this.apiCall(`/api/attendance/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/** Bulk upsert helper if you want “Save All” to call one method */
+async upsertManualRows(rows: Array<{
+  id?: string;
+  employee_id: string;
+  date: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  work_type?: 'office' | 'remote' | 'hybrid';
+  notes?: string;
+}>) {
+  await Promise.all(rows.map(r => {
+    return r.id
+      ? this.updateAttendanceRow(r.id, r)
+      : this.createAttendanceRow(r as any);
+  }));
+}
 
 
 
