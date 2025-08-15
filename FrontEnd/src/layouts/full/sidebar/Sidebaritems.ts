@@ -52,13 +52,14 @@ const SidebarContent = [
         href: '/attendance',
         permission: 'attendance.view',
       },
-      {
+        {
         id: uniqueId(),
-        title: 'Departments',
-        icon: IconBuilding,
-        href: '/Departments',
-        permission: 'employees.view',
+        title: 'Payroll',
+        icon: IconCurrencyDollar,
+        href: '/payroll',
+        permission: 'payroll.view',
       },
+     
       // {
       //   id: uniqueId(),
       //   title: 'Dept. Employees',
@@ -73,27 +74,29 @@ const SidebarContent = [
         href: '/leaves',
         permission: 'leaves.view',
       },
-      {
+      // {
+      //   id: uniqueId(),
+      //   title: 'Leave Requests',
+      //   icon: IconCalendar,
+      //   href: '/leave-requests',
+      //   permission: 'leaves.approve',
+      // },
+   
+       {
         id: uniqueId(),
-        title: 'Leave Requests',
-        icon: IconCalendar,
-        href: '/leave-requests',
-        permission: 'leaves.approve',
+        title: 'Departments',
+        icon: IconBuilding,
+        href: '/Departments',
+        permission: 'employees.view',
       },
-      {
+         {
         id: uniqueId(),
         title: 'Holidays',
         icon: IconCalendar,
         href: '/holidays',
         permission: 'leaves.view',
       },
-      {
-        id: uniqueId(),
-        title: 'Payroll',
-        icon: IconCurrencyDollar,
-        href: '/payroll',
-        permission: 'payroll.view',
-      },
+    
     ],
   },
   {

@@ -5,12 +5,61 @@ const { getDB } = require('../config/database');
 const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
 // Apply authentication and client access to all routes
 router.use(authenticate);
 router.use(ensureClientAccess);
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadPath = path.join(__dirname, '../../uploads/employee-documents');
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename with timestamp and original extension
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const extension = path.extname(file.originalname);
+    const filename = `${file.fieldname}-${uniqueSuffix}${extension}`;
+    cb(null, filename);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = [
+    'image/jpeg',
+    'image/jpg', 
+    'image/png',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+  
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only JPEG, PNG, PDF, DOC, and DOCX files are allowed.'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
 // =============================================
 // GET ALL EMPLOYEES
 // =============================================
@@ -556,9 +605,16 @@ router.post('/',
     body('emergency_contact_relation').trim().isLength({ min: 1 }).withMessage('Emergency contact relation is required'),
     
     // Work Schedule Validations - NEW
-    body('in_time').isTime().withMessage('Valid in time is required'),
-    body('out_time').isTime().withMessage('Valid out time is required'),
-    body('follows_company_schedule').isBoolean().optional()
+    body('in_time')
+      .optional({ checkFalsy: true }),
+
+    body('out_time')
+      .optional({ checkFalsy: true }),
+
+    body('follows_company_schedule')
+      .optional({ checkFalsy: true })
+      .isBoolean()
+      .withMessage('Valid boolean value is required')
   ],
   asyncHandler(async (req, res) => {
 
@@ -1056,6 +1112,306 @@ router.post('/bulk-delete',
 );
 
 // =============================================
+// UPLOAD EMPLOYEE DOCUMENTS
+// =============================================
+router.post('/:id/documents', 
+  checkPermission('employees.edit'),
+  checkResourceOwnership('employee'),
+  upload.fields([
+    { name: 'national_id', maxCount: 2 },
+    { name: 'passport', maxCount: 2 },
+    { name: 'other', maxCount: 5 },
+    { name: 'resume', maxCount: 1 },
+    { name: 'education', maxCount: 5 },
+    { name: 'experience', maxCount: 5 }
+  ]),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const employeeId = req.params.id;
+    const { notes } = req.body;
+    
+    if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No files uploaded'
+      });
+    }
+
+    try {
+      await db.execute('START TRANSACTION');
+      
+      const uploadedDocuments = [];
+      
+      // Process each file type
+      for (const [documentType, files] of Object.entries(req.files)) {
+        for (const file of files) {
+          const documentData = {
+            id: require('uuid').v4(),
+            employee_id: employeeId,
+            client_id: req.user.clientId,
+            document_type: documentType,
+            original_filename: file.originalname,
+            stored_filename: file.filename,
+            file_path: file.path,
+            file_size: file.size,
+            mime_type: file.mimetype,
+            uploaded_by: req.user.userId,
+            notes: notes || null
+          };
+          
+          await db.execute(`
+            INSERT INTO employee_documents 
+            (id, employee_id, client_id, document_type, original_filename, 
+             stored_filename, file_path, file_size, mime_type, uploaded_by, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, Object.values(documentData));
+          
+          uploadedDocuments.push({
+            id: documentData.id,
+            document_type: documentType,
+            original_filename: file.originalname,
+            file_size: file.size,
+            uploaded_at: new Date()
+          });
+        }
+      }
+      
+      await db.execute('COMMIT');
+      
+      res.status(201).json({
+        success: true,
+        message: `Successfully uploaded ${uploadedDocuments.length} document(s)`,
+        data: uploadedDocuments
+      });
+      
+    } catch (error) {
+      await db.execute('ROLLBACK');
+      
+      // Clean up uploaded files on error
+      Object.values(req.files).flat().forEach(file => {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      });
+      
+      throw error;
+    }
+  })
+);
+
+// =============================================
+// GET EMPLOYEE DOCUMENTS
+// =============================================
+router.get('/:id/documents', 
+  checkPermission('employees.edit'),
+  checkResourceOwnership('employee'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const employeeId = req.params.id;
+    
+    const [documents] = await db.execute(`
+      SELECT 
+        ed.id,
+        ed.document_type,
+        ed.original_filename,
+        ed.file_size,
+        ed.mime_type,
+        ed.uploaded_at,
+        ed.notes,
+        ed.is_active,
+        au.name as uploaded_by_name
+      FROM employee_documents ed
+      LEFT JOIN admin_users au ON ed.uploaded_by = au.id
+      WHERE ed.employee_id = ? 
+        AND ed.client_id = ? 
+        AND ed.is_active = TRUE
+      ORDER BY ed.document_type, ed.uploaded_at DESC
+    `, [employeeId, req.user.clientId]);
+    
+    // Group documents by type
+    const groupedDocuments = documents.reduce((acc, doc) => {
+      if (!acc[doc.document_type]) {
+        acc[doc.document_type] = [];
+      }
+      acc[doc.document_type].push(doc);
+      return acc;
+    }, {});
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        documents: groupedDocuments,
+        total_count: documents.length
+      }
+    });
+  })
+);
+
+// =============================================
+// DOWNLOAD EMPLOYEE DOCUMENT
+// =============================================
+router.get('/:id/documents/:documentId/download', 
+  checkPermission('employees.edit'),
+  checkResourceOwnership('employee'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const { id: employeeId, documentId } = req.params;
+    
+    const [documents] = await db.execute(`
+      SELECT 
+        ed.original_filename,
+        ed.stored_filename,
+        ed.file_path,
+        ed.mime_type
+      FROM employee_documents ed
+      WHERE ed.id = ? 
+        AND ed.employee_id = ?
+        AND ed.client_id = ? 
+        AND ed.is_active = TRUE
+    `, [documentId, employeeId, req.user.clientId]);
+    
+    if (documents.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+    
+    const document = documents[0];
+    
+    if (!fs.existsSync(document.file_path)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+    
+    res.setHeader('Content-Disposition', `attachment; filename="${document.original_filename}"`);
+    res.setHeader('Content-Type', document.mime_type);
+    
+    const fileStream = fs.createReadStream(document.file_path);
+    fileStream.pipe(res);
+  })
+);
+
+// =============================================
+// DELETE EMPLOYEE DOCUMENT
+// =============================================
+router.delete('/:id/documents/:documentId', 
+  checkPermission('employees.delete'),
+  checkResourceOwnership('employee'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const { id: employeeId, documentId } = req.params;
+    
+    // Get document info first
+    const [documents] = await db.execute(`
+      SELECT file_path 
+      FROM employee_documents 
+      WHERE id = ? AND employee_id = ? AND client_id = ? AND is_active = TRUE
+    `, [documentId, employeeId, req.user.clientId]);
+    
+    if (documents.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+    
+    // Soft delete the document
+    await db.execute(`
+      UPDATE employee_documents 
+      SET is_active = FALSE, updated_at = NOW()
+      WHERE id = ? AND employee_id = ? AND client_id = ?
+    `, [documentId, employeeId, req.user.clientId]);
+    
+    // Optionally delete the physical file
+    const filePath = documents[0].file_path;
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Document deleted successfully'
+    });
+  })
+);
+
+// =============================================
+// UPDATE DOCUMENT NOTES
+// =============================================
+router.put('/:id/documents/:documentId', 
+  checkPermission('employees.edit'),
+  checkResourceOwnership('employee'),
+  [
+    body('notes').optional().trim().isLength({ max: 500 }).withMessage('Notes cannot exceed 500 characters')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+    
+    const db = getDB();
+    const { id: employeeId, documentId } = req.params;
+    const { notes } = req.body;
+    
+    const [result] = await db.execute(`
+      UPDATE employee_documents 
+      SET notes = ?, updated_at = NOW()
+      WHERE id = ? AND employee_id = ? AND client_id = ? AND is_active = TRUE
+    `, [notes, documentId, employeeId, req.user.clientId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Document notes updated successfully'
+    });
+  })
+);
+
+// =============================================
+// ERROR HANDLING MIDDLEWARE FOR MULTER
+// =============================================
+// Add this after your routes
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 10MB.'
+      });
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        message: 'Too many files uploaded for this document type.'
+      });
+    }
+  }
+  
+  if (error.message.includes('Invalid file type')) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+  
+  next(error);
+});
+
+// =============================================
 // UTILITY FUNCTION FOR ATTENDANCE SYSTEM
 // =============================================
 
@@ -1083,8 +1439,6 @@ const getEmployeeWorkHours = async (employeeId, clientId, db) => {
 
 
 
-
-//Get employee not in today attendance table
 
   
 

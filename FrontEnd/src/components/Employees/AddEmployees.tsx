@@ -98,6 +98,8 @@ const AddEmployees: React.FC = () => {
   const [managers, setManagers] = useState<Manager[]>([]);
   const [filteredDesignations, setFilteredDesignations] = useState<Designation[]>([]);
   const [filteredManagers, setFilteredManagers] = useState<Manager[]>([]);
+  const [uploadedDocuments, setUploadedDocuments] = useState({});
+  const [documentUploading, setDocumentUploading] = useState({});
 
   // Form data
   const [formData, setFormData] = useState<EmployeeFormData>({
@@ -259,6 +261,37 @@ const AddEmployees: React.FC = () => {
     }));
   };
 
+  // Add this function to handle document uploads:
+ const handleDocumentUpload = async (documentType: string, file: File) => {
+  if (!file) return;
+  
+  // Set uploading state
+  setDocumentUploading(prev => ({ ...prev, [documentType]: true }));
+  
+  const formData = new FormData();
+  formData.append(documentType, file);
+  formData.append('notes', `${documentType.replace('_', ' ')} document for employee`);
+  
+  try {
+    // Note: You'll need the employee ID after creating the employee
+    // For now, we'll store the files temporarily and upload after employee creation
+    
+    // Store file temporarily in state for upload after employee creation
+    setUploadedDocuments(prev => ({
+      ...prev,
+      [documentType]: [...(prev[documentType] || []), file]
+    }));
+    
+    console.log(`${documentType} file prepared for upload:`, file.name);
+    
+  } catch (error) {
+    console.error('Document preparation error:', error);
+    setError(`Failed to prepare ${documentType} document`);
+  } finally {
+    setDocumentUploading(prev => ({ ...prev, [documentType]: false }));
+  }
+ };
+
   // Handle company schedule checkbox change - FETCH FROM DATABASE
   const handleCompanyScheduleChange = async (checked: boolean) => {
     if (checked) {
@@ -325,7 +358,7 @@ const AddEmployees: React.FC = () => {
         }
         if (!formData.phone.trim()) errors.phone = 'Phone number is required';
         if (!formData.date_of_birth) errors.date_of_birth = 'Date of birth is required';
-        
+        if (!formData.gender) errors.gender = 'gender is required';
         // Emergency contact validation
         if (!formData.emergency_contact_name.trim()) {
           errors.emergency_contact_name = 'Emergency contact name is required';
@@ -336,6 +369,7 @@ const AddEmployees: React.FC = () => {
         if (!formData.emergency_contact_relation.trim()) {
           errors.emergency_contact_relation = 'Emergency contact relation is required';
         }
+        
         break;
 
       case 1: // Professional Information
@@ -372,6 +406,9 @@ const AddEmployees: React.FC = () => {
     }
 
     setValidationErrors(errors);
+
+    console.log("validation error",errors);
+
     return Object.keys(errors).length === 0;
   };
 
@@ -451,7 +488,13 @@ const AddEmployees: React.FC = () => {
       const response = await apiService.createEmployee(submitData);
 
       if (response.success) {
-        setSuccess('Employee created successfully!');
+         const employeeId = response.data.employee.id;
+
+         if (Object.keys(uploadedDocuments).length > 0) {
+            await uploadEmployeeDocuments(employeeId);
+         }
+
+         setSuccess('Employee created successfully!');
         
         // Reset form after successful submission
         setTimeout(() => {
@@ -467,6 +510,40 @@ const AddEmployees: React.FC = () => {
       setSubmitLoading(false);
     }
   };
+
+  const uploadEmployeeDocuments = async (employeeId: string) => {
+  try {
+    for (const [documentType, files] of Object.entries(uploadedDocuments)) {
+      if (files && files.length > 0) {
+        const formData = new FormData();
+        
+        // Add all files of this type
+        files.forEach((file: File) => {
+          formData.append(documentType, file);
+        });
+        
+        formData.append('notes', `${documentType.replace('_', ' ')} document for employee`);
+        
+        const response = await fetch(`/api/employees/${employeeId}/documents`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          console.error(`Failed to upload ${documentType}:`, result.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Document upload error:', error);
+    // Don't fail the entire process if document upload fails
+  }
+};
 
   // Reset form
   const handleReset = () => {
@@ -692,12 +769,16 @@ const AddEmployees: React.FC = () => {
                         id="gender"
                         value={formData.gender}
                         onChange={(e) => handleInputChange('gender', e.target.value)}
+                        color={validationErrors.date_of_birth ? 'failure' : undefined}
                       >
-                        <option value="">Select gender</option>
+                        <option>Select gender</option>
                         <option value="male">Male</option>
                         <option value="female">Female</option>
                         <option value="other">Other</option>
                       </Select>
+                     {validationErrors.gender && (
+                        <p className="text-red-600 text-sm mt-1">{validationErrors.gender}</p>
+                      )}
                     </div>
 
                     <div className="md:col-span-2">
@@ -1090,9 +1171,10 @@ const AddEmployees: React.FC = () => {
                         Upload a clear copy of the employee's national ID card (front and back)
                       </p>
                       <FileUploadBox
-                        id="national_id"
-                        label=""
-                        onFileChange={(file) => console.log('National ID file:', file)}
+                          id="national_id"
+                          label=""
+                          onFileChange={(file) => handleDocumentUpload('national_id', file)}
+                          loading={documentUploading.national_id}
                       />
                     </div>
 
@@ -1104,7 +1186,21 @@ const AddEmployees: React.FC = () => {
                       <FileUploadBox
                         id="passport"
                         label=""
-                        onFileChange={(file) => console.log('Passport file:', file)}
+                        onFileChange={(file) => handleDocumentUpload('passport', file)}
+                        loading={documentUploading.passport}
+                      />
+                    </div>
+
+                      <div className="bg-red-50 dark:bg-green-900/20 p-4 rounded-lg">
+                      <h5 className="font-medium text-green-800 dark:text-green-200 mb-2">Other documents</h5>
+                      <p className="text-sm text-green-600 dark:text-green-300 mb-3">
+                        Upload a copy of the employee's other documents (optional)
+                      </p>
+                      <FileUploadBox
+                        id="other"
+                        label=""
+                        onFileChange={(file) => handleDocumentUpload('other', file)}
+                        loading={documentUploading.other}
                       />
                     </div>
                   </div>
@@ -1123,7 +1219,8 @@ const AddEmployees: React.FC = () => {
                       <FileUploadBox
                         id="resume"
                         label=""
-                        onFileChange={(file) => console.log('Resume file:', file)}
+                        onFileChange={(file) => handleDocumentUpload('resume', file)}
+                        loading={documentUploading.resume}
                       />
                     </div>
 
@@ -1135,7 +1232,8 @@ const AddEmployees: React.FC = () => {
                       <FileUploadBox
                         id="education"
                         label=""
-                        onFileChange={(file) => console.log('Education file:', file)}
+                        onFileChange={(file) => handleDocumentUpload('education', file)}
+                        loading={documentUploading.education}
                       />
                     </div>
 
@@ -1147,7 +1245,8 @@ const AddEmployees: React.FC = () => {
                       <FileUploadBox
                         id="experience"
                         label=""
-                        onFileChange={(file) => console.log('Experience file:', file)}
+                        onFileChange={(file) => handleDocumentUpload('experience', file)}
+                        loading={documentUploading.experience}
                       />
                     </div>
                   </div>

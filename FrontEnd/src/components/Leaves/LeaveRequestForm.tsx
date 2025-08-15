@@ -120,7 +120,7 @@ const LeaveRequestForm: React.FC = () => {
       ]);
 
       if (employeesResponse.success) {
-        setEmployees(employeesResponse.data || []);
+        setEmployees(employeesResponse.data.employees || []);
       }
       
       if (leaveTypesResponse.success) {
