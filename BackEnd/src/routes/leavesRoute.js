@@ -169,8 +169,8 @@ router.get('/requests',
   checkPermission('leaves.approve'),
   validateDateRange,
   asyncHandler(async (req, res) => {
-    const db = getDB(); // FIXED: This was in the wrong position causing syntax error
-    const clientId = req.user.clientId; // FIXED: Changed from client_id to clientId
+    const db = getDB();
+    const clientId = req.user.clientId;
     
     const { 
       start_date, 
@@ -179,6 +179,7 @@ router.get('/requests',
       department_id, 
       employee_id,
       leave_type_id,
+      leave_duration, // NEW filter
       limit = 50, 
       offset = 0 
     } = req.query;
@@ -210,70 +211,92 @@ router.get('/requests',
       whereClause += ' AND lr.leave_type_id = ?';
       params.push(leave_type_id);
     }
-
-    try {
-      // Get leave requests with all related information
-      const [requests] = await db.execute(`
-        SELECT 
-          lr.id,
-          lr.employee_id,
-          CONCAT(e.first_name, ' ', e.last_name) as employee_name,
-          e.employee_code,
-          d.name as department_name,
-          lr.leave_type_id,
-          lt.name as leave_type_name,
-          lr.start_date,
-          lr.end_date,
-          lr.days_requested,
-          lr.reason,
-          lr.status,
-          lr.applied_at,
-          lr.reviewed_at,
-          lr.reviewer_comments,
-          lr.supporting_documents,
-          CONCAT(reviewer.first_name, ' ', reviewer.last_name) as reviewer_name
-        FROM leave_requests lr
-        JOIN employees e ON lr.employee_id = e.id
-        JOIN leave_types lt ON lr.leave_type_id = lt.id
-        LEFT JOIN departments d ON e.department_id = d.id
-        LEFT JOIN admin_users au ON lr.reviewed_by = au.id
-        LEFT JOIN employees reviewer ON au.employee_id = reviewer.id
-        ${whereClause}
-        ORDER BY lr.applied_at DESC
-        LIMIT ? OFFSET ?
-      `, [...params, parseInt(limit), parseInt(offset)]);
-
-      // Get total count for pagination
-      const [countResult] = await db.execute(`
-        SELECT COUNT(*) as total
-        FROM leave_requests lr
-        JOIN employees e ON lr.employee_id = e.id
-        ${whereClause}
-      `, params);
-
-      res.json({
-        success: true,
-        data: {
-          requests,
-          pagination: {
-            total: countResult[0].total,
-            limit: parseInt(limit),
-            offset: parseInt(offset),
-            pages: Math.ceil(countResult[0].total / parseInt(limit))
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Error fetching leave requests:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch leave requests',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+    if (leave_duration) {
+      whereClause += ' AND lr.leave_duration = ?';
+      params.push(leave_duration);
     }
+
+    // Get total count for pagination
+    const [countResult] = await db.execute(`
+      SELECT COUNT(*) as total
+      FROM leave_requests lr
+      JOIN employees e ON lr.employee_id = e.id
+      ${whereClause}
+    `, params);
+
+    // Get leave requests with duration and time information
+    const [requests] = await db.execute(`
+      SELECT 
+        lr.id,
+        lr.employee_id,
+        CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+        e.employee_code,
+        e.email as employee_email,
+        lr.leave_type_id,
+        lt.name as leave_type_name,
+        lr.start_date,
+        lr.end_date,
+        COALESCE(lr.leave_duration, 'full_day') as leave_duration,
+        lr.start_time,
+        lr.end_time,
+        lr.days_requested,
+        lr.reason,
+        lr.status,
+        lr.applied_at,
+        lr.reviewed_at,
+        lr.reviewer_comments,
+        lr.supporting_documents,
+        CONCAT(reviewer.first_name, ' ', reviewer.last_name) as reviewer_name,
+        d.name as department_name,
+        des.title as designation_title
+      FROM leave_requests lr
+      JOIN employees e ON lr.employee_id = e.id
+      JOIN leave_types lt ON lr.leave_type_id = lt.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN designations des ON e.designation_id = des.id
+      LEFT JOIN admin_users au ON lr.reviewed_by = au.id
+      LEFT JOIN employees reviewer ON au.employee_id = reviewer.id
+      ${whereClause}
+      ORDER BY 
+        CASE 
+          WHEN lr.status = 'pending' THEN 1 
+          WHEN lr.status = 'approved' THEN 2
+          WHEN lr.status = 'rejected' THEN 3
+          ELSE 4 
+        END,
+        lr.applied_at DESC
+      LIMIT ? OFFSET ?
+    `, [...params, parseInt(limit), parseInt(offset)]);
+
+    // Format the response
+    const formattedRequests = requests.map(req => ({
+      ...req,
+      // Add formatted time range for short leaves
+      time_range: req.leave_duration === 'short_leave' && req.start_time && req.end_time
+        ? `${req.start_time.substring(0, 5)} - ${req.end_time.substring(0, 5)}`
+        : null,
+      // Add duration label
+      duration_label: req.leave_duration === 'full_day' ? 'Full Day' :
+                     req.leave_duration === 'half_day' ? 'Half Day' :
+                     req.leave_duration === 'short_leave' ? 'Short Leave' : 'Full Day'
+    }));
+
+    const totalCount = countResult[0].total;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    res.json({
+      success: true,
+      data: formattedRequests,
+      pagination: {
+        total: totalCount,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        pages: totalPages,
+        current_page: Math.floor(offset / limit) + 1
+      }
+    });
   })
 );
-
 // POST /api/leaves/request - Submit new leave request
 // POST /api/leaves/request - Submit new leave request
 // POST /api/leaves/request - Admin creates leave request for any employee
@@ -307,7 +330,7 @@ router.post('/request',
       leave_type_id,
       start_date,
       end_date,
-      leave_duration = 'full_day',
+      leave_duration = 'full_day', // Default to full_day for backward compatibility
       start_time = null,
       end_time = null,
       reason,
@@ -612,7 +635,7 @@ router.get('/dashboard',
     const { date = new Date().toISOString().split('T')[0] } = req.query;
 
     try {
-      // Get employees on leave today
+      // Get employees on leave today with duration info
       const [onLeaveToday] = await db.execute(`
         SELECT 
           e.id,
@@ -621,6 +644,10 @@ router.get('/dashboard',
           e.profile_image,
           lr.start_date,
           lr.end_date,
+          COALESCE(lr.leave_duration, 'full_day') as leave_duration,
+          lr.start_time,
+          lr.end_time,
+          lr.days_requested,
           lt.name as leave_type,
           lr.reason,
           d.name as department
@@ -632,43 +659,91 @@ router.get('/dashboard',
         AND lr.status = 'approved'
         AND lr.start_date <= ?
         AND lr.end_date >= ?
-        ORDER BY e.first_name ASC
+        ORDER BY lr.leave_duration, e.first_name
       `, [clientId, date, date]);
 
-      // Get pending requests that need attention
-      const [pendingRequests] = await db.execute(`
+      // Get pending requests count
+      const [pendingCount] = await db.execute(`
+        SELECT COUNT(*) as count
+        FROM leave_requests lr
+        JOIN employees e ON lr.employee_id = e.id
+        WHERE e.client_id = ? AND lr.status = 'pending'
+      `, [clientId]);
+
+      // Get upcoming leaves (next 7 days)
+      const [upcomingLeaves] = await db.execute(`
         SELECT 
-          lr.id,
-          CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+          e.id,
+          CONCAT(e.first_name, ' ', e.last_name) as name,
           e.employee_code,
-          lt.name as leave_type,
           lr.start_date,
           lr.end_date,
+          COALESCE(lr.leave_duration, 'full_day') as leave_duration,
           lr.days_requested,
-          lr.reason,
-          lr.applied_at,
+          lt.name as leave_type,
           d.name as department
         FROM leave_requests lr
         JOIN employees e ON lr.employee_id = e.id
         JOIN leave_types lt ON lr.leave_type_id = lt.id
         LEFT JOIN departments d ON e.department_id = d.id
         WHERE e.client_id = ?
-        AND lr.status = 'pending'
-        ORDER BY lr.applied_at ASC
+        AND lr.status = 'approved'
+        AND lr.start_date > ?
+        AND lr.start_date <= DATE_ADD(?, INTERVAL 7 DAY)
+        ORDER BY lr.start_date
         LIMIT 10
-      `, [clientId]);
+      `, [clientId, date, date]);
+
+      // Get monthly statistics with duration breakdown
+      const currentMonth = new Date(date).getMonth() + 1;
+      const currentYear = new Date(date).getFullYear();
+      
+      const [monthlyStats] = await db.execute(`
+        SELECT 
+          COUNT(*) as total_requests,
+          SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
+          SUM(CASE WHEN COALESCE(leave_duration, 'full_day') = 'full_day' THEN 1 ELSE 0 END) as full_day_count,
+          SUM(CASE WHEN leave_duration = 'half_day' THEN 1 ELSE 0 END) as half_day_count,
+          SUM(CASE WHEN leave_duration = 'short_leave' THEN 1 ELSE 0 END) as short_leave_count,
+          SUM(days_requested) as total_days_requested
+        FROM leave_requests lr
+        JOIN employees e ON lr.employee_id = e.id
+        WHERE e.client_id = ?
+        AND MONTH(lr.start_date) = ?
+        AND YEAR(lr.start_date) = ?
+      `, [clientId, currentMonth, currentYear]);
+
+      // Format response
+      const dashboard = {
+        summary: {
+          onLeaveCount: onLeaveToday.length,
+          pendingRequestsCount: pendingCount[0].count,
+          upcomingLeavesCount: upcomingLeaves.length,
+          approvedThisMonthCount: monthlyStats[0]?.approved_count || 0,
+          // New duration breakdown
+          durationBreakdown: {
+            fullDay: monthlyStats[0]?.full_day_count || 0,
+            halfDay: monthlyStats[0]?.half_day_count || 0,
+            shortLeave: monthlyStats[0]?.short_leave_count || 0
+          }
+        },
+        onLeaveToday: onLeaveToday.map(leave => ({
+          ...leave,
+          // Format time for short leaves
+          timeRange: leave.leave_duration === 'short_leave' && leave.start_time && leave.end_time
+            ? `${leave.start_time.substring(0, 5)} - ${leave.end_time.substring(0, 5)}`
+            : null
+        })),
+        upcomingLeaves,
+        monthlyStats: monthlyStats[0] || {},
+        date
+      };
 
       res.json({
         success: true,
-        data: {
-          onLeaveToday,
-          pendingRequests,
-          summary: {
-            employeesOnLeaveCount: onLeaveToday.length,
-            pendingRequestsCount: pendingRequests.length
-          },
-          date
-        }
+        data: dashboard
       });
     } catch (error) {
       console.error('Error fetching leave dashboard:', error);

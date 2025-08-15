@@ -1,3 +1,4 @@
+// services/leaveApi.ts
 import apiService from './api';
 
 // =============================================
@@ -41,35 +42,6 @@ export interface LeaveRequest {
   department_name?: string;
 }
 
-export interface CreateLeaveRequestData {
-  leave_type_id: string;
-  start_date: string;
-  end_date: string;
-  leave_duration: 'full_day' | 'half_day' | 'short_leave'; // NEW
-  start_time?: string | null; // NEW - required for short_leave
-  end_time?: string | null; // NEW - required for short_leave
-  reason: string;
-  days_requested: number; // Now supports decimals
-  supporting_documents?: string[] | null;
-  notes?: string | null;
-}
-
-export interface CreateLeaveRequestForEmployeeData extends CreateLeaveRequestData {
-  employee_id: string;
-}
-
-export interface LeaveRequestFilters {
-  start_date?: string;
-  end_date?: string;
-  status?: 'pending' | 'approved' | 'rejected' | 'cancelled';
-  department_id?: string;
-  employee_id?: string;
-  leave_type_id?: string;
-  leave_duration?: 'full_day' | 'half_day' | 'short_leave'; // NEW
-  limit?: number;
-  offset?: number;
-}
-
 export interface LeaveDashboard {
   summary: {
     onLeaveCount: number;
@@ -93,16 +65,19 @@ export interface LeaveDashboard {
   upcomingLeaves: LeaveRequest[];
 }
 
-export interface LeaveBalance {
-  employee_id: string;
+export interface CreateLeaveRequestData {
   leave_type_id: string;
-  leave_type_name: string;
-  year: number;
-  total_allocated: number;
-  used: number; // Now supports decimals for half-day/short leaves
-  pending: number; // Now supports decimals
-  available: number; // Now supports decimals
+  start_date: string;
+  end_date: string;
+  leave_duration: 'full_day' | 'half_day' | 'short_leave'; // NEW
+  start_time?: string | null; // NEW - required for short_leave
+  end_time?: string | null; // NEW - required for short_leave
+  reason: string;
+  days_requested: number; // Now supports decimals
+  supporting_documents?: string[] | null;
+  notes?: string | null;
 }
+
 export interface CreateLeaveTypeData {
   name: string;
   description?: string;
@@ -114,34 +89,59 @@ export interface CreateLeaveTypeData {
   approval_hierarchy?: any[];
 }
 
+export interface LeaveRequestFilters {
+  start_date?: string;
+  end_date?: string;
+  status?: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  department_id?: string;
+  employee_id?: string;
+  leave_type_id?: string;
+  leave_duration?: 'full_day' | 'half_day' | 'short_leave'; // NEW
+  limit?: number;
+  offset?: number;
+}
+
+export interface LeaveBalance {
+  employee_id: string;
+  leave_type_id: string;
+  leave_type_name: string;
+  year: number;
+  total_allocated: number;
+  used: number; // Now supports decimals for half-day/short leaves
+  pending: number; // Now supports decimals
+  available: number; // Now supports decimals
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  pagination?: {
+    total: number;
+    limit: number;
+    offset: number;
+    pages: number;
+  };
+}
+
 // =============================================
 // LEAVE API SERVICE CLASS
 // =============================================
 
 class LeaveApiService {
-
-  private apiService: any;
-
-  constructor(apiService: any) {
-    this.apiService = apiService;
-  }
-  // =============================================
-  // LEAVE TYPES
-  // =============================================
-
+  
   /**
    * Get all leave types for the current client
    */
   async getLeaveTypes(): Promise<ApiResponse<LeaveType[]>> {
     try {
-      const response = await this.apiService.apiCall('/api/leaves/types');
+      const response = await apiService.apiCall('/api/leaves/types');
       return response;
     } catch (error) {
       console.error('Failed to fetch leave types:', error);
       throw error;
     }
   }
-
 
   /**
    * Create a new leave type
@@ -190,70 +190,8 @@ class LeaveApiService {
     }
   }
 
-  // =============================================
-  // LEAVE REQUESTS - EMPLOYEE ACTIONS
-  // =============================================
-
   /**
-   * Get current user's leave requests
-   */
-  // async getMyLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
-  //   try {
-  //     const queryParams = new URLSearchParams();
-  //     if (filters) {
-  //       Object.entries(filters).forEach(([key, value]) => {
-  //         if (value !== undefined && value !== null) {
-  //           queryParams.append(key, value.toString());
-  //         }
-  //       });
-  //     }
-
-  //     const url = `/api/leaves/my-requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  //     const response = await apiService.apiCall(url);
-  //     return response;
-  //   } catch (error) {
-  //     console.error('Failed to fetch my leave requests:', error);
-  //     throw error;
-  //   }
-  // }
-
-  /**
-   * Submit a new leave request
-   */
-  // async submitLeaveRequest(data: CreateLeaveRequestData): Promise<ApiResponse> {
-  //   try {
-  //     const response = await apiService.apiCall('/api/leaves/request', {
-  //       method: 'POST',
-  //       body: JSON.stringify(data),
-  //     });
-  //     return response;
-  //   } catch (error) {
-  //     console.error('Failed to submit leave request:', error);
-  //     throw error;
-  //   }
-  // }
-
-  /**
-   * Cancel a leave request
-   */
-  // async cancelLeaveRequest(requestId: string): Promise<ApiResponse> {
-  //   try {
-  //     const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/cancel`, {
-  //       method: 'PUT',
-  //     });
-  //     return response;
-  //   } catch (error) {
-  //     console.error('Failed to cancel leave request:', error);
-  //     throw error;
-  //   }
-  // }
-
-  // =============================================
-  // LEAVE REQUESTS - MANAGER/HR ACTIONS
-  // =============================================
-
-  /**
-   * Get all leave requests (for managers/HR)
+   * Get all leave requests with optional filters
    */
   async getAllLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
     try {
@@ -267,7 +205,7 @@ class LeaveApiService {
       }
 
       const url = `/api/leaves/requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await this.apiService.apiCall(url);
+      const response = await apiService.apiCall(url);
       return response;
     } catch (error) {
       console.error('Failed to fetch leave requests:', error);
@@ -275,11 +213,11 @@ class LeaveApiService {
     }
   }
 
- /**
+  /**
    * Submit a leave request for an employee (admin action)
    * Now supports leave_duration, start_time, and end_time
    */
-  async submitLeaveRequestForEmployee(data: CreateLeaveRequestForEmployeeData): Promise<ApiResponse> {
+  async submitLeaveRequestForEmployee(data: CreateLeaveRequestData & { employee_id: string }): Promise<ApiResponse> {
     try {
       // Validate time fields for short leave
       if (data.leave_duration === 'short_leave' && (!data.start_time || !data.end_time)) {
@@ -299,7 +237,7 @@ class LeaveApiService {
         days_requested: calculatedDays
       };
 
-      const response = await this.apiService.apiCall('/api/leaves/request', {
+      const response = await apiService.apiCall('/api/leaves/request', {
         method: 'POST',
         body: JSON.stringify(requestData),
       });
@@ -310,12 +248,12 @@ class LeaveApiService {
     }
   }
 
-/**
+  /**
    * Approve a leave request
    */
   async approveLeaveRequest(requestId: string, comments?: string): Promise<ApiResponse> {
     try {
-      const response = await this.apiService.apiCall(`/api/leaves/requests/${requestId}/approve`, {
+      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/approve`, {
         method: 'PUT',
         body: JSON.stringify({ comments }),
       });
@@ -326,12 +264,12 @@ class LeaveApiService {
     }
   }
 
-/**
+  /**
    * Reject a leave request
    */
   async rejectLeaveRequest(requestId: string, comments: string): Promise<ApiResponse> {
     try {
-      const response = await this.apiService.apiCall(`/api/leaves/requests/${requestId}/reject`, {
+      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/reject`, {
         method: 'PUT',
         body: JSON.stringify({ comments }),
       });
@@ -343,32 +281,12 @@ class LeaveApiService {
   }
 
   /**
-   * Bulk approve multiple leave requests
-   */
-  // async bulkApproveRequests(requestIds: string[], comments?: string): Promise<ApiResponse> {
-  //   try {
-  //     const response = await apiService.apiCall('/api/leaves/requests/bulk-approve', {
-  //       method: 'POST',
-  //       body: JSON.stringify({ request_ids: requestIds, comments }),
-  //     });
-  //     return response;
-  //   } catch (error) {
-  //     console.error('Failed to bulk approve requests:', error);
-  //     throw error;
-  //   }
-  // }
-
-  // =============================================
-  // DASHBOARD & ANALYTICS
-  // =============================================
-
-  /**
    * Get leave dashboard data
    */
   async getLeaveDashboard(date?: string): Promise<ApiResponse<LeaveDashboard>> {
     try {
       const url = `/api/leaves/dashboard${date ? `?date=${date}` : ''}`;
-      const response = await this.apiService.apiCall(url);
+      const response = await apiService.apiCall(url);
       return response;
     } catch (error) {
       console.error('Failed to fetch leave dashboard:', error);
@@ -382,7 +300,7 @@ class LeaveApiService {
   async getLeaveBalance(employeeId?: string): Promise<ApiResponse<LeaveBalance[]>> {
     try {
       const url = `/api/leaves/balance${employeeId ? `?employee_id=${employeeId}` : ''}`;
-      const response = await this.apiService.apiCall(url);
+      const response = await apiService.apiCall(url);
       return response;
     } catch (error) {
       console.error('Failed to fetch leave balance:', error);
@@ -391,115 +309,43 @@ class LeaveApiService {
   }
 
   /**
-   * Get leave analytics
+   * Get my leave requests (for current employee)
    */
-  // async getLeaveAnalytics(filters?: {
-  //   start_date?: string;
-  //   end_date?: string;
-  //   department_id?: string;
-  //   leave_type_id?: string;
-  // }): Promise<ApiResponse> {
-  //   try {
-  //     const queryParams = new URLSearchParams();
-  //     if (filters) {
-  //       Object.entries(filters).forEach(([key, value]) => {
-  //         if (value !== undefined && value !== null) {
-  //           queryParams.append(key, value.toString());
-  //         }
-  //       });
-  //     }
-
-  //     const url = `/api/leaves/analytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  //     const response = await apiService.apiCall(url);
-  //     return response;
-  //   } catch (error) {
-  //     console.error('Failed to fetch leave analytics:', error);
-  //     throw error;
-  //   }
-  // }
-
-  // =============================================
-  // EXPORT FUNCTIONALITY
-  // =============================================
-
-  /**
-   * Export leave data
-   */
-  // async exportLeaveData(filters?: {
-  //   start_date?: string;
-  //   end_date?: string;
-  //   format?: 'json' | 'csv' | 'xlsx';
-  //   status?: string;
-  //   department_id?: string;
-  // }): Promise<ApiResponse> {
-  //   try {
-  //     const queryParams = new URLSearchParams();
-  //     if (filters) {
-  //       Object.entries(filters).forEach(([key, value]) => {
-  //         if (value !== undefined && value !== null) {
-  //           queryParams.append(key, value.toString());
-  //         }
-  //       });
-  //     }
-
-  //     const url = `/api/leaves/export${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      
-  //     if (filters?.format === 'csv') {
-  //       // For CSV downloads, we need to handle blob response
-  //       const response = await fetch(`${apiService['baseURL']}${url}`, {
-  //         headers: apiService['getHeaders'](),
-  //       });
-        
-  //       if (!response.ok) {
-  //         throw new Error('Export failed');
-  //       }
-        
-  //       const blob = await response.blob();
-  //       const downloadUrl = window.URL.createObjectURL(blob);
-  //       const link = document.createElement('a');
-  //       link.href = downloadUrl;
-  //       link.download = `leave-export-${new Date().toISOString().split('T')[0]}.csv`;
-  //       document.body.appendChild(link);
-  //       link.click();
-  //       link.remove();
-  //       window.URL.revokeObjectURL(downloadUrl);
-        
-  //       return { success: true, message: 'Export downloaded successfully' };
-  //     } else {
-  //       return await apiService.apiCall(url);
-  //     }
-  //   } catch (error) {
-  //     console.error('Failed to export leave data:', error);
-  //     throw error;
-  //   }
-  // }
-
-  // =============================================
-  // HELPER METHODS
-  // =============================================
-
-  /**
-   * Calculate business days between two dates
-   */
-  calculateBusinessDays(startDate: string, endDate: string): number {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    let businessDays = 0;
-    
-    while (start <= end) {
-      const dayOfWeek = start.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
-        businessDays++;
+  async getMyLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, value.toString());
+          }
+        });
       }
-      start.setDate(start.getDate() + 1);
+
+      const url = `/api/leaves/my-requests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await apiService.apiCall(url);
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch my leave requests:', error);
+      throw error;
     }
-    
-    return businessDays;
   }
 
   /**
-   * Format leave duration for display
+   * Cancel a leave request
    */
+  async cancelLeaveRequest(requestId: string): Promise<ApiResponse> {
+    try {
+      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}/cancel`, {
+        method: 'PUT',
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to cancel leave request:', error);
+      throw error;
+    }
+  }
+
   /**
    * Helper function to format leave duration display
    */
@@ -562,6 +408,41 @@ class LeaveApiService {
   }
 
   /**
+   * Calculate business days between two dates
+   */
+  calculateBusinessDays(startDate: string, endDate: string): number {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    let businessDays = 0;
+    
+    while (start <= end) {
+      const dayOfWeek = start.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
+        businessDays++;
+      }
+      start.setDate(start.getDate() + 1);
+    }
+    
+    return businessDays;
+  }
+
+  /**
+   * Format leave duration for display
+   */
+  formatLeaveDurationText(startDate: string, endDate: string, days: number): string {
+    const start = new Date(startDate).toLocaleDateString();
+    const end = new Date(endDate).toLocaleDateString();
+    
+    if (days === 1) {
+      return `${start} (1 day)`;
+    } else if (startDate === endDate) {
+      return `${start} (1 day)`;
+    } else {
+      return `${start} to ${end} (${days} days)`;
+    }
+  }
+
+  /**
    * Get status color for UI
    */
   getStatusColor(status: string): string {
@@ -600,8 +481,8 @@ class LeaveApiService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (start >= end) {
-      errors.push('End date must be after start date');
+    if (start > end) {
+      errors.push('End date must be on or after start date');
     }
 
     if (start < today) {
@@ -622,13 +503,6 @@ class LeaveApiService {
   }
 }
 
-// Export default instance
-export default LeaveApiService;
-
-// Type definition for API response
-interface ApiResponse<T = any> {
-  success: boolean;
-  message: string;
-  data?: T;
-  error?: string;
-}
+// Create and export singleton instance
+const leaveApiService = new LeaveApiService();
+export default leaveApiService;

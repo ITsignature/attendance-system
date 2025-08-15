@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Button,
@@ -16,12 +17,60 @@ import {
   FaInfoCircle,
   FaClock
 } from 'react-icons/fa';
+import leaveApiService from '../../services/leaveApi';
+import apiService from '../../services/api';
 
-const LeaveRequestForm = () => {
+// Type Definitions
+interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  employee_code: string;
+  department_name?: string;
+  designation?: string;
+  employment_status: string;
+}
+
+interface LeaveType {
+  id: string;
+  name: string;
+  description?: string;
+  max_days_per_request?: number;
+  advance_notice_days?: number;
+  max_days_per_year?: number;
+  is_paid: boolean;
+}
+
+interface FormData {
+  employee_id: string;
+  leave_type_id: string;
+  leave_duration: 'full_day' | 'half_day' | 'short_leave';
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+  reason: string;
+  admin_notes: string;
+  supporting_documents: File[];
+}
+
+interface FormErrors {
+  employee_id?: string;
+  leave_type_id?: string;
+  start_date?: string;
+  end_date?: string;
+  start_time?: string;
+  end_time?: string;
+  reason?: string;
+  general?: string;
+}
+
+const LeaveRequestForm: React.FC = () => {
   const navigate = useNavigate();
   
-  // State Management
-  const [formData, setFormData] = useState({
+  // State Management with proper types
+  const [formData, setFormData] = useState<FormData>({
     employee_id: '',
     leave_type_id: '',
     leave_duration: 'full_day',
@@ -34,14 +83,14 @@ const LeaveRequestForm = () => {
     supporting_documents: []
   });
 
-  const [employees, setEmployees] = useState([]);
-  const [leaveTypes, setLeaveTypes] = useState([]);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [submitLoading, setSubmitLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [success, setSuccess] = useState('');
-  const [calculatedDays, setCalculatedDays] = useState(0);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [submitLoading, setSubmitLoading] = useState<boolean>(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [success, setSuccess] = useState<string>('');
+  const [calculatedDays, setCalculatedDays] = useState<number>(0);
 
   // Load initial data
   useEffect(() => {
@@ -58,27 +107,24 @@ const LeaveRequestForm = () => {
     if (formData.leave_duration !== 'full_day' && formData.start_date) {
       setFormData(prev => ({ ...prev, end_date: formData.start_date }));
     }
-  }, [formData.leave_duration]);
+  }, [formData.leave_duration, formData.start_date]);
 
-  const loadInitialData = async () => {
+  const loadInitialData = async (): Promise<void> => {
     try {
       setLoading(true);
       
-      // Mock API calls - replace with actual API service
+      // Fetch employees and leave types
       const [employeesResponse, leaveTypesResponse] = await Promise.all([
-        fetch('/api/employees'),
-        fetch('/api/leaves/types')
+        apiService.apiCall('/api/employees'),
+        leaveApiService.getLeaveTypes()
       ]);
 
-      const employeesData = await employeesResponse.json();
-      const leaveTypesData = await leaveTypesResponse.json();
-
-      if (employeesData.success) {
-        setEmployees(employeesData.data || []);
+      if (employeesResponse.success) {
+        setEmployees(employeesResponse.data || []);
       }
       
-      if (leaveTypesData.success) {
-        setLeaveTypes(leaveTypesData.data || []);
+      if (leaveTypesResponse.success) {
+        setLeaveTypes(leaveTypesResponse.data || []);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -88,7 +134,7 @@ const LeaveRequestForm = () => {
     }
   };
 
-  const calculateLeaveDays = () => {
+  const calculateLeaveDays = (): void => {
     if (!formData.start_date || !formData.end_date) {
       setCalculatedDays(0);
       return;
@@ -115,12 +161,16 @@ const LeaveRequestForm = () => {
     }
   };
 
-  const handleInputChange = (field, value) => {
+  const handleInputChange = (field: keyof FormData, value: any): void => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Clear field error when user types
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
+    if (errors[field as keyof FormErrors]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field as keyof FormErrors];
+        return newErrors;
+      });
     }
 
     // Handle employee selection
@@ -130,8 +180,8 @@ const LeaveRequestForm = () => {
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {};
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
 
     if (!formData.employee_id) {
       newErrors.employee_id = 'Please select an employee';
@@ -175,7 +225,7 @@ const LeaveRequestForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -200,16 +250,9 @@ const LeaveRequestForm = () => {
         supporting_documents: formData.supporting_documents?.length > 0 ? formData.supporting_documents : null
       };
 
-      // Mock API call - replace with actual API service
-      const response = await fetch('/api/leaves/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submitData)
-      });
-      
-      const result = await response.json();
+      const response = await leaveApiService.submitLeaveRequestForEmployee(submitData);
 
-      if (result.success) {
+      if (response.success) {
         setSuccess(`Leave request created successfully for ${selectedEmployee?.first_name} ${selectedEmployee?.last_name}!`);
         
         // Reset form
@@ -233,21 +276,21 @@ const LeaveRequestForm = () => {
           navigate('/leave-requests');
         }, 2000);
       } else {
-        setErrors({ general: result.message || 'Failed to create leave request' });
+        setErrors({ general: response.message || 'Failed to create leave request' });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create leave request:', error);
-      setErrors({ general: 'Failed to create leave request. Please try again.' });
+      setErrors({ general: error.message || 'Failed to create leave request. Please try again.' });
     } finally {
       setSubmitLoading(false);
     }
   };
 
-  const getTodayDate = () => {
+  const getTodayDate = (): string => {
     return new Date().toISOString().split('T')[0];
   };
 
-  const formatDate = (date) => {
+  const formatDate = (date: string): string => {
     return new Date(date).toLocaleDateString('en-US', {
       weekday: 'short',
       year: 'numeric',
@@ -256,7 +299,7 @@ const LeaveRequestForm = () => {
     });
   };
 
-  const getDurationBadgeColor = (duration) => {
+  const getDurationBadgeColor = (duration: string): string => {
     switch (duration) {
       case 'full_day': return 'success';
       case 'half_day': return 'info';
@@ -265,7 +308,7 @@ const LeaveRequestForm = () => {
     }
   };
 
-  const getDurationLabel = (duration) => {
+  const getDurationLabel = (duration: string): string => {
     switch (duration) {
       case 'full_day': return 'Full Day';
       case 'half_day': return 'Half Day';
@@ -319,7 +362,7 @@ const LeaveRequestForm = () => {
               required
             >
               <option value="">Choose an employee...</option>
-              {employees.map((employee) => (
+              {Array.isArray(employees) && employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
                   {employee.first_name} {employee.last_name} - {employee.employee_code}
                 </option>
@@ -373,7 +416,7 @@ const LeaveRequestForm = () => {
           <div>
             <Label htmlFor="leave_duration" value="Leave Duration *" />
             <div className="grid grid-cols-3 gap-3 mt-2">
-              {['full_day', 'half_day', 'short_leave'].map((duration) => (
+              {(['full_day', 'half_day', 'short_leave'] as const).map((duration) => (
                 <button
                   key={duration}
                   type="button"
@@ -528,6 +571,7 @@ const LeaveRequestForm = () => {
               color="gray"
               onClick={() => navigate('/leave-requests')}
               disabled={submitLoading}
+              type="button"
             >
               Cancel
             </Button>
