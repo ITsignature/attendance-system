@@ -204,6 +204,102 @@ console.log('🔍 Token will expire at:', new Date(Date.now() + 24 * 60 * 60 * 1
 // =============================================
 // REFRESH TOKEN ENDPOINT
 // =============================================
+// router.post('/refresh', asyncHandler(async (req, res) => {
+//   const { refreshToken } = req.body;
+
+//   if (!refreshToken) {
+//     return res.status(400).json({
+//       success: false,
+//       message: 'Refresh token is required'
+//     });
+//   }
+
+//   try {
+//     // Verify refresh token
+//     const decoded = verifyToken(refreshToken, 'refresh');
+//     const db = getDB();
+
+
+
+//     // Check if session exists and is active
+//     const [sessions] = await db.execute(`
+//       SELECT us.*, au.is_active as user_active
+//       FROM user_sessions us
+//       JOIN admin_users au ON us.admin_user_id = au.id
+//       WHERE us.token_jti = ? AND us.is_active = TRUE AND us.expires_at > NOW()     
+//     `, [decoded.jti]);
+
+//     console.log('decoded',decoded);
+//     console.log('sessions:', sessions);
+    
+// // 55a4dff5-7ce7-464f-9142-5d56f1811406   ad428097-5979-43ea-9e66-d49a55d3a5d2
+//     if (sessions.length === 0) {
+//       console.log('Invalid or expired refresh token');
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Invalid or expired refresh token'
+//       });
+//     }
+
+//     // Get fresh user data
+//     const [users] = await db.execute(`
+//       SELECT
+//         au.*,
+//         r.name as role_name,
+//         r.access_level,
+//         c.name as client_name
+//       FROM admin_users au
+//       JOIN roles r ON au.role_id = r.id
+//       LEFT JOIN clients c ON au.client_id = c.id
+//       WHERE au.id = ? AND au.is_active = TRUE
+//     `, [decoded.userId]);
+
+//     if (users.length === 0) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'User not found or inactive'
+//       });
+//     }
+
+//     const user = users[0];
+
+//     // Generate new tokens
+//     const tokenPayload = {
+//       userId: user.id,
+//       email: user.email,
+//       clientId: user.client_id,
+//       roleId: user.role_id,
+//       isSuperAdmin: user.is_super_admin
+//     };
+
+//     const { accessToken, refreshToken: newRefreshToken, jti } = generateTokens(tokenPayload);
+
+//     // Update session with new JTI
+//     await db.execute(`
+//       UPDATE user_sessions 
+//       SET token_jti = ?, expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR)
+//       WHERE token_jti = ?
+//     `, [jti, decoded.jti]);
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Token refreshed successfully',
+//       data: {
+//         accessToken,
+//         refreshToken: newRefreshToken,
+//         expiresIn: convertToSeconds(process.env.JWT_EXPIRES_IN)
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('Token refresh error:', error);
+//     console.log('Token Refresh Error')
+//     res.status(401).json({
+//       success: false,
+//       message: 'Invalid refresh token'
+//     });
+//   }
+// }));
 router.post('/refresh', asyncHandler(async (req, res) => {
   const { refreshToken } = req.body;
 
@@ -219,17 +315,36 @@ router.post('/refresh', asyncHandler(async (req, res) => {
     const decoded = verifyToken(refreshToken, 'refresh');
     const db = getDB();
 
-    // Check if session exists and is active
-    const [sessions] = await db.execute(`
-      SELECT us.*, au.is_active as user_active
-      FROM user_sessions us
-      JOIN admin_users au ON us.admin_user_id = au.id
-      WHERE us.token_jti = ? AND us.is_active = TRUE AND us.expires_at > NOW()     
-    `, [decoded.jti]);
+    // 🔥 ADD: Test database connection and retry if needed
+    let retries = 3;
+    let sessions;
+    
+    while (retries > 0) {
+      try {
+        // Check if session exists and is active
+        [sessions] = await db.execute(`
+          SELECT us.*, au.is_active as user_active
+          FROM user_sessions us
+          JOIN admin_users au ON us.admin_user_id = au.id
+          WHERE us.token_jti = ? AND us.is_active = TRUE AND us.expires_at > NOW()     
+        `, [decoded.jti]);
+        break; // Success, exit retry loop
+      } catch (dbError) {
+        console.error(`Database error (attempt ${4 - retries}):`, dbError.code);
+        retries--;
+        
+        if (retries === 0) {
+          throw dbError; // Re-throw if all retries failed
+        }
+        
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, (4 - retries) * 1000));
+      }
+    }
 
+    console.log('decoded', decoded);
     console.log('sessions:', sessions);
     
-// 55a4dff5-7ce7-464f-9142-5d56f1811406   ad428097-5979-43ea-9e66-d49a55d3a5d2
     if (sessions.length === 0) {
       console.log('Invalid or expired refresh token');
       return res.status(401).json({
@@ -238,18 +353,32 @@ router.post('/refresh', asyncHandler(async (req, res) => {
       });
     }
 
-    // Get fresh user data
-    const [users] = await db.execute(`
-      SELECT
-        au.*,
-        r.name as role_name,
-        r.access_level,
-        c.name as client_name
-      FROM admin_users au
-      JOIN roles r ON au.role_id = r.id
-      LEFT JOIN clients c ON au.client_id = c.id
-      WHERE au.id = ? AND au.is_active = TRUE
-    `, [decoded.userId]);
+    // Get fresh user data with retry logic
+    retries = 3;
+    let users;
+    
+    while (retries > 0) {
+      try {
+        [users] = await db.execute(`
+          SELECT
+            au.*,
+            r.name as role_name,
+            r.access_level,
+            c.name as client_name
+          FROM admin_users au
+          JOIN roles r ON au.role_id = r.id
+          LEFT JOIN clients c ON au.client_id = c.id
+          WHERE au.id = ? AND au.is_active = TRUE
+        `, [decoded.userId]);
+        break;
+      } catch (dbError) {
+        console.error(`Database error on user fetch (attempt ${4 - retries}):`, dbError.code);
+        retries--;
+        
+        if (retries === 0) throw dbError;
+        await new Promise(resolve => setTimeout(resolve, (4 - retries) * 1000));
+      }
+    }
 
     if (users.length === 0) {
       return res.status(401).json({
@@ -271,12 +400,24 @@ router.post('/refresh', asyncHandler(async (req, res) => {
 
     const { accessToken, refreshToken: newRefreshToken, jti } = generateTokens(tokenPayload);
 
-    // Update session with new JTI
-    await db.execute(`
-      UPDATE user_sessions 
-      SET token_jti = ?, expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR)
-      WHERE token_jti = ?
-    `, [jti, decoded.jti]);
+    // Update session with new JTI with retry logic
+    retries = 3;
+    while (retries > 0) {
+      try {
+        await db.execute(`
+          UPDATE user_sessions 
+          SET token_jti = ?, expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR)
+          WHERE token_jti = ?
+        `, [jti, decoded.jti]);
+        break;
+      } catch (dbError) {
+        console.error(`Database error on session update (attempt ${4 - retries}):`, dbError.code);
+        retries--;
+        
+        if (retries === 0) throw dbError;
+        await new Promise(resolve => setTimeout(resolve, (4 - retries) * 1000));
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -290,14 +431,21 @@ router.post('/refresh', asyncHandler(async (req, res) => {
 
   } catch (error) {
     console.error('Token refresh error:', error);
-    console.log('Akila willa always be a pillar of the og crew')
+    
+    // 🔥 ADD: Better error handling for different error types
+    if (error.code === 'ECONNRESET' || error.code === 'PROTOCOL_CONNECTION_LOST') {
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection error. Please try again.'
+      });
+    }
+    
     res.status(401).json({
       success: false,
       message: 'Invalid refresh token'
     });
   }
 }));
-
 // =============================================
 // LOGOUT ENDPOINT
 // =============================================

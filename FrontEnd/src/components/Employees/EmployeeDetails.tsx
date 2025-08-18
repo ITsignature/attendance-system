@@ -37,6 +37,10 @@ interface Employee {
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
+  // Added work schedule fields
+  in_time?: string;
+  out_time?: string;
+  follows_company_schedule?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +84,17 @@ interface FinancialRecord {
   status: 'Paid' | 'Pending' | 'Approved' | 'Rejected';
 }
 
+interface EmployeeDocument {
+  id: string;
+  document_type: string;
+  original_filename: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_at: string;
+  notes?: string;
+  uploaded_by_name?: string;
+}
+
 interface FieldProps {
   label: string;
   value: string | number | undefined;
@@ -107,6 +122,7 @@ const EmployeeDetails: React.FC = () => {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
+  const [documents, setDocuments] = useState<{[key: string]: EmployeeDocument[]}>({});
   
   // UI State
   const [loading, setLoading] = useState(true);
@@ -160,7 +176,8 @@ const EmployeeDetails: React.FC = () => {
         await Promise.all([
           loadAttendanceData(employeeData.id),
           loadLeaveData(employeeData.id),
-          loadFinancialData(employeeData.id)
+          loadFinancialData(employeeData.id),
+          loadDocuments(employeeData.id)
         ]);
         
       } else {
@@ -329,6 +346,91 @@ const EmployeeDetails: React.FC = () => {
       console.warn('Failed to load financial data:', error);
       setFinancialRecords([]);
     }
+  };
+
+  const loadDocuments = async (empId: string) => {
+    try {
+      console.log('🔄 Loading documents for employee:', empId);
+      
+      const response = await apiService.apiCall(`/api/employees/${empId}/documents`);
+      
+      if (response.success && response.data) {
+        console.log('✅ Documents loaded:', response.data.documents);
+        setDocuments(response.data.documents || {});
+      } else {
+        console.warn('Failed to load documents:', response.message);
+        setDocuments({});
+      }
+    } catch (error) {
+      console.warn('Failed to load documents:', error);
+      setDocuments({});
+    }
+  };
+
+  const handleDownloadDocument = async (documentId: string) => {
+    try {
+      // Use fetch directly for blob downloads instead of apiService
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(
+        `/api/employees/${employee?.id}/documents/${documentId}/download`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Get the filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'document';
+      
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (fileNameMatch) {
+          filename = fileNameMatch[1];
+        }
+      }
+      
+      // Get the blob from response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Failed to download document:', error);
+      setError('Failed to download document');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getDocumentIcon = (mimeType: string) => {
+    if (mimeType.includes('pdf')) return '📄';
+    if (mimeType.includes('image')) return '🖼️';
+    if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
+    return '📁';
   };
 
   // Handle terminate employee
@@ -627,6 +729,43 @@ const EmployeeDetails: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Work Schedule Section */}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <HiClock className="w-6 h-6 text-purple-600" />
+                    Work Schedule
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Field 
+                      label="In Time" 
+                      value={employee.in_time ? formatTime(employee.in_time) : undefined}
+                      icon={<HiClock className="w-4 h-4 text-gray-500" />}
+                    />
+                    <Field 
+                      label="Out Time" 
+                      value={employee.out_time ? formatTime(employee.out_time) : undefined}
+                      icon={<HiClock className="w-4 h-4 text-gray-500" />}
+                    />
+                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <div className="flex items-center gap-2 mb-1">
+                        <HiClock className="w-4 h-4 text-gray-500" />
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Follows Company Schedule</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge 
+                          color={employee.follows_company_schedule ? 'green' : 'gray'} 
+                          size="sm"
+                        >
+                          {employee.follows_company_schedule ? 'Yes' : 'No'}
+                        </Badge>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {employee.follows_company_schedule ? 'Uses company standard hours' : 'Custom schedule'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Emergency Contact Section */}
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -647,44 +786,65 @@ const EmployeeDetails: React.FC = () => {
                     Documents
                   </h3>
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                    <div className="space-y-3">
-                      {/* Mock documents - replace with actual document management */}
-                      <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border">
-                        <div className="flex items-center gap-3">
-                          <HiDocumentText className="w-5 h-5 text-gray-500" />
-                          <span className="text-sm font-medium">Appointment Letter.pdf</span>
+                    <div className="space-y-4">
+                      {Object.keys(documents).length === 0 ? (
+                        <div className="text-center py-8">
+                          <HiDocumentText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-500 dark:text-gray-400">No documents uploaded yet.</p>
                         </div>
-                        <div className="flex gap-2">
-                          <Button size="xs" color="gray">
-                            <FaEye className="w-3 h-3" />
-                          </Button>
-                          <Button size="xs" color="gray">
-                            <FaDownload className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border">
-                        <div className="flex items-center gap-3">
-                          <HiDocumentText className="w-5 h-5 text-gray-500" />
-                          <span className="text-sm font-medium">Experience Certificate.pdf</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="xs" color="gray">
-                            <FaEye className="w-3 h-3" />
-                          </Button>
-                          <Button size="xs" color="gray">
-                            <FaDownload className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <DynamicProtectedComponent permission="employees.edit">
-                        <Button size="sm" color="purple" className="mt-4">
-                          <FaPlus className="w-3 h-3 mr-2" />
-                          Upload Document
-                        </Button>
-                      </DynamicProtectedComponent>
+                      ) : (
+                        Object.entries(documents).map(([documentType, docs]) => (
+                          <div key={documentType} className="space-y-2">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 capitalize border-b pb-1">
+                              {documentType.replace('_', ' ')} ({docs.length})
+                            </h4>
+                            <div className="space-y-2">
+                              {docs.map((doc) => (
+                                <div 
+                                  key={doc.id} 
+                                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border hover:shadow-sm transition-shadow"
+                                >
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <span className="text-2xl">{getDocumentIcon(doc.mime_type)}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                        {doc.original_filename}
+                                      </p>
+                                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                        <span>{formatFileSize(doc.file_size)}</span>
+                                        <span>•</span>
+                                        <span>{formatDate(doc.uploaded_at)}</span>
+                                        {doc.uploaded_by_name && (
+                                          <>
+                                            <span>•</span>
+                                            <span>by {doc.uploaded_by_name}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                      {doc.notes && (
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                          {doc.notes}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex gap-2 ml-4">
+                                    <Button 
+                                      size="xs" 
+                                      color="gray" 
+                                      title="Download"
+                                      onClick={() => handleDownloadDocument(doc.id)}
+                                    >
+                                      <FaDownload className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>

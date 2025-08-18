@@ -462,7 +462,7 @@ private async queueRefresh(): Promise<void> {
   async checkEmailAvailability(email: string): Promise<ApiResponse> {
     return this.apiCall(`/api/employees/check-email?email=${encodeURIComponent(email)}`);
   }
-  async updateEmployee(id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
+  async   (id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
     return this.apiCall(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) });
   }
   async deleteEmployee(id: string): Promise<ApiResponse> {

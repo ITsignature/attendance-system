@@ -369,9 +369,37 @@ router.put('/:id',
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
     body('marital_status').optional().isIn(['single', 'married', 'divorced', 'widowed']).withMessage('Invalid marital status'),
     
-    // ADD NEW WORK SCHEDULE VALIDATIONS
-    body('in_time').optional().isTime().withMessage('Valid in time is required'),
-    body('out_time').optional().isTime().withMessage('Valid out time is required'),
+    // ADD NEW WORK SCHEDULE VALIDATIONS with custom cleaning
+    body('in_time').optional().custom((value) => {
+      if (!value) return true; // Allow empty/null values
+      
+      // Clean the value - remove quotes and whitespace
+      let cleanValue = value;
+      if (typeof value === 'string') {
+        cleanValue = value.replace(/^["']|["']$/g, '').trim();
+      }
+      
+      // Check if it matches time format HH:MM
+      if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(cleanValue)) {
+        throw new Error('Valid in time is required (HH:MM format)');
+      }
+      return true;
+    }),
+    body('out_time').optional().custom((value) => {
+      if (!value) return true; // Allow empty/null values
+      
+      // Clean the value - remove quotes and whitespace
+      let cleanValue = value;
+      if (typeof value === 'string') {
+        cleanValue = value.replace(/^["']|["']$/g, '').trim();
+      }
+      
+      // Check if it matches time format HH:MM
+      if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(cleanValue)) {
+        throw new Error('Valid out time is required (HH:MM format)');
+      }
+      return true;
+    }),
     body('follows_company_schedule').optional().isBoolean().withMessage('follows_company_schedule must be true or false')
   ],
   asyncHandler(async (req, res) => {
@@ -387,6 +415,14 @@ router.put('/:id',
 
     const db = getDB();
     const employeeId = req.params.id;
+    
+    // 🔥 FIX: Clean time values in request body AFTER validation
+    if (req.body.in_time && typeof req.body.in_time === 'string') {
+      req.body.in_time = req.body.in_time.replace(/^["']|["']$/g, '').trim();
+    }
+    if (req.body.out_time && typeof req.body.out_time === 'string') {
+      req.body.out_time = req.body.out_time.replace(/^["']|["']$/g, '').trim();
+    }
     
     // Handle work schedule logic
     if (req.body.in_time || req.body.out_time || req.body.hasOwnProperty('follows_company_schedule')) {
@@ -409,7 +445,12 @@ router.put('/:id',
         const scheduleMap = {};
         companySchedule.forEach(setting => {
           try {
-            scheduleMap[setting.setting_key] = JSON.parse(setting.setting_value);
+            let value = JSON.parse(setting.setting_value);
+            // 🔥 FIX: Remove quotes if it's a string wrapped in quotes
+            if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+              value = value.slice(1, -1); // Remove first and last character (quotes)
+            }
+            scheduleMap[setting.setting_key] = value;
           } catch (e) {
             scheduleMap[setting.setting_key] = setting.setting_value;
           }
@@ -465,8 +506,27 @@ router.put('/:id',
 
     allowedFields.forEach(field => {
       if (req.body.hasOwnProperty(field)) {
+        // 🔥 FIX: Handle undefined values properly
+        let value = req.body[field];
+        
+        // 🔥 FIX: Clean time values if they have quotes
+        if ((field === 'in_time' || field === 'out_time') && typeof value === 'string') {
+          // Remove quotes if present: "08:00" -> 08:00
+          value = value.replace(/^["']|["']$/g, '');
+        }
+        
+        // Convert undefined to null for MySQL compatibility
+        if (value === undefined) {
+          value = null;
+        }
+        
+        // Handle empty strings for optional fields
+        if (value === '') {
+          value = null;
+        }
+        
         updateFields.push(`${field} = ?`);
-        updateValues.push(req.body[field]);
+        updateValues.push(value);
       }
     });
 
@@ -489,37 +549,51 @@ router.put('/:id',
     // Add client_id to ensure user can only update their own employees
     updateValues.push(req.user.clientId);
 
-    const [result] = await db.execute(updateQuery, updateValues);
+    // 🔥 DEBUG: Log the final query and values for debugging
+    console.log('🔧 Update Query:', updateQuery);
+    console.log('🔧 Update Values:', updateValues);
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
+    try {
+      const [result] = await db.execute(updateQuery, updateValues);
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Employee not found'
+        });
+      }
+
+      // Fetch updated employee with all related data
+      const [updatedEmployee] = await db.execute(`
+        SELECT 
+          e.*,
+          CONCAT(e.first_name, ' ', e.last_name) as full_name,
+          d.name as department_name,
+          des.title as designation_title,
+          CONCAT(m.first_name, ' ', m.last_name) as manager_name
+        FROM employees e
+        LEFT JOIN departments d ON e.department_id = d.id
+        LEFT JOIN designations des ON e.designation_id = des.id
+        LEFT JOIN employees m ON e.manager_id = m.id
+        WHERE e.id = ? AND e.client_id = ?
+      `, [employeeId, req.user.clientId]);
+
+      res.status(200).json({
+        success: true,
+        message: 'Employee updated successfully',
+        data: {
+          employee: updatedEmployee[0]
+        }
+      });
+
+    } catch (dbError) {
+      console.error('❌ Database error during employee update:', dbError);
+      return res.status(500).json({
         success: false,
-        message: 'Employee not found'
+        message: 'Database error occurred while updating employee',
+        error: dbError.message
       });
     }
-
-    // Fetch updated employee with all related data
-    const [updatedEmployee] = await db.execute(`
-      SELECT 
-        e.*,
-        CONCAT(e.first_name, ' ', e.last_name) as full_name,
-        d.name as department_name,
-        des.title as designation_title,
-        CONCAT(m.first_name, ' ', m.last_name) as manager_name
-      FROM employees e
-      LEFT JOIN departments d ON e.department_id = d.id
-      LEFT JOIN designations des ON e.designation_id = des.id
-      LEFT JOIN employees m ON e.manager_id = m.id
-      WHERE e.id = ? AND e.client_id = ?
-    `, [employeeId, req.user.clientId]);
-
-    res.status(200).json({
-      success: true,
-      message: 'Employee updated successfully',
-      data: {
-        employee: updatedEmployee[0]
-      }
-    });
   })
 );
 
