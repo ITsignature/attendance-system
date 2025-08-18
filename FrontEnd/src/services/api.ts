@@ -269,16 +269,16 @@ class ApiService {
   //   return response as LoginResponse;
   // }
 
-  // async logout(): Promise<ApiResponse> {
-  //   try {
-  //     const response = await this.apiCall('/auth/logout', { method: 'POST' });
-  //     this.removeToken();
-  //     return response;
-  //   } catch (error) {
-  //     this.removeToken();
-  //     throw error;
-  //   }
-  // }
+  async logout(): Promise<ApiResponse> {
+    try {
+      const response = await this.apiCall('/auth/logout', { method: 'POST' });
+      this.removeToken();
+      return response;
+    } catch (error) {
+      this.removeToken();
+      throw error;
+    }
+  }
 
   async login(email: string, password: string): Promise<LoginResponse> {
   const response = await this.apiCall<LoginResponse['data']>('/auth/login', {
@@ -292,7 +292,7 @@ class ApiService {
     //localStorage.setItem('user', JSON.stringify(response.data.user));
 
     // NEW: schedule proactive refresh if backend returns expiresIn
-    const secs =
+    let secs =
       typeof response.data.expiresIn === 'string'
         ? parseInt(response.data.expiresIn, 10)
         : Number(response.data.expiresIn);
@@ -386,8 +386,10 @@ private scheduleTokenRefresh(expiresInSeconds?: number) {
 
   // refresh 60s before expiry (never < 5s)
   const refreshInMs = Math.max((expiresInSeconds - 60) * 1000, 5000);
+  console.log(`🔄 Scheduling refresh in ${refreshInMs / 1000}s for token expiring in ${expiresInSeconds}s`);
   this.refreshTimer = window.setTimeout(async () => {
     try {
+      console.log('🔄 Auto-refresh triggered');
       await this.queueRefresh(); // will no-op if already refreshing
     } catch {
       // ignore here; the next actual API call will force logout if needed

@@ -163,6 +163,9 @@ router.post('/login', [
       sessionExpiry
     ]);
 
+    console.log('🔍 Server time when generating token:', new Date().toISOString());
+console.log('🔍 Token will expire at:', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+
     // Prepare response data
     const userData = {
       id: user.id,
@@ -185,7 +188,7 @@ router.post('/login', [
         user: userData,
         accessToken,
         refreshToken,
-        expiresIn: process.env.JWT_EXPIRES_IN
+        expiresIn: convertToSeconds(process.env.JWT_EXPIRES_IN)
       }
     });
 
@@ -221,10 +224,14 @@ router.post('/refresh', asyncHandler(async (req, res) => {
       SELECT us.*, au.is_active as user_active
       FROM user_sessions us
       JOIN admin_users au ON us.admin_user_id = au.id
-      WHERE us.token_jti = ? AND us.is_active = TRUE AND us.expires_at > NOW()
+      WHERE us.token_jti = ? AND us.is_active = TRUE AND us.expires_at > NOW()     
     `, [decoded.jti]);
 
+    console.log('sessions:', sessions);
+    
+// 55a4dff5-7ce7-464f-9142-5d56f1811406   ad428097-5979-43ea-9e66-d49a55d3a5d2
     if (sessions.length === 0) {
+      console.log('Invalid or expired refresh token');
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired refresh token'
@@ -233,7 +240,7 @@ router.post('/refresh', asyncHandler(async (req, res) => {
 
     // Get fresh user data
     const [users] = await db.execute(`
-      SELECT 
+      SELECT
         au.*,
         r.name as role_name,
         r.access_level,
@@ -277,12 +284,13 @@ router.post('/refresh', asyncHandler(async (req, res) => {
       data: {
         accessToken,
         refreshToken: newRefreshToken,
-        expiresIn: process.env.JWT_EXPIRES_IN
+        expiresIn: convertToSeconds(process.env.JWT_EXPIRES_IN)
       }
     });
 
   } catch (error) {
     console.error('Token refresh error:', error);
+    console.log('Akila willa always be a pillar of the og crew')
     res.status(401).json({
       success: false,
       message: 'Invalid refresh token'
@@ -395,5 +403,31 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
     });
   }
 }));
+
+const convertToSeconds = (timeStr) => {
+  if (!timeStr) return 900; // default 15 minutes
+  
+  const str = timeStr.toString();
+  
+  // Handle pure numbers (assume seconds)
+  if (/^\d+$/.test(str)) {
+    return parseInt(str);
+  }
+  
+  // Handle time formats like "15m", "24h", "7d"
+  const match = str.match(/^(\d+)([smhd])$/);
+  if (!match) return 900; // default 15 minutes
+  
+  const [, num, unit] = match;
+  const value = parseInt(num);
+  
+  switch(unit) {
+    case 's': return value;
+    case 'm': return value * 60;      // minutes to seconds
+    case 'h': return value * 3600;    // hours to seconds  
+    case 'd': return value * 86400;   // days to seconds
+    default: return value;
+  }
+};
 
 module.exports = router;

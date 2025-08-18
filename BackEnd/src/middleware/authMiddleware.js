@@ -42,7 +42,7 @@ const authenticate = asyncHandler(async (req, res, next) => {
 
   const session = sessions[0];
 
-  console.log("session",session);
+  console.log("session eka meka",session);
   
   // If session expired, mark inactive and return error
   if (new Date(session.expires_at) <= new Date()) {
@@ -51,6 +51,7 @@ const authenticate = asyncHandler(async (req, res, next) => {
       SET is_active = FALSE
       WHERE id = ?
     `, [session.id]);
+    console.log('Expired token');
 
     return res.status(401).json({
       success: false,
@@ -122,6 +123,25 @@ const authenticate = asyncHandler(async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Authentication error:', error);
+
+    if (error.name === 'TokenExpiredError') {
+      console.log('Token expiredd');
+      return res.status(401).json({
+        success: false,
+        message: 'Token expired',
+        code: 'TOKEN_EXPIRED'  // ← Frontend can detect this
+      });
+    }
+    
+    if (error.name === 'JsonWebTokenError') {
+      console.log('Token invalidd');
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token',
+        code: 'TOKEN_INVALID'
+      });
+    }
+
     return res.status(401).json({
       success: false,
       message: 'Invalid token'

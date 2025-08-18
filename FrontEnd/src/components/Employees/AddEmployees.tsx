@@ -512,6 +512,16 @@ const AddEmployees: React.FC = () => {
   };
 
   const uploadEmployeeDocuments = async (employeeId: string) => {
+  const token = localStorage.getItem('accessToken');
+  const userData = localStorage.getItem('user');
+  
+  console.log('🔍 Upload Debug:', { hasToken: !!token, hasUserData: !!userData });
+  
+  if (!token) {
+    console.error('❌ No token found');
+    return;
+  }
+
   try {
     for (const [documentType, files] of Object.entries(uploadedDocuments)) {
       if (files && files.length > 0) {
@@ -523,14 +533,22 @@ const AddEmployees: React.FC = () => {
         });
         
         formData.append('notes', `${documentType.replace('_', ' ')} document for employee`);
+        console.log('formdata',formData);
         
-        const response = await fetch(`/api/employees/${employeeId}/documents`, {
+        const response = await fetch(`http://localhost:5000/api/employees/${employeeId}/documents`, {
           method: 'POST',
+          // headers: {
+          //   'Authorization': `Bearer ${localStorage.getItem('token')}`
+          // },
+
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
+    'Authorization': `Bearer ${token}`,
+    ...(userData && { 'X-Client-ID': JSON.parse(userData).clientId })
+  },
           body: formData
+          
         });
+        debugAuth;
         
         const result = await response.json();
         
@@ -544,6 +562,20 @@ const AddEmployees: React.FC = () => {
     // Don't fail the entire process if document upload fails
   }
 };
+
+const debugAuth = () => {
+  console.log('🔍 Auth Debug:');
+  console.log('accessToken:', localStorage.getItem('accessToken'));
+  console.log('user:', localStorage.getItem('user'));
+  
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    const parts = token.split('.');
+    console.log('Token parts:', parts.length);
+    console.log('Token preview:', token.substring(0, 20) + '...');
+  }
+};
+
 
   // Reset form
   const handleReset = () => {

@@ -282,6 +282,7 @@ router.get('/managers',
         managers
       }
     });
+    console.log(managers)
   })
 );
 
