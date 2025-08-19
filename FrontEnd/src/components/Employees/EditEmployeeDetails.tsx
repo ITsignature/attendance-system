@@ -1,4 +1,4 @@
-// EditEmployeeDetails.tsx - Complete backend integration
+// EditEmployeeDetails.tsx - Complete version with deferred document uploads
 import React, { useState, useEffect } from "react";
 import { Tabs, TextInput, Select, Button, Alert, Spinner, Label, Checkbox } from "flowbite-react";
 import { HiUser, HiBriefcase, HiDocumentText, HiSave, HiX, HiClock } from "react-icons/hi";
@@ -42,36 +42,6 @@ interface Employee {
   manager_name?: string;
 }
 
-interface UpdateEmployeeData {
-  first_name?: string;
-  last_name?: string;
-  email?: string;
-  phone?: string;
-  date_of_birth?: string;
-  gender?: 'male' | 'female' | 'other';
-  address?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-  nationality?: string;
-  marital_status?: 'single' | 'married' | 'divorced' | 'widowed';
-  employee_code?: string;
-  department_id?: string;
-  designation_id?: string;
-  manager_id?: string;
-  hire_date?: string;
-  employment_status?: 'active' | 'inactive' | 'terminated' | 'on_leave';
-  employee_type?: 'full_time' | 'part_time' | 'contract' | 'intern';
-  base_salary?: number;
-  emergency_contact_name?: string;
-  emergency_contact_phone?: string;
-  emergency_contact_relation?: string;
-  // Added work schedule fields
-  in_time?: string;
-  out_time?: string;
-  follows_company_schedule?: boolean;
-}
-
 interface ValidationErrors {
   [key: string]: string;
 }
@@ -83,8 +53,13 @@ interface EmployeeDocument {
   file_size: number;
   mime_type: string;
   uploaded_at: string;
-  notes?: string;
   uploaded_by_name?: string;
+}
+
+interface PendingDocument {
+  documentType: string;
+  file: File;
+  id: string; // For tracking in UI
 }
 
 const EditEmployeeDetails: React.FC = () => {
@@ -108,6 +83,7 @@ const EditEmployeeDetails: React.FC = () => {
   
   // Document management
   const [documents, setDocuments] = useState<{[key: string]: EmployeeDocument[]}>({});
+  const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
   const [documentUploading, setDocumentUploading] = useState(false);
 
   // Load data on component mount
@@ -167,8 +143,9 @@ const EditEmployeeDetails: React.FC = () => {
       const response = await apiService.apiCall(`/api/employees/${employeeId}/documents`);
       
       if (response.success && response.data) {
-        console.log('✅ Documents loaded:', response.data.documents);
-        setDocuments(response.data.documents || {});
+        const data = response.data as any;
+        console.log('✅ Documents loaded:', data.documents);
+        setDocuments(data.documents || {});
       } else {
         console.warn('Failed to load documents:', response.message);
         setDocuments({});
@@ -179,54 +156,168 @@ const EditEmployeeDetails: React.FC = () => {
     }
   };
 
-// Fixed handleDocumentUpload function
-const handleDocumentUpload = async (documentType: string, file: File) => {
-  if (!file) return;
+  const loadReferenceData = async () => {
+    try {
+      const [deptResponse, designResponse, managerResponse] = await Promise.all([
+        apiService.getDepartments(),
+        apiService.getDesignations(),
+        apiService.getManagers()
+      ]);
 
-  try {
-    setDocumentUploading(true);
-    const formData = new FormData();
-    
-    // Add single file to FormData with the document type as the field name
-    formData.append(documentType, file);
-    
-    // Add notes for the document
-    formData.append('notes', `${documentType.replace('_', ' ')} document for employee`);
+      if (deptResponse.success && deptResponse.data) {
+        setDepartments(deptResponse.data.departments || []);
+      }
 
-    const response = await apiService.apiCall(
-      `/api/employees/${employeeId}/documents`,
-      'POST',
-      formData,
-      { 'Content-Type': 'multipart/form-data' }
-    );
+      if (designResponse.success && designResponse.data) {
+        setDesignations(designResponse.data.designations || []);
+      }
 
-    if (response.success) {
-      setSuccess(`Successfully uploaded document: ${file.name}`);
-      // Reload documents to show the newly uploaded ones
-      await loadDocuments();
-    } else {
-      setError('Failed to upload document: ' + response.message);
+      if (managerResponse.success && managerResponse.data) {
+        setManagers(managerResponse.data.managers || []);
+      }
+    } catch (error) {
+      console.error('Failed to load reference data:', error);
     }
-  } catch (error: any) {
-    console.error('Document upload error:', error);
-    setError('Failed to upload document: ' + error.message);
-  } finally {
-    setDocumentUploading(false);
-  }
-};
+  };
+
+  // Handle document selection (store in state instead of uploading)
+  const handleDocumentSelect = (documentType: string, file: File | null) => {
+    if (!file) {
+      // Remove any pending document of this type
+      setPendingDocuments(prev => prev.filter(doc => doc.documentType !== documentType));
+      return;
+    }
+
+    // Check if we already have a pending document of this type
+    const existingIndex = pendingDocuments.findIndex(doc => doc.documentType === documentType);
+    
+    const newDocument: PendingDocument = {
+      documentType,
+      file,
+      id: `${documentType}_${Date.now()}` // Unique ID for UI tracking
+    };
+
+    if (existingIndex >= 0) {
+      // Replace existing pending document of this type
+      setPendingDocuments(prev => {
+        const updated = [...prev];
+        updated[existingIndex] = newDocument;
+        return updated;
+      });
+    } else {
+      // Add new pending document
+      setPendingDocuments(prev => [...prev, newDocument]);
+    }
+  };
+
+  // Remove a pending document
+  const removePendingDocument = (documentId: string) => {
+    setPendingDocuments(prev => prev.filter(doc => doc.id !== documentId));
+  };
+
+  // Upload all pending documents
+  const uploadPendingDocuments = async (): Promise<boolean> => {
+    if (pendingDocuments.length === 0) return true;
+
+    setDocumentUploading(true);
+    const uploadResults: boolean[] = [];
+
+    try {
+      for (const pendingDoc of pendingDocuments) {
+        const formData = new FormData();
+        formData.append(pendingDoc.documentType, pendingDoc.file);
+
+        // Use direct fetch for file upload to avoid Content-Type issues
+        const token = localStorage.getItem('accessToken'); // Note: using 'accessToken' not 'token'
+        const baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
+        
+        // Get client ID for multi-tenant support
+        const userData = localStorage.getItem('user');
+        let clientId = null;
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            clientId = user.clientId;
+          } catch {
+            console.warn('Failed to parse user data for client ID');
+          }
+        }
+
+        const headers: HeadersInit = {
+          'Authorization': `Bearer ${token}`,
+          // Do NOT set Content-Type - let browser set it for FormData
+        };
+        
+        if (clientId) {
+          headers['X-Client-ID'] = clientId;
+        }
+
+        const response = await fetch(`${baseURL}/api/employees/${employeeId}/documents`, {
+          method: 'POST',
+          headers,
+          body: formData
+        });
+
+        const data = await response.json();
+        uploadResults.push(data.success);
+
+        if (!data.success) {
+          setError(`Failed to upload ${pendingDoc.file.name}: ${data.message}`);
+        }
+      }
+
+      // Clear pending documents if all uploads were successful
+      if (uploadResults.every(result => result === true)) {
+        setPendingDocuments([]);
+        await loadDocuments(); // Reload documents to show newly uploaded ones
+        return true;
+      }
+
+      return false;
+    } catch (error: any) {
+      console.error('Document upload error:', error);
+      setError('Failed to upload documents: ' + error.message);
+      return false;
+    } finally {
+      setDocumentUploading(false);
+    }
+  };
 
   const handleDownloadDocument = async (documentId: string, filename: string) => {
     try {
-      const response = await apiService.apiCall(
-        `/api/employees/${employeeId}/documents/${documentId}/download`,
-        'GET',
-        null,
-        { responseType: 'blob' }
+      const token = localStorage.getItem('accessToken');
+      const baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
+      
+      // Get client ID for multi-tenant support
+      const userData = localStorage.getItem('user');
+      let clientId = null;
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          clientId = user.clientId;
+        } catch {
+          console.warn('Failed to parse user data for client ID');
+        }
+      }
+
+      const headers: HeadersInit = {
+        'Authorization': `Bearer ${token}`,
+      };
+      
+      if (clientId) {
+        headers['X-Client-ID'] = clientId;
+      }
+
+      const response = await fetch(
+        `${baseURL}/api/employees/${employeeId}/documents/${documentId}/download`,
+        {
+          method: 'GET',
+          headers
+        }
       );
       
-      if (response.success) {
-        // Create blob URL and trigger download
-        const blob = new Blob([response.data]);
+      if (response.ok) {
+        const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -235,6 +326,8 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
+      } else {
+        setError('Failed to download document');
       }
     } catch (error) {
       console.error('Failed to download document:', error);
@@ -248,7 +341,9 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
     try {
       const response = await apiService.apiCall(
         `/api/employees/${employeeId}/documents/${documentId}`,
-        'DELETE'
+        {
+          method: 'DELETE'
+        }
       );
       
       if (response.success) {
@@ -286,30 +381,6 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
       month: 'short',
       day: 'numeric'
     });
-  };
-
-  const loadReferenceData = async () => {
-    try {
-      const [deptResponse, designResponse, managerResponse] = await Promise.all([
-        apiService.getDepartments(),
-        apiService.getDesignations(),
-        apiService.getManagers()
-      ]);
-
-      if (deptResponse.success && deptResponse.data) {
-        setDepartments(deptResponse.data.departments || []);
-      }
-
-      if (designResponse.success && designResponse.data) {
-        setDesignations(designResponse.data.designations || []);
-      }
-
-      if (managerResponse.success && managerResponse.data) {
-        setManagers(managerResponse.data.managers || []);
-      }
-    } catch (error) {
-      console.error('Failed to load reference data:', error);
-    }
   };
 
   const handleChange = (field: keyof Employee, value: string | number | boolean) => {
@@ -440,7 +511,7 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
       if (originalValue !== newValue) {
         // Special handling for empty strings vs null/undefined
         if (!((!originalValue || originalValue === '') && (!newValue || newValue === ''))) {
-          changes[key as keyof UpdateEmployeeData] = newValue;
+          (changes as any)[key] = newValue;
         }
       }
     });
@@ -462,14 +533,30 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
       // Get only changed fields
       const changedData = getChangedFields();
       
-      if (Object.keys(changedData).length === 0) {
+      // Check if we have changes or pending documents
+      const hasFormChanges = Object.keys(changedData).length > 0;
+      const hasPendingDocs = pendingDocuments.length > 0;
+      const pendingDocsCount = pendingDocuments.length; // Store count before clearing
+
+      if (!hasFormChanges && !hasPendingDocs) {
         setError('No changes detected');
         return;
       }
 
-      console.log('Updating employee with changes:', changedData);
+      let updateSuccess = true;
+      let uploadSuccess = true;
 
-      const response = await apiService.updateEmployee(employeeId!, changedData);
+      // Upload pending documents first
+      if (hasPendingDocs) {
+        console.log(`Uploading ${pendingDocsCount} pending documents...`);
+        uploadSuccess = await uploadPendingDocuments();
+      }
+
+      // Update employee data if there are changes
+      if (hasFormChanges) {
+        console.log('Updating employee with changes:', changedData);
+
+         const response = await apiService.updateEmployee(employeeId!, changedData);
 
       if (response.success && response.data) {
         setSuccess('Employee updated successfully!');
@@ -480,25 +567,44 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
         setTimeout(() => {
           navigate(`/employee/${employeeId}`);
         }, 2000);
-      } else {
-        setError(response.message || 'Failed to update employee');
-        
-        // Handle field-specific errors
-        if (response.field) {
-          setValidationErrors({
-            [response.field]: response.message || 'Invalid value'
-          });
+        } else {
+          setError(response.message || 'Failed to update employee');
+          updateSuccess = false;
+          
+          // Handle field-specific errors
+          const responseData = response as any;
+          if (responseData.field) {
+            setValidationErrors({
+              [responseData.field]: response.message || 'Invalid value'
+            });
+          }
         }
       }
+
+      // Show appropriate success/error message
+      if (updateSuccess && uploadSuccess) {
+        const messages = [];
+        if (hasFormChanges) messages.push('Employee information updated');
+        if (hasPendingDocs) messages.push(`${pendingDocsCount} document(s) uploaded`);
+        setSuccess(messages.join(' and ') + ' successfully!');
+        
+        // Navigate back after a delay
+        setTimeout(() => {
+          navigate(`/employee/${employeeId}`);
+        }, 2000);
+      }
+
     } catch (error: any) {
-      console.error('Update employee error:', error);
-      setError(error.message || 'Failed to update employee');
+      console.error('Save employee error:', error);
+      setError(error.message || 'Failed to save changes');
     } finally {
       setSaving(false);
     }
   };
 
   const handleCancel = () => {
+    // Clear pending documents when canceling
+    setPendingDocuments([]);
     navigate(`/employee/${employeeId}`);
   };
 
@@ -543,6 +649,14 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
       {success && (
         <Alert color="success" className="mb-4">
           <span className="font-medium">Success!</span> {success}
+        </Alert>
+      )}
+
+      {/* Show pending documents notification */}
+      {pendingDocuments.length > 0 && (
+        <Alert color="info" className="mb-4">
+          <span className="font-medium">Note:</span> You have {pendingDocuments.length} document(s) pending upload. 
+          They will be uploaded when you click "Save Changes".
         </Alert>
       )}
 
@@ -963,22 +1077,130 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
             <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-700">
               <h4 className="text-lg font-medium text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
                 <HiDocumentText className="w-5 h-5" />
-                Upload New Documents
+                Select Documents to Upload
               </h4>
               
-              <FileUploadBox onFilesSelected={handleDocumentUpload} />
-              
-              {documentUploading && (
-                <div className="mt-4 flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                  <Spinner size="sm" />
-                  <span>Uploading documents...</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Identity Documents */}
+                <div className="space-y-4">
+                  <h5 className="text-md font-medium text-gray-800 dark:text-white">Identity Documents</h5>
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                    <h6 className="font-medium text-blue-800 dark:text-blue-200 mb-2">National ID</h6>
+                    <FileUploadBox
+                      id="national_id"
+                      label=""
+                      onFileChange={(file) => handleDocumentSelect('national_id', file)}
+                      loading={documentUploading}
+                    />
+                  </div>
+
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                    <h6 className="font-medium text-green-800 dark:text-green-200 mb-2">Passport</h6>
+                    <FileUploadBox
+                      id="passport"
+                      label=""
+                      onFileChange={(file) => handleDocumentSelect('passport', file)}
+                      loading={documentUploading}
+                    />
+                  </div>
+
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                    <h6 className="font-medium text-purple-800 dark:text-purple-200 mb-2">Other Documents</h6>
+                    <FileUploadBox
+                      id="other"
+                      label=""
+                      onFileChange={(file) => handleDocumentSelect('other', file)}
+                      loading={documentUploading}
+                    />
+                  </div>
                 </div>
-              )}
+
+                {/* Professional Documents */}
+                <div className="space-y-4">
+                  <h5 className="text-md font-medium text-gray-800 dark:text-white">Professional Documents</h5>
+
+                  <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+                    <h6 className="font-medium text-orange-800 dark:text-orange-200 mb-2">Resume/CV</h6>
+                    <FileUploadBox
+                      id="resume"
+                      label=""
+                      onFileChange={(file) => handleDocumentSelect('resume', file)}
+                      loading={documentUploading}
+                    />
+                  </div>
+
+                  <div className="bg-teal-50 dark:bg-teal-900/20 p-4 rounded-lg">
+                    <h6 className="font-medium text-teal-800 dark:text-teal-200 mb-2">Education</h6>
+                    <FileUploadBox
+                      id="education"
+                      label=""
+                      onFileChange={(file) => handleDocumentSelect('education', file)}
+                      loading={documentUploading}
+                    />
+                  </div>
+
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg">
+                    <h6 className="font-medium text-indigo-800 dark:text-indigo-200 mb-2">Experience</h6>
+                    <FileUploadBox
+                      id="experience"
+                      label=""
+                      onFileChange={(file) => handleDocumentSelect('experience', file)}
+                      loading={documentUploading}
+                    />
+                  </div>
+                </div>
+              </div>
               
               <p className="text-sm text-blue-700 dark:text-blue-300 mt-4">
-                Supported formats: PDF, DOC, DOCX, JPG, PNG, Excel files. Maximum 10MB per file.
+                Supported formats: PDF, DOC, DOCX, JPG, PNG. Maximum 10MB per file.
+                Documents will be uploaded when you click "Save Changes".
               </p>
             </div>
+
+            {/* Pending Documents Section */}
+            {pendingDocuments.length > 0 && (
+              <div>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <HiClock className="w-5 h-5 text-orange-600" />
+                  Pending Uploads ({pendingDocuments.length})
+                </h4>
+                
+                <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+                  <div className="space-y-2">
+                    {pendingDocuments.map((doc) => (
+                      <div 
+                        key={doc.id}
+                        className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <HiDocumentText className="w-5 h-5 text-orange-500" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
+                              {doc.file.name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Type: {doc.documentType.replace('_', ' ')} • 
+                              Size: {formatFileSize(doc.file.size)}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="xs"
+                          color="red"
+                          onClick={() => removePendingDocument(doc.id)}
+                        >
+                          <HiX className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-orange-700 dark:text-orange-300 mt-3">
+                    These documents will be uploaded when you save changes.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Existing Documents */}
             <div>
@@ -1024,11 +1246,6 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
                                     </>
                                   )}
                                 </div>
-                                {doc.notes && (
-                                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 italic">
-                                    "{doc.notes}"
-                                  </p>
-                                )}
                               </div>
                             </div>
                             
@@ -1085,17 +1302,18 @@ const handleDocumentUpload = async (documentType: string, file: File) => {
         <Button 
           color="purple" 
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || documentUploading}
         >
-          {saving ? (
+          {saving || documentUploading ? (
             <>
               <Spinner size="sm" className="mr-2" />
-              Saving...
+              {documentUploading ? 'Uploading Documents...' : 'Saving...'}
             </>
           ) : (
             <>
               <HiSave className="w-4 h-4 mr-2" />
               Save Changes
+              {pendingDocuments.length > 0 && ` (${pendingDocuments.length} docs)`}
             </>
           )}
         </Button>

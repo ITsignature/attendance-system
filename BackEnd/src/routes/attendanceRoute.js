@@ -508,20 +508,21 @@ router.get('/',
 
     // Get attendance records with employee schedule info
     const query = `
-      SELECT 
-        a.*,
-        CONCAT(e.first_name, ' ', e.last_name) as employee_name,
-        e.employee_code,
-        e.in_time as scheduled_in_time,
-        e.out_time as scheduled_out_time,
-        e.follows_company_schedule,
-        d.name as department_name
-      FROM attendance a
-      JOIN employees e ON a.employee_id = e.id
-      LEFT JOIN departments d ON e.department_id = d.id
-      ${whereClause}
-      ORDER BY a.${sortBy} ${sortOrder}
-      LIMIT ? OFFSET ?
+     SELECT 
+    a.*,
+    CONCAT_WS(' ', e.first_name, e.last_name) AS employee_name,
+    e.employee_code,
+    e.in_time AS scheduled_in_time,
+    e.out_time AS scheduled_out_time,
+    e.follows_company_schedule,
+    d.name AS department_name
+FROM attendance a
+JOIN employees e ON a.employee_id = e.id
+LEFT JOIN departments d ON e.department_id = d.id
+${whereClause}
+ORDER BY a.${sortBy} ${sortOrder}
+LIMIT ? OFFSET ?
+
     `;
     
     queryParams.push(parseInt(limit), parseInt(offset));

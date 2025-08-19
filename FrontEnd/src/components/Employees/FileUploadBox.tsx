@@ -62,18 +62,15 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ id, label, onFileChange, 
     <div className="w-full">
       <p className="mb-2 font-medium">{label}</p>
 
-      <div
-        className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-          dragActive
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-purple-500 hover:border-purple-400'
-        } ${loading ? 'opacity-50 pointer-events-none' : ''}`}
-        onClick={handleBoxClick}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
+    <div
+  className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors
+    ${dragActive ? 'border-blue-400 bg-blue-50' : 'border-purple-500 hover:border-purple-400'}
+    ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+  onDragEnter={handleDrag}
+  onDragLeave={handleDrag}
+  onDragOver={handleDrag}
+  onDrop={handleDrop}
+>
 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 rounded-lg">
@@ -82,15 +79,16 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ id, label, onFileChange, 
           </div>
         )}
 
-        <input
-          ref={inputRef}
-          id={id}
-          type="file"
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          onChange={handleFileChange}
-          accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
-          disabled={loading}
-        />
+ <input
+  ref={inputRef}
+  id={id} 
+  type="file"
+  className={`${selectedFile ? "hidden" : "absolute inset-0 w-full h-full opacity-0 cursor-pointer"}`}
+  onChange={handleFileChange}
+  accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+  disabled={loading}
+/>
+
 
         {selectedFile ? (
           <div className="flex items-center justify-between">
@@ -139,6 +137,7 @@ const FileUploadBox: React.FC<FileUploadBoxProps> = ({ id, label, onFileChange, 
       </div>
     </div>
   );
+  
 };
 
 export default FileUploadBox;

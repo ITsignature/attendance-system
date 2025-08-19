@@ -704,14 +704,14 @@ const AllEmployees: React.FC = () => {
           )}
           
           {/* Export */}
-          <Button
+          {/* <Button
             size="sm"
             color="gray"
             onClick={() => setShowExportModal(true)}
           >
             <HiOutlineDownload className="mr-1 h-4 w-4" />
             Export
-          </Button>
+          </Button> */}
         </div>
       </div>
 

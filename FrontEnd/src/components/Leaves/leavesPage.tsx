@@ -154,6 +154,8 @@ const LeavePage: React.FC = () => {
     return renderLoadingState();
   }
 
+
+  console.log("dash",dashboard)
   return (
     <div className="p-6 rounded-xl shadow-md bg-white dark:bg-darkgray space-y-6">
       {/* Error Display */}

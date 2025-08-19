@@ -473,6 +473,10 @@ private async queueRefresh(): Promise<void> {
       method: 'POST', body: JSON.stringify({ employee_ids: employeeIds }),
     });
   }
+  
+    async updateEmployee(id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
+    return this.apiCall(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) });
+  }
   async bulkUpdateEmployees(updates: Array<{ id: string; data: UpdateEmployeeData }>): Promise<ApiResponse> {
     return this.apiCall('/api/employees/bulk-update', {
       method: 'PUT', body: JSON.stringify({ updates }),

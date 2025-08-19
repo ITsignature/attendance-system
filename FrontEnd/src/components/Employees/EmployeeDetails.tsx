@@ -367,56 +367,57 @@ const EmployeeDetails: React.FC = () => {
     }
   };
 
-  const handleDownloadDocument = async (documentId: string) => {
+  const handleDownloadDocument = async (documentId: string, filename: string) => {
     try {
-      // Use fetch directly for blob downloads instead of apiService
       const token = localStorage.getItem('accessToken');
+      const baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
+      
+      // Get client ID for multi-tenant support
+      const userData = localStorage.getItem('user');
+      let clientId = null;
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          clientId = user.clientId;
+        } catch {
+          console.warn('Failed to parse user data for client ID');
+        }
+      }
+
+      const headers: HeadersInit = {
+        'Authorization': `Bearer ${token}`,
+      };
+      
+      if (clientId) {
+        headers['X-Client-ID'] = clientId;
+      }
+
       const response = await fetch(
-        `/api/employees/${employee?.id}/documents/${documentId}/download`,
+        `${baseURL}/api/employees/${employeeId}/documents/${documentId}/download`,
         {
           method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          headers
         }
       );
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        setError('Failed to download document');
       }
-      
-      // Get the filename from Content-Disposition header
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = 'document';
-      
-      if (contentDisposition) {
-        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (fileNameMatch) {
-          filename = fileNameMatch[1];
-        }
-      }
-      
-      // Get the blob from response
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      
-      // Cleanup
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
     } catch (error) {
       console.error('Failed to download document:', error);
       setError('Failed to download document');
     }
   };
-
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -780,74 +781,74 @@ const EmployeeDetails: React.FC = () => {
                 </div>
 
                 {/* Documents Section */}
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <HiDocumentText className="w-6 h-6 text-purple-600" />
-                    Documents
-                  </h3>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                    <div className="space-y-4">
-                      {Object.keys(documents).length === 0 ? (
-                        <div className="text-center py-8">
-                          <HiDocumentText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-500 dark:text-gray-400">No documents uploaded yet.</p>
-                        </div>
-                      ) : (
-                        Object.entries(documents).map(([documentType, docs]) => (
-                          <div key={documentType} className="space-y-2">
-                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 capitalize border-b pb-1">
-                              {documentType.replace('_', ' ')} ({docs.length})
-                            </h4>
-                            <div className="space-y-2">
-                              {docs.map((doc) => (
-                                <div 
-                                  key={doc.id} 
-                                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border hover:shadow-sm transition-shadow"
-                                >
-                                  <div className="flex items-center gap-3 flex-1">
-                                    <span className="text-2xl">{getDocumentIcon(doc.mime_type)}</span>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                        {doc.original_filename}
-                                      </p>
-                                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                        <span>{formatFileSize(doc.file_size)}</span>
-                                        <span>•</span>
-                                        <span>{formatDate(doc.uploaded_at)}</span>
-                                        {doc.uploaded_by_name && (
-                                          <>
-                                            <span>•</span>
-                                            <span>by {doc.uploaded_by_name}</span>
-                                          </>
-                                        )}
-                                      </div>
-                                      {doc.notes && (
-                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                          {doc.notes}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex gap-2 ml-4">
-                                    <Button 
-                                      size="xs" 
-                                      color="gray" 
-                                      title="Download"
-                                      onClick={() => handleDownloadDocument(doc.id)}
-                                    >
-                                      <FaDownload className="w-3 h-3" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <HiDocumentText className="w-6 h-6 text-purple-600" />
+                        Documents
+                      </h3>
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                        <div className="space-y-4">
+                          {Object.keys(documents).length === 0 ? (
+                            <div className="text-center py-8">
+                              <HiDocumentText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                              <p className="text-gray-500 dark:text-gray-400">No documents uploaded yet.</p>
                             </div>
-                          </div>
-                        ))
-                      )}
+                          ) : (
+                            Object.entries(documents).map(([documentType, docs]) => (
+                              <div key={documentType} className="space-y-2">
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 capitalize border-b pb-1">
+                                  {documentType.replace('_', ' ')} ({docs.length})
+                                </h4>
+                                <div className="space-y-2">
+                                  {docs.map((doc) => (
+                                    <div 
+                                      key={doc.id} 
+                                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border hover:shadow-sm transition-shadow"
+                                    >
+                                      <div className="flex items-center gap-3 flex-1">
+                                        <span className="text-2xl">{getDocumentIcon(doc.mime_type)}</span>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                            {doc.original_filename}
+                                          </p>
+                                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                            <span>{formatFileSize(doc.file_size)}</span>
+                                            <span>•</span>
+                                            <span>{formatDate(doc.uploaded_at)}</span>
+                                            {doc.uploaded_by_name && (
+                                              <>
+                                                <span>•</span>
+                                                <span>by {doc.uploaded_by_name}</span>
+                                              </>
+                                            )}
+                                          </div>
+                                          {doc.notes && (
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                              {doc.notes}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex gap-2 ml-4">
+                                        <Button 
+                                          size="xs" 
+                                          color="gray" 
+                                          title="Download"
+                                          onClick={() => handleDownloadDocument(doc.id, doc.original_filename)}
+                                        >
+                                          <FaDownload className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
               </div>
             )}
 

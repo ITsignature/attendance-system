@@ -1187,7 +1187,7 @@ router.post('/bulk-delete',
 );
 
 // =============================================
-// UPLOAD EMPLOYEE DOCUMENTS
+// UPLOAD EMPLOYEE DOCUMENTS - FIXED VERSION
 // =============================================
 router.post('/:id/documents', 
   checkPermission('employees.edit'),
@@ -1204,6 +1204,8 @@ router.post('/:id/documents',
     const db = getDB();
     const employeeId = req.params.id;
     const { notes } = req.body;
+
+    console.log('req',req);
     
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({
@@ -1212,12 +1214,75 @@ router.post('/:id/documents',
       });
     }
 
+    // Define maximum limits for each document type
+    const documentLimits = {
+      'national_id': 2,
+      'passport': 2,
+      'other': 5,
+      'resume': 1,
+      'education': 5,
+      'experience': 5
+    };
+
     try {
       await db.execute('START TRANSACTION');
       
+      // Check existing document counts for validation
+      const [existingCounts] = await db.execute(`
+        SELECT document_type, COUNT(*) as count
+        FROM employee_documents 
+        WHERE employee_id = ? AND client_id = ? AND is_active = TRUE
+        GROUP BY document_type
+      `, [employeeId, req.user.clientId]);
+      
+      // Create a map of existing counts
+      const existingCountsMap = {};
+      existingCounts.forEach(row => {
+        existingCountsMap[row.document_type] = parseInt(row.count);
+      });
+      
+      // Validate that new uploads won't exceed limits
+      const validationErrors = [];
+      for (const [documentType, files] of Object.entries(req.files)) {
+        const currentCount = existingCountsMap[documentType] || 0;
+        const newFilesCount = files.length;
+        const totalAfterUpload = currentCount + newFilesCount;
+        const limit = documentLimits[documentType];
+        
+        if (totalAfterUpload > limit) {
+          validationErrors.push({
+            documentType,
+            currentCount,
+            newFilesCount,
+            limit,
+            message: `Cannot upload ${newFilesCount} ${documentType.replace('_', ' ')} document(s). Current: ${currentCount}, Limit: ${limit}, Total would be: ${totalAfterUpload}`
+          });
+        }
+      }
+      
+      // If validation fails, rollback and return errors
+      if (validationErrors.length > 0) {
+        await db.execute('ROLLBACK');
+        
+        // Clean up uploaded files since validation failed
+        Object.values(req.files).flat().forEach(file => {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        });
+        
+        return res.status(400).json({
+          success: false,
+          message: validationErrors.map(err => err.message).join('. '),
+          errors: validationErrors,
+          currentCounts: existingCountsMap,
+          limits: documentLimits
+        });
+      }
+      
       const uploadedDocuments = [];
       
-      // Process each file type
+      // Process each file type (validation passed)
       for (const [documentType, files] of Object.entries(req.files)) {
         for (const file of files) {
           const documentData = {
@@ -1253,10 +1318,25 @@ router.post('/:id/documents',
       
       await db.execute('COMMIT');
       
+      // Get updated counts for response
+      const [updatedCounts] = await db.execute(`
+        SELECT document_type, COUNT(*) as count
+        FROM employee_documents 
+        WHERE employee_id = ? AND client_id = ? AND is_active = TRUE
+        GROUP BY document_type
+      `, [employeeId, req.user.clientId]);
+      
+      const updatedCountsMap = {};
+      updatedCounts.forEach(row => {
+        updatedCountsMap[row.document_type] = parseInt(row.count);
+      });
+      
       res.status(201).json({
         success: true,
         message: `Successfully uploaded ${uploadedDocuments.length} document(s)`,
-        data: uploadedDocuments
+        data: uploadedDocuments,
+        currentCounts: updatedCountsMap,
+        limits: documentLimits
       });
       
     } catch (error) {
@@ -1271,6 +1351,61 @@ router.post('/:id/documents',
       
       throw error;
     }
+  })
+);
+
+// =============================================
+// GET EMPLOYEE DOCUMENT COUNTS (Helper endpoint)
+// =============================================
+router.get('/:id/documents/counts', 
+  checkPermission('employees.view'),
+  checkResourceOwnership('employee'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const employeeId = req.params.id;
+    
+    const [counts] = await db.execute(`
+      SELECT document_type, COUNT(*) as count
+      FROM employee_documents 
+      WHERE employee_id = ? AND client_id = ? AND is_active = TRUE
+      GROUP BY document_type
+    `, [employeeId, req.user.clientId]);
+    
+    const documentLimits = {
+      'national_id': 2,
+      'passport': 2,
+      'other': 5,
+      'resume': 1,
+      'education': 5,
+      'experience': 5
+    };
+    
+    const countsMap = {};
+    counts.forEach(row => {
+      countsMap[row.document_type] = parseInt(row.count);
+    });
+    
+    // Add remaining slots for each document type
+    const availability = {};
+    Object.keys(documentLimits).forEach(docType => {
+      const current = countsMap[docType] || 0;
+      const limit = documentLimits[docType];
+      availability[docType] = {
+        current,
+        limit,
+        remaining: limit - current,
+        canUpload: current < limit
+      };
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        counts: countsMap,
+        limits: documentLimits,
+        availability
+      }
+    });
   })
 );
 

@@ -157,6 +157,7 @@ const AttendanceView: React.FC = () => {
     const response = await apiService.getAttendanceRecords(qs); // <-- pass string
 
     if (response.success) {
+      console.log("attendance re",response.data.attendance);
       setAttendanceRecords(response.data.attendance);
       setPagination(response.data.pagination);
     }

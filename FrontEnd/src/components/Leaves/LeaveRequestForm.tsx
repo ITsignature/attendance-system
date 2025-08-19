@@ -115,7 +115,7 @@ const LeaveRequestForm: React.FC = () => {
       
       // Fetch employees and leave types
       const [employeesResponse, leaveTypesResponse] = await Promise.all([
-        apiService.apiCall('/api/employees'),
+        apiService.getEmployees({ limit: 10000, page: 1, status: 'active' }),
         leaveApiService.getLeaveTypes()
       ]);
 
@@ -249,6 +249,8 @@ const LeaveRequestForm: React.FC = () => {
         notes: formData.admin_notes.trim() || null,
         supporting_documents: formData.supporting_documents?.length > 0 ? formData.supporting_documents : null
       };
+
+      console.log('submit data',submitData);
 
       const response = await leaveApiService.submitLeaveRequestForEmployee(submitData);
 
