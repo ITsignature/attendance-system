@@ -811,7 +811,7 @@ router.patch(
         console.log('req.body', req.body);
 
 const [rows] = await db.execute(
-  `SELECT leave_type
+  `SELECT leave_duration
      FROM leave_requests
     WHERE employee_id = ?
       AND DATE(?) BETWEEN DATE(start_date) AND DATE(end_date)
