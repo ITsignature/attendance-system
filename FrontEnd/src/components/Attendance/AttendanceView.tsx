@@ -58,6 +58,7 @@ interface AttendanceFilters {
   work_duration?: string;
   sortBy: string;
   sortOrder: 'ASC' | 'DESC';
+  employeeName: '';
 }
 
 
@@ -76,17 +77,18 @@ const AttendanceView: React.FC = () => {
 
   const [filters, setFilters] = useState<AttendanceFilters>({
     page: 1,
-    limit: 10,
+    limit: 50,
     sortBy: 'date',
     sortOrder: 'DESC',
     startDate: todayStr(),
     endDate: todayStr(),
+    employeeName: '', 
   });
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
     totalRecords: 0,
-    recordsPerPage: 10
+    recordsPerPage: 50
   });
 
 
@@ -330,6 +332,11 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
   }
 };
 
+const filteredRecords = attendanceRecords.filter(record =>
+  record.employee_name.toLowerCase().includes(filters.employeeName?.toLowerCase() || '')
+);
+
+
 
   return (
     <div className="p-6">
@@ -359,7 +366,7 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Employee</label>
-            <Select
+            {/* <input
               value={filters.employeeId || ''}
               onChange={(e) => handleFilterChange('employeeId', e.target.value)}
             >
@@ -369,7 +376,14 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
                   {emp.first_name} {emp.last_name}
                 </option>
               ))}
-            </Select>
+            </input> */}
+             <TextInput
+    type="text"
+    placeholder="Search by employee name"
+    value={filters.employeeName || ''}
+    onChange={(e) => handleFilterChange('employeeName', e.target.value)}
+    
+  />
           </div>
 
           <div>
@@ -447,7 +461,7 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
                   <Table.HeadCell>Actions</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
-                  {attendanceRecords.map((record) => (
+                  {filteredRecords.map((record) => (
                     <Table.Row key={record.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
                       <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                         <div>

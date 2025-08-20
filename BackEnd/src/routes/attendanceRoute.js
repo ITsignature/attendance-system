@@ -455,7 +455,7 @@ router.get('/',
     
     const {
       page = 1,
-      limit = 10,
+      limit = 50,
       employeeId = '',
       startDate = '',
       endDate = '',

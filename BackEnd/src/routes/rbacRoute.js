@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../config/database');
-const { authenticate, requireSuperAdmin } = require('../middleware/authMiddleware');
+const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 

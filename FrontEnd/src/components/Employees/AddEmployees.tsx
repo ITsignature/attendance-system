@@ -83,6 +83,38 @@ interface Manager {
   department_name?: string;
 }
 
+// Custom styled components for required fields
+const RequiredLabel: React.FC<{ htmlFor: string; value: string }> = ({ htmlFor, value }) => (
+  <Label 
+    htmlFor={htmlFor} 
+    className="text-red-700 dark:text-red-400 font-medium"
+  >
+    {value} <span className="text-red-500 font-bold">*</span>
+  </Label>
+);
+
+const RequiredTextInput: React.FC<any> = (props) => (
+  <div className="relative">
+    
+    <TextInput
+      {...props}
+      className={`${props.className || ''} border-red-200 dark:border-red-800 focus:border-red-500 focus:ring-red-500`}
+      style={{ paddingLeft: '12px' }}
+    />
+  </div>
+);
+
+const RequiredSelect: React.FC<any> = (props) => (
+  <div className="relative">
+    
+    <Select
+      {...props}
+      className={`${props.className || ''} border-red-200 dark:border-red-800 focus:border-red-500 focus:ring-red-500`}
+      style={{ paddingLeft: '12px' }}
+    />
+  </div>
+);
+
 const AddEmployees: React.FC = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
@@ -197,6 +229,7 @@ const AddEmployees: React.FC = () => {
     if (formData.department_id) {
       const filtered = designations.filter(
         designation => designation.department_id === formData.department_id
+        //this filtered has the designations related to that dep id
       );
       setFilteredDesignations(filtered);
     } else {
@@ -379,6 +412,11 @@ const AddEmployees: React.FC = () => {
         if (!formData.hire_date) errors.hire_date = 'Hire date is required';
         if (!formData.employment_status) errors.employment_status = 'Employment status is required';
         if (!formData.employee_type) errors.employee_type = 'Employment type is required';
+        
+        // MAKE BASE SALARY REQUIRED
+        if (!formData.salary || formData.salary === '' || Number(formData.salary) <= 0) {
+          errors.salary = 'Base salary is required and must be greater than 0';
+        }
         
         // Work Schedule Validation
         if (!formData.in_time) {
@@ -725,8 +763,8 @@ const debugAuth = () => {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="first_name" value="First Name *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="first_name" value="First Name" />
+                      <RequiredTextInput
                         id="first_name"
                         value={formData.first_name}
                         onChange={(e) => handleInputChange('first_name', e.target.value)}
@@ -739,8 +777,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="last_name" value="Last Name *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="last_name" value="Last Name" />
+                      <RequiredTextInput
                         id="last_name"
                         value={formData.last_name}
                         onChange={(e) => handleInputChange('last_name', e.target.value)}
@@ -753,8 +791,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="email" value="Email Address *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="email" value="Email Address" />
+                      <RequiredTextInput
                         id="email"
                         type="email"
                         value={formData.email}
@@ -768,8 +806,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="phone" value="Phone Number *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="phone" value="Phone Number" />
+                      <RequiredTextInput
                         id="phone"
                         value={formData.phone}
                         onChange={(e) => handleInputChange('phone', e.target.value)}
@@ -782,8 +820,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="date_of_birth" value="Date of Birth *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="date_of_birth" value="Date of Birth" />
+                      <RequiredTextInput
                         id="date_of_birth"
                         type="date"
                         value={formData.date_of_birth}
@@ -796,18 +834,18 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="gender" value="Gender" />
-                      <Select
+                      <RequiredLabel htmlFor="gender" value="Gender" />
+                      <RequiredSelect
                         id="gender"
                         value={formData.gender}
                         onChange={(e) => handleInputChange('gender', e.target.value)}
-                        color={validationErrors.date_of_birth ? 'failure' : undefined}
+                        color={validationErrors.gender ? 'failure' : undefined}
                       >
                         <option>Select gender</option>
                         <option value="male">Male</option>
                         <option value="female">Female</option>
                         <option value="other">Other</option>
-                      </Select>
+                      </RequiredSelect>
                      {validationErrors.gender && (
                         <p className="text-red-600 text-sm mt-1">{validationErrors.gender}</p>
                       )}
@@ -887,8 +925,8 @@ const debugAuth = () => {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="emergency_contact_name" value="Emergency Contact Name *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="emergency_contact_name" value="Emergency Contact Name" />
+                      <RequiredTextInput
                         id="emergency_contact_name"
                         value={formData.emergency_contact_name}
                         onChange={(e) => handleInputChange('emergency_contact_name', e.target.value)}
@@ -901,8 +939,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="emergency_contact_phone" value="Emergency Contact Phone *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="emergency_contact_phone" value="Emergency Contact Phone" />
+                      <RequiredTextInput
                         id="emergency_contact_phone"
                         value={formData.emergency_contact_phone}
                         onChange={(e) => handleInputChange('emergency_contact_phone', e.target.value)}
@@ -915,8 +953,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <Label htmlFor="emergency_contact_relation" value="Relationship *" />
-                      <TextInput
+                      <RequiredLabel htmlFor="emergency_contact_relation" value="Relationship" />
+                      <RequiredTextInput
                         id="emergency_contact_relation"
                         value={formData.emergency_contact_relation}
                         onChange={(e) => handleInputChange('emergency_contact_relation', e.target.value)}
@@ -946,9 +984,9 @@ const debugAuth = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="employee_code" value="Employee Code *" />
+                    <RequiredLabel htmlFor="employee_code" value="Employee Code" />
                     <div className="flex gap-2">
-                      <TextInput
+                      <RequiredTextInput
                         id="employee_code"
                         value={formData.employee_code}
                         onChange={(e) => handleInputChange('employee_code', e.target.value)}
@@ -966,8 +1004,8 @@ const debugAuth = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="hire_date" value="Hire Date *" />
-                    <TextInput
+                    <RequiredLabel htmlFor="hire_date" value="Hire Date" />
+                    <RequiredTextInput
                       id="hire_date"
                       type="date"
                       value={formData.hire_date}
@@ -980,8 +1018,8 @@ const debugAuth = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="department_id" value="Department *" />
-                    <Select
+                    <RequiredLabel htmlFor="department_id" value="Department" />
+                    <RequiredSelect
                       id="department_id"
                       value={formData.department_id}
                       onChange={(e) => handleInputChange('department_id', e.target.value)}
@@ -993,15 +1031,15 @@ const debugAuth = () => {
                           {dept.name}
                         </option>
                       ))}
-                    </Select>
+                    </RequiredSelect>
                     {validationErrors.department_id && (
                       <p className="text-red-600 text-sm mt-1">{validationErrors.department_id}</p>
                     )}
                   </div>
 
                   <div>
-                    <Label htmlFor="designation_id" value="Designation *" />
-                    <Select
+                    <RequiredLabel htmlFor="designation_id" value="Designation" />
+                    <RequiredSelect
                       id="designation_id"
                       value={formData.designation_id}
                       onChange={(e) => handleInputChange('designation_id', e.target.value)}
@@ -1016,7 +1054,7 @@ const debugAuth = () => {
                           {designation.title}
                         </option>
                       ))}
-                    </Select>
+                    </RequiredSelect>
                     {validationErrors.designation_id && (
                       <p className="text-red-600 text-sm mt-1">{validationErrors.designation_id}</p>
                     )}
@@ -1039,8 +1077,8 @@ const debugAuth = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="employment_status" value="Employment Status *" />
-                    <Select
+                    <RequiredLabel htmlFor="employment_status" value="Employment Status" />
+                    <RequiredSelect
                       id="employment_status"
                       value={formData.employment_status}
                       onChange={(e) => handleInputChange('employment_status', e.target.value)}
@@ -1048,15 +1086,15 @@ const debugAuth = () => {
                     >
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
-                    </Select>
+                    </RequiredSelect>
                     {validationErrors.employment_status && (
                       <p className="text-red-600 text-sm mt-1">{validationErrors.employment_status}</p>
                     )}
                   </div>
 
                   <div>
-                    <Label htmlFor="employee_type" value="Employment Type *" />
-                    <Select
+                    <RequiredLabel htmlFor="employee_type" value="Employment Type" />
+                    <RequiredSelect
                       id="employee_type"
                       value={formData.employee_type}
                       onChange={(e) => handleInputChange('employee_type', e.target.value)}
@@ -1067,21 +1105,25 @@ const debugAuth = () => {
                       <option value="contract">Contract</option>
                       <option value="intern">Intern</option>
                       <option value="consultant">Consultant</option>
-                    </Select>
+                    </RequiredSelect>
                     {validationErrors.employee_type && (
                       <p className="text-red-600 text-sm mt-1">{validationErrors.employee_type}</p>
                     )}
                   </div>
 
                   <div>
-                    <Label htmlFor="salary" value="Base Salary" />
-                    <TextInput
+                    <RequiredLabel htmlFor="salary" value="Base Salary" />
+                    <RequiredTextInput
                       id="salary"
                       type="number"
                       value={formData.salary}
                       onChange={(e) => handleInputChange('salary', e.target.value)}
                       placeholder="Enter base salary"
+                      color={validationErrors.salary ? 'failure' : undefined}
                     />
+                    {validationErrors.salary && (
+                      <p className="text-red-600 text-sm mt-1">{validationErrors.salary}</p>
+                    )}
                   </div>
                 </div>
 
@@ -1114,8 +1156,8 @@ const debugAuth = () => {
                     {/* Time Fields */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="in_time" value="In Time *" />
-                        <TextInput
+                        <RequiredLabel htmlFor="in_time" value="In Time" />
+                        <RequiredTextInput
                           id="in_time"
                           type="time"
                           value={formData.in_time}
@@ -1130,8 +1172,8 @@ const debugAuth = () => {
                       </div>
 
                       <div>
-                        <Label htmlFor="out_time" value="Out Time *" />
-                        <TextInput
+                        <RequiredLabel htmlFor="out_time" value="Out Time" />
+                        <RequiredTextInput
                           id="out_time"
                           type="time"
                           value={formData.out_time}
@@ -1310,6 +1352,7 @@ const debugAuth = () => {
                     <p><strong>Department:</strong> {departments.find(d => d.id === formData.department_id)?.name || 'Not selected'}</p>
                     <p><strong>Designation:</strong> {designations.find(d => d.id === formData.designation_id)?.title || 'Not selected'}</p>
                     <p><strong>Employment Type:</strong> {formData.employee_type || 'Not selected'}</p>
+                    <p><strong>Base Salary:</strong> {formData.salary || 'Not set'}</p>
                     <p><strong>Work Schedule:</strong> {formData.in_time} - {formData.out_time} ({formData.follows_company_schedule ? 'Company Standard' : 'Custom'})</p>
                     <p><strong>Emergency Contact:</strong> {formData.emergency_contact_name} ({formData.emergency_contact_relation}) - {formData.emergency_contact_phone}</p>
                   </div>

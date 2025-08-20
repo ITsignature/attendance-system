@@ -107,9 +107,14 @@ const Field: React.FC<FieldProps> = ({ label, value, icon }) => (
       {icon}
       <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
     </div>
-    <p className="text-base text-gray-900 dark:text-white font-medium">
-      {value || 'Not provided'}
-    </p>
+  <p
+  className={`text-base font-medium ${
+    value ? "text-gray-900 dark:text-white" : "text-gray-300"
+  }`}
+>
+  {value || "Not provided"}
+</p>
+
   </div>
 );
 

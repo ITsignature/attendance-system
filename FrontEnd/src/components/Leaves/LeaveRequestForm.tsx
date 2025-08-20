@@ -19,6 +19,8 @@ import {
 } from 'react-icons/fa';
 import leaveApiService from '../../services/leaveApi';
 import apiService from '../../services/api';
+import ReactSelect from 'react-select';
+
 
 // Type Definitions
 interface Employee {
@@ -91,6 +93,9 @@ const LeaveRequestForm: React.FC = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [success, setSuccess] = useState<string>('');
   const [calculatedDays, setCalculatedDays] = useState<number>(0);
+
+
+
 
   // Load initial data
   useEffect(() => {
@@ -319,6 +324,16 @@ const LeaveRequestForm: React.FC = () => {
     }
   };
 
+
+const employeeOptions = employees
+  .map(emp => ({
+    value: emp.id, // the actual ID
+    label: `${emp.first_name} ${emp.last_name} - ${emp.employee_code}`, // what shows in dropdown
+  }))
+  .sort((a, b) => a.label.localeCompare(b.label));
+
+
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -326,6 +341,7 @@ const LeaveRequestForm: React.FC = () => {
       </div>
     );
   }
+
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -356,20 +372,39 @@ const LeaveRequestForm: React.FC = () => {
           {/* Employee Selection */}
           <div>
             <Label htmlFor="employee_id" value="Select Employee *" />
-            <Select
-              id="employee_id"
-              value={formData.employee_id}
-              onChange={(e) => handleInputChange('employee_id', e.target.value)}
-              className={errors.employee_id ? 'border-red-500' : ''}
-              required
-            >
-              <option value="">Choose an employee...</option>
-              {Array.isArray(employees) && employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.first_name} {employee.last_name} - {employee.employee_code}
-                </option>
-              ))}
-            </Select>
+<ReactSelect
+  options={employeeOptions}
+  value={employeeOptions.find(opt => opt.value === formData.employee_id) || null}
+  onChange={(option) => handleInputChange('employee_id', option?.value || '')}
+  isClearable
+  placeholder="Choose an employee..."
+  isSearchable
+  styles={{
+    control: (provided, state) => ({
+      ...provided,
+      borderRadius: '9999px',        // fully rounded
+      borderColor: '#D1D5DB',       // Tailwind gray-300
+      minHeight: '40px',
+      boxShadow: state.isFocused ? '0 0 0 1px #3B82F6' : 'none', // optional focus ring
+      '&:hover': {
+        borderColor: '#9CA3AF',     // Tailwind gray-400 on hover
+        background:'rgb(209 213 219)'
+      },
+    }),
+    menu: (provided) => ({
+      ...provided,
+      borderRadius: '12px',
+     
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isFocused ? '#F3F4F6' : 'white', // light gray on hover
+      color: '#111827', // gray-900
+    }),
+  }}
+/>
+
+
             {errors.employee_id && (
               <p className="text-red-500 text-sm mt-1">{errors.employee_id}</p>
             )}
