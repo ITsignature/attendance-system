@@ -77,13 +77,15 @@ const AttendanceView: React.FC = () => {
 
   const [filters, setFilters] = useState<AttendanceFilters>({
     page: 1,
-    limit: 50,
+    limit: 100,
     sortBy: 'date',
     sortOrder: 'DESC',
     startDate: todayStr(),
     endDate: todayStr(),
     employeeName: '', 
   });
+
+
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -94,7 +96,6 @@ const AttendanceView: React.FC = () => {
 
   const [showResolve, setShowResolve] = useState(false);
   const [resolveRecord, setResolveRecord] = useState<AttendanceRecord | null>(null);
-/* add after the other useState hooks */
   const [showDelete, setShowDelete] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<AttendanceRecord | null>(null);
   
@@ -104,6 +105,7 @@ const AttendanceView: React.FC = () => {
     setResolveRecord(rec);
     setShowResolve(true);
   };
+
   // Load data on component mount and filter changes
   useEffect(() => {
     loadAttendanceRecords();
@@ -354,10 +356,10 @@ const filteredRecords = attendanceRecords.filter(record =>
           <Button color="purple" as={Link} to="/manual-attendance">
         Manual Attendance Sheet
       </Button>
-        <Button onClick={() => setShowForm(true)}>
+        {/* <Button onClick={() => setShowForm(true)}>
           <HiPlus className="mr-2 h-4 w-4" />
           Add Attendance
-        </Button>
+        </Button> */}
         </div>
       </div>
 
@@ -518,33 +520,31 @@ const filteredRecords = attendanceRecords.filter(record =>
                   
                       </Table.Cell>
                       
-              <Table.Cell>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={() => openResolve(record)}
-                onKeyDown={(e) => e.key === 'Enter' && openResolve(record)}
-                className="inline-block cursor-pointer"
-                title="Click to change work duration"
-              >
-                {getWorkDurationBadge(record.work_duration)}
-              </span>
-            </Table.Cell>
-
-
-                      
                       <Table.Cell>
-                        <div className="space-y-1">
-                          <div className="font-semibold">
-                            {record.total_hours ? `${toHrsMins(record.total_hours)}` : 'N/A'}
-                          </div>
-                          {(record.overtime_hours || 0) > 0 && (
-                            <div className="text-sm text-orange-600">
-                               OT: {toHrsMins(record.overtime_hours)}
-                            </div>
-                          )}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openResolve(record)}
+                        onKeyDown={(e) => e.key === 'Enter' && openResolve(record)}
+                        className="inline-block cursor-pointer"
+                        title="Click to change work duration"
+                      >
+                        {getWorkDurationBadge(record.work_duration)}
+                      </span>
+                    </Table.Cell>
+                      
+                    <Table.Cell>
+                      <div className="space-y-1">
+                        <div className="font-semibold">
+                          {record.total_hours ? `${toHrsMins(record.total_hours)}` : 'N/A'}
                         </div>
-                      </Table.Cell>
+                        {(record.overtime_hours || 0) > 0 && (
+                          <div className="text-sm text-orange-600">
+                            OT: {toHrsMins(record.overtime_hours)}
+                          </div>
+                        )}
+                      </div>
+                    </Table.Cell>
                       
                       <Table.Cell>
                         <div className="flex space-x-2">
@@ -558,7 +558,7 @@ const filteredRecords = attendanceRecords.filter(record =>
                         >
                           <HiPencil className="h-4 w-4" />
                         </Button>
-                          <Button
+                          {/* <Button
                               size="sm"
                               color="failure"
                               onClick={() => {
@@ -567,7 +567,7 @@ const filteredRecords = attendanceRecords.filter(record =>
                               }}
                             >
                             <HiTrash className="h-4 w-4" />
-                          </Button>
+                          </Button> */}
                         </div>
                       </Table.Cell>
                     </Table.Row>

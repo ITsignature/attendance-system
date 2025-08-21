@@ -1,11 +1,12 @@
-// EmployeeDetails.tsx - Complete Enhanced Design Matching AddEmployees
+// EmployeeDetails.tsx - Complete Enhanced Design with Updated Attendance and Leave tabs
 import React, { useState, useEffect } from "react";
-import { Tabs, Button, Select, Modal, TextInput, Label, Badge, Spinner, Alert, Card, Breadcrumb } from "flowbite-react";
-import { HiUser, HiBriefcase, HiDocumentText, HiCash, HiHome, HiCalendar, HiClock, HiPhone, HiMail, HiLocationMarker, HiIdentification } from "react-icons/hi";
-import { FaEye, FaDownload, FaPlus, FaTrash, FaEdit } from "react-icons/fa";
+import { Tabs, Button, Select, Modal, TextInput, Label, Badge, Spinner, Alert, Card, Breadcrumb, Table } from "flowbite-react";
+import { HiUser, HiBriefcase, HiDocumentText, HiCash, HiHome, HiCalendar, HiClock, HiPhone, HiMail, HiLocationMarker, HiIdentification, HiRefresh } from "react-icons/hi";
+import { FaEye, FaDownload, FaPlus, FaTrash, FaEdit, FaCheck, FaTimes } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router";
 import { DynamicProtectedComponent } from "../RBACSystem/rbacSystem";
 import apiService from '../../services/api';
+import leaveApiService from '../../services/leaveApi';
 
 // Types
 interface Employee {
@@ -47,29 +48,49 @@ interface Employee {
 
 interface AttendanceRecord {
   id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_code: string;
   date: string;
   check_in_time?: string;
   check_out_time?: string;
-  break_duration?: number;
   total_hours?: number;
   overtime_hours?: number;
-  status: 'present' | 'absent' | 'late' | 'half_day' | 'on_leave';
-  work_type?: 'office' | 'remote' | 'hybrid';
+  break_duration?: number;
+  arrival_status: 'on_time' | 'late' | 'absent';
+  work_duration: 'full_day' | 'half_day' | 'short_leave' | 'on_leave';
+  work_type: 'office' | 'remote' | 'hybrid';
   notes?: string;
+  scheduled_in_time?: string;
+  scheduled_out_time?: string;
+  follows_company_schedule?: boolean;
+  department_name?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface LeaveRecord {
   id: string;
-  leave_type: string;
+  employee_id: string;
+  employee_name: string;
+  employee_code: string;
+  leave_type_id: string;
+  leave_type_name: string;
+  leave_duration: 'full_day' | 'half_day' | 'short_leave';
   start_date: string;
   end_date: string;
+  start_time?: string;
+  end_time?: string;
   days_requested: number;
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   applied_at: string;
   reviewed_at?: string;
+  reviewer_id?: string;
   reviewer_name?: string;
   reviewer_comments?: string;
+  admin_notes?: string;
+  supporting_documents?: any[];
 }
 
 interface FinancialRecord {
@@ -101,20 +122,32 @@ interface FieldProps {
   icon?: React.ReactNode;
 }
 
+interface AttendanceFilters {
+  startDate: string;
+  endDate: string;
+  arrival_status: string;
+  work_duration: string;
+}
+
+interface LeaveFilters {
+  status: string;
+  year: string;
+  month: string;
+}
+
 const Field: React.FC<FieldProps> = ({ label, value, icon }) => (
   <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
     <div className="flex items-center gap-2 mb-1">
       {icon}
       <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
     </div>
-  <p
-  className={`text-base font-medium ${
-    value ? "text-gray-900 dark:text-white" : "text-gray-300"
-  }`}
->
-  {value || "Not provided"}
-</p>
-
+    <p
+      className={`text-base font-medium ${
+        value ? "text-gray-900 dark:text-white" : "text-gray-300"
+      }`}
+    >
+      {value || "Not provided"}
+    </p>
   </div>
 );
 
@@ -135,10 +168,40 @@ const EmployeeDetails: React.FC = () => {
   const [activeSidebarTab, setActiveSidebarTab] = useState("Profile");
   const [showTerminateModal, setShowTerminateModal] = useState(false);
   const [terminating, setTerminating] = useState(false);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [leavesLoading, setLeavesLoading] = useState(false);
   
-  // Filter states
-  const [attendanceMonth, setAttendanceMonth] = useState("2024-07");
-  const [leaveMonth, setLeaveMonth] = useState("2024-07");
+  // Get today's date in YYYY-MM-DD format
+  const todayStr = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  // Get first day of current month
+  const firstDayOfMonth = () => {
+    const d = new Date();
+    d.setDate(1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
+  };
+
+  // Attendance Filter states
+  const [attendanceFilters, setAttendanceFilters] = useState<AttendanceFilters>({
+    startDate: firstDayOfMonth(),
+    endDate: todayStr(),
+    arrival_status: '',
+    work_duration: ''
+  });
+
+  // Leave Filter states
+  const [leaveFilters, setLeaveFilters] = useState<LeaveFilters>({
+    status: '',
+    year: new Date().getFullYear().toString(),
+    month: ''
+  });
+
+  // Filter states for Financial Records (keeping existing)
   const [filterType, setFilterType] = useState<string>('all');
   const [filterMonthYear, setFilterMonthYear] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -162,6 +225,20 @@ const EmployeeDetails: React.FC = () => {
     
     loadEmployeeData();
   }, [employeeId]);
+
+  // Load attendance when filters change
+  useEffect(() => {
+    if (employee && activeSidebarTab === "Attendance") {
+      loadAttendanceData(employee.id);
+    }
+  }, [attendanceFilters, activeSidebarTab]);
+
+  // Load leaves when filters change
+  useEffect(() => {
+    if (employee && activeSidebarTab === "Leave") {
+      loadLeaveData(employee.id);
+    }
+  }, [leaveFilters, activeSidebarTab]);
 
   const loadEmployeeData = async () => {
     try {
@@ -198,117 +275,81 @@ const EmployeeDetails: React.FC = () => {
 
   const loadAttendanceData = async (empId: string) => {
     try {
-      // Mock data for now - replace with actual API call
-      const mockAttendance: AttendanceRecord[] = [
-        {
-          id: '1',
-          date: '2024-07-01',
-          check_in_time: '09:28',
-          check_out_time: '19:00',
-          break_duration: 30,
-          total_hours: 9.02,
-          overtime_hours: 1.02,
-          status: 'present',
-          work_type: 'office'
-        },
-        {
-          id: '2',
-          date: '2024-07-02',
-          check_in_time: '09:20',
-          check_out_time: '19:00',
-          break_duration: 20,
-          total_hours: 9.20,
-          overtime_hours: 1.20,
-          status: 'present',
-          work_type: 'office'
-        },
-        {
-          id: '3',
-          date: '2024-07-03',
-          check_in_time: '09:25',
-          check_out_time: '19:00',
-          break_duration: 30,
-          total_hours: 9.05,
-          overtime_hours: 1.05,
-          status: 'present',
-          work_type: 'office'
-        },
-        {
-          id: '4',
-          date: '2024-07-04',
-          check_in_time: '09:45',
-          check_out_time: '19:00',
-          break_duration: 40,
-          total_hours: 8.35,
-          overtime_hours: 0.35,
-          status: 'late',
-          work_type: 'office'
-        },
-        {
-          id: '5',
-          date: '2024-07-05',
-          check_in_time: '10:00',
-          check_out_time: '19:00',
-          break_duration: 30,
-          total_hours: 8.30,
-          overtime_hours: 0.30,
-          status: 'late',
-          work_type: 'office'
-        }
-      ];
+      setAttendanceLoading(true);
       
-      setAttendance(mockAttendance);
+      // Build query parameters for attendance
+      const params = new URLSearchParams();
+      params.append('employeeId', empId);
+      params.append('startDate', attendanceFilters.startDate);
+      params.append('endDate', attendanceFilters.endDate);
+      params.append('limit', '1000'); // Get all records, no pagination
+      
+      if (attendanceFilters.arrival_status) {
+        params.append('arrival_status', attendanceFilters.arrival_status);
+      }
+      if (attendanceFilters.work_duration) {
+        params.append('work_duration', attendanceFilters.work_duration);
+      }
+      
+      const response = await apiService.getAttendanceRecords(params.toString());
+      
+      if (response.success && response.data) {
+        setAttendance(response.data.attendance || []);
+      } else {
+        setAttendance([]);
+      }
     } catch (error) {
       console.warn('Failed to load attendance data:', error);
       setAttendance([]);
+    } finally {
+      setAttendanceLoading(false);
     }
   };
 
   const loadLeaveData = async (empId: string) => {
     try {
-      // Mock data for now - replace with actual API call
-      const mockLeaves: LeaveRecord[] = [
-        {
-          id: '1',
-          leave_type: 'Annual Leave',
-          start_date: '2024-06-05',
-          end_date: '2024-06-08',
-          days_requested: 3,
-          reason: 'Family vacation',
-          status: 'pending',
-          applied_at: '2024-06-01',
-          reviewer_name: 'Mark Williams'
-        },
-        {
-          id: '2',
-          leave_type: 'Sick Leave',
-          start_date: '2024-04-06',
-          end_date: '2024-04-10',
-          days_requested: 4,
-          reason: 'Medical treatment',
-          status: 'approved',
-          applied_at: '2024-04-01',
-          reviewed_at: '2024-04-02',
-          reviewer_name: 'Mark Williams'
-        },
-        {
-          id: '3',
-          leave_type: 'Personal Leave',
-          start_date: '2024-03-14',
-          end_date: '2024-03-16',
-          days_requested: 2,
-          reason: 'Personal matters',
-          status: 'approved',
-          applied_at: '2024-03-10',
-          reviewed_at: '2024-03-11',
-          reviewer_name: 'Mark Williams'
-        }
-      ];
+      setLeavesLoading(true);
       
-      setLeaves(mockLeaves);
+      // Fetch all leave requests and filter for this employee
+      const response = await leaveApiService.getAllLeaveRequests({
+        employee_id: empId
+      });
+      
+      if (response.success && response.data) {
+        let leaveRequests = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data.requests || []);
+        
+        // Filter by status if selected
+        if (leaveFilters.status) {
+          leaveRequests = leaveRequests.filter(req => req.status === leaveFilters.status);
+        }
+        
+        // Filter by year
+        if (leaveFilters.year) {
+          leaveRequests = leaveRequests.filter(req => {
+            const year = new Date(req.start_date).getFullYear().toString();
+            return year === leaveFilters.year;
+          });
+        }
+        
+        // Filter by month
+        if (leaveFilters.month) {
+          leaveRequests = leaveRequests.filter(req => {
+            const month = (new Date(req.start_date).getMonth() + 1).toString();
+            return month === leaveFilters.month;
+          });
+        }
+        
+        setLeaves(leaveRequests);
+      } else {
+        setLeaves([]);
+      }
     } catch (error) {
       console.warn('Failed to load leave data:', error);
       setLeaves([]);
+    } finally {
+      setLeavesLoading(false);
     }
   };
 
@@ -423,6 +464,7 @@ const EmployeeDetails: React.FC = () => {
       setError('Failed to download document');
     }
   };
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -465,20 +507,29 @@ const EmployeeDetails: React.FC = () => {
 
   // Helper functions
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric'
     });
   };
 
   const formatTime = (timeString?: string) => {
     if (!timeString) return 'N/A';
-    return new Date(`2000-01-01 ${timeString}`).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
+    try {
+      // Handle both HH:MM and HH:MM:SS formats
+      const [hours, minutes] = timeString.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0);
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return timeString;
+    }
   };
 
   const formatHours = (hours?: number) => {
@@ -486,6 +537,68 @@ const EmployeeDetails: React.FC = () => {
     const h = Math.floor(hours);
     const m = Math.round((hours - h) * 60);
     return `${h}:${m.toString().padStart(2, '0')} Hrs`;
+  };
+
+  // Attendance status badges
+  const getArrivalStatusBadge = (status: string | null | undefined) => {
+    if (!status) {
+      return <Badge color="gray">Unknown</Badge>;
+    }
+    
+    const colors: { [key: string]: any } = {
+      'on_time': 'success',
+      'late': 'warning', 
+      'absent': 'failure'
+    };
+    return <Badge color={colors[status] || 'gray'}>{status.replace('_', ' ')}</Badge>;
+  };
+
+  const getWorkDurationBadge = (duration?: string | null) => {
+    const label = duration ? duration.replace(/_/g, ' ') : 'N/A';
+    const colorMap: Record<string, any> = {
+      full_day: 'success',
+      half_day: 'info',
+      short_leave: 'warning',
+      on_leave: 'purple',
+    };
+    const color = duration ? (colorMap[duration] ?? 'gray') : 'gray';
+    return <Badge color={color}>{label}</Badge>;
+  };
+
+  const getWorkTypeBadge = (type?: string | null) => {
+    const label = type ? type.charAt(0).toUpperCase() + type.slice(1) : 'N/A';
+    const colorMap: Record<string, any> = {
+      office: 'blue',
+      remote: 'green',
+      hybrid: 'purple',
+    };
+    const color = type ? (colorMap[type] ?? 'gray') : 'gray';
+    return <Badge color={color}>{label}</Badge>;
+  };
+
+  // Leave status badge
+  const getLeaveStatusBadge = (status: string) => {
+    const colors: Record<string, any> = {
+      pending: 'warning',
+      approved: 'success',
+      rejected: 'failure',
+      cancelled: 'gray'
+    };
+    return <Badge color={colors[status] || 'gray'}>
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </Badge>;
+  };
+
+  const getLeaveTypeColor = (leaveType: string) => {
+    const colors: Record<string, string> = {
+      'Annual Leave': 'blue',
+      'Sick Leave': 'red',
+      'Personal Leave': 'purple',
+      'Emergency Leave': 'yellow',
+      'Maternity Leave': 'pink',
+      'Paternity Leave': 'green'
+    };
+    return colors[leaveType] || 'gray';
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -546,6 +659,16 @@ const EmployeeDetails: React.FC = () => {
         label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       };
     });
+  };
+
+  // Generate year options for leave filter
+  const getYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear; i >= currentYear - 5; i--) {
+      years.push(i.toString());
+    }
+    return years;
   };
 
   // Loading state
@@ -786,243 +909,401 @@ const EmployeeDetails: React.FC = () => {
                 </div>
 
                 {/* Documents Section */}
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <HiDocumentText className="w-6 h-6 text-purple-600" />
-                        Documents
-                      </h3>
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                        <div className="space-y-4">
-                          {Object.keys(documents).length === 0 ? (
-                            <div className="text-center py-8">
-                              <HiDocumentText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                              <p className="text-gray-500 dark:text-gray-400">No documents uploaded yet.</p>
-                            </div>
-                          ) : (
-                            Object.entries(documents).map(([documentType, docs]) => (
-                              <div key={documentType} className="space-y-2">
-                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 capitalize border-b pb-1">
-                                  {documentType.replace('_', ' ')} ({docs.length})
-                                </h4>
-                                <div className="space-y-2">
-                                  {docs.map((doc) => (
-                                    <div 
-                                      key={doc.id} 
-                                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border hover:shadow-sm transition-shadow"
-                                    >
-                                      <div className="flex items-center gap-3 flex-1">
-                                        <span className="text-2xl">{getDocumentIcon(doc.mime_type)}</span>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                            {doc.original_filename}
-                                          </p>
-                                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                            <span>{formatFileSize(doc.file_size)}</span>
-                                            <span>•</span>
-                                            <span>{formatDate(doc.uploaded_at)}</span>
-                                            {doc.uploaded_by_name && (
-                                              <>
-                                                <span>•</span>
-                                                <span>by {doc.uploaded_by_name}</span>
-                                              </>
-                                            )}
-                                          </div>
-                                          {doc.notes && (
-                                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                              {doc.notes}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="flex gap-2 ml-4">
-                                        <Button 
-                                          size="xs" 
-                                          color="gray" 
-                                          title="Download"
-                                          onClick={() => handleDownloadDocument(doc.id, doc.original_filename)}
-                                        >
-                                          <FaDownload className="w-3 h-3" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ))
-                          )}
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <HiDocumentText className="w-6 h-6 text-purple-600" />
+                    Documents
+                  </h3>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                    <div className="space-y-4">
+                      {Object.keys(documents).length === 0 ? (
+                        <div className="text-center py-8">
+                          <HiDocumentText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-500 dark:text-gray-400">No documents uploaded yet.</p>
                         </div>
-                      </div>
+                      ) : (
+                        Object.entries(documents).map(([documentType, docs]) => (
+                          <div key={documentType} className="space-y-2">
+                            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 capitalize border-b pb-1">
+                              {documentType.replace('_', ' ')} ({docs.length})
+                            </h4>
+                            <div className="space-y-2">
+                              {docs.map((doc) => (
+                                <div 
+                                  key={doc.id} 
+                                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border hover:shadow-sm transition-shadow"
+                                >
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <span className="text-2xl">{getDocumentIcon(doc.mime_type)}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                        {doc.original_filename}
+                                      </p>
+                                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                        <span>{formatFileSize(doc.file_size)}</span>
+                                        <span>•</span>
+                                        <span>{formatDate(doc.uploaded_at)}</span>
+                                        {doc.uploaded_by_name && (
+                                          <>
+                                            <span>•</span>
+                                            <span>by {doc.uploaded_by_name}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                      {doc.notes && (
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                          {doc.notes}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex gap-2 ml-4">
+                                    <Button 
+                                      size="xs" 
+                                      color="gray" 
+                                      title="Download"
+                                      onClick={() => handleDownloadDocument(doc.id, doc.original_filename)}
+                                    >
+                                      <FaDownload className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Attendance Tab */}
+            {/* Attendance Tab - Updated UI matching AttendanceView */}
             {activeSidebarTab === "Attendance" && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    <HiClock className="w-6 h-6 text-purple-600" />
-                    Attendance Records
-                  </h3>
-                  <Select
-                    value={attendanceMonth}
-                    onChange={(e) => setAttendanceMonth(e.target.value)}
-                    className="w-48"
-                  >
-                    <option value="2024-07">July 2024</option>
-                    <option value="2024-06">June 2024</option>
-                    <option value="2024-05">May 2024</option>
-                  </Select>
-                </div>
+                {/* Filters Section */}
+                <Card className="mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Start Date</label>
+                      <TextInput
+                        type="date"
+                        value={attendanceFilters.startDate}
+                        onChange={(e) => setAttendanceFilters(prev => ({
+                          ...prev,
+                          startDate: e.target.value,
+                          endDate: prev.endDate < e.target.value ? e.target.value : prev.endDate
+                        }))}
+                      />
+                    </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                      <tr>
-                        <th className="px-6 py-3">Date</th>
-                        <th className="px-6 py-3">Check In</th>
-                        <th className="px-6 py-3">Check Out</th>
-                        <th className="px-6 py-3">Break</th>
-                        <th className="px-6 py-3">Total Hours</th>
-                        <th className="px-6 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {attendance.map((record) => (
-                        <tr key={record.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                            {formatDate(record.date)}
-                          </td>
-                          <td className="px-6 py-4">{formatTime(record.check_in_time)}</td>
-                          <td className="px-6 py-4">{formatTime(record.check_out_time)}</td>
-                          <td className="px-6 py-4">{record.break_duration || 0} min</td>
-                          <td className="px-6 py-4">{formatHours(record.total_hours)}</td>
-                          <td className="px-6 py-4">
-                            <Badge color={getStatusBadgeColor(record.status)} size="sm">
-                              {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">End Date</label>
+                      <TextInput
+                        type="date"
+                        value={attendanceFilters.endDate}
+                        onChange={(e) => setAttendanceFilters(prev => ({
+                          ...prev,
+                          endDate: e.target.value,
+                          startDate: prev.startDate > e.target.value ? e.target.value : prev.startDate
+                        }))}
+                      />
+                    </div>
 
-                {/* Attendance Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                    <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Present Days</h4>
-                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                      {attendance.filter(a => a.status === 'present').length}
-                    </p>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Arrival Status</label>
+                      <Select
+                        value={attendanceFilters.arrival_status}
+                        onChange={(e) => setAttendanceFilters(prev => ({ ...prev, arrival_status: e.target.value }))}
+                      >
+                        <option value="">All Status</option>
+                        <option value="on_time">On Time</option>
+                        <option value="late">Late</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Work Duration</label>
+                      <Select
+                        value={attendanceFilters.work_duration}
+                        onChange={(e) => setAttendanceFilters(prev => ({ ...prev, work_duration: e.target.value }))}
+                      >
+                        <option value="">All Duration</option>
+                        <option value="full_day">Full Day</option>
+                        <option value="half_day">Half Day</option>
+                        <option value="short_leave">Short Leave</option>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-end">
+                      <Button 
+                        onClick={() => loadAttendanceData(employee.id)} 
+                        disabled={attendanceLoading}
+                      >
+                        <HiRefresh className="mr-2 h-4 w-4" />
+                        Refresh
+                      </Button>
+                    </div>
                   </div>
+                </Card>
+
+                {/* Attendance Table */}
+                <Card>
+                  {attendanceLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Spinner size="xl" />
+                      <span className="ml-3">Loading attendance records...</span>
+                    </div>
+                  ) : attendance.length === 0 ? (
+                    <div className="text-center py-12">
+                      <HiClock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500 dark:text-gray-400">No attendance records found for the selected period.</p>
+                    </div>
+                  ) : (
+                    <Table hoverable>
+                      <Table.Head>
+                        <Table.HeadCell>Date</Table.HeadCell>
+                        <Table.HeadCell>Check In</Table.HeadCell>
+                        <Table.HeadCell>Check Out</Table.HeadCell>
+                        <Table.HeadCell>Break</Table.HeadCell>
+                        <Table.HeadCell>Total Hours</Table.HeadCell>
+                        <Table.HeadCell>Overtime</Table.HeadCell>
+                        <Table.HeadCell>Arrival Status</Table.HeadCell>
+                        <Table.HeadCell>Work Duration</Table.HeadCell>
+                        <Table.HeadCell>Work Type</Table.HeadCell>
+                      </Table.Head>
+                      <Table.Body className="divide-y">
+                        {attendance.map((record) => (
+                          <Table.Row key={record.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                            <Table.Cell className="font-medium text-gray-900 dark:text-white">
+                              {formatDate(record.date)}
+                            </Table.Cell>
+                            <Table.Cell>{formatTime(record.check_in_time)}</Table.Cell>
+                            <Table.Cell>{formatTime(record.check_out_time)}</Table.Cell>
+                            <Table.Cell>{record.break_duration || 0} min</Table.Cell>
+                            <Table.Cell>{formatHours(record.total_hours)}</Table.Cell>
+                            <Table.Cell>{formatHours(record.overtime_hours)}</Table.Cell>
+                            <Table.Cell>{getArrivalStatusBadge(record.arrival_status)}</Table.Cell>
+                            <Table.Cell>{getWorkDurationBadge(record.work_duration)}</Table.Cell>
+                            <Table.Cell>{getWorkTypeBadge(record.work_type)}</Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table>
+                  )}
                   
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Avg Hours</h4>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                      {formatHours(attendance.reduce((sum, a) => sum + (a.total_hours || 0), 0) / attendance.length)}
-                    </p>
-                  </div>
-                </div>
+                  {/* Summary Section */}
+                  {attendance.length > 0 && (
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Days</h4>
+                        <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{attendance.length}</p>
+                      </div>
+                      
+                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">On Time</h4>
+                        <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                          {attendance.filter(r => r.arrival_status === 'on_time').length}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Late</h4>
+                        <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+                          {attendance.filter(r => r.arrival_status === 'late').length}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-1">Total Hours</h4>
+                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                          {attendance.reduce((sum, r) => sum + (r.total_hours || 0), 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </Card>
               </div>
             )}
 
-            {/* Leave Tab */}
+            {/* Leave Tab - Updated UI matching LeaveRequests */}
             {activeSidebarTab === "Leave" && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    <HiCalendar className="w-6 h-6 text-purple-600" />
-                    Leave Records
-                  </h3>
-                  <Select
-                    value={leaveMonth}
-                    onChange={(e) => setLeaveMonth(e.target.value)}
-                    className="w-48"
-                  >
-                    <option value="2024-07">July 2024</option>
-                    <option value="2024-06">June 2024</option>
-                    <option value="2024-05">May 2024</option>
-                  </Select>
-                </div>
+                {/* Filters Section */}
+                <Card className="mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Status</label>
+                      <Select
+                        value={leaveFilters.status}
+                        onChange={(e) => setLeaveFilters(prev => ({ ...prev, status: e.target.value }))}
+                      >
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="cancelled">Cancelled</option>
+                      </Select>
+                    </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                      <tr>
-                        <th className="px-6 py-3">Leave Type</th>
-                        <th className="px-6 py-3">Date Range</th>
-                        <th className="px-6 py-3">Days</th>
-                        <th className="px-6 py-3">Reason</th>
-                        <th className="px-6 py-3">Reviewed By</th>
-                        <th className="px-6 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaves.map((leave) => (
-                        <tr key={leave.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                            {leave.leave_type}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div>
-                              <p>{formatDate(leave.start_date)} - {formatDate(leave.end_date)}</p>
-                              <p className="text-xs text-gray-500">
-                                Applied: {formatDate(leave.applied_at)}
-                              </p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">{leave.days_requested} Days</td>
-                          <td className="px-6 py-4">
-                            <div className="max-w-xs">
-                              <p className="truncate" title={leave.reason}>{leave.reason}</p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">{leave.reviewer_name || 'N/A'}</td>
-                          <td className="px-6 py-4">
-                            <Badge color={getStatusBadgeColor(leave.status)} size="sm">
-                              {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Year</label>
+                      <Select
+                        value={leaveFilters.year}
+                        onChange={(e) => setLeaveFilters(prev => ({ ...prev, year: e.target.value }))}
+                      >
+                        {getYearOptions().map(year => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </Select>
+                    </div>
 
-                {/* Leave Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Requests</h4>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{leaves.length}</p>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Month</label>
+                      <Select
+                        value={leaveFilters.month}
+                        onChange={(e) => setLeaveFilters(prev => ({ ...prev, month: e.target.value }))}
+                      >
+                        <option value="">All Months</option>
+                        <option value="1">January</option>
+                        <option value="2">February</option>
+                        <option value="3">March</option>
+                        <option value="4">April</option>
+                        <option value="5">May</option>
+                        <option value="6">June</option>
+                        <option value="7">July</option>
+                        <option value="8">August</option>
+                        <option value="9">September</option>
+                        <option value="10">October</option>
+                        <option value="11">November</option>
+                        <option value="12">December</option>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-end">
+                      <Button 
+                        onClick={() => loadLeaveData(employee.id)} 
+                        disabled={leavesLoading}
+                      >
+                        <HiRefresh className="mr-2 h-4 w-4" />
+                        Refresh
+                      </Button>
+                    </div>
                   </div>
+                </Card>
+
+                {/* Leave Table */}
+                <Card>
+                  {leavesLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Spinner size="xl" />
+                      <span className="ml-3">Loading leave requests...</span>
+                    </div>
+                  ) : leaves.length === 0 ? (
+                    <div className="text-center py-12">
+                      <HiCalendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500 dark:text-gray-400">No leave requests found.</p>
+                    </div>
+                  ) : (
+                    <Table hoverable>
+                      <Table.Head>
+                        <Table.HeadCell>Leave Type</Table.HeadCell>
+                        <Table.HeadCell>Duration</Table.HeadCell>
+                        <Table.HeadCell>Date Range</Table.HeadCell>
+                        <Table.HeadCell>Days</Table.HeadCell>
+                        <Table.HeadCell>Reason</Table.HeadCell>
+                        <Table.HeadCell>Status</Table.HeadCell>
+                        <Table.HeadCell>Applied Date</Table.HeadCell>
+                        <Table.HeadCell>Reviewed By</Table.HeadCell>
+                      </Table.Head>
+                      <Table.Body className="divide-y">
+                        {leaves.map((leave) => (
+                          <Table.Row key={leave.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                            <Table.Cell>
+                              <span className={`text-sm font-medium text-${getLeaveTypeColor(leave.leave_type_name)}-600`}>
+                                {leave.leave_type_name}
+                              </span>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Badge color="info" size="sm">
+                                {leave.leave_duration?.replace('_', ' ')}
+                              </Badge>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="text-sm">
+                                <div>{formatDate(leave.start_date)}</div>
+                                <div className="text-gray-500">to {formatDate(leave.end_date)}</div>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <span className="font-medium">{leave.days_requested}</span>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="max-w-xs">
+                                <p className="truncate text-sm" title={leave.reason}>
+                                  {leave.reason}
+                                </p>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              {getLeaveStatusBadge(leave.status)}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <span className="text-sm text-gray-500">
+                                {formatDate(leave.applied_at)}
+                              </span>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="text-sm">
+                                <p>{leave.reviewer_name || 'Pending'}</p>
+                                {leave.reviewed_at && (
+                                  <p className="text-xs text-gray-500">{formatDate(leave.reviewed_at)}</p>
+                                )}
+                              </div>
+                            </Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table>
+                  )}
                   
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                    <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Approved</h4>
-                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                      {leaves.filter(l => l.status === 'approved').length}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
-                    <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Pending</h4>
-                    <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
-                      {leaves.filter(l => l.status === 'pending').length}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-                    <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">Rejected</h4>
-                    <p className="text-2xl font-bold text-red-900 dark:text-red-100">
-                      {leaves.filter(l => l.status === 'rejected').length}
-                    </p>
-                  </div>
-                </div>
+                  {/* Leave Summary Cards */}
+                  {leaves.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Requests</h4>
+                        <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{leaves.length}</p>
+                      </div>
+                      
+                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Approved</h4>
+                        <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                          {leaves.filter(l => l.status === 'approved').length}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Pending</h4>
+                        <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+                          {leaves.filter(l => l.status === 'pending').length}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                        <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">Rejected</h4>
+                        <p className="text-2xl font-bold text-red-900 dark:text-red-100">
+                          {leaves.filter(l => l.status === 'rejected').length}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </Card>
               </div>
             )}
 
-            {/* Financial Records Tab */}
+            {/* Financial Records Tab - Keeping existing implementation */}
             {activeSidebarTab === "Financial Records" && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -1202,7 +1483,7 @@ const EmployeeDetails: React.FC = () => {
           </div>
         </Card>
 
-        {/* Quick Actions Footer - REMOVED Quick Test and Generate Report buttons */}
+        {/* Quick Actions Footer */}
         <div className="mt-8 flex justify-between items-center">
           <Button color="gray" onClick={() => navigate('/employees')}>
             ← Back to Employees

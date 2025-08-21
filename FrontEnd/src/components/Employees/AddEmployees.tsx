@@ -132,6 +132,7 @@ const AddEmployees: React.FC = () => {
   const [filteredManagers, setFilteredManagers] = useState<Manager[]>([]);
   const [uploadedDocuments, setUploadedDocuments] = useState({});
   const [documentUploading, setDocumentUploading] = useState({});
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
 
   // Form data
   const [formData, setFormData] = useState<EmployeeFormData>({
@@ -482,6 +483,7 @@ const AddEmployees: React.FC = () => {
 
     try {
       setSubmitLoading(true);
+      setShowLoadingOverlay(true);
       setError(null);
 
       // Prepare data for submission
@@ -540,10 +542,12 @@ const AddEmployees: React.FC = () => {
         }, 2000);
       } else {
         setError(response.message || 'Failed to create employee');
+        setShowLoadingOverlay(false);
       }
     } catch (err: any) {
-      console.error('❌ Failed to create employee:', err);
-      setError(err.message || 'Failed to create employee. Please try again.');
+    console.error('Failed to create employee:', err);
+    setError(err.message || 'Failed to create employee. Please try again.');
+    setShowLoadingOverlay(false); // Hide overlay on error
     } finally {
       setSubmitLoading(false);
     }
@@ -1391,6 +1395,7 @@ const debugAuth = () => {
                 color="purple" 
                 onClick={handleSubmit}
                 disabled={submitLoading}
+                className={`${submitLoading ? 'opacity-75 cursor-not-allowed' : ''}`}
               >
                 {submitLoading ? (
                   <>
@@ -1414,6 +1419,22 @@ const debugAuth = () => {
             Need help? Contact your system administrator or refer to the user guide.
           </p>
         </div>
+
+        {showLoadingOverlay && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 flex flex-col items-center">
+            <Spinner size="xl" className="mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Creating Employee...
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 text-center">
+              Please wait while we create the employee profile and upload documents.
+              <br />
+              Do not close this window.
+            </p>
+          </div>
+        </div>
+      )}
       </div>
     </DynamicProtectedComponent>
   );

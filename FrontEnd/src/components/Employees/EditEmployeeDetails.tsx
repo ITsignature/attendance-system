@@ -1,4 +1,4 @@
-// EditEmployeeDetails.tsx - Complete version with deferred document uploads
+// EditEmployeeDetails.tsx - Complete version with loading overlay
 import React, { useState, useEffect } from "react";
 import { Tabs, TextInput, Select, Button, Alert, Spinner, Label, Checkbox } from "flowbite-react";
 import { HiUser, HiBriefcase, HiDocumentText, HiSave, HiX, HiClock } from "react-icons/hi";
@@ -6,6 +6,39 @@ import { FaDownload, FaTrash } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
 import apiService from '../../services/api';
 import FileUploadBox from "./FileUploadBox";
+
+// Loading Overlay Component
+interface LoadingOverlayProps {
+  isVisible: boolean;
+  message?: string;
+  submessage?: string;
+  spinnerSize?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
+const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
+  isVisible,
+  message = 'Processing...',
+  submessage,
+  spinnerSize = 'xl'
+}) => {
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-8 flex flex-col items-center max-w-md mx-4">
+        <Spinner size={spinnerSize} className="mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 text-center">
+          {message}
+        </h3>
+        {submessage && (
+          <p className="text-gray-600 dark:text-gray-400 text-center text-sm">
+            {submessage}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // Types
 interface Employee {
@@ -33,7 +66,6 @@ interface Employee {
   emergency_contact_name: string;
   emergency_contact_phone: string;
   emergency_contact_relation: string;
-  // Added work schedule fields
   in_time?: string;
   out_time?: string;
   follows_company_schedule?: boolean;
@@ -59,7 +91,7 @@ interface EmployeeDocument {
 interface PendingDocument {
   documentType: string;
   file: File;
-  id: string; // For tracking in UI
+  id: string;
 }
 
 const EditEmployeeDetails: React.FC = () => {
@@ -75,9 +107,15 @@ const EditEmployeeDetails: React.FC = () => {
   const [success, setSuccess] = useState<string>('');
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   
+  // Loading overlay state
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Processing...');
+  const [loadingSubmessage, setLoadingSubmessage] = useState('');
+  
   // Reference data
   const [departments, setDepartments] = useState<any[]>([]);
   const [designations, setDesignations] = useState<any[]>([]);
+  const [filteredDesignations, setFilteredDesignations] = useState<any[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
   const [filteredManagers, setFilteredManagers] = useState<any[]>([]);
   
@@ -85,6 +123,17 @@ const EditEmployeeDetails: React.FC = () => {
   const [documents, setDocuments] = useState<{[key: string]: EmployeeDocument[]}>({});
   const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
   const [documentUploading, setDocumentUploading] = useState(false);
+
+  // Helper functions for loading overlay
+  const showLoading = (message: string, submessage?: string) => {
+    setLoadingMessage(message);
+    setLoadingSubmessage(submessage || '');
+    setShowLoadingOverlay(true);
+  };
+
+  const hideLoading = () => {
+    setShowLoadingOverlay(false);
+  };
 
   // Load data on component mount
   useEffect(() => {
@@ -112,6 +161,17 @@ const EditEmployeeDetails: React.FC = () => {
     }
   }, [formData?.department_id, departments, managers]);
 
+  useEffect(() => {
+    if (formData?.department_id) {
+      const filtered = designations.filter(
+        designation => designation.department_id === formData.department_id
+      );
+      setFilteredDesignations(filtered);
+    } else {
+      setFilteredDesignations(designations);
+    }
+  }, [formData?.department_id, designations]);
+
   const loadEmployeeData = async () => {
     try {
       setLoading(true);
@@ -122,7 +182,7 @@ const EditEmployeeDetails: React.FC = () => {
       if (response.success && response.data) {
         const employeeData = response.data.employee;
         setEmployee(employeeData);
-        setFormData({ ...employeeData }); // Create a copy for editing
+        setFormData({ ...employeeData });
       } else {
         setError(response.message || 'Failed to load employee data');
       }
@@ -138,13 +198,13 @@ const EditEmployeeDetails: React.FC = () => {
     if (!employeeId) return;
     
     try {
-      console.log('🔄 Loading documents for employee:', employeeId);
+      console.log('Loading documents for employee:', employeeId);
       
       const response = await apiService.apiCall(`/api/employees/${employeeId}/documents`);
       
       if (response.success && response.data) {
         const data = response.data as any;
-        console.log('✅ Documents loaded:', data.documents);
+        console.log('Documents loaded:', data.documents);
         setDocuments(data.documents || {});
       } else {
         console.warn('Failed to load documents:', response.message);
@@ -180,42 +240,35 @@ const EditEmployeeDetails: React.FC = () => {
     }
   };
 
-  // Handle document selection (store in state instead of uploading)
   const handleDocumentSelect = (documentType: string, file: File | null) => {
     if (!file) {
-      // Remove any pending document of this type
       setPendingDocuments(prev => prev.filter(doc => doc.documentType !== documentType));
       return;
     }
 
-    // Check if we already have a pending document of this type
     const existingIndex = pendingDocuments.findIndex(doc => doc.documentType === documentType);
     
     const newDocument: PendingDocument = {
       documentType,
       file,
-      id: `${documentType}_${Date.now()}` // Unique ID for UI tracking
+      id: `${documentType}_${Date.now()}`
     };
 
     if (existingIndex >= 0) {
-      // Replace existing pending document of this type
       setPendingDocuments(prev => {
         const updated = [...prev];
         updated[existingIndex] = newDocument;
         return updated;
       });
     } else {
-      // Add new pending document
       setPendingDocuments(prev => [...prev, newDocument]);
     }
   };
 
-  // Remove a pending document
   const removePendingDocument = (documentId: string) => {
     setPendingDocuments(prev => prev.filter(doc => doc.id !== documentId));
   };
 
-  // Upload all pending documents
   const uploadPendingDocuments = async (): Promise<boolean> => {
     if (pendingDocuments.length === 0) return true;
 
@@ -227,11 +280,9 @@ const EditEmployeeDetails: React.FC = () => {
         const formData = new FormData();
         formData.append(pendingDoc.documentType, pendingDoc.file);
 
-        // Use direct fetch for file upload to avoid Content-Type issues
-        const token = localStorage.getItem('accessToken'); // Note: using 'accessToken' not 'token'
+        const token = localStorage.getItem('accessToken');
         const baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
         
-        // Get client ID for multi-tenant support
         const userData = localStorage.getItem('user');
         let clientId = null;
         if (userData) {
@@ -245,7 +296,6 @@ const EditEmployeeDetails: React.FC = () => {
 
         const headers: HeadersInit = {
           'Authorization': `Bearer ${token}`,
-          // Do NOT set Content-Type - let browser set it for FormData
         };
         
         if (clientId) {
@@ -266,10 +316,9 @@ const EditEmployeeDetails: React.FC = () => {
         }
       }
 
-      // Clear pending documents if all uploads were successful
       if (uploadResults.every(result => result === true)) {
         setPendingDocuments([]);
-        await loadDocuments(); // Reload documents to show newly uploaded ones
+        await loadDocuments();
         return true;
       }
 
@@ -285,10 +334,11 @@ const EditEmployeeDetails: React.FC = () => {
 
   const handleDownloadDocument = async (documentId: string, filename: string) => {
     try {
+      showLoading('Downloading Document...', `Preparing ${filename} for download.`);
+      
       const token = localStorage.getItem('accessToken');
       const baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
       
-      // Get client ID for multi-tenant support
       const userData = localStorage.getItem('user');
       let clientId = null;
       if (userData) {
@@ -332,6 +382,8 @@ const EditEmployeeDetails: React.FC = () => {
     } catch (error) {
       console.error('Failed to download document:', error);
       setError('Failed to download document');
+    } finally {
+      hideLoading();
     }
   };
 
@@ -339,6 +391,8 @@ const EditEmployeeDetails: React.FC = () => {
     if (!confirm('Are you sure you want to delete this document?')) return;
     
     try {
+      showLoading('Deleting Document...', 'Removing document from database.');
+      
       const response = await apiService.apiCall(
         `/api/employees/${employeeId}/documents/${documentId}`,
         {
@@ -348,7 +402,6 @@ const EditEmployeeDetails: React.FC = () => {
       
       if (response.success) {
         setSuccess('Document deleted successfully');
-        // Reload documents after deletion
         await loadDocuments();
       } else {
         setError('Failed to delete document');
@@ -356,6 +409,8 @@ const EditEmployeeDetails: React.FC = () => {
     } catch (error) {
       console.error('Failed to delete document:', error);
       setError('Failed to delete document');
+    } finally {
+      hideLoading();
     }
   };
 
@@ -391,7 +446,6 @@ const EditEmployeeDetails: React.FC = () => {
       [field]: value
     }));
 
-    // Clear validation error when user starts typing
     if (validationErrors[field]) {
       setValidationErrors(prev => {
         const newErrors = { ...prev };
@@ -401,12 +455,10 @@ const EditEmployeeDetails: React.FC = () => {
     }
   };
 
-  // Handle company schedule checkbox change - fetch company times when enabled
   const handleCompanyScheduleChange = async (checked: boolean) => {
     if (!formData) return;
 
     if (checked) {
-      // Fetch fresh company times from database when checkbox is checked
       try {
         const response = await apiService.apiCall('/api/settings');
         if (response.success) {
@@ -420,14 +472,12 @@ const EditEmployeeDetails: React.FC = () => {
         }
       } catch (error) {
         console.error('Failed to load company schedule:', error);
-        // Only fallback if database fetch fails
         setFormData(prev => ({
           ...prev!,
           follows_company_schedule: true
         }));
       }
     } else {
-      // Just update the checkbox, keep current times for manual editing
       setFormData(prev => ({
         ...prev!,
         follows_company_schedule: false
@@ -440,7 +490,6 @@ const EditEmployeeDetails: React.FC = () => {
     
     const errors: ValidationErrors = {};
 
-    // Required field validation
     if (!formData.first_name?.trim()) {
       errors.first_name = 'First name is required';
     }
@@ -483,7 +532,6 @@ const EditEmployeeDetails: React.FC = () => {
       errors.emergency_contact_relation = 'Emergency contact relation is required';
     }
 
-    // Work schedule validation
     if (formData.in_time && formData.out_time) {
       const inTime = new Date(`2000-01-01T${formData.in_time}`);
       const outTime = new Date(`2000-01-01T${formData.out_time}`);
@@ -497,21 +545,18 @@ const EditEmployeeDetails: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const getChangedFields = (): UpdateEmployeeData => {
+  const getChangedFields = (): any => {
     if (!employee || !formData) return {};
 
-    const changes: UpdateEmployeeData = {};
+    const changes: any = {};
     
-    // Compare each field and only include changed ones
     Object.keys(formData).forEach(key => {
       const originalValue = employee[key as keyof Employee];
       const newValue = formData[key as keyof Employee];
       
-      // Handle different data types and null/undefined
       if (originalValue !== newValue) {
-        // Special handling for empty strings vs null/undefined
         if (!((!originalValue || originalValue === '') && (!newValue || newValue === ''))) {
-          (changes as any)[key] = newValue;
+          changes[key] = newValue;
         }
       }
     });
@@ -530,13 +575,10 @@ const EditEmployeeDetails: React.FC = () => {
       setError('');
       setSuccess('');
 
-      // Get only changed fields
       const changedData = getChangedFields();
-      
-      // Check if we have changes or pending documents
       const hasFormChanges = Object.keys(changedData).length > 0;
       const hasPendingDocs = pendingDocuments.length > 0;
-      const pendingDocsCount = pendingDocuments.length; // Store count before clearing
+      const pendingDocsCount = pendingDocuments.length;
 
       if (!hasFormChanges && !hasPendingDocs) {
         setError('No changes detected');
@@ -545,6 +587,15 @@ const EditEmployeeDetails: React.FC = () => {
 
       let updateSuccess = true;
       let uploadSuccess = true;
+
+      // Show loading overlay for the entire save process
+      if (hasFormChanges && hasPendingDocs) {
+        showLoading('Updating Employee...', 'Saving changes and uploading documents. Please wait.');
+      } else if (hasFormChanges) {
+        showLoading('Updating Employee...', 'Saving employee information changes.');
+      } else if (hasPendingDocs) {
+        showLoading('Uploading Documents...', `Uploading ${pendingDocsCount} document(s).`);
+      }
 
       // Upload pending documents first
       if (hasPendingDocs) {
@@ -556,22 +607,20 @@ const EditEmployeeDetails: React.FC = () => {
       if (hasFormChanges) {
         console.log('Updating employee with changes:', changedData);
 
-         const response = await apiService.updateEmployee(employeeId!, changedData);
+        const response = await apiService.updateEmployee(employeeId!, changedData);
 
-      if (response.success && response.data) {
-        setSuccess('Employee updated successfully!');
-        setEmployee(response.data.employee);
-        setFormData({ ...response.data.employee });
-        
-        // Navigate back to employee details after a delay
-        setTimeout(() => {
-          navigate(`/employee/${employeeId}`);
-        }, 2000);
+        if (response.success && response.data) {
+          setSuccess('Employee updated successfully!');
+          setEmployee(response.data.employee);
+          setFormData({ ...response.data.employee });
+          
+          setTimeout(() => {
+            navigate(`/employee/${employeeId}`);
+          }, 2000);
         } else {
           setError(response.message || 'Failed to update employee');
           updateSuccess = false;
           
-          // Handle field-specific errors
           const responseData = response as any;
           if (responseData.field) {
             setValidationErrors({
@@ -581,14 +630,12 @@ const EditEmployeeDetails: React.FC = () => {
         }
       }
 
-      // Show appropriate success/error message
       if (updateSuccess && uploadSuccess) {
         const messages = [];
         if (hasFormChanges) messages.push('Employee information updated');
         if (hasPendingDocs) messages.push(`${pendingDocsCount} document(s) uploaded`);
         setSuccess(messages.join(' and ') + ' successfully!');
         
-        // Navigate back after a delay
         setTimeout(() => {
           navigate(`/employee/${employeeId}`);
         }, 2000);
@@ -599,11 +646,11 @@ const EditEmployeeDetails: React.FC = () => {
       setError(error.message || 'Failed to save changes');
     } finally {
       setSaving(false);
+      hideLoading();
     }
   };
 
   const handleCancel = () => {
-    // Clear pending documents when canceling
     setPendingDocuments([]);
     navigate(`/employee/${employeeId}`);
   };
@@ -629,6 +676,13 @@ const EditEmployeeDetails: React.FC = () => {
 
   return (
     <div className="p-6 bg-white rounded-xl shadow-md">
+      {/* Loading Overlay */}
+      <LoadingOverlay 
+        isVisible={showLoadingOverlay} 
+        message={loadingMessage} 
+        submessage={loadingSubmessage} 
+      />
+
       {/* Header */}
       <div className="mb-6">
         <h3 className="text-xl font-semibold mb-2">
@@ -893,9 +947,12 @@ const EditEmployeeDetails: React.FC = () => {
                 value={formData.designation_id || ''}
                 onChange={(e) => handleChange('designation_id', e.target.value)}
                 color={validationErrors.designation_id ? 'failure' : undefined}
+                disabled={!formData.department_id}
               >
-                <option value="">Select Designation</option>
-                {designations.map((designation) => (
+                <option value="">
+                  {formData.department_id ? 'Select designation' : 'Select department first'}
+                </option>
+                {filteredDesignations.map((designation) => (
                   <option key={designation.id} value={designation.id}>
                     {designation.title}
                   </option>
@@ -980,7 +1037,6 @@ const EditEmployeeDetails: React.FC = () => {
               </h4>
             </div>
 
-            {/* Company Schedule Checkbox */}
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <Checkbox
@@ -1001,7 +1057,6 @@ const EditEmployeeDetails: React.FC = () => {
                 </div>
               </div>
 
-              {/* Show current company schedule if following */}
               {formData.follows_company_schedule && (
                 <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md">
                   <div className="flex items-center gap-2">
@@ -1017,7 +1072,6 @@ const EditEmployeeDetails: React.FC = () => {
               )}
             </div>
 
-            {/* Time Fields */}
             <div>
               <Label htmlFor="in_time" value="In Time *" />
               <TextInput
@@ -1050,7 +1104,6 @@ const EditEmployeeDetails: React.FC = () => {
               )}
             </div>
 
-            {/* Warning for custom schedule */}
             {!formData.follows_company_schedule && (
               <div className="md:col-span-2 mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
                 <div className="flex">
@@ -1073,7 +1126,6 @@ const EditEmployeeDetails: React.FC = () => {
         {/* Documents Tab */}
         <Tabs.Item title="Documents" icon={HiDocumentText}>
           <div className="mt-6 space-y-6">
-            {/* Upload Section */}
             <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg border-2 border-dashed border-blue-300 dark:border-blue-700">
               <h4 className="text-lg font-medium text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
                 <HiDocumentText className="w-5 h-5" />
@@ -1081,7 +1133,6 @@ const EditEmployeeDetails: React.FC = () => {
               </h4>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Identity Documents */}
                 <div className="space-y-4">
                   <h5 className="text-md font-medium text-gray-800 dark:text-white">Identity Documents</h5>
                   
@@ -1116,7 +1167,6 @@ const EditEmployeeDetails: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Professional Documents */}
                 <div className="space-y-4">
                   <h5 className="text-md font-medium text-gray-800 dark:text-white">Professional Documents</h5>
 
@@ -1158,7 +1208,6 @@ const EditEmployeeDetails: React.FC = () => {
               </p>
             </div>
 
-            {/* Pending Documents Section */}
             {pendingDocuments.length > 0 && (
               <div>
                 <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -1202,7 +1251,6 @@ const EditEmployeeDetails: React.FC = () => {
               </div>
             )}
 
-            {/* Existing Documents */}
             <div>
               <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <HiDocumentText className="w-5 h-5 text-purple-600" />
@@ -1277,7 +1325,6 @@ const EditEmployeeDetails: React.FC = () => {
               )}
             </div>
 
-            {/* Document Types Info */}
             <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-700">
               <h5 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">Document Types</h5>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-yellow-700 dark:text-yellow-300">
