@@ -77,7 +77,7 @@ const AttendanceView: React.FC = () => {
 
   const [filters, setFilters] = useState<AttendanceFilters>({
     page: 1,
-    limit: 100,
+    limit: 50,
     sortBy: 'date',
     sortOrder: 'DESC',
     startDate: todayStr(),

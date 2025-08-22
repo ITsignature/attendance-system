@@ -394,41 +394,116 @@ const initializeAuth = async () => {
     }
   };
 
-  const logout = async (): Promise<void> => {
+  const logout = async (showNotification: boolean = true): Promise<void> => {
     try {
-      await apiService.logout();
-    } catch (error) {
-      console.warn('Logout API call failed:', error);
-    } finally {
-      // Clear local state regardless of API success
-      setCurrentUser(null);
-      setCurrentClientState(null);
-      setRoles([]);
-      setClients([]);
-      setAdminUsers([]);
+      setIsLoading(true);
       
-      // Clear localStorage
-      localStorage.removeItem('user');
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-    }
-  };
-
-  const refreshUserData = async (): Promise<void> => {
-    try {
-      const response = await apiService.getCurrentUser();
-      if (response.success && response.data) {
-        setCurrentUser(response.data.user);
-
-        console.log("my data", response.data);
-        // localStorage.setItem('user', JSON.stringify(response.data.user));
-         setCurrentUser(response.data.user);
+      // ✅ Try to call backend logout
+      const response = await apiService.logout();
+      
+      if (showNotification) {
+        if (response.success) {
+          console.log('✅ Logged out successfully');
+          // You can add a toast notification here
+          // toast.success('Logged out successfully');
+        } else {
+          console.warn('⚠️ Logout completed but server returned error:', response.message);
+          // toast.warning('Logged out locally but server error occurred');
+        }
       }
     } catch (error) {
-      console.error('Failed to refresh user data:', error);
-      throw error;
+      console.error('❌ Logout API call failed:', error);
+      
+      if (showNotification) {
+        // ✅ Inform user about the issue but continue with logout
+        console.warn('⚠️ Server logout failed, but clearing local session');
+        // toast.warning('Logged out locally - server may still show you as logged in');
+      }
+    } finally {
+      // ✅ Always clear local state regardless of server response
+      try {
+        // Clear all authentication state
+        setCurrentUser(null);
+        setCurrentClientState(null);
+        setRoles([]);
+        setClients([]);
+        setAdminUsers([]);
+        
+        // Clear localStorage
+        localStorage.removeItem('user');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('accessTokenExpiresIn');
+        
+        // Clear any scheduled token refresh
+        if (apiService.clearRefreshTimer) {
+          apiService.clearRefreshTimer();
+        }
+        
+        console.log('✅ Local session cleared successfully');
+        
+      } catch (clearError) {
+        console.error('❌ Error clearing local state:', clearError);
+      } finally {
+        setIsLoading(false);
+        
+        // ✅ Force redirect to login page
+        window.location.href = '/login';
+      }
     }
   };
+
+  const handleTokenExpiration = async () => {
+  console.log('🔓 Token expired, automatically logging out...');
+  await logout(true); // Show notification
+};
+
+  const refreshUserData = async (): Promise<void> => {
+  try {
+    setIsLoading(true);
+    const response = await apiService.getCurrentUser();
+    
+    if (response.success && response.data) {
+      const userData = response.data.user;
+      
+      
+      setCurrentUser(userData);
+      
+     
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      
+      if (userData.clientId && userData.clientName) {
+        const clientData = {
+          id: userData.clientId,
+          name: userData.clientName,
+          description: '',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        setCurrentClientState(clientData);
+      }
+      
+      console.log('✅ User data refreshed successfully:', userData.name);
+    } else {
+      throw new Error('Invalid response from server');
+    }
+  } catch (error) {
+    console.error('❌ Failed to refresh user data:', error);
+    
+    
+    if (error.response?.status === 401) {
+      console.log('🔓 Session expired, logging out...');
+      await logout();
+    }
+    
+    throw error;
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
 const hasPermission = (permission: string): boolean => {
   if (!currentUser) return false;

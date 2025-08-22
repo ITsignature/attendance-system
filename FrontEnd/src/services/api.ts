@@ -117,6 +117,8 @@ class ApiService {
 
   // 🔽 NEW: proactive refresh timer
   private refreshTimer: number | null = null;
+  private maxRefreshRetries = 2;
+
 
   constructor() {
     this.baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
