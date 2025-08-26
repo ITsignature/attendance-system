@@ -38,6 +38,7 @@ const PayrollDashboard = () => {
   const [selectedRecord, setSelectedRecord] = useState<PayrollRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<PayrollRecord | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [payslipData, setPayslipData] = useState<any>(null);
   
   // New Payroll Form State
   const [newPayrollData, setNewPayrollData] = useState<CreatePayrollData>({
@@ -70,52 +71,326 @@ const PayrollDashboard = () => {
     insurance_amount: 0
   });
 
+  // Fix the Edit functionality - Add Edit Modal
+const EditModal = () => (
+  <Modal show={isEditing} onClose={() => { setIsEditing(false); setEditingRecord(null); }} size="4xl">
+    <Modal.Header>Edit Payroll Record - {editingRecord?.name}</Modal.Header>
+    <Modal.Body>
+      {editingRecord && (
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <h4 className="font-semibold text-lg">Earnings</h4>
+            <div>
+              <label className="block text-sm font-medium mb-1">Base Salary</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.baseSalary}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, baseSalary: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Allowances</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.allowances}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, allowances: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Overtime</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.overtime}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, overtime: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Bonus</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.bonus}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, bonus: Number(e.target.value) }
+                })}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="font-semibold text-lg">Deductions</h4>
+            <div>
+              <label className="block text-sm font-medium mb-1">Tax Deduction</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.tax}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, tax: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Provident Fund</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.providentFund}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, providentFund: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Insurance</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.insurance}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, insurance: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Other Deductions</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.other}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, other: Number(e.target.value) }
+                })}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal.Body>
+    <Modal.Footer>
+      <Button color="gray" onClick={() => { setIsEditing(false); setEditingRecord(null); }}>Cancel</Button>
+      <Button color="blue" onClick={handleUpdatePayroll} disabled={loading}>Save Changes</Button>
+    </Modal.Footer>
+  </Modal>
+);
+
+// Fix the Payslip Modal
+const PayslipModal = () => (
+  <Modal show={showPayslipModal} onClose={() => setShowPayslipModal(false)} size="5xl">
+    <Modal.Header>
+      <div className="flex justify-between items-center w-full">
+        <span>Payslip - {selectedRecord?.name}</span>
+        <Button size="sm" color="blue" onClick={() => window.print()}>
+          Print
+        </Button>
+      </div>
+    </Modal.Header>
+    <Modal.Body>
+      {payslipData && selectedRecord && (
+        <div className="payslip-content bg-white p-8 rounded-lg print:p-0">
+          {/* Company Header */}
+          <div className="text-center mb-8 border-b-2 border-gray-300 pb-4">
+            <h1 className="text-3xl font-bold text-gray-800">PAYSLIP</h1>
+            <p className="text-lg text-gray-600">{payslipData.company?.name || 'Company Name'}</p>
+            <p className="text-sm text-gray-500">
+              {payslipData.company?.address || 'Company Address'}
+            </p>
+            <p className="text-sm text-gray-500">
+              Tel: {payslipData.company?.phone || 'N/A'} | Email: {payslipData.company?.email || 'N/A'}
+            </p>
+          </div>
+
+          {/* Pay Period */}
+          <div className="bg-gray-100 p-4 rounded-lg mb-6">
+            <h3 className="font-semibold text-lg mb-2">Pay Period</h3>
+            <p className="text-gray-700">
+              From: {formatDate(selectedRecord.payPeriod.start)} To: {formatDate(selectedRecord.payPeriod.end)}
+            </p>
+          </div>
+
+          {/* Employee Info */}
+          <div className="grid grid-cols-2 gap-8 mb-6">
+            <div>
+              <h3 className="font-semibold text-lg mb-3 text-gray-800">Employee Information</h3>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-medium">Name:</span> {selectedRecord.name}</p>
+                <p><span className="font-medium">Employee ID:</span> {selectedRecord.employeeCode}</p>
+                <p><span className="font-medium">Department:</span> {selectedRecord.department || 'N/A'}</p>
+                <p><span className="font-medium">Designation:</span> {selectedRecord.designation || 'N/A'}</p>
+                <p><span className="font-medium">Email:</span> {selectedRecord.email}</p>
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg mb-3 text-gray-800">Payment Details</h3>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-medium">Payment Date:</span> {formatDate(selectedRecord.payment.date)}</p>
+                <p><span className="font-medium">Payment Method:</span> {selectedRecord.payment.method.replace('_', ' ').toUpperCase()}</p>
+                <p><span className="font-medium">Payment Status:</span> 
+                  <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                    selectedRecord.payment.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {selectedRecord.payment.status.toUpperCase()}
+                  </span>
+                </p>
+                {selectedRecord.payment.reference && (
+                  <p><span className="font-medium">Reference:</span> {selectedRecord.payment.reference}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Salary Breakdown */}
+          <div className="grid grid-cols-2 gap-8 mb-6">
+            {/* Earnings */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-semibold text-lg mb-3 text-green-700 border-b border-green-200 pb-2">Earnings</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Base Salary:</span>
+                  <span className="font-medium">{formatCurrency(selectedRecord.earnings.baseSalary)}</span>
+                </div>
+                {selectedRecord.earnings.allowances > 0 && (
+                  <div className="flex justify-between">
+                    <span>Allowances:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.earnings.allowances)}</span>
+                  </div>
+                )}
+                {selectedRecord.earnings.overtime > 0 && (
+                  <div className="flex justify-between">
+                    <span>Overtime:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.earnings.overtime)}</span>
+                  </div>
+                )}
+                {selectedRecord.earnings.bonus > 0 && (
+                  <div className="flex justify-between">
+                    <span>Bonus:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.earnings.bonus)}</span>
+                  </div>
+                )}
+                <hr className="my-2" />
+                <div className="flex justify-between font-semibold text-green-700">
+                  <span>Gross Salary:</span>
+                  <span>{formatCurrency(selectedRecord.summary.grossSalary)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Deductions */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-semibold text-lg mb-3 text-red-700 border-b border-red-200 pb-2">Deductions</h3>
+              <div className="space-y-2 text-sm">
+                {selectedRecord.deductions.tax > 0 && (
+                  <div className="flex justify-between">
+                    <span>Tax Deduction:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.tax)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.providentFund > 0 && (
+                  <div className="flex justify-between">
+                    <span>Provident Fund:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.providentFund)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.insurance > 0 && (
+                  <div className="flex justify-between">
+                    <span>Insurance:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.insurance)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.loan > 0 && (
+                  <div className="flex justify-between">
+                    <span>Loan Deduction:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.loan)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.other > 0 && (
+                  <div className="flex justify-between">
+                    <span>Other Deductions:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.other)}</span>
+                  </div>
+                )}
+                <hr className="my-2" />
+                <div className="flex justify-between font-semibold text-red-700">
+                  <span>Total Deductions:</span>
+                  <span>{formatCurrency(selectedRecord.summary.totalDeductions)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Net Salary */}
+          <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+            <div className="flex justify-between items-center">
+              <span className="text-xl font-bold text-blue-800">Net Salary:</span>
+              <span className="text-2xl font-bold text-blue-800">{formatCurrency(selectedRecord.summary.netSalary)}</span>
+            </div>
+            <div className="mt-3 text-sm text-gray-600">
+              <p className="italic">
+                Amount in words: {numberToWords(selectedRecord.summary.netSalary)}
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-8 pt-4 border-t border-gray-300 text-center text-sm text-gray-500">
+            <p>This is a computer-generated payslip and does not require a signature.</p>
+            <p>Generated on {new Date().toLocaleDateString()}</p>
+          </div>
+        </div>
+      )}
+    </Modal.Body>
+    <Modal.Footer>
+      <Button onClick={() => setShowPayslipModal(false)}>Close</Button>
+    </Modal.Footer>
+  </Modal>
+);
+
   // Fetch payroll records
-  const fetchPayrollRecords = async () => {
-    setLoading(true);
-    setError(null);
+const fetchPayrollRecords = async () => {
+  setLoading(true);
+  setError(null);
+  
+  try {
+    const [year, month] = selectedMonth.split('-');
+    const filters: PayrollFilters = {
+      month: parseInt(month),
+      year: parseInt(year),
+      status: filterStatus as any,
+      department_id: filterDepartment || undefined,
+      limit: recordsPerPage,
+      offset: (currentPage - 1) * recordsPerPage,
+      sort_by: sortBy,
+      sort_order: sortOrder
+    };
+
+    console.log('Fetching payroll with filters:', filters);
+    const response = await payrollApiService.getPayrollRecords(filters);
     
-    try {
-      const [year, month] = selectedMonth.split('-');
-      const filters: PayrollFilters = {
-        month: parseInt(month),
-        year: parseInt(year),
-        status: filterStatus as any,
-        department_id: filterDepartment || undefined,
-        limit: recordsPerPage,
-        offset: (currentPage - 1) * recordsPerPage,
-        sort_by: sortBy,
-        sort_order: sortOrder
-      };
+    console.log('API Response:', response);
 
-      // Apply search filter if exists
-      if (searchTerm) {
-        // Since backend doesn't have direct search, we'll fetch all and filter client-side
-        // Or you can add search functionality to your backend
-      }
-      
-      console.log('Fetching payroll with filters:', filters);
-      const response = await payrollApiService.getPayrollRecords(filters);
-    
-
-      if (response.success && response.data) {
-        
-        
-          console.log('API Response:', response);
-
-        setPayrollRecords(response.data.data);
-        setTotalRecords(response.data.pagination?.total || 0);
-        setSummary(response.data.summary || null);
-      }
-      else {
-      console.warn('Invalid payroll response:', response); // Debug log
+    if (response.success && response.data) {
+      // Changed from response.data.data to just response.data
+      setPayrollRecords(response.data);  // <-- FIXED: Remove the extra .data
+      setTotalRecords(response.pagination?.total || 0);
+      setSummary(response.summary || null);
+    } else {
+      console.warn('Invalid payroll response:', response);
       setPayrollRecords([]);
       setTotalRecords(0);
       setSummary(null);
       setError('No payroll records found or invalid response');
     }
 
-    } catch (err: any) {
+  } catch (err: any) {
     console.error('Error fetching payroll:', err);
     setError(err.message || 'Failed to fetch payroll records');
     setPayrollRecords([]);
@@ -309,15 +584,78 @@ const PayrollDashboard = () => {
   // Generate and show payslip
   const showPayslip = async (record: PayrollRecord) => {
     try {
+      setSelectedRecord(record);
       const response = await payrollApiService.getPayslip(record.id);
       if (response.success && response.data) {
-        setSelectedRecord(record);
+        setPayslipData(response.data);
+        setShowPayslipModal(true);
+      } else {
+        // If API fails, show basic payslip with available data
+        setPayslipData({
+          company: {
+            name: 'Your Company Name',
+            address: 'Company Address',
+            phone: 'Company Phone',
+            email: 'Company Email'
+          }
+        });
         setShowPayslipModal(true);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to generate payslip');
+      // Fallback - show payslip with available data
+      setPayslipData({
+        company: {
+          name: 'Your Company Name',
+          address: 'Company Address',
+          phone: 'Company Phone',
+          email: 'Company Email'
+        }
+      });
+      setShowPayslipModal(true);
     }
   };
+
+  const numberToWords = (num: number): string => {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  
+  if (num === 0) return 'Zero';
+  
+  const wholePart = Math.floor(num);
+  const decimalPart = Math.round((num - wholePart) * 100);
+  
+  let words = '';
+  
+  // Convert whole part (simplified for amounts up to 999,999)
+  if (wholePart >= 1000) {
+    const thousands = Math.floor(wholePart / 1000);
+    words += ones[thousands] + ' Thousand ';
+  }
+  
+  const hundreds = Math.floor((wholePart % 1000) / 100);
+  if (hundreds > 0) {
+    words += ones[hundreds] + ' Hundred ';
+  }
+  
+  const tensPlace = Math.floor((wholePart % 100) / 10);
+  const onesPlace = wholePart % 10;
+  
+  if (tensPlace === 1) {
+    words += teens[onesPlace] + ' ';
+  } else {
+    if (tensPlace > 0) words += tens[tensPlace] + ' ';
+    if (onesPlace > 0) words += ones[onesPlace] + ' ';
+  }
+  
+  words += 'Dollars';
+  
+  if (decimalPart > 0) {
+    words += ' and ' + decimalPart + '/100';
+  }
+  
+  return words.trim();
+};
 
   // Reset new payroll form
   const resetNewPayrollForm = () => {
@@ -360,6 +698,8 @@ const PayrollDashboard = () => {
          record.department.toLowerCase().includes(searchLower) ||
          record.designation.toLowerCase().includes(searchLower);
 });
+
+
 
   return (
     <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-6 relative w-full break-words">
@@ -1007,6 +1347,8 @@ const PayrollDashboard = () => {
           <Button onClick={() => setShowDeductionsModal(false)}>Close</Button>
         </Modal.Footer>
       </Modal>
+      {EditModal()}
+    {PayslipModal()}
     </div>
   );
 };

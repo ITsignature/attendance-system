@@ -1,5 +1,3 @@
-// services/payrollApi.ts
-
 import apiService, { ApiResponse } from './api';
 
 // =============================================

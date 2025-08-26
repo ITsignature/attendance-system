@@ -135,6 +135,8 @@ router.get('/',
       const endDate = new Date(year, month, 0).toISOString().split('T')[0];
       whereConditions.push('pr.pay_period_start >= ? AND pr.pay_period_end <= ?');
       queryParams.push(startDate, endDate);
+      console.log(startDate);
+      console.log(endDate);
     }
 
     if (status !== 'all') {
@@ -200,7 +202,7 @@ router.get('/',
       id: record.id,
       employeeId: record.employee_id,
       employeeCode: record.employee_code,
-      name: `${record.first_name} ${record.last_name}`,
+      name: record.last_name ? `${record.first_name} ${record.last_name}` : record.first_name,
       email: record.email,
       phone: record.phone,
       designation: record.designation_title,
@@ -768,7 +770,7 @@ router.post('/bulk-process',
 // DELETE PAYROLL RECORD
 // =============================================
 router.delete('/:id', 
-  checkPermission('payroll.delete'),
+  checkPermission('payroll.edit'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const { id } = req.params;

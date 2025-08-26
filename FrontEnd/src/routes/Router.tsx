@@ -17,7 +17,7 @@ const Dashboard = Loadable(lazy(() => import('../components/dashboard/DashboardV
 const Attendance = Loadable(lazy(() => import('../components/Attendance/AttendanceView')));
 
 //Payroll
-const Payroll = Loadable(lazy(() => import('../components/Payroll/PayrollView')));
+const Payroll = Loadable(lazy(() => import('../components/Payroll/Payroll')));
 
 const UnauthorizedPage = Loadable(lazy(() => import('../views/UnauthorizedPage')));
 
@@ -35,8 +35,6 @@ const DepartmentManagement = Loadable(lazy(() => import('../components/Departmen
 const LeavePage = Loadable(lazy(() => import('../components/Leaves/leavesPage')));
 const HolidayPage = Loadable(lazy(() => import('../components/Leaves/holidaysPage')));
 const LeaveRequestsManagement = Loadable(lazy(() => import('../components/Leaves/LeaveRequests')));
-const createLeaveRequestForEmployee = Loadable(lazy(() => import('../components/Leaves/LeaveRequestForm')));
-
 
 // Icons
 const Solar = Loadable(lazy(() => import('../views/icons/Solar')));
@@ -116,6 +114,7 @@ const Router = [
         <FullLayout />
       </AuthenticatedApp>
     ),
+    
     children: [
       { 
         path: '/', 
@@ -250,16 +249,6 @@ const Router = [
     </DynamicProtectedRoute>
   )
 },
-// { 
-//   path: '/leave-request/:id', 
-//   exact: true, 
-//   element: (
-//     <DynamicProtectedRoute permission="leaves.view">
-//       <LeaveRequestDetails />
-//     </DynamicProtectedRoute>
-//   )
-// }
-      
       // Payroll Management
       { 
         path: '/payroll', 
