@@ -578,15 +578,19 @@ router.patch('/:id/payment-status',
       });
     }
 
+    // FIX: Use null instead of undefined for optional parameters
+    const finalPaymentDate = payment_date || null;
+    const finalPaymentReference = payment_reference || null;
+
     // Update payment status
     await db.execute(`
       UPDATE payroll_records SET
         payment_status = ?,
-        payment_date = COALESCE(?, payment_date),
-        payment_reference = COALESCE(?, payment_reference),
+        payment_date = ?,
+        payment_reference = ?,
         updated_at = NOW()
       WHERE id = ?
-    `, [payment_status, payment_date, payment_reference, id]);
+    `, [payment_status, finalPaymentDate, finalPaymentReference, id]);
 
     res.json({
       success: true,
