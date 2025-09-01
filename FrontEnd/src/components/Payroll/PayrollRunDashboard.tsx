@@ -1,9 +1,3 @@
-// =============================================
-// PAYROLL RUN DASHBOARD - INDUSTRY STANDARD UI
-// =============================================
-// Modern payroll management dashboard with run-based operations
-// Replaces individual record management with batch processing workflow
-
 import React, { useState, useEffect } from 'react';
 import { TextInput, Button, Select, Badge, Modal, Table, Alert, Card } from "flowbite-react";
 import { payrollRunApiService, PayrollRun, PayrollRunFilters } from '../../services/payrollRunService';
@@ -26,6 +20,8 @@ const PayrollRunDashboard = () => {
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [availablePeriods, setAvailablePeriods] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [employeeRecords, setEmployeeRecords] = useState<any[]>([]);
+  const [activeDetailsTab, setActiveDetailsTab] = useState<'summary' | 'employees'>('summary');
   
   // Filter States
   const [filters, setFilters] = useState<PayrollRunFilters>({
@@ -282,10 +278,12 @@ const PayrollRunDashboard = () => {
 
   const openRunDetails = async (run: PayrollRun) => {
     setSelectedRun(run);
+    setActiveDetailsTab('summary');
     try {
-      const [summaryResponse, workflowResponse] = await Promise.all([
+      const [summaryResponse, workflowResponse, recordsResponse] = await Promise.all([
         payrollRunApiService.getRunSummary(run.id),
-        payrollRunApiService.getWorkflowStatus(run.id)
+        payrollRunApiService.getWorkflowStatus(run.id),
+        payrollRunApiService.getPayrollRecords(run.id)
       ]);
       
       if (summaryResponse.success) {
@@ -295,11 +293,84 @@ const PayrollRunDashboard = () => {
       if (workflowResponse.success) {
         setWorkflowStatus(workflowResponse.data);
       }
+
+      if (recordsResponse.success) {
+        setEmployeeRecords(recordsResponse.data);
+      }
       
       setShowRunDetailsModal(true);
     } catch (err) {
       console.warn('Failed to load run details:', err);
       setShowRunDetailsModal(true);
+    }
+  };
+
+  const handleApproval = async (run: PayrollRun, approvalLevel: 'review' | 'approve') => {
+    setSelectedRun(run);
+    setApprovalForm({ 
+      approval_level: approvalLevel, 
+      comments: '' 
+    });
+    setShowApprovalModal(true);
+  };
+
+  const submitApproval = async () => {
+    if (!selectedRun) return;
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await payrollRunApiService.approvePayrollRun(selectedRun.id, approvalForm);
+      
+      if (result.success) {
+        setSuccessMessage(
+          approvalForm.approval_level === 'review' 
+            ? 'Payroll run submitted for review successfully' 
+            : 'Payroll run approved successfully'
+        );
+        setShowApprovalModal(false);
+        loadPayrollRuns(); // Refresh the list
+      } else {
+        setError(result.message || 'Failed to update payroll run');
+      }
+    } catch (err) {
+      setError('Failed to update payroll run');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProcess = async (run: PayrollRun) => {
+    setSelectedRun(run);
+    setProcessForm({
+      payment_method: 'bank_transfer',
+      payment_date: new Date().toISOString().split('T')[0],
+      batch_reference: ''
+    });
+    setShowProcessModal(true);
+  };
+
+  const submitProcess = async () => {
+    if (!selectedRun) return;
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await payrollRunApiService.processPayrollRun(selectedRun.id, processForm);
+      
+      if (result.success) {
+        setSuccessMessage(`Payroll run processed successfully. ${result.data.records_processed} records processed.`);
+        setShowProcessModal(false);
+        loadPayrollRuns(); // Refresh the list
+      } else {
+        setError(result.message || 'Failed to process payroll run');
+      }
+    } catch (err) {
+      setError('Failed to process payroll run');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -683,9 +754,398 @@ const PayrollRunDashboard = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* Other modals would go here... */}
-      {/* For brevity, I'm not including all modal implementations */}
-      {/* You would add: RunDetailsModal, ApprovalModal, ProcessModal */}
+      {/* Run Details Modal */}
+      <Modal
+        show={showRunDetailsModal}
+        onClose={() => {
+          setShowRunDetailsModal(false);
+          setSelectedRun(null);
+          setRunSummary(null);
+          setWorkflowStatus(null);
+          setEmployeeRecords([]);
+          setActiveDetailsTab('summary');
+        }}
+        size="4xl"
+      >
+        <Modal.Header>
+          Payroll Run Details - {selectedRun?.run_name}
+        </Modal.Header>
+        <Modal.Body>
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveDetailsTab('summary')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeDetailsTab === 'summary'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Summary & Statistics
+              </button>
+              <button
+                onClick={() => setActiveDetailsTab('employees')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeDetailsTab === 'employees'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Employee Records ({employeeRecords.length})
+              </button>
+            </nav>
+          </div>
+
+          {/* Summary Tab */}
+          {activeDetailsTab === 'summary' && runSummary && (
+            <div className="space-y-6">
+              {/* Run Information */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Run Information</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <span className="text-sm font-medium text-gray-500">Run Number</span>
+                    <p className="text-sm">{runSummary.run_info?.run_number}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-500">Status</span>
+                    <p className="text-sm">
+                      <Badge color={
+                        runSummary.run_info?.status === 'completed' ? 'success' :
+                        runSummary.run_info?.status === 'calculated' ? 'info' :
+                        runSummary.run_info?.status === 'draft' ? 'warning' : 'gray'
+                      }>
+                        {runSummary.run_info?.status?.toUpperCase()}
+                      </Badge>
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-500">Pay Date</span>
+                    <p className="text-sm">{runSummary.run_info?.period?.pay_date}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Statistics */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Statistics</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <span className="text-sm font-medium text-blue-600">Total Employees</span>
+                    <p className="text-2xl font-bold text-blue-700">{runSummary.statistics?.total_employees}</p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <span className="text-sm font-medium text-green-600">Gross Amount</span>
+                    <p className="text-2xl font-bold text-green-700">
+                      Rs. {runSummary.statistics?.total_gross_amount?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-red-50 p-4 rounded-lg">
+                    <span className="text-sm font-medium text-red-600">Deductions</span>
+                    <p className="text-2xl font-bold text-red-700">
+                      Rs. {runSummary.statistics?.total_deductions_amount?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <span className="text-sm font-medium text-purple-600">Net Amount</span>
+                    <p className="text-2xl font-bold text-purple-700">
+                      Rs. {runSummary.statistics?.total_net_amount?.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Workflow Status */}
+              {workflowStatus?.workflow && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Workflow Status</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm font-medium text-gray-500">Created</span>
+                        <p className="text-sm">
+                          {new Date(workflowStatus.workflow.created_at).toLocaleString()} 
+                          <br />by {workflowStatus.workflow.created_by}
+                        </p>
+                      </div>
+                      {workflowStatus.workflow.approved_at && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Approved</span>
+                          <p className="text-sm">
+                            {new Date(workflowStatus.workflow.approved_at).toLocaleString()} 
+                            <br />by {workflowStatus.workflow.approved_by}
+                          </p>
+                        </div>
+                      )}
+                      {workflowStatus.workflow.processed_at && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-500">Processed</span>
+                          <p className="text-sm">
+                            {new Date(workflowStatus.workflow.processed_at).toLocaleString()} 
+                            <br />by {workflowStatus.workflow.processed_by}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Employee Records Tab */}
+          {activeDetailsTab === 'employees' && (
+            <div className="space-y-4">
+              {employeeRecords.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <Table.Head>
+                      <Table.HeadCell>Employee</Table.HeadCell>
+                      <Table.HeadCell>Department</Table.HeadCell>
+                      <Table.HeadCell>Base Salary</Table.HeadCell>
+                      <Table.HeadCell>Gross Salary</Table.HeadCell>
+                      <Table.HeadCell>Deductions</Table.HeadCell>
+                      <Table.HeadCell>Net Salary</Table.HeadCell>
+                      <Table.HeadCell>Status</Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body>
+                      {employeeRecords.map((record) => (
+                        <Table.Row key={record.id}>
+                          <Table.Cell>
+                            <div>
+                              <div className="font-medium">{record.employee_name}</div>
+                              <div className="text-sm text-gray-500">{record.employee_code}</div>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div>
+                              <div className="text-sm">{record.department_name}</div>
+                              <div className="text-xs text-gray-500">{record.designation_name}</div>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm">Rs. {record.base_salary?.toLocaleString()}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm font-medium">Rs. {record.gross_salary?.toLocaleString()}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm text-red-600">Rs. {record.total_deductions?.toLocaleString()}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm font-semibold text-green-600">Rs. {record.net_salary?.toLocaleString()}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge color={
+                              record.calculation_status === 'calculated' ? 'success' :
+                              record.calculation_status === 'pending' ? 'warning' :
+                              record.calculation_status === 'error' ? 'failure' : 'gray'
+                            }>
+                              {record.calculation_status?.toUpperCase()}
+                            </Badge>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table>
+                  
+                  {/* Summary Row */}
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Total Employees:</span>
+                        <span className="font-medium ml-2">{employeeRecords.length}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Total Gross:</span>
+                        <span className="font-medium ml-2">Rs. {employeeRecords.reduce((sum, r) => sum + (r.gross_salary || 0), 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Total Deductions:</span>
+                        <span className="font-medium ml-2 text-red-600">Rs. {employeeRecords.reduce((sum, r) => sum + (r.total_deductions || 0), 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Total Net:</span>
+                        <span className="font-medium ml-2 text-green-600">Rs. {employeeRecords.reduce((sum, r) => sum + (r.net_salary || 0), 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No employee records found for this payroll run.</p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {!runSummary && activeDetailsTab === 'summary' && (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Loading payroll run details...</p>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowRunDetailsModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Approval Modal */}
+      <Modal
+        show={showApprovalModal}
+        onClose={() => {
+          setShowApprovalModal(false);
+          setSelectedRun(null);
+          setApprovalForm({ approval_level: 'review', comments: '' });
+        }}
+        size="md"
+      >
+        <Modal.Header>
+          {approvalForm.approval_level === 'review' ? 'Submit for Review' : 'Approve Payroll Run'}
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            {selectedRun && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold">{selectedRun.run_name}</h4>
+                <p className="text-sm text-gray-600">{selectedRun.run_number}</p>
+                <p className="text-sm text-gray-600">
+                  {selectedRun.total_employees} employees • Rs. {selectedRun.total_net_amount?.toLocaleString()}
+                </p>
+              </div>
+            )}
+            
+            <div>
+              <label htmlFor="approval-comments" className="block text-sm font-medium text-gray-700 mb-2">
+                Comments (optional)
+              </label>
+              <textarea
+                id="approval-comments"
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder={
+                  approvalForm.approval_level === 'review' 
+                    ? 'Add any notes for the reviewer...' 
+                    : 'Add approval comments...'
+                }
+                value={approvalForm.comments}
+                onChange={(e) => setApprovalForm({ ...approvalForm, comments: e.target.value })}
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowApprovalModal(false)}>
+            Cancel
+          </Button>
+          <Button 
+            color={approvalForm.approval_level === 'review' ? 'orange' : 'green'}
+            onClick={submitApproval}
+            disabled={loading}
+          >
+            {loading ? 'Processing...' : (
+              approvalForm.approval_level === 'review' ? 'Submit for Review' : 'Approve Payroll'
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Process Payment Modal */}
+      <Modal
+        show={showProcessModal}
+        onClose={() => {
+          setShowProcessModal(false);
+          setSelectedRun(null);
+          setProcessForm({
+            payment_method: 'bank_transfer',
+            payment_date: new Date().toISOString().split('T')[0],
+            batch_reference: ''
+          });
+        }}
+        size="md"
+      >
+        <Modal.Header>
+          Process Payroll Payments
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            {selectedRun && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold">{selectedRun.run_name}</h4>
+                <p className="text-sm text-gray-600">{selectedRun.run_number}</p>
+                <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">Employees:</span>
+                    <span className="font-medium ml-2">{selectedRun.total_employees}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Total Amount:</span>
+                    <span className="font-medium ml-2">Rs. {selectedRun.total_net_amount?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div>
+              <label htmlFor="payment-method" className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Method *
+              </label>
+              <select
+                id="payment-method"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={processForm.payment_method}
+                onChange={(e) => setProcessForm({ ...processForm, payment_method: e.target.value as any })}
+              >
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cash">Cash</option>
+                <option value="cheque">Cheque</option>
+              </select>
+            </div>
+            
+            <div>
+              <label htmlFor="payment-date" className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Date *
+              </label>
+              <input
+                type="date"
+                id="payment-date"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={processForm.payment_date}
+                onChange={(e) => setProcessForm({ ...processForm, payment_date: e.target.value })}
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="batch-reference" className="block text-sm font-medium text-gray-700 mb-2">
+                Batch Reference (optional)
+              </label>
+              <input
+                type="text"
+                id="batch-reference"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter batch reference number..."
+                value={processForm.batch_reference}
+                onChange={(e) => setProcessForm({ ...processForm, batch_reference: e.target.value })}
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowProcessModal(false)}>
+            Cancel
+          </Button>
+          <Button 
+            color="purple"
+            onClick={submitProcess}
+            disabled={loading}
+          >
+            {loading ? 'Processing...' : 'Process Payments'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
     </div>
   );

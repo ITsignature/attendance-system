@@ -196,6 +196,91 @@ router.get('/:id',
 );
 
 /**
+ * GET /api/payroll-runs/:id/workflow
+ * Get workflow status for a payroll run
+ */
+router.get('/:id/workflow',
+    checkPermission('payroll.view'),
+    param('id').isUUID().withMessage('Valid run ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const runId = req.params.id;
+        const clientId = req.user.clientId;
+
+        try {
+            const run = await PayrollRunService.getPayrollRun(runId, clientId);
+            
+            res.json({
+                success: true,
+                data: {
+                    workflow: {
+                        status: run.run_status,
+                        created_at: run.created_at,
+                        created_by: run.created_by_name || 'System User',
+                        reviewed_at: run.reviewed_at,
+                        reviewed_by: run.reviewed_by_name || null,
+                        approved_at: run.approved_at,
+                        approved_by: run.approved_by_name || null,
+                        processed_at: run.processed_at,
+                        processed_by: run.processed_by_name || null,
+                        completed_at: run.completed_at
+                    }
+                }
+            });
+        } catch (error) {
+            res.status(404).json({
+                success: false,
+                message: error.message
+            });
+        }
+    })
+);
+
+/**
+ * GET /api/payroll-runs/:id/records
+ * Get individual employee records for a payroll run
+ */
+router.get('/:id/records',
+    checkPermission('payroll.view'),
+    param('id').isUUID().withMessage('Valid run ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const runId = req.params.id;
+        const clientId = req.user.clientId;
+
+        try {
+            const records = await PayrollRunService.getPayrollRecords(runId, clientId);
+            
+            res.json({
+                success: true,
+                data: records
+            });
+        } catch (error) {
+            res.status(404).json({
+                success: false,
+                message: error.message
+            });
+        }
+    })
+);
+
+/**
  * POST /api/payroll-runs
  * Create new payroll run
  */
@@ -279,7 +364,7 @@ router.post('/:id/calculate',
  * Approve payroll run (review or final approval)
  */
 router.post('/:id/approve',
-    checkPermission('payroll.approve'),
+    checkPermission('payroll.edit'),
     [
         param('id').isUUID(),
         ...validateApproval

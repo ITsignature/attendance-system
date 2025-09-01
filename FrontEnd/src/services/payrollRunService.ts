@@ -244,6 +244,37 @@ class PayrollRunApiService {
   }
 
   /**
+   * Get individual employee records for a payroll run
+   */
+  async getPayrollRecords(runId: string): Promise<ApiResponse<Array<{
+    id: string;
+    employee_id: string;
+    employee_code: string;
+    employee_name: string;
+    department_name: string;
+    designation_name: string;
+    calculation_status: string;
+    worked_days: number;
+    worked_hours: number;
+    overtime_hours: number;
+    leave_days: number;
+    total_earnings: number;
+    total_deductions: number;
+    total_taxes: number;
+    gross_salary: number;
+    taxable_income: number;
+    net_salary: number;
+    payment_status: string;
+    payment_method: string;
+    payment_date: string;
+    calculated_at: string;
+    notes: string;
+    base_salary: number;
+  }>>> {
+    return apiService.apiCall(`/api/payroll-runs/${runId}/records`);
+  }
+
+  /**
    * Get pending approvals for current user
    */
   async getPendingApprovals(): Promise<ApiResponse<Array<{
