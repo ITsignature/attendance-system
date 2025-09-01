@@ -600,6 +600,164 @@ router.patch('/:id/payment-status',
 );
 
 // =============================================
+// BULK UPDATE PAYMENT STATUS
+// =============================================
+router.patch('/bulk-payment-status', 
+  checkPermission('payroll.process'),
+  [
+    body('record_ids')
+      .isArray({ min: 1 })
+      .withMessage('Record IDs must be a non-empty array'),
+    body('record_ids.*')
+      .isUUID()
+      .withMessage('Each record ID must be a valid UUID'),
+    body('payment_status')
+      .isIn(['pending', 'paid', 'failed'])
+      .withMessage('Invalid payment status. Must be pending, paid, or failed'),
+    body('payment_date')
+      .optional()
+      .isISO8601()
+      .withMessage('Invalid payment date format'),
+    body('payment_reference')
+      .optional()
+      .isString()
+      .isLength({ max: 255 })
+      .withMessage('Payment reference must be a string with max 255 characters')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const userId = req.user.userId;
+    const { 
+      record_ids, 
+      payment_status, 
+      payment_date = null, 
+      payment_reference = null 
+    } = req.body;
+
+    try {
+      // Start transaction
+      await db.execute('START TRANSACTION');
+
+      // First, verify all records exist and belong to the client
+      const placeholders = record_ids.map(() => '?').join(',');
+      const [existingRecords] = await db.execute(`
+        SELECT pr.id, pr.payment_status, e.client_id,
+               CONCAT(e.first_name, ' ', e.last_name) as employee_name
+        FROM payroll_records pr
+        JOIN employees e ON pr.employee_id = e.id
+        WHERE pr.id IN (${placeholders}) AND e.client_id = ?
+      `, [...record_ids, clientId]);
+
+      // Check if all records were found
+      if (existingRecords.length !== record_ids.length) {
+        await db.execute('ROLLBACK');
+        const foundIds = existingRecords.map(r => r.id);
+        const missingIds = record_ids.filter(id => !foundIds.includes(id));
+        
+        return res.status(404).json({
+          success: false,
+          message: 'Some payroll records not found or access denied',
+          details: {
+            missing_records: missingIds,
+            found: existingRecords.length,
+            requested: record_ids.length
+          }
+        });
+      }
+
+      // Check for any restrictions (optional - you can remove this if not needed)
+      const paidRecords = existingRecords.filter(r => r.payment_status === 'paid');
+      if (paidRecords.length > 0 && !req.user.isSuperAdmin) {
+        await db.execute('ROLLBACK');
+        return res.status(403).json({
+          success: false,
+          message: 'Cannot modify paid records without admin privileges',
+          details: {
+            paid_records: paidRecords.map(r => ({
+              id: r.id,
+              employee_name: r.employee_name
+            }))
+          }
+        });
+      }
+
+      // Perform bulk update
+      const updateResult = await db.execute(`
+        UPDATE payroll_records pr
+        JOIN employees e ON pr.employee_id = e.id 
+        SET 
+          pr.payment_status = ?,
+          pr.payment_date = ?,
+          pr.payment_reference = ?,
+          pr.updated_at = NOW()
+        WHERE pr.id IN (${placeholders}) AND e.client_id = ?
+      `, [payment_status, payment_date, payment_reference, ...record_ids, clientId]);
+
+      // Log the bulk update activity (optional)
+      if (updateResult[0].affectedRows > 0) {
+        await db.execute(`
+          INSERT INTO activity_logs (
+            id, user_id, action, resource_type, resource_id, 
+            description, metadata, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        `, [
+          uuidv4(),
+          userId,
+          'bulk_payment_status_update',
+          'payroll_records',
+          null,
+          `Bulk updated payment status to ${payment_status} for ${updateResult[0].affectedRows} records`,
+          JSON.stringify({
+            record_ids,
+            payment_status,
+            payment_date,
+            payment_reference,
+            affected_rows: updateResult[0].affectedRows
+          })
+        ]).catch(() => {}); // Ignore logging errors
+      }
+
+      // Commit transaction
+      await db.execute('COMMIT');
+
+      // Return success response
+      res.json({
+        success: true,
+        message: `Successfully updated payment status for ${updateResult[0].affectedRows} records`,
+        data: {
+          updated_records: updateResult[0].affectedRows,
+          payment_status,
+          payment_date,
+          payment_reference,
+          processed_at: new Date().toISOString()
+        }
+      });
+
+    } catch (error) {
+      // Rollback transaction on error
+      await db.execute('ROLLBACK');
+      console.error('Bulk payment status update error:', error);
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update payment statuses',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  })
+);
+
+// =============================================
 // BULK PROCESS PAYROLL
 // =============================================
 router.post('/bulk-process', 

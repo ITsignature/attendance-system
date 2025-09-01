@@ -1,4 +1,5 @@
 import apiService, { ApiResponse } from './api';
+import payrollCalculationService, { PayrollCalculationResult, AttendanceMetrics } from './payrollCalculationService';
 
 // =============================================
 // TYPE DEFINITIONS
@@ -97,6 +98,19 @@ export interface BulkProcessData {
   tax_rate?: number;
   provident_fund_rate?: number;
   insurance_amount?: number;
+  use_progressive_tax?: boolean;
+  performance_based_bonus?: boolean;
+  include_attendance_deductions?: boolean;
+}
+
+export interface AdvancedCalculationOptions {
+  useFlatTax?: boolean;
+  taxRate?: number;
+  useProgressiveTax?: boolean;
+  performanceScore?: number;
+  attendance?: AttendanceMetrics;
+  overtimeHours?: number;
+  overtimeType?: 'weekday' | 'saturday' | 'sunday' | 'holiday';
 }
 
 export interface PayrollSummary {
@@ -310,6 +324,19 @@ class PayrollApiService {
     });
   }
 
+  // Bulk update payment status
+  async bulkUpdatePaymentStatus(data: {
+    record_ids: string[];
+    payment_status: 'pending' | 'paid' | 'failed';
+    payment_date?: string;
+    payment_reference?: string;
+  }): Promise<ApiResponse> {
+    return apiService.apiCall('/api/payroll/bulk-payment-status', {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+  }
+
   // Get payroll summary for a period
   async getPayrollSummary(period: string): Promise<ApiResponse<PayrollSummary>> {
     return apiService.apiCall(`/api/payroll/summary/${period}`);
@@ -420,6 +447,146 @@ class PayrollApiService {
     const dailyRate = netSalary / totalDays;
     
     return Math.round(dailyRate * daysElapsed);
+  }
+
+  // =============================================
+  // ADVANCED CALCULATION METHODS
+  // =============================================
+
+  /**
+   * Calculate payroll with advanced options (progressive tax, performance bonus, etc.)
+   */
+  calculateAdvancedPayroll(
+    baseSalary: number, 
+    allowances: number = 0, 
+    options: AdvancedCalculationOptions = {}
+  ): PayrollCalculationResult {
+    return payrollCalculationService.calculatePayroll({
+      baseSalary,
+      allowances,
+      overtimeHours: options.overtimeHours || 0,
+      bonus: 0, // Will be calculated based on performance if provided
+      commission: 0,
+      insurance: 0,
+      loanDeduction: 0,
+      otherDeductions: 0,
+      attendance: options.attendance,
+      useFlatTax: options.useFlatTax || false,
+      taxRate: options.taxRate || 0.15,
+      performanceScore: options.performanceScore
+    });
+  }
+
+  /**
+   * Calculate progressive tax for given salary
+   */
+  calculateProgressiveTax(grossSalary: number): number {
+    return payrollCalculationService.calculateProgressiveTax(grossSalary);
+  }
+
+  /**
+   * Calculate flat tax for given salary
+   */
+  calculateFlatTax(grossSalary: number, taxRate: number): number {
+    return payrollCalculationService.calculateFlatTax(grossSalary, taxRate);
+  }
+
+  /**
+   * Calculate overtime amount
+   */
+  calculateOvertimeAmount(
+    monthlySalary: number, 
+    overtimeHours: number, 
+    dayType: 'weekday' | 'saturday' | 'sunday' | 'holiday' = 'weekday'
+  ): number {
+    const hourlyRate = payrollCalculationService.getHourlyRate(monthlySalary);
+    return payrollCalculationService.calculateOvertime(hourlyRate, overtimeHours, dayType);
+  }
+
+  /**
+   * Calculate performance bonus
+   */
+  calculatePerformanceBonus(baseSalary: number, performanceScore: number, maxBonusPercentage: number = 0.20): number {
+    return payrollCalculationService.calculatePerformanceBonus(baseSalary, performanceScore, maxBonusPercentage);
+  }
+
+  /**
+   * Calculate attendance-based deductions
+   */
+  calculateAttendanceDeductions(baseSalary: number, attendance: AttendanceMetrics): number {
+    return payrollCalculationService.calculateAttendanceDeductions(baseSalary, attendance);
+  }
+
+  /**
+   * Calculate provident fund contributions
+   */
+  calculateProvidentFund(baseSalary: number) {
+    return payrollCalculationService.calculateProvidentFund(baseSalary);
+  }
+
+  /**
+   * Calculate loan EMI
+   */
+  calculateLoanEMI(principal: number, annualRate: number, tenureMonths: number): number {
+    return payrollCalculationService.calculateEMI(principal, annualRate, tenureMonths);
+  }
+
+  /**
+   * Get hourly rate from monthly salary
+   */
+  getHourlyRate(monthlySalary: number): number {
+    return payrollCalculationService.getHourlyRate(monthlySalary);
+  }
+
+  /**
+   * Get daily rate from monthly salary
+   */
+  getDailyRate(monthlySalary: number): number {
+    return payrollCalculationService.getDailyRate(monthlySalary);
+  }
+
+  /**
+   * Convert number to words (for payslips)
+   */
+  numberToWords(amount: number): string {
+    return payrollCalculationService.numberToWords(amount);
+  }
+
+  /**
+   * Validate payroll data
+   */
+  validatePayrollData(data: any): { isValid: boolean; errors: string[]; warnings: string[] } {
+    return payrollCalculationService.validatePayrollData(data);
+  }
+
+  /**
+   * Preview payroll calculation without saving
+   */
+  previewPayrollCalculation(
+    employeeData: { base_salary: number },
+    calculationOptions: AdvancedCalculationOptions & {
+      allowances?: number;
+      bonus?: number;
+      commission?: number;
+      insurance?: number;
+      loanDeduction?: number;
+      otherDeductions?: number;
+    }
+  ): PayrollCalculationResult {
+    return payrollCalculationService.calculatePayroll({
+      baseSalary: employeeData.base_salary,
+      allowances: calculationOptions.allowances || 0,
+      overtimeHours: calculationOptions.overtimeHours || 0,
+      bonus: calculationOptions.bonus || 0,
+      commission: calculationOptions.commission || 0,
+      insurance: calculationOptions.insurance || 0,
+      loanDeduction: calculationOptions.loanDeduction || 0,
+      otherDeductions: calculationOptions.otherDeductions || 0,
+      attendance: calculationOptions.attendance,
+      useFlatTax: calculationOptions.useFlatTax || false,
+      taxRate: calculationOptions.taxRate || 0.15,
+      performanceScore: calculationOptions.performanceScore
+    });
   }
 }
 

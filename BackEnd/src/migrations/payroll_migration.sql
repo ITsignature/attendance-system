@@ -351,6 +351,233 @@ END$
 DELIMITER ;
 
 -- =============================================
+-- INDUSTRY STANDARD PAYROLL RUN TABLES
+-- =============================================
+
+-- Payroll Periods Table (required for payroll runs)
+CREATE TABLE IF NOT EXISTS `payroll_periods` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `client_id` varchar(36) NOT NULL,
+  `period_number` int NOT NULL,
+  `period_year` year NOT NULL,
+  `period_type` enum('weekly','bi-weekly','monthly','quarterly') DEFAULT 'monthly',
+  `period_start_date` date NOT NULL,
+  `period_end_date` date NOT NULL,
+  `cut_off_date` date NOT NULL,
+  `pay_date` date NOT NULL,
+  `status` enum('active','closed','archived') DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_period` (`client_id`,`period_year`,`period_number`,`period_type`),
+  KEY `idx_period_dates` (`period_start_date`,`period_end_date`),
+  KEY `idx_pay_date` (`pay_date`),
+  CONSTRAINT `fk_payroll_periods_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Payroll Runs Table (batch processing)
+CREATE TABLE IF NOT EXISTS `payroll_runs` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `client_id` varchar(36) NOT NULL,
+  `run_number` varchar(50) NOT NULL,
+  `period_id` varchar(36) NOT NULL,
+  `run_name` varchar(100) NOT NULL,
+  `run_type` enum('regular','bonus','correction','off-cycle') DEFAULT 'regular',
+  `run_status` enum('draft','calculating','calculated','review','approved','processing','completed','cancelled') DEFAULT 'draft',
+  `total_employees` int DEFAULT 0,
+  `processed_employees` int DEFAULT 0,
+  `total_gross_amount` decimal(15,2) DEFAULT 0.00,
+  `total_deductions_amount` decimal(15,2) DEFAULT 0.00,
+  `total_net_amount` decimal(15,2) DEFAULT 0.00,
+  `calculation_started_at` timestamp NULL DEFAULT NULL,
+  `calculation_completed_at` timestamp NULL DEFAULT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `reviewed_by` varchar(36) DEFAULT NULL,
+  `approved_by` varchar(36) DEFAULT NULL,
+  `processed_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `calculation_method` enum('simple','advanced') DEFAULT 'advanced',
+  `notes` text,
+  `processing_errors` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_run_number` (`client_id`,`run_number`),
+  KEY `idx_run_status` (`run_status`),
+  KEY `idx_period` (`period_id`),
+  KEY `idx_created_by` (`created_by`),
+  CONSTRAINT `fk_payroll_runs_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payroll_runs_period` FOREIGN KEY (`period_id`) REFERENCES `payroll_periods` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_payroll_runs_created_by` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`),
+  CONSTRAINT `fk_payroll_runs_reviewed_by` FOREIGN KEY (`reviewed_by`) REFERENCES `admin_users` (`id`),
+  CONSTRAINT `fk_payroll_runs_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`),
+  CONSTRAINT `fk_payroll_runs_processed_by` FOREIGN KEY (`processed_by`) REFERENCES `admin_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Approval Workflows Table  
+CREATE TABLE IF NOT EXISTS `approval_workflows` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `run_id` varchar(36) NOT NULL,
+  `client_id` varchar(36) NOT NULL,
+  `status` enum('active','completed','rejected') DEFAULT 'active',
+  `current_level` int DEFAULT 1,
+  `total_levels` int DEFAULT 3,
+  `initiated_by` varchar(36) NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_run_id` (`run_id`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `fk_approval_workflows_run` FOREIGN KEY (`run_id`) REFERENCES `payroll_runs` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_approval_workflows_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_approval_workflows_initiator` FOREIGN KEY (`initiated_by`) REFERENCES `admin_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Approval Steps Table
+CREATE TABLE IF NOT EXISTS `approval_steps` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `workflow_id` varchar(36) NOT NULL,
+  `step_level` int NOT NULL,
+  `step_name` varchar(50) NOT NULL,
+  `step_title` varchar(100) NOT NULL,
+  `required_role` varchar(100) NOT NULL,
+  `status` enum('pending','active','approved','rejected') DEFAULT 'pending',
+  `timeout_hours` int DEFAULT 24,
+  `approved_by` varchar(36) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_workflow_id` (`workflow_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_step_level` (`step_level`),
+  CONSTRAINT `fk_approval_steps_workflow` FOREIGN KEY (`workflow_id`) REFERENCES `approval_workflows` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_approval_steps_approver` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Enhanced Payroll Approvals Table
+CREATE TABLE IF NOT EXISTS `payroll_approvals` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `run_id` varchar(36) NOT NULL,
+  `approval_level` varchar(50) NOT NULL,
+  `approver_id` varchar(36) NOT NULL,
+  `approval_status` enum('pending','approved','rejected') NOT NULL,
+  `approval_date` timestamp NOT NULL,
+  `comments` text,
+  PRIMARY KEY (`id`),
+  KEY `idx_run_level` (`run_id`,`approval_level`),
+  KEY `idx_approver` (`approver_id`),
+  KEY `idx_status` (`approval_status`),
+  CONSTRAINT `fk_payroll_approvals_run` FOREIGN KEY (`run_id`) REFERENCES `payroll_runs` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payroll_approvals_approver` FOREIGN KEY (`approver_id`) REFERENCES `admin_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Payroll Audit Log Table
+CREATE TABLE IF NOT EXISTS `payroll_audit_log` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `run_id` varchar(36) NOT NULL,
+  `action` varchar(50) NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `new_value` text,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_run_action` (`run_id`,`action`),
+  KEY `idx_user_action` (`user_id`,`action`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `fk_payroll_audit_log_run` FOREIGN KEY (`run_id`) REFERENCES `payroll_runs` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payroll_audit_log_user` FOREIGN KEY (`user_id`) REFERENCES `admin_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Create new payroll records table for the run-based system
+-- (Rename existing table first if it exists)
+RENAME TABLE payroll_records TO payroll_records_old_backup;
+
+CREATE TABLE IF NOT EXISTS `payroll_records` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `run_id` varchar(36) NOT NULL,
+  `employee_id` varchar(36) NOT NULL,
+  `employee_code` varchar(50) NOT NULL,
+  `employee_name` varchar(200) NOT NULL,
+  `department_name` varchar(100) DEFAULT NULL,
+  `designation_name` varchar(100) DEFAULT NULL,
+  `calculation_status` enum('pending','calculating','calculated','error','excluded') DEFAULT 'pending',
+  `calculation_errors` json DEFAULT NULL,
+  `worked_days` decimal(5,2) DEFAULT 0.00,
+  `worked_hours` decimal(8,2) DEFAULT 0.00,
+  `overtime_hours` decimal(8,2) DEFAULT 0.00,
+  `leave_days` decimal(5,2) DEFAULT 0.00,
+  `total_earnings` decimal(12,2) DEFAULT 0.00,
+  `total_deductions` decimal(12,2) DEFAULT 0.00,
+  `total_taxes` decimal(12,2) DEFAULT 0.00,
+  `total_benefits` decimal(12,2) DEFAULT 0.00,
+  `gross_salary` decimal(12,2) DEFAULT 0.00,
+  `taxable_income` decimal(12,2) DEFAULT 0.00,
+  `net_salary` decimal(12,2) DEFAULT 0.00,
+  `payment_status` enum('pending','paid','failed','cancelled') DEFAULT 'pending',
+  `payment_method` enum('bank_transfer','cash','cheque') DEFAULT 'bank_transfer',
+  `payment_date` date DEFAULT NULL,
+  `payment_reference` varchar(100) DEFAULT NULL,
+  `approved_by` varchar(36) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `calculated_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `notes` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_run_employee` (`run_id`,`employee_id`),
+  KEY `idx_calculation_status` (`calculation_status`),
+  KEY `idx_payment_status` (`payment_status`),
+  KEY `idx_employee` (`employee_id`),
+  CONSTRAINT `fk_payroll_records_run` FOREIGN KEY (`run_id`) REFERENCES `payroll_runs` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payroll_records_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payroll_records_approver` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Create payroll record components table
+CREATE TABLE IF NOT EXISTS `payroll_record_components` (
+  `id` varchar(36) NOT NULL DEFAULT (uuid()),
+  `record_id` varchar(36) NOT NULL,
+  `component_id` varchar(36) DEFAULT NULL,
+  `component_code` varchar(20) NOT NULL,
+  `component_name` varchar(100) NOT NULL,
+  `component_type` enum('earning','deduction','tax','benefit') NOT NULL,
+  `component_category` varchar(50) NOT NULL,
+  `calculation_method` varchar(20) NOT NULL,
+  `base_amount` decimal(12,2) DEFAULT 0.00,
+  `rate` decimal(10,4) DEFAULT 0.0000,
+  `quantity` decimal(10,2) DEFAULT 1.00,
+  `calculated_amount` decimal(12,2) NOT NULL,
+  `is_overridden` tinyint(1) DEFAULT 0,
+  `original_amount` decimal(12,2) DEFAULT NULL,
+  `override_reason` varchar(255) DEFAULT NULL,
+  `overridden_by` varchar(36) DEFAULT NULL,
+  `overridden_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_record_id` (`record_id`),
+  KEY `idx_component_type` (`component_type`),
+  KEY `idx_component_category` (`component_category`),
+  CONSTRAINT `fk_payroll_record_components_record` FOREIGN KEY (`record_id`) REFERENCES `payroll_records` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payroll_record_components_overridden_by` FOREIGN KEY (`overridden_by`) REFERENCES `admin_users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Insert sample payroll periods for testing
+INSERT IGNORE INTO `payroll_periods` (`id`, `client_id`, `period_number`, `period_year`, `period_start_date`, `period_end_date`, `cut_off_date`, `pay_date`) 
+SELECT 
+    UUID() as id,
+    c.id as client_id,
+    MONTH(CURDATE()) as period_number,
+    YEAR(CURDATE()) as period_year,
+    DATE_SUB(CURDATE(), INTERVAL DAY(CURDATE()) - 1 DAY) as period_start_date,
+    LAST_DAY(CURDATE()) as period_end_date,
+    DATE_SUB(LAST_DAY(CURDATE()), INTERVAL 5 DAY) as cut_off_date,
+    DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 5 DAY) as pay_date
+FROM clients c 
+WHERE c.is_active = 1;
+
+-- =============================================
 -- Grant Permissions (adjust as needed)
 -- =============================================
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON hrms_system.payroll_records TO 'hrms_app'@'localhost';

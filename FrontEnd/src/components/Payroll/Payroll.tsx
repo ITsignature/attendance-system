@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TextInput, Button, Select, Badge, Modal, Table, Alert } from "flowbite-react";
-import { payrollApiService, PayrollRecord, PayrollFilters, CreatePayrollData, BulkProcessData } from '../../services/payrollService';
+import { payrollApiService, PayrollRecord, PayrollFilters, CreatePayrollData, BulkProcessData, AdvancedCalculationOptions, AttendanceMetrics } from '../../services/payrollService';
 import apiService from '../../services/api';
 import { HiInformationCircle, HiExclamationCircle } from 'react-icons/hi';
 import { HiSearch, HiX, HiChevronDown  } from 'react-icons/hi';
@@ -42,6 +42,45 @@ const PayrollDashboard = () => {
 
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
 
+  // Advanced calculation options
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [advancedOptions, setAdvancedOptions] = useState<AdvancedCalculationOptions>({
+    useFlatTax: true,
+    taxRate: 0.15,
+    useProgressiveTax: false,
+    performanceScore: undefined,
+    overtimeHours: 0,
+    overtimeType: 'weekday',
+    attendance: undefined
+  });
+
+  // Calculation preview
+  const [calculationPreview, setCalculationPreview] = useState<any>(null);
+  const [showCalculationPreview, setShowCalculationPreview] = useState(false);
+
+  // Dropdown state
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  
+  // Payment status modal states
+  const [showPaymentStatusModal, setShowPaymentStatusModal] = useState(false);
+  const [selectedPaymentRecord, setSelectedPaymentRecord] = useState<PayrollRecord | null>(null);
+  const [paymentStatusForm, setPaymentStatusForm] = useState({
+    status: 'pending' as 'pending' | 'paid' | 'failed',
+    payment_date: '',
+    payment_reference: '',
+    notes: ''
+  });
+
+  // Bulk payment status update states
+  const [showBulkPaymentModal, setShowBulkPaymentModal] = useState(false);
+  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
+  const [bulkPaymentForm, setBulkPaymentForm] = useState({
+    status: 'paid' as 'pending' | 'paid' | 'failed',
+    payment_date: '',
+    payment_reference: '',
+    notes: ''
+  });
+
   // ISSUE 3 FIX: Simplified Add Form
   const [simpleAddData, setSimpleAddData] = useState<{
     employee_id: string;
@@ -62,6 +101,319 @@ const PayrollDashboard = () => {
     provident_fund_rate: 0.08,
     insurance_amount: 0
   });
+
+    const [newPayrollData, setNewPayrollData] = useState<CreatePayrollData>({
+    employee_id: '',
+    pay_period_start: '',
+    pay_period_end: '',
+    base_salary: 0,
+    allowances: 0,
+    overtime_amount: 0,
+    bonus: 0,
+    commission: 0,
+    tax_deduction: 0,
+    provident_fund: 0,
+    insurance: 0,
+    loan_deduction: 0,
+    other_deductions: 0,
+    payment_method: 'bank_transfer',
+    notes: ''
+  });
+
+  // Bulk Process Form State
+  const [bulkProcessData, setBulkProcessData] = useState<BulkProcessData>({
+    pay_period_start: '',
+    pay_period_end: '',
+    auto_calculate_overtime: true,
+    default_allowances: 0,
+    default_bonus: 0,
+    tax_rate: 0.15,
+    provident_fund_rate: 0.08,
+    insurance_amount: 0
+  });
+
+  // Fix the Edit functionality - Add Edit Modal
+const EditModal = () => (
+  <Modal show={isEditing} onClose={() => { setIsEditing(false); setEditingRecord(null); }} size="4xl">
+    <Modal.Header>Edit Payroll Record - {editingRecord?.name}</Modal.Header>
+    <Modal.Body>
+      {editingRecord && (
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <h4 className="font-semibold text-lg">Earnings</h4>
+            <div>
+              <label className="block text-sm font-medium mb-1">Base Salary</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.baseSalary}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, baseSalary: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Allowances</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.allowances}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, allowances: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Overtime</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.overtime}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, overtime: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Bonus</label>
+              <TextInput
+                type="number"
+                value={editingRecord.earnings.bonus}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  earnings: { ...editingRecord.earnings, bonus: Number(e.target.value) }
+                })}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="font-semibold text-lg">Deductions</h4>
+            <div>
+              <label className="block text-sm font-medium mb-1">Tax Deduction</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.tax}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, tax: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Provident Fund</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.providentFund}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, providentFund: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Insurance</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.insurance}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, insurance: Number(e.target.value) }
+                })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Other Deductions</label>
+              <TextInput
+                type="number"
+                value={editingRecord.deductions.other}
+                onChange={(e) => setEditingRecord({
+                  ...editingRecord,
+                  deductions: { ...editingRecord.deductions, other: Number(e.target.value) }
+                })}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal.Body>
+    <Modal.Footer>
+      <Button color="gray" onClick={() => { setIsEditing(false); setEditingRecord(null); }}>Cancel</Button>
+      <Button color="blue" onClick={handleUpdatePayroll} disabled={loading}>Save Changes</Button>
+    </Modal.Footer>
+  </Modal>
+);
+
+// Fix the Payslip Modal
+const PayslipModal = () => (
+  <Modal show={showPayslipModal} onClose={() => setShowPayslipModal(false)} size="5xl">
+    <Modal.Header>
+      <div className="flex justify-between items-center w-full">
+        <span>Payslip - {selectedRecord?.name}</span>
+        <Button size="sm" color="blue" onClick={() => window.print()}>
+          Print
+        </Button>
+      </div>
+    </Modal.Header>
+    <Modal.Body>
+      {payslipData && selectedRecord && (
+        <div className="payslip-content bg-white p-8 rounded-lg print:p-0">
+          {/* Company Header */}
+          <div className="text-center mb-8 border-b-2 border-gray-300 pb-4">
+            <h1 className="text-3xl font-bold text-gray-800">PAYSLIP</h1>
+            <p className="text-lg text-gray-600">{payslipData.company?.name || 'Company Name'}</p>
+            <p className="text-sm text-gray-500">
+              {payslipData.company?.address || 'Company Address'}
+            </p>
+            <p className="text-sm text-gray-500">
+              Tel: {payslipData.company?.phone || 'N/A'} | Email: {payslipData.company?.email || 'N/A'}
+            </p>
+          </div>
+
+          {/* Pay Period */}
+          <div className="bg-gray-100 p-4 rounded-lg mb-6">
+            <h3 className="font-semibold text-lg mb-2">Pay Period</h3>
+            <p className="text-gray-700">
+              From: {formatDate(selectedRecord.payPeriod.start)} To: {formatDate(selectedRecord.payPeriod.end)}
+            </p>
+          </div>
+
+          {/* Employee Info */}
+          <div className="grid grid-cols-2 gap-8 mb-6">
+            <div>
+              <h3 className="font-semibold text-lg mb-3 text-gray-800">Employee Information</h3>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-medium">Name:</span> {selectedRecord.name}</p>
+                <p><span className="font-medium">Employee ID:</span> {selectedRecord.employeeCode}</p>
+                <p><span className="font-medium">Department:</span> {selectedRecord.department || 'N/A'}</p>
+                <p><span className="font-medium">Designation:</span> {selectedRecord.designation || 'N/A'}</p>
+                <p><span className="font-medium">Email:</span> {selectedRecord.email}</p>
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg mb-3 text-gray-800">Payment Details</h3>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-medium">Payment Date:</span> {formatDate(selectedRecord.payment.date)}</p>
+                <p><span className="font-medium">Payment Method:</span> {selectedRecord.payment.method.replace('_', ' ').toUpperCase()}</p>
+                <p><span className="font-medium">Payment Status:</span> 
+                  <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                    selectedRecord.payment.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {selectedRecord.payment.status.toUpperCase()}
+                  </span>
+                </p>
+                {selectedRecord.payment.reference && (
+                  <p><span className="font-medium">Reference:</span> {selectedRecord.payment.reference}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Salary Breakdown */}
+          <div className="grid grid-cols-2 gap-8 mb-6">
+            {/* Earnings */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-semibold text-lg mb-3 text-green-700 border-b border-green-200 pb-2">Earnings</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Base Salary:</span>
+                  <span className="font-medium">{formatCurrency(selectedRecord.earnings.baseSalary)}</span>
+                </div>
+                {selectedRecord.earnings.allowances > 0 && (
+                  <div className="flex justify-between">
+                    <span>Allowances:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.earnings.allowances)}</span>
+                  </div>
+                )}
+                {selectedRecord.earnings.overtime > 0 && (
+                  <div className="flex justify-between">
+                    <span>Overtime:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.earnings.overtime)}</span>
+                  </div>
+                )}
+                {selectedRecord.earnings.bonus > 0 && (
+                  <div className="flex justify-between">
+                    <span>Bonus:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.earnings.bonus)}</span>
+                  </div>
+                )}
+                <hr className="my-2" />
+                <div className="flex justify-between font-semibold text-green-700">
+                  <span>Gross Salary:</span>
+                  <span>{formatCurrency(selectedRecord.summary.grossSalary)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Deductions */}
+            <div className="border rounded-lg p-4">
+              <h3 className="font-semibold text-lg mb-3 text-red-700 border-b border-red-200 pb-2">Deductions</h3>
+              <div className="space-y-2 text-sm">
+                {selectedRecord.deductions.tax > 0 && (
+                  <div className="flex justify-between">
+                    <span>Tax Deduction:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.tax)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.providentFund > 0 && (
+                  <div className="flex justify-between">
+                    <span>Provident Fund:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.providentFund)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.insurance > 0 && (
+                  <div className="flex justify-between">
+                    <span>Insurance:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.insurance)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.loan > 0 && (
+                  <div className="flex justify-between">
+                    <span>Loan Deduction:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.loan)}</span>
+                  </div>
+                )}
+                {selectedRecord.deductions.other > 0 && (
+                  <div className="flex justify-between">
+                    <span>Other Deductions:</span>
+                    <span className="font-medium">{formatCurrency(selectedRecord.deductions.other)}</span>
+                  </div>
+                )}
+                <hr className="my-2" />
+                <div className="flex justify-between font-semibold text-red-700">
+                  <span>Total Deductions:</span>
+                  <span>{formatCurrency(selectedRecord.summary.totalDeductions)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Net Salary */}
+          <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+            <div className="flex justify-between items-center">
+              <span className="text-xl font-bold text-blue-800">Net Salary:</span>
+              <span className="text-2xl font-bold text-blue-800">{formatCurrency(selectedRecord.summary.netSalary)}</span>
+            </div>
+            <div className="mt-3 text-sm text-gray-600">
+              <p className="italic">
+                Amount in words: {numberToWords(selectedRecord.summary.netSalary)}
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-8 pt-4 border-t border-gray-300 text-center text-sm text-gray-500">
+            <p>This is a computer-generated payslip and does not require a signature.</p>
+            <p>Generated on {new Date().toLocaleDateString()}</p>
+          </div>
+        </div>
+      )}
+    </Modal.Body>
+    <Modal.Footer>
+      <Button onClick={() => setShowPayslipModal(false)}>Close</Button>
+    </Modal.Footer>
+  </Modal>
+);
 
   // Fetch payroll records
   const fetchPayrollRecords = async () => {
@@ -134,6 +486,21 @@ const PayrollDashboard = () => {
     fetchEmployees();
   }, [selectedMonth, filterStatus, filterDepartment, currentPage, recordsPerPage, sortBy, sortOrder]);
 
+  // Handle click outside dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.employee-dropdown-container')) {
+        setShowEmployeeDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   // ISSUE 5 FIX: Format currency with Rs.
   const formatCurrency = (amount: number) => {
     return `Rs. ${new Intl.NumberFormat('en-IN').format(amount)}`;
@@ -149,29 +516,153 @@ const PayrollDashboard = () => {
     return <Badge color={color} size="sm">{status.toUpperCase()}</Badge>;
   };
 
-  // ISSUE 1 FIX: Toggle payment status with all 4 statuses
-  const togglePaymentStatus = async (record: PayrollRecord) => {
+  // Open payment status modal
+  const openPaymentStatusModal = (record: PayrollRecord) => {
+    setSelectedPaymentRecord(record);
+    setPaymentStatusForm({
+      status: record.payment.status as 'pending' | 'paid' | 'failed',
+      payment_date: record.payment.date || '',
+      payment_reference: record.payment.reference || '',
+      notes: record.notes || ''
+    });
+    setShowPaymentStatusModal(true);
+  };
+
+  // Update payment status with detailed information
+  const updatePaymentStatus = async () => {
+    if (!selectedPaymentRecord) return;
+    
     try {
-      // Cycle through statuses: pending -> processing -> paid -> failed -> pending
-      let newStatus = 'pending';
-      switch(record.payment.status) {
-        case 'pending': newStatus = 'processing'; break;
-        case 'processing': newStatus = 'paid'; break;
-        case 'paid': newStatus = 'failed'; break;
-        case 'failed': newStatus = 'pending'; break;
+      setLoading(true);
+      
+      // Auto-set payment date if status is 'paid' and no date is provided
+      const paymentDate = paymentStatusForm.status === 'paid' && !paymentStatusForm.payment_date 
+        ? new Date().toISOString().split('T')[0] 
+        : paymentStatusForm.payment_date;
+      
+      await payrollApiService.updatePaymentStatus(
+        selectedPaymentRecord.id, 
+        paymentStatusForm.status, 
+        paymentDate || undefined,
+        paymentStatusForm.payment_reference || undefined
+      );
+      
+      // If notes were added, update the payroll record
+      if (paymentStatusForm.notes !== (selectedPaymentRecord.notes || '')) {
+        await payrollApiService.updatePayroll(selectedPaymentRecord.id, {
+          notes: paymentStatusForm.notes
+        });
       }
       
-      const paymentDate = newStatus === 'paid' ? new Date().toISOString().split('T')[0] : null;
-      
-      await payrollApiService.updatePaymentStatus(record.id, newStatus, paymentDate || undefined);
       setSuccessMessage('Payment status updated successfully');
+      setShowPaymentStatusModal(false);
+      setSelectedPaymentRecord(null);
       fetchPayrollRecords();
     } catch (err: any) {
       setError(err.message || 'Failed to update payment status');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ISSUE 3 FIX: Simplified create payroll
+  // Handle bulk record selection
+  const handleRecordSelection = (recordId: string, checked: boolean) => {
+    const newSelection = new Set(selectedRecords);
+    if (checked) {
+      newSelection.add(recordId);
+    } else {
+      newSelection.delete(recordId);
+    }
+    setSelectedRecords(newSelection);
+  };
+
+  // Handle select all records
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(filteredRecords.map(record => record.id));
+      setSelectedRecords(allIds);
+    } else {
+      setSelectedRecords(new Set());
+    }
+  };
+
+  // Open bulk payment status modal
+  const openBulkPaymentModal = () => {
+    if (selectedRecords.size === 0) {
+      setError('Please select at least one payroll record');
+      return;
+    }
+    setBulkPaymentForm({
+      status: 'paid',
+      payment_date: new Date().toISOString().split('T')[0],
+      payment_reference: '',
+      notes: ''
+    });
+    setShowBulkPaymentModal(true);
+  };
+
+  // Bulk update payment status - NEW OPTIMIZED VERSION
+  const bulkUpdatePaymentStatus = async () => {
+    try {
+      setLoading(true);
+
+      const paymentDate = bulkPaymentForm.status === 'paid' && !bulkPaymentForm.payment_date 
+        ? new Date().toISOString().split('T')[0] 
+        : bulkPaymentForm.payment_date;
+
+      // Single API call for all records
+      const response = await payrollApiService.bulkUpdatePaymentStatus({
+        record_ids: Array.from(selectedRecords),
+        payment_status: bulkPaymentForm.status,
+        payment_date: paymentDate || undefined,
+        payment_reference: bulkPaymentForm.payment_reference || undefined
+      });
+
+      if (response.success) {
+        // Handle notes update separately if provided (since bulk API doesn't handle notes yet)
+        if (bulkPaymentForm.notes.trim()) {
+          let notesUpdateCount = 0;
+          for (const recordId of selectedRecords) {
+            try {
+              await payrollApiService.updatePayroll(recordId, {
+                notes: bulkPaymentForm.notes
+              });
+              notesUpdateCount++;
+            } catch (err) {
+              console.warn(`Failed to update notes for record ${recordId}:`, err);
+            }
+          }
+          
+          if (notesUpdateCount > 0) {
+            setSuccessMessage(
+              `Successfully updated ${response.data.updated_records} payment status(es) and added notes to ${notesUpdateCount} records`
+            );
+          } else {
+            setSuccessMessage(
+              `Successfully updated ${response.data.updated_records} payment status(es)`
+            );
+          }
+        } else {
+          setSuccessMessage(
+            `Successfully updated ${response.data.updated_records} payment status(es) to ${bulkPaymentForm.status.toUpperCase()}`
+          );
+        }
+      } else {
+        throw new Error(response.message || 'Bulk update failed');
+      }
+
+      setShowBulkPaymentModal(false);
+      setSelectedRecords(new Set());
+      fetchPayrollRecords();
+    } catch (err: any) {
+      console.error('Bulk payment status update error:', err);
+      setError(err.message || 'Failed to update payment statuses');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ISSUE 3 FIX: Enhanced create payroll with advanced calculations
   const handleSimpleCreatePayroll = async () => {
     try {
       setLoading(true);
@@ -181,30 +672,63 @@ const PayrollDashboard = () => {
         throw new Error('Please select an employee');
       }
 
-      // Calculate overtime from attendance (simulate for now)
-      const overtime_amount = 0; // This should be calculated from attendance
-      
       const base_salary = selectedEmployee.base_salary || 0;
-      const gross_salary = base_salary + simpleAddData.default_allowances + overtime_amount + simpleAddData.default_bonus;
-      const tax_deduction = gross_salary * simpleAddData.tax_rate;
-      const provident_fund = base_salary * simpleAddData.provident_fund_rate;
+
+      // Use advanced calculation if enabled
+      let calculationResult;
+      if (showAdvancedOptions) {
+        calculationResult = payrollApiService.previewPayrollCalculation(
+          { base_salary },
+          {
+            allowances: simpleAddData.default_allowances,
+            bonus: simpleAddData.default_bonus,
+            insurance: simpleAddData.insurance_amount,
+            useFlatTax: advancedOptions.useFlatTax,
+            taxRate: advancedOptions.useFlatTax ? simpleAddData.tax_rate : undefined,
+            useProgressiveTax: advancedOptions.useProgressiveTax,
+            performanceScore: advancedOptions.performanceScore,
+            overtimeHours: advancedOptions.overtimeHours,
+            attendance: advancedOptions.attendance
+          }
+        );
+      } else {
+        // Simple calculation (existing logic)
+        const overtime_amount = 0;
+        const gross_salary = base_salary + simpleAddData.default_allowances + overtime_amount + simpleAddData.default_bonus;
+        const tax_deduction = gross_salary * simpleAddData.tax_rate;
+        const provident_fund = base_salary * simpleAddData.provident_fund_rate;
+        
+        calculationResult = {
+          baseSalary: base_salary,
+          allowances: simpleAddData.default_allowances,
+          overtimeAmount: overtime_amount,
+          bonus: simpleAddData.default_bonus,
+          commission: 0,
+          taxDeduction: tax_deduction,
+          providentFund: provident_fund,
+          insurance: simpleAddData.insurance_amount,
+          loanDeduction: 0,
+          attendanceDeduction: 0,
+          otherDeductions: 0
+        };
+      }
       
       const payrollData: CreatePayrollData = {
         employee_id: simpleAddData.employee_id,
         pay_period_start: simpleAddData.pay_period_start,
         pay_period_end: simpleAddData.pay_period_end,
-        base_salary: base_salary,
-        allowances: simpleAddData.default_allowances,
-        overtime_amount: overtime_amount,
-        bonus: simpleAddData.default_bonus,
-        commission: 0,
-        tax_deduction: tax_deduction,
-        provident_fund: provident_fund,
-        insurance: simpleAddData.insurance_amount,
-        loan_deduction: 0,
-        other_deductions: 0,
+        base_salary: calculationResult.baseSalary,
+        allowances: calculationResult.allowances,
+        overtime_amount: calculationResult.overtimeAmount,
+        bonus: calculationResult.bonus,
+        commission: calculationResult.commission,
+        tax_deduction: calculationResult.taxDeduction,
+        provident_fund: calculationResult.providentFund,
+        insurance: calculationResult.insurance,
+        loan_deduction: calculationResult.loanDeduction,
+        other_deductions: calculationResult.otherDeductions + calculationResult.attendanceDeduction,
         payment_method: 'bank_transfer',
-        notes: 'Created from simplified form'
+        notes: showAdvancedOptions ? 'Created with advanced calculations' : 'Created from simplified form'
       };
 
       await payrollApiService.createPayroll(payrollData);
@@ -230,6 +754,49 @@ const PayrollDashboard = () => {
       provident_fund_rate: 0.08,
       insurance_amount: 0
     });
+    setAdvancedOptions({
+      useFlatTax: true,
+      taxRate: 0.15,
+      useProgressiveTax: false,
+      performanceScore: undefined,
+      overtimeHours: 0,
+      overtimeType: 'weekday',
+      attendance: undefined
+    });
+    setCalculationPreview(null);
+    setShowCalculationPreview(false);
+    setShowEmployeeDropdown(false);
+  };
+
+  // Preview payroll calculation with advanced options
+  const previewPayrollCalculation = () => {
+    const selectedEmployee = employees.find(e => e.id === simpleAddData.employee_id);
+    if (!selectedEmployee) {
+      setError('Please select an employee first');
+      return;
+    }
+
+    try {
+      const preview = payrollApiService.previewPayrollCalculation(
+        { base_salary: selectedEmployee.base_salary || 0 },
+        {
+          allowances: simpleAddData.default_allowances,
+          bonus: simpleAddData.default_bonus,
+          insurance: simpleAddData.insurance_amount,
+          useFlatTax: advancedOptions.useFlatTax,
+          taxRate: advancedOptions.useFlatTax ? simpleAddData.tax_rate : undefined,
+          useProgressiveTax: advancedOptions.useProgressiveTax,
+          performanceScore: advancedOptions.performanceScore,
+          overtimeHours: advancedOptions.overtimeHours,
+          attendance: advancedOptions.attendance
+        }
+      );
+
+      setCalculationPreview(preview);
+      setShowCalculationPreview(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to calculate payroll preview');
+    }
   };
 
   // ISSUE 2 FIX: Update payroll with proper structure
@@ -254,7 +821,7 @@ const PayrollDashboard = () => {
         loan_deduction: editingRecord.deductions.loan,
         other_deductions: editingRecord.deductions.other,
         payment_method: editingRecord.payment.method,
-        payment_date: editingRecord.payment.date,
+        payment_date: editingRecord.payment.date || new Date().toISOString().split('T')[0],
         payment_reference: editingRecord.payment.reference,
         notes: editingRecord.notes
       };
@@ -461,7 +1028,6 @@ const PayrollDashboard = () => {
                 <option value="all">All Status</option>
                 <option value="paid">Paid</option>
                 <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
                 <option value="failed">Failed</option>
               </Select>
             </div>
@@ -499,6 +1065,11 @@ const PayrollDashboard = () => {
               <Button color="purple" size="sm" onClick={() => setShowBulkProcessModal(true)}>
                 ⚡ Bulk
               </Button>
+              {selectedRecords.size > 0 && (
+                <Button color="orange" size="sm" onClick={openBulkPaymentModal}>
+                  💳 Update Status ({selectedRecords.size})
+                </Button>
+              )}
               <Button color="green" size="sm" onClick={() => setShowAddModal(true)}>
                 ➕ Add
               </Button>
@@ -515,6 +1086,14 @@ const PayrollDashboard = () => {
             <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
               <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                 <tr>
+                  <th scope="col" className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={filteredRecords.length > 0 && selectedRecords.size === filteredRecords.length}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                    />
+                  </th>
                   <th scope="col" className="px-3 py-3">Employee</th>
                   <th scope="col" className="px-3 py-3">Department</th>
                   <th scope="col" className="px-3 py-3 text-right">Base Salary</th>
@@ -531,7 +1110,7 @@ const PayrollDashboard = () => {
               <tbody>
                 {filteredRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="text-center py-8 text-gray-500">
+                    <td colSpan={12} className="text-center py-8 text-gray-500">
                       No payroll records found
                     </td>
                   </tr>
@@ -546,6 +1125,14 @@ const PayrollDashboard = () => {
 
                     return (
                       <tr key={record.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                        <td className="px-3 py-4">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300"
+                            checked={selectedRecords.has(record.id)}
+                            onChange={(e) => handleRecordSelection(record.id, e.target.checked)}
+                          />
+                        </td>
                         <td className="px-3 py-4">
                           <div className="flex items-center">
                             <div className="w-8 h-8 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-sm">
@@ -597,7 +1184,7 @@ const PayrollDashboard = () => {
                           <div className="text-xs text-gray-400">Until today</div>
                         </td>
                         <td className="px-3 py-4">
-                          <div onClick={() => togglePaymentStatus(record)} className="cursor-pointer">
+                          <div onClick={() => openPaymentStatusModal(record)} className="cursor-pointer">
                             {getStatusBadge(record.payment.status)}
                           </div>
                         </td>
@@ -687,42 +1274,108 @@ const PayrollDashboard = () => {
             <div>
               <label className="block text-sm font-medium mb-1">Employee *</label>
               
-              {/* Search Input */}
-              <TextInput
-                type="text"
-                placeholder="Search employees..."
-                value={employeeSearchTerm}
-                onChange={(e) => setEmployeeSearchTerm(e.target.value)}
-                className="mb-2"
-              />
+              {/* Searchable Dropdown */}
+              <div className="relative employee-dropdown-container">
+                <TextInput
+                  type="text"
+                  placeholder="Search and select employee..."
+                  value={employeeSearchTerm}
+                  onChange={(e) => {
+                    setEmployeeSearchTerm(e.target.value);
+                    setShowEmployeeDropdown(true);
+                    // Clear selection when typing if it doesn't match
+                    if (e.target.value && simpleAddData.employee_id) {
+                      const selectedEmp = employees.find(emp => emp.id === simpleAddData.employee_id);
+                      const fullName = selectedEmp ? `${selectedEmp.first_name} ${selectedEmp.last_name}` : '';
+                      if (!fullName.toLowerCase().includes(e.target.value.toLowerCase())) {
+                        setSimpleAddData({...simpleAddData, employee_id: ''});
+                      }
+                    }
+                  }}
+                  onFocus={() => {
+                    if (!simpleAddData.employee_id) {
+                      setEmployeeSearchTerm('');
+                    }
+                    setShowEmployeeDropdown(true);
+                  }}
+                  className="pr-10"
+                  required
+                />
+                <HiChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                
+                {/* Dropdown List */}
+                {showEmployeeDropdown && (employeeSearchTerm || !simpleAddData.employee_id) && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                    {employees
+                      .filter(emp => {
+                        if (!employeeSearchTerm.trim()) return true; // Show all if no search term
+                        const searchLower = employeeSearchTerm.toLowerCase();
+                        const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
+                        const employeeCode = emp.employee_code.toLowerCase();
+                        return fullName.includes(searchLower) || employeeCode.includes(searchLower);
+                      })
+                      .sort((a, b) => {
+                        const nameA = `${a.first_name} ${a.last_name}`.toLowerCase();
+                        const nameB = `${b.first_name} ${b.last_name}`.toLowerCase();
+                        return nameA.localeCompare(nameB);
+                      })
+                      .map((emp) => (
+                        <div
+                          key={emp.id}
+                          className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          onClick={() => {
+                            setSimpleAddData({
+                              ...simpleAddData,
+                              employee_id: emp.id
+                            });
+                            setEmployeeSearchTerm(`${emp.first_name} ${emp.last_name} - ${emp.employee_code}`);
+                            setShowEmployeeDropdown(false);
+                          }}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {emp.first_name} {emp.last_name}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                ID: {emp.employee_code} | Dept: {emp.department || 'N/A'}
+                              </div>
+                            </div>
+                            <div className="text-sm font-medium text-blue-600">
+                              Rs. {(emp.base_salary || 0).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    
+                    {employees.filter(emp => {
+                      const searchLower = employeeSearchTerm.toLowerCase();
+                      const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
+                      const employeeCode = emp.employee_code.toLowerCase();
+                      return fullName.includes(searchLower) || employeeCode.includes(searchLower);
+                    }).length === 0 && (
+                      <div className="px-3 py-2 text-gray-500 text-center">
+                        No employees found matching "{employeeSearchTerm}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               
-              {/* Dropdown */}
-              <Select
-                value={simpleAddData.employee_id}
-                onChange={(e) => {
-                  const emp = employees.find(em => em.id === e.target.value);
-                  setSimpleAddData({
-                    ...simpleAddData,
-                    employee_id: e.target.value
-                  });
-                }}
-                required
-              >
-                <option value="">Select Employee</option>
-                {employees
-                  .filter(emp => {
-                    if (!employeeSearchTerm.trim()) return true;
-                    const searchLower = employeeSearchTerm.toLowerCase();
-                    const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
-                    const employeeCode = emp.employee_code.toLowerCase();
-                    return fullName.includes(searchLower) || employeeCode.includes(searchLower);
-                  })
-                  .map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.first_name} {emp.last_name} - {emp.employee_code} (Base: Rs. {emp.base_salary || 0})
-                    </option>
-                  ))}
-              </Select>
+              {/* Selected Employee Display */}
+              {simpleAddData.employee_id && (
+                <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                  <div className="font-medium">Selected Employee:</div>
+                  <div className="text-blue-700">
+                    {(() => {
+                      const selectedEmp = employees.find(e => e.id === simpleAddData.employee_id);
+                      return selectedEmp ? 
+                        `${selectedEmp.first_name} ${selectedEmp.last_name} (${selectedEmp.employee_code}) - Base Salary: Rs. ${(selectedEmp.base_salary || 0).toLocaleString()}` : 
+                        'Employee not found';
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -794,10 +1447,206 @@ const PayrollDashboard = () => {
               </div>
             </div>
             
+            {/* Advanced Options Toggle */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium">Advanced Calculation Options</label>
+                <Button
+                  size="xs"
+                  color="blue"
+                  onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                >
+                  {showAdvancedOptions ? 'Hide' : 'Show'} Advanced
+                </Button>
+              </div>
+
+              {showAdvancedOptions && (
+                <div className="space-y-4 p-4 bg-blue-50 rounded-lg">
+                  {/* Tax Calculation Options */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tax Calculation Method</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="taxMethod"
+                          checked={advancedOptions.useFlatTax}
+                          onChange={() => setAdvancedOptions({
+                            ...advancedOptions,
+                            useFlatTax: true,
+                            useProgressiveTax: false
+                          })}
+                          className="mr-2"
+                        />
+                        Flat Tax Rate
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="taxMethod"
+                          checked={advancedOptions.useProgressiveTax}
+                          onChange={() => setAdvancedOptions({
+                            ...advancedOptions,
+                            useFlatTax: false,
+                            useProgressiveTax: true
+                          })}
+                          className="mr-2"
+                        />
+                        Progressive Tax (Sri Lankan Slabs)
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Overtime Calculation */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Overtime Hours</label>
+                      <TextInput
+                        type="number"
+                        value={advancedOptions.overtimeHours || 0}
+                        onChange={(e) => setAdvancedOptions({
+                          ...advancedOptions,
+                          overtimeHours: Number(e.target.value)
+                        })}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Overtime Type</label>
+                      <Select
+                        value={advancedOptions.overtimeType || 'weekday'}
+                        onChange={(e) => setAdvancedOptions({
+                          ...advancedOptions,
+                          overtimeType: e.target.value as any
+                        })}
+                      >
+                        <option value="weekday">Weekday (1.5x)</option>
+                        <option value="saturday">Saturday (1.5x)</option>
+                        <option value="sunday">Sunday (2.0x)</option>
+                        <option value="holiday">Holiday (2.5x)</option>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Performance Score */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Performance Score (0-100) for Bonus</label>
+                    <TextInput
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={advancedOptions.performanceScore || ''}
+                      onChange={(e) => setAdvancedOptions({
+                        ...advancedOptions,
+                        performanceScore: e.target.value ? Number(e.target.value) : undefined
+                      })}
+                      placeholder="Leave empty to use default bonus"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Performance bonus = (Score/100) × 20% × Base Salary
+                    </p>
+                  </div>
+
+                  {/* Calculate Preview Button */}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      color="green"
+                      onClick={previewPayrollCalculation}
+                      disabled={!simpleAddData.employee_id}
+                    >
+                      📊 Preview Calculation
+                    </Button>
+                    {showCalculationPreview && (
+                      <Button
+                        size="sm"
+                        color="gray"
+                        onClick={() => setShowCalculationPreview(false)}
+                      >
+                        Hide Preview
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Calculation Preview */}
+            {showCalculationPreview && calculationPreview && (
+              <div className="border-t pt-4">
+                <h4 className="font-medium text-sm mb-3">Calculation Preview</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="bg-green-50 p-3 rounded">
+                    <h5 className="font-medium text-green-700 mb-2">Earnings</h5>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span>Base Salary:</span>
+                        <span>{formatCurrency(calculationPreview.baseSalary)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Allowances:</span>
+                        <span>{formatCurrency(calculationPreview.allowances)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Overtime:</span>
+                        <span>{formatCurrency(calculationPreview.overtimeAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Bonus:</span>
+                        <span>{formatCurrency(calculationPreview.bonus)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium border-t pt-1">
+                        <span>Gross:</span>
+                        <span>{formatCurrency(calculationPreview.grossSalary)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-red-50 p-3 rounded">
+                    <h5 className="font-medium text-red-700 mb-2">Deductions</h5>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span>Tax:</span>
+                        <span>{formatCurrency(calculationPreview.taxDeduction)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>PF:</span>
+                        <span>{formatCurrency(calculationPreview.providentFund)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Insurance:</span>
+                        <span>{formatCurrency(calculationPreview.insurance)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Other:</span>
+                        <span>{formatCurrency(calculationPreview.otherDeductions + calculationPreview.attendanceDeduction)}</span>
+                      </div>
+                      <div className="flex justify-between font-medium border-t pt-1">
+                        <span>Total:</span>
+                        <span>{formatCurrency(calculationPreview.totalDeductions)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 p-3 rounded mt-3">
+                  <div className="flex justify-between font-bold text-lg">
+                    <span>Net Salary:</span>
+                    <span className="text-blue-600">{formatCurrency(calculationPreview.netSalary)}</span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Hourly Rate: {formatCurrency(calculationPreview.hourlyRate)} | 
+                    Daily Rate: {formatCurrency(calculationPreview.dailyRate)}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-gray-100 p-3 rounded">
               <p className="text-sm text-gray-600">
                 * Base salary will be fetched from employee record<br/>
-                * Overtime will be calculated from attendance records
+                * Use Advanced Options for progressive tax, overtime, and performance bonuses<br/>
+                * Preview calculations before creating the payroll record
               </p>
             </div>
           </div>
@@ -1014,6 +1863,242 @@ const PayrollDashboard = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button onClick={() => setShowDeductionsModal(false)}>Close</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Payment Status Update Modal */}
+      <Modal show={showPaymentStatusModal} onClose={() => setShowPaymentStatusModal(false)} size="lg">
+        <Modal.Header>
+          Update Payment Status - {selectedPaymentRecord?.name}
+        </Modal.Header>
+        <Modal.Body>
+          {selectedPaymentRecord && (
+            <div className="space-y-6">
+              {/* Employee Info */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-medium">Employee:</span>
+                    <div className="text-gray-700">{selectedPaymentRecord.name}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Net Salary:</span>
+                    <div className="text-green-600 font-semibold">
+                      {formatCurrency(selectedPaymentRecord.summary.netSalary)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Pay Period:</span>
+                    <div className="text-gray-700">
+                      {formatDate(selectedPaymentRecord.payPeriod.start)} - {formatDate(selectedPaymentRecord.payPeriod.end)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Current Status:</span>
+                    <div className="mt-1">{getStatusBadge(selectedPaymentRecord.payment.status)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Status Form */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Update Payment Status *</label>
+                  <Select
+                    value={paymentStatusForm.status}
+                    onChange={(e) => setPaymentStatusForm({
+                      ...paymentStatusForm, 
+                      status: e.target.value as 'pending' | 'paid' | 'failed'
+                    })}
+                    required
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="paid">Paid</option>
+                    <option value="failed">Failed</option>
+                  </Select>
+                </div>
+
+                {/* Payment Date - Show when status is 'paid' */}
+                {paymentStatusForm.status === 'paid' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Payment Date</label>
+                    <TextInput
+                      type="date"
+                      value={paymentStatusForm.payment_date}
+                      onChange={(e) => setPaymentStatusForm({
+                        ...paymentStatusForm, 
+                        payment_date: e.target.value
+                      })}
+                      placeholder="Auto-set to today if empty"
+                    />
+                  </div>
+                )}
+
+                {/* Payment Reference - Show when status is 'paid' */}
+                {paymentStatusForm.status === 'paid' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Payment Reference</label>
+                    <TextInput
+                      type="text"
+                      value={paymentStatusForm.payment_reference}
+                      onChange={(e) => setPaymentStatusForm({
+                        ...paymentStatusForm, 
+                        payment_reference: e.target.value
+                      })}
+                      placeholder="Transaction ID, Check number, etc."
+                    />
+                  </div>
+                )}
+
+                {/* Notes - Always show */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Notes</label>
+                  <textarea
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    rows={3}
+                    value={paymentStatusForm.notes}
+                    onChange={(e) => setPaymentStatusForm({
+                      ...paymentStatusForm, 
+                      notes: e.target.value
+                    })}
+                    placeholder="Optional notes about this payment..."
+                  />
+                </div>
+
+                {/* Status-specific help text */}
+                <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+                  {paymentStatusForm.status === 'pending' && (
+                    <div>💡 Payment is waiting to be processed</div>
+                  )}
+                  {paymentStatusForm.status === 'paid' && (
+                    <div>✅ Payment has been successfully completed</div>
+                  )}
+                  {paymentStatusForm.status === 'failed' && (
+                    <div>❌ Payment failed - may need manual intervention</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowPaymentStatusModal(false)}>
+            Cancel
+          </Button>
+          <Button color="blue" onClick={updatePaymentStatus} disabled={loading}>
+            {loading ? 'Updating...' : 'Update Status'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Bulk Payment Status Update Modal */}
+      <Modal show={showBulkPaymentModal} onClose={() => setShowBulkPaymentModal(false)} size="lg">
+        <Modal.Header>
+          Bulk Update Payment Status ({selectedRecords.size} records)
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-6">
+            {/* Selected Records Summary */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-medium mb-2">Selected Records</h4>
+              <div className="text-sm text-gray-700">
+                <p>{selectedRecords.size} payroll records selected for status update</p>
+                <div className="mt-2 max-h-32 overflow-y-auto">
+                  {Array.from(selectedRecords).map(recordId => {
+                    const record = filteredRecords.find(r => r.id === recordId);
+                    return record ? (
+                      <div key={recordId} className="flex justify-between py-1">
+                        <span>{record.name}</span>
+                        <span>{formatCurrency(record.summary.netSalary)}</span>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Bulk Payment Status Form */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Update Status To *</label>
+                <Select
+                  value={bulkPaymentForm.status}
+                  onChange={(e) => setBulkPaymentForm({
+                    ...bulkPaymentForm, 
+                    status: e.target.value as 'pending' | 'paid' | 'failed'
+                  })}
+                  required
+                >
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="failed">Failed</option>
+                </Select>
+              </div>
+
+              {/* Payment Date - Show when status is 'paid' */}
+              {bulkPaymentForm.status === 'paid' && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Payment Date</label>
+                  <TextInput
+                    type="date"
+                    value={bulkPaymentForm.payment_date}
+                    onChange={(e) => setBulkPaymentForm({
+                      ...bulkPaymentForm, 
+                      payment_date: e.target.value
+                    })}
+                    placeholder="Auto-set to today if empty"
+                  />
+                </div>
+              )}
+
+              {/* Payment Reference - Show when status is 'paid' */}
+              {bulkPaymentForm.status === 'paid' && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Payment Reference</label>
+                  <TextInput
+                    type="text"
+                    value={bulkPaymentForm.payment_reference}
+                    onChange={(e) => setBulkPaymentForm({
+                      ...bulkPaymentForm, 
+                      payment_reference: e.target.value
+                    })}
+                    placeholder="Batch number, transaction ID, etc."
+                  />
+                </div>
+              )}
+
+              {/* Notes - Always show */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Notes (Applied to all selected records)</label>
+                <textarea
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  rows={3}
+                  value={bulkPaymentForm.notes}
+                  onChange={(e) => setBulkPaymentForm({
+                    ...bulkPaymentForm, 
+                    notes: e.target.value
+                  })}
+                  placeholder="Optional notes for all selected payments..."
+                />
+              </div>
+
+              {/* Status-specific help text */}
+              <div className="text-sm text-gray-600 bg-yellow-50 p-3 rounded">
+                ⚠️ <strong>Warning:</strong> This will update {selectedRecords.size} payment records at once. 
+                {bulkPaymentForm.status === 'paid' && ' All records will be marked as paid with the same date and reference.'}
+                {bulkPaymentForm.status === 'failed' && ' All records will be marked as failed.'}
+                {bulkPaymentForm.status === 'pending' && ' All records will be marked as pending.'}
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowBulkPaymentModal(false)}>
+            Cancel
+          </Button>
+          <Button color="orange" onClick={bulkUpdatePaymentStatus} disabled={loading}>
+            {loading ? 'Updating...' : `Update ${selectedRecords.size} Records`}
+          </Button>
         </Modal.Footer>
       </Modal>
     </div>

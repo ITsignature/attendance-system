@@ -32,8 +32,8 @@ const connectDB = async () => {
       multipleStatements: false
     });
 
-    let retires = 3;
-    while(retires>0){
+    let retries = 3;
+    while(retries>0){
       try{
         const connection = await pool.getConnection();
         console.log('✅ MySQL Database connected successfully');
