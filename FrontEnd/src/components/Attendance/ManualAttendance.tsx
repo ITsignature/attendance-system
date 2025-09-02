@@ -17,6 +17,7 @@ import {
   HiSave
 } from 'react-icons/hi';
 import apiService from '../../services/api';
+import { useWorkingHours } from '../../hooks/useWorkingHours';
 
 type WorkType = 'office' | 'remote' | 'hybrid';
 
@@ -63,6 +64,20 @@ const ManualAttendance: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [loadError, setLoadError] = useState<string>('');
+  
+  // Get configured working hours
+  const { workingHours } = useWorkingHours();
+  
+  // Clean time values to remove extra quotes
+  const cleanTimeValue = (timeStr: string) => {
+    if (typeof timeStr !== 'string') return timeStr;
+    const trimmed = timeStr.trim();
+    // Remove extra quotes like "\"08:30\"" → "08:30"
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      return trimmed.slice(1, -1);
+    }
+    return trimmed;
+  };
 
   // Load employees once
   useEffect(() => {
@@ -279,8 +294,8 @@ const ManualAttendance: React.FC = () => {
       {/* Quick actions (times only) */}
       <Card className="mb-4">
         <div className="flex flex-wrap gap-2 items-center">
-          <Button size="sm" onClick={() => quickFillTimes('09:00', '17:00')}>
-            Fill All Times: 09:00–17:00
+          <Button size="sm" onClick={() => quickFillTimes(cleanTimeValue(workingHours.start_time), cleanTimeValue(workingHours.end_time))}>
+            Fill All Times: {cleanTimeValue(workingHours.start_time)}–{cleanTimeValue(workingHours.end_time)}
           </Button>
           <Button size="sm" color="gray" onClick={() => quickFillTimes('', '')}>
             Clear All Times
