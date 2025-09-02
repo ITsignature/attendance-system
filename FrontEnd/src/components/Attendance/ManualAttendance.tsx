@@ -256,6 +256,54 @@ const ManualAttendance: React.FC = () => {
     })));
   };
 
+  const fillWithDefaultTimes = () => {
+    setRows(prev => prev.map(r => {
+      // Get employee-specific times or fall back to company default
+      const employeeTimes = getEmployeeDefaultTimes(r.employee);
+      
+      return {
+        ...r,
+        check_in_time: cleanTimeValue(employeeTimes.start_time),
+        check_out_time: cleanTimeValue(employeeTimes.end_time),
+        dirty: true,
+        saved: false,
+      };
+    }));
+  };
+
+  const getEmployeeDefaultTimes = (employee: Employee) => {
+    // For now, we'll use a simple mapping based on employee characteristics
+    // This can be extended to use database-stored employee schedules
+    
+    // Example: Different schedules based on department or employee type
+    const customSchedules: { [key: string]: { start_time: string; end_time: string } } = {
+      // Department-based schedules
+      'IT': { start_time: '09:30:00', end_time: '18:30:00' },
+      'Security': { start_time: '08:00:00', end_time: '20:00:00' },
+      'Management': { start_time: '10:00:00', end_time: '19:00:00' },
+      
+      // You can also add employee-specific schedules by employee code
+      'EMP001': { start_time: '07:00:00', end_time: '15:00:00' }, // Early shift
+      'EMP002': { start_time: '14:00:00', end_time: '22:00:00' }, // Late shift
+    };
+
+    // Check if employee has a specific schedule by employee code
+    if (employee.employee_code && customSchedules[employee.employee_code]) {
+      return customSchedules[employee.employee_code];
+    }
+
+    // Check if department has a specific schedule
+    if (employee.department_name && customSchedules[employee.department_name]) {
+      return customSchedules[employee.department_name];
+    }
+
+    // Fall back to company default
+    return {
+      start_time: workingHours.start_time,
+      end_time: workingHours.end_time
+    };
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -294,8 +342,8 @@ const ManualAttendance: React.FC = () => {
       {/* Quick actions (times only) */}
       <Card className="mb-4">
         <div className="flex flex-wrap gap-2 items-center">
-          <Button size="sm" onClick={() => quickFillTimes(cleanTimeValue(workingHours.start_time), cleanTimeValue(workingHours.end_time))}>
-            Fill All Times: {cleanTimeValue(workingHours.start_time)}–{cleanTimeValue(workingHours.end_time)}
+          <Button size="sm" onClick={() => fillWithDefaultTimes()}>
+            Fill with Default Time: {cleanTimeValue(workingHours.start_time)}–{cleanTimeValue(workingHours.end_time)}
           </Button>
           <Button size="sm" color="gray" onClick={() => quickFillTimes('', '')}>
             Clear All Times

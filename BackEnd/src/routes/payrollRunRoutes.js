@@ -629,4 +629,40 @@ router.post('/periods',
     })
 );
 
+/**
+ * GET /api/payroll-runs/records/:recordId/components
+ * Get component breakdown for a specific payroll record
+ */
+router.get('/records/:recordId/components',
+    checkPermission('payroll.view'),
+    param('recordId').isUUID(),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const recordId = req.params.recordId;
+        const clientId = req.user.clientId;
+
+        try {
+            const components = await PayrollRunService.getRecordComponents(recordId, clientId);
+            
+            res.json({
+                success: true,
+                data: components
+            });
+        } catch (error) {
+            res.status(404).json({
+                success: false,
+                message: error.message
+            });
+        }
+    })
+);
+
 module.exports = router;

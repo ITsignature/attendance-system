@@ -511,13 +511,37 @@ class PayrollRunService {
         // Get employee allowances and deductions
         const employeeData = await this.getEmployeePayrollData(record.employee_id, record.client_id, record.run_id);
         
+        // Get attendance summary and leave data for attendance-based calculations
+        const attendanceSummary = await this.getAttendanceSummary(record.employee_id, record.run_id);
+        const approvedLeaves = await this.getApprovedLeaves(record.employee_id, record.run_id);
+        
         // Calculate gross salary with all components
         const grossComponents = await this.calculateGrossComponents(record, employeeData);
-        const grossSalary = grossComponents.total;
+        let grossSalary = grossComponents.total;
         
-        // Calculate deductions based on method
+        // Calculate attendance-based deductions BEFORE other deductions
+        const attendanceDeductions = await this.calculateAttendanceDeductions(
+            record.employee_id, 
+            record.run_id, 
+            parseFloat(record.base_salary) || 0, 
+            attendanceSummary, 
+            approvedLeaves
+        );
+        
+        // Adjust gross salary for attendance (subtract attendance deductions from gross)
+        grossSalary = grossSalary - attendanceDeductions.total;
+        
+        // Calculate regular deductions based on method
         const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData);
-        const totalDeductions = deductionComponents.total;
+        console.log(`Regular deductions for ${record.employee_name}:`, deductionComponents);
+        
+        // Combine regular deductions with attendance deductions
+        const combinedDeductions = {
+            components: [...deductionComponents.components, ...attendanceDeductions.components],
+            total: deductionComponents.total + attendanceDeductions.total
+        };
+        console.log(`Combined deductions for ${record.employee_name}:`, combinedDeductions);
+        const totalDeductions = combinedDeductions.total;
         
         // Calculate taxes based on method
         const taxComponents = await this.calculateTaxes(grossSalary, calculationMethod, employeeData);
@@ -537,19 +561,338 @@ class PayrollRunService {
                 calculation_status = 'calculated',
                 calculated_at = NOW()
             WHERE id = ?
-        `, [grossSalary, totalDeductions, totalTaxes, grossSalary, grossSalary, netSalary, record.id]);
+        `, [grossComponents.additionsTotal, totalDeductions, totalTaxes, grossSalary, grossSalary, netSalary, record.id]);
 
         // Create detailed component records
         try {
             await this.createPayrollComponents(record.id, {
-                grossComponents,
-                deductionComponents,
+                grossComponents: { components: grossComponents.components }, // Only pass components, not totals
+                deductionComponents: combinedDeductions,
                 taxComponents
             }, record.client_id);
         } catch (componentError) {
             console.log(`Component creation failed for record ${record.id}: ${componentError.message}`);
+            console.log(`Combined deductions structure:`, JSON.stringify(combinedDeductions, null, 2));
             // Continue with calculation even if component creation fails
         }
+    }
+
+    /**
+     * Get attendance summary for employee during payroll period
+     */
+    async getAttendanceSummary(employeeId, runId) {
+        const db = getDB();
+        
+        const [attendanceData] = await db.execute(`
+            SELECT 
+                a.date,
+                a.check_in_time,
+                a.check_out_time,
+                a.total_hours,
+                a.overtime_hours,
+                a.break_duration,
+                a.status,
+                a.notes
+            FROM attendance a
+            JOIN payroll_runs pr ON pr.id = ?
+            JOIN payroll_periods pp ON pr.period_id = pp.id
+            WHERE a.employee_id = ? 
+              AND DATE(a.date) BETWEEN pp.period_start_date AND pp.period_end_date
+            ORDER BY a.date
+        `, [runId, employeeId]);
+
+        // Get working hours configuration (with fallback if table doesn't exist)
+        let workingHours = {
+            hours_per_day: 8,
+            late_threshold: 15,
+            full_day_minimum_hours: 7,
+            half_day_minimum_hours: 4,
+            short_leave_minimum_hours: 1,
+            start_time: '09:00:00',
+            end_time: '17:00:00'
+        };
+
+        try {
+            const [workingHoursConfig] = await db.execute(`
+                SELECT 
+                    hours_per_day,
+                    late_threshold,
+                    full_day_minimum_hours,
+                    half_day_minimum_hours,
+                    short_leave_minimum_hours,
+                    start_time,
+                    end_time
+                FROM working_hours_settings 
+                WHERE client_id = (
+                    SELECT client_id FROM employees WHERE id = ?
+                )
+                LIMIT 1
+            `, [employeeId]);
+
+            if (workingHoursConfig.length > 0) {
+                workingHours = { ...workingHours, ...workingHoursConfig[0] };
+            }
+        } catch (error) {
+            console.log('Working hours settings table not found, using defaults');
+        }
+
+        return {
+            attendanceRecords: attendanceData,
+            workingHours: workingHours,
+            summary: this.calculateAttendanceSummary(attendanceData, workingHours)
+        };
+    }
+
+    /**
+     * Get approved leaves for employee during payroll period
+     */
+    async getApprovedLeaves(employeeId, runId) {
+        const db = getDB();
+        
+        const [leaves] = await db.execute(`
+            SELECT 
+                lr.start_date,
+                lr.end_date,
+                lr.days_requested,
+                lr.reason,
+                lt.name as leave_type_name,
+                lt.is_paid
+            FROM leave_requests lr
+            JOIN leave_types lt ON lr.leave_type_id = lt.id
+            JOIN payroll_runs pr ON pr.id = ?
+            JOIN payroll_periods pp ON pr.period_id = pp.id
+            WHERE lr.employee_id = ? 
+              AND lr.status = 'approved'
+              AND (
+                (lr.start_date BETWEEN pp.period_start_date AND pp.period_end_date)
+                OR (lr.end_date BETWEEN pp.period_start_date AND pp.period_end_date)
+                OR (lr.start_date <= pp.period_start_date AND lr.end_date >= pp.period_end_date)
+              )
+        `, [runId, employeeId]);
+
+        return leaves;
+    }
+
+    /**
+     * Calculate attendance summary statistics
+     */
+    calculateAttendanceSummary(attendanceRecords, workingHours) {
+        const summary = {
+            totalWorkDays: attendanceRecords.length,
+            presentDays: 0,
+            absentDays: 0,
+            lateDays: 0,
+            halfDays: 0,
+            onLeaveDays: 0,
+            totalWorkedHours: 0,
+            totalOvertimeHours: 0,
+            expectedHours: 0,
+            lateMinutes: 0,
+            shortfallHours: 0
+        };
+
+        // Calculate expected working days and hours
+        const expectedWorkingDays = this.getExpectedWorkingDays(attendanceRecords);
+        summary.expectedHours = expectedWorkingDays * workingHours.hours_per_day;
+
+        attendanceRecords.forEach(record => {
+            const workedHours = parseFloat(record.total_hours) || 0;
+            const overtimeHours = parseFloat(record.overtime_hours) || 0;
+
+            summary.totalWorkedHours += workedHours;
+            summary.totalOvertimeHours += overtimeHours;
+
+            switch (record.status) {
+                case 'present':
+                    summary.presentDays++;
+                    break;
+                case 'absent':
+                    summary.absentDays++;
+                    break;
+                case 'late':
+                    summary.lateDays++;
+                    summary.presentDays++;
+                    // Calculate late minutes
+                    if (record.check_in_time && workingHours.start_time) {
+                        const lateMinutes = this.calculateLateMinutes(record.check_in_time, workingHours.start_time);
+                        summary.lateMinutes += lateMinutes;
+                    }
+                    break;
+                case 'half_day':
+                    summary.halfDays++;
+                    break;
+                case 'on_leave':
+                    summary.onLeaveDays++;
+                    break;
+            }
+        });
+
+        // Calculate shortfall hours (expected - actual worked)
+        summary.shortfallHours = Math.max(0, summary.expectedHours - summary.totalWorkedHours);
+
+        return summary;
+    }
+
+    /**
+     * Calculate late minutes
+     */
+    calculateLateMinutes(checkInTime, expectedStartTime) {
+        try {
+            const checkIn = new Date(`2000-01-01 ${checkInTime}`);
+            const expectedStart = new Date(`2000-01-01 ${expectedStartTime}`);
+            
+            if (checkIn > expectedStart) {
+                const diffMs = checkIn.getTime() - expectedStart.getTime();
+                return Math.floor(diffMs / (1000 * 60)); // Convert to minutes
+            }
+            return 0;
+        } catch (error) {
+            console.error('Error calculating late minutes:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Get expected working days (excluding weekends)
+     */
+    getExpectedWorkingDays(attendanceRecords) {
+        // For now, assume all attendance records represent working days
+        // You can enhance this to exclude weekends/holidays
+        return attendanceRecords.length;
+    }
+
+    /**
+     * Calculate attendance-based salary deductions
+     */
+    async calculateAttendanceDeductions(employeeId, runId, baseSalary, attendanceSummary, approvedLeaves) {
+        const db = getDB();
+        
+        // Get payroll period info for working days calculation
+        const [periodInfo] = await db.execute(`
+            SELECT pp.period_start_date, pp.period_end_date
+            FROM payroll_runs pr
+            JOIN payroll_periods pp ON pr.period_id = pp.id
+            WHERE pr.id = ?
+        `, [runId]);
+
+        if (periodInfo.length === 0) {
+            throw new Error('Period information not found');
+        }
+
+        const period = periodInfo[0];
+        const workingDaysInMonth = this.calculateWorkingDaysInPeriod(period.period_start_date, period.period_end_date);
+        
+        // Calculate per-day and per-minute salary rates
+        const perDaySalary = baseSalary / workingDaysInMonth;
+        const perMinuteSalary = perDaySalary / (attendanceSummary.workingHours.hours_per_day * 60);
+
+        const deductions = {
+            absentDeduction: 0,
+            lateDeduction: 0,
+            shortfallDeduction: 0,
+            unpaidLeaveDeduction: 0,
+            components: []
+        };
+
+        // 1. Absent days deduction (only for days not covered by paid leave)
+        const unpaidAbsentDays = this.calculateUnpaidAbsentDays(attendanceSummary, approvedLeaves);
+        if (unpaidAbsentDays > 0) {
+            deductions.absentDeduction = unpaidAbsentDays * perDaySalary;
+            deductions.components.push({
+                code: 'ABSENT_DEDUCTION',
+                name: 'Absent Days Deduction',
+                type: 'deduction',
+                category: 'attendance',
+                amount: deductions.absentDeduction,
+                details: `${unpaidAbsentDays} days × ${perDaySalary.toFixed(2)}`
+            });
+        }
+
+        // 2. Late arrival deduction (per minute)
+        if (attendanceSummary.summary.lateMinutes > 0) {
+            deductions.lateDeduction = attendanceSummary.summary.lateMinutes * perMinuteSalary;
+            deductions.components.push({
+                code: 'LATE_DEDUCTION',
+                name: 'Late Arrival Deduction',
+                type: 'deduction',
+                category: 'attendance',
+                amount: deductions.lateDeduction,
+                details: `${attendanceSummary.summary.lateMinutes} minutes × ${perMinuteSalary.toFixed(4)}`
+            });
+        }
+
+        // 3. Hour shortfall deduction (if total worked hours is less than expected)
+        if (attendanceSummary.summary.shortfallHours > 0) {
+            const hourlyRate = perDaySalary / attendanceSummary.workingHours.hours_per_day;
+            deductions.shortfallDeduction = attendanceSummary.summary.shortfallHours * hourlyRate;
+            deductions.components.push({
+                code: 'SHORTFALL_DEDUCTION',
+                name: 'Working Hours Shortfall',
+                type: 'deduction',
+                category: 'attendance',
+                amount: deductions.shortfallDeduction,
+                details: `${attendanceSummary.summary.shortfallHours} hours × ${hourlyRate.toFixed(2)}`
+            });
+        }
+
+        // 4. Unpaid leave deduction
+        const unpaidLeaveDays = this.calculateUnpaidLeaveDays(approvedLeaves);
+        if (unpaidLeaveDays > 0) {
+            deductions.unpaidLeaveDeduction = unpaidLeaveDays * perDaySalary;
+            deductions.components.push({
+                code: 'UNPAID_LEAVE_DEDUCTION',
+                name: 'Unpaid Leave Deduction',
+                type: 'deduction',
+                category: 'leave',
+                amount: deductions.unpaidLeaveDeduction,
+                details: `${unpaidLeaveDays} days × ${perDaySalary.toFixed(2)}`
+            });
+        }
+
+        deductions.total = deductions.absentDeduction + deductions.lateDeduction + 
+                          deductions.shortfallDeduction + deductions.unpaidLeaveDeduction;
+
+        return deductions;
+    }
+
+    /**
+     * Calculate working days in a period (excluding weekends)
+     */
+    calculateWorkingDaysInPeriod(startDate, endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        let workingDays = 0;
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dayOfWeek = d.getDay();
+            // Exclude Saturday (6) and Sunday (0)
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                workingDays++;
+            }
+        }
+        
+        return workingDays;
+    }
+
+    /**
+     * Calculate unpaid absent days (absent days not covered by paid leave)
+     */
+    calculateUnpaidAbsentDays(attendanceSummary, approvedLeaves) {
+        // This is a simplified calculation
+        // In reality, you'd need to check each absent day against approved leaves
+        const absentDays = attendanceSummary.summary.absentDays;
+        const paidLeaveDays = approvedLeaves.filter(leave => leave.is_paid).length;
+        
+        return Math.max(0, absentDays - paidLeaveDays);
+    }
+
+    /**
+     * Calculate unpaid leave days
+     */
+    calculateUnpaidLeaveDays(approvedLeaves) {
+        return approvedLeaves
+            .filter(leave => !leave.is_paid)
+            .reduce((total, leave) => total + leave.days_requested, 0);
     }
 
     /**
@@ -600,21 +943,14 @@ class PayrollRunService {
     async calculateGrossComponents(record, employeeData) {
         const baseSalary = parseFloat(record.base_salary) || 0;
         const components = [];
-        let total = baseSalary;
+        let total = baseSalary; // Start with base salary
+        let additionsTotal = 0; // Track additions separately
         
-        // Base salary component
-        components.push({
-            code: 'BASIC_SAL',
-            name: 'Basic Salary', 
-            type: 'earning',
-            category: 'basic',
-            amount: baseSalary
-        });
-        
-        // Add allowances
+        // Add allowances (these are additions)
         for (const allowance of employeeData.allowances) {
             const amount = parseFloat(allowance.amount) || 0;
             total += amount;
+            additionsTotal += amount;
             components.push({
                 code: allowance.allowance_type.toUpperCase(),
                 name: allowance.allowance_type.replace('_', ' '),
@@ -624,12 +960,13 @@ class PayrollRunService {
             });
         }
         
-        // Add overtime
+        // Add overtime (this is an addition)
         if (employeeData.overtimeHours > 0) {
             const hourlyRate = baseSalary / (22 * 8); // Assuming 22 working days, 8 hours
             const overtimeRate = hourlyRate * 1.5; // 1.5x overtime rate
             const overtimeAmount = employeeData.overtimeHours * overtimeRate;
             total += overtimeAmount;
+            additionsTotal += overtimeAmount;
             
             components.push({
                 code: 'OVERTIME',
@@ -640,7 +977,11 @@ class PayrollRunService {
             });
         }
         
-        return { components, total };
+        return { 
+            components, 
+            total,
+            additionsTotal: Math.round(additionsTotal * 100) / 100 // Separate additions total
+        };
     }
 
     /**
@@ -759,13 +1100,22 @@ class PayrollRunService {
      */
     async createPayrollComponents(recordId, componentData, clientId = 'DEFAULT') {
         const db = getDB();
+        
+        console.log(`Creating components for record ${recordId}:`, {
+            grossComponentsCount: componentData.grossComponents?.components?.length || 0,
+            deductionComponentsCount: componentData.deductionComponents?.components?.length || 0,
+            taxComponentsCount: componentData.taxComponents?.components?.length || 0
+        });
+        
         const allComponents = [
-            ...componentData.grossComponents.components,
-            ...componentData.deductionComponents.components, 
-            ...componentData.taxComponents.components
+            ...(componentData.grossComponents?.components || []),
+            ...(componentData.deductionComponents?.components || []), 
+            ...(componentData.taxComponents?.components || [])
         ];
 
         for (const comp of allComponents) {
+            console.log(`Processing component:`, { name: comp.name, type: comp.type, amount: comp.amount });
+            
             // Get or create component_id
             let componentId;
             try {
@@ -776,6 +1126,7 @@ class PayrollRunService {
                 
                 if (existingComponent.length > 0) {
                     componentId = existingComponent[0].id;
+                    console.log(`Using existing component ID: ${componentId}`);
                 } else {
                     componentId = uuidv4();
                     await db.execute(`
@@ -787,9 +1138,11 @@ class PayrollRunService {
                         componentId, clientId, comp.name, comp.type, comp.category,
                         comp.type === 'earning', comp.category === 'statutory'
                     ]);
+                    console.log(`Created new component ID: ${componentId}`);
                 }
 
                 // Insert component record
+                const recordComponentId = uuidv4();
                 await db.execute(`
                     INSERT INTO payroll_record_components (
                         id, record_id, component_id, component_code, component_name,
@@ -797,12 +1150,15 @@ class PayrollRunService {
                         calculated_amount
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, 'calculated', ?)
                 `, [
-                    uuidv4(), recordId, componentId, comp.code, comp.name,
+                    recordComponentId, recordId, componentId, comp.code, comp.name,
                     comp.type, comp.category, comp.amount
                 ]);
+                
+                console.log(`Created payroll_record_component: ${recordComponentId} for ${comp.name}`);
 
             } catch (error) {
-                console.warn(`Failed to create component ${comp.code}:`, error.message);
+                console.error(`Failed to create component ${comp.code}:`, error.message);
+                console.error(`Component data:`, comp);
             }
         }
     }
@@ -1061,6 +1417,51 @@ class PayrollRunService {
         }
 
         return records;
+    }
+
+    /**
+     * Get component breakdown for a specific payroll record
+     */
+    async getRecordComponents(recordId, clientId) {
+        const db = getDB();
+        
+        console.log(`Getting components for record ${recordId}, client ${clientId}`);
+        
+        const [components] = await db.execute(`
+            SELECT 
+                prc.id,
+                prc.component_code,
+                prc.component_name,
+                prc.component_type,
+                prc.component_category,
+                prc.calculation_method,
+                prc.calculated_amount,
+                pr.employee_name
+            FROM payroll_record_components prc
+            JOIN payroll_records pr ON prc.record_id = pr.id
+            JOIN payroll_runs run ON pr.run_id = run.id
+            WHERE prc.record_id = ? AND run.client_id = ?
+            ORDER BY prc.component_type DESC, prc.component_category, prc.component_name
+        `, [recordId, clientId]);
+        
+        console.log(`Found ${components.length} components for record ${recordId}`);
+        console.log('Components:', components.map(c => ({ name: c.component_name, type: c.component_type, amount: c.calculated_amount })));
+
+        if (components.length === 0) {
+            // Check if the record exists
+            const [record] = await db.execute(`
+                SELECT pr.id 
+                FROM payroll_records pr
+                JOIN payroll_runs run ON pr.run_id = run.id
+                WHERE pr.id = ? AND run.client_id = ?
+            `, [recordId, clientId]);
+            
+            if (record.length === 0) {
+                throw new Error('Payroll record not found');
+            }
+        }
+
+        return components;
     }
 }
 

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TextInput, Button, Select, Badge, Modal, Table, Alert, Card } from "flowbite-react";
 import { payrollRunApiService, PayrollRun, PayrollRunFilters } from '../../services/payrollRunService';
-import { HiPlus, HiPlay, HiEye, HiCheck, HiX, HiCreditCard, HiDocumentReport } from 'react-icons/hi';
+import { HiPlus, HiPlay, HiEye, HiCheck, HiX, HiCreditCard, HiDocumentReport, HiUsers } from 'react-icons/hi';
 
 const PayrollRunDashboard = () => {
   // =============================================
   // STATE MANAGEMENT
   // =============================================
   
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -20,8 +22,6 @@ const PayrollRunDashboard = () => {
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [availablePeriods, setAvailablePeriods] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
-  const [employeeRecords, setEmployeeRecords] = useState<any[]>([]);
-  const [activeDetailsTab, setActiveDetailsTab] = useState<'summary' | 'employees'>('summary');
   
   // Filter States
   const [filters, setFilters] = useState<PayrollRunFilters>({
@@ -283,12 +283,10 @@ const PayrollRunDashboard = () => {
 
   const openRunDetails = async (run: PayrollRun) => {
     setSelectedRun(run);
-    setActiveDetailsTab('summary');
     try {
-      const [summaryResponse, workflowResponse, recordsResponse] = await Promise.all([
+      const [summaryResponse, workflowResponse] = await Promise.all([
         payrollRunApiService.getRunSummary(run.id),
-        payrollRunApiService.getWorkflowStatus(run.id),
-        payrollRunApiService.getPayrollRecords(run.id)
+        payrollRunApiService.getWorkflowStatus(run.id)
       ]);
       
       if (summaryResponse.success) {
@@ -298,16 +296,16 @@ const PayrollRunDashboard = () => {
       if (workflowResponse.success) {
         setWorkflowStatus(workflowResponse.data);
       }
-
-      if (recordsResponse.success) {
-        setEmployeeRecords(recordsResponse.data);
-      }
       
       setShowRunDetailsModal(true);
     } catch (err) {
       console.warn('Failed to load run details:', err);
       setShowRunDetailsModal(true);
     }
+  };
+
+  const navigateToEmployeeRecords = (runId: string) => {
+    navigate(`/payroll/runs/${runId}/employees`);
   };
 
   const handleApproval = async (run: PayrollRun, approvalLevel: 'review' | 'approve') => {
@@ -639,7 +637,15 @@ const PayrollRunDashboard = () => {
                           onClick={() => openRunDetails(run)}
                         >
                           <HiEye className="w-3 h-3 mr-1" />
-                          Details
+                          Summary
+                        </Button>
+                        <Button
+                          size="xs"
+                          color="blue"
+                          onClick={() => navigateToEmployeeRecords(run.id)}
+                        >
+                          <HiUsers className="w-3 h-3 mr-1" />
+                          Employees
                         </Button>
                         {getActionButtons(run)}
                       </div>
@@ -791,43 +797,15 @@ const PayrollRunDashboard = () => {
           setSelectedRun(null);
           setRunSummary(null);
           setWorkflowStatus(null);
-          setEmployeeRecords([]);
-          setActiveDetailsTab('summary');
         }}
         size="4xl"
       >
         <Modal.Header>
-          Payroll Run Details - {selectedRun?.run_name}
+          Payroll Run Summary - {selectedRun?.run_name}
         </Modal.Header>
         <Modal.Body>
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200 mb-6">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveDetailsTab('summary')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeDetailsTab === 'summary'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Summary & Statistics
-              </button>
-              <button
-                onClick={() => setActiveDetailsTab('employees')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeDetailsTab === 'employees'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Employee Records ({employeeRecords.length})
-              </button>
-            </nav>
-          </div>
-
-          {/* Summary Tab */}
-          {activeDetailsTab === 'summary' && runSummary && (
+          {/* Summary Content */}
+          {runSummary && (
             <div className="space-y-6">
               {/* Run Information */}
               <div>
@@ -923,93 +901,7 @@ const PayrollRunDashboard = () => {
             </div>
           )}
 
-          {/* Employee Records Tab */}
-          {activeDetailsTab === 'employees' && (
-            <div className="space-y-4">
-              {employeeRecords.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <Table.Head>
-                      <Table.HeadCell>Employee</Table.HeadCell>
-                      <Table.HeadCell>Department</Table.HeadCell>
-                      <Table.HeadCell>Base Salary</Table.HeadCell>
-                      <Table.HeadCell>Gross Salary</Table.HeadCell>
-                      <Table.HeadCell>Deductions</Table.HeadCell>
-                      <Table.HeadCell>Net Salary</Table.HeadCell>
-                      <Table.HeadCell>Status</Table.HeadCell>
-                    </Table.Head>
-                    <Table.Body>
-                      {employeeRecords.map((record) => (
-                        <Table.Row key={record.id}>
-                          <Table.Cell>
-                            <div>
-                              <div className="font-medium">{record.employee_name}</div>
-                              <div className="text-sm text-gray-500">{record.employee_code}</div>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div>
-                              <div className="text-sm">{record.department_name}</div>
-                              <div className="text-xs text-gray-500">{record.designation_name}</div>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span className="text-sm">Rs. {record.base_salary?.toLocaleString()}</span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span className="text-sm font-medium">Rs. {record.gross_salary?.toLocaleString()}</span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span className="text-sm text-red-600">Rs. {record.total_deductions?.toLocaleString()}</span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span className="text-sm font-semibold text-green-600">Rs. {record.net_salary?.toLocaleString()}</span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Badge color={
-                              record.calculation_status === 'calculated' ? 'success' :
-                              record.calculation_status === 'pending' ? 'warning' :
-                              record.calculation_status === 'error' ? 'failure' : 'gray'
-                            }>
-                              {record.calculation_status?.toUpperCase()}
-                            </Badge>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table>
-                  
-                  {/* Summary Row */}
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="grid grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Total Employees:</span>
-                        <span className="font-medium ml-2">{employeeRecords.length}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Total Gross:</span>
-                        <span className="font-medium ml-2">Rs. {employeeRecords.reduce((sum, r) => sum + (r.gross_salary || 0), 0).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Total Deductions:</span>
-                        <span className="font-medium ml-2 text-red-600">Rs. {employeeRecords.reduce((sum, r) => sum + (r.total_deductions || 0), 0).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Total Net:</span>
-                        <span className="font-medium ml-2 text-green-600">Rs. {employeeRecords.reduce((sum, r) => sum + (r.net_salary || 0), 0).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">No employee records found for this payroll run.</p>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {!runSummary && activeDetailsTab === 'summary' && (
+          {!runSummary && (
             <div className="text-center py-8">
               <p className="text-gray-500">Loading payroll run details...</p>
             </div>

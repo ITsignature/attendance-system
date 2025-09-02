@@ -244,6 +244,22 @@ class PayrollRunApiService {
   }
 
   /**
+   * Get component breakdown for a specific payroll record
+   */
+  async getRecordComponents(recordId: string): Promise<ApiResponse<Array<{
+    id: string;
+    component_code: string;
+    component_name: string;
+    component_type: 'earning' | 'deduction' | 'tax';
+    component_category: string;
+    calculated_amount: number;
+    calculation_method: string;
+    details?: string;
+  }>>> {
+    return apiService.apiCall(`/api/payroll-runs/records/${recordId}/components`);
+  }
+
+  /**
    * Get individual employee records for a payroll run
    */
   async getPayrollRecords(runId: string): Promise<ApiResponse<Array<{
