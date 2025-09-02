@@ -326,6 +326,67 @@ class PayrollRunService {
         }
     }
 
+    /**
+     * Cancel payroll run
+     */
+    async cancelPayrollRun(runId, clientId, userId, cancellationReason = '') {
+        const db = getDB();
+        
+        try {
+            await db.execute('START TRANSACTION');
+
+            // Verify run exists and can be cancelled
+            const [run] = await db.execute(
+                'SELECT run_status FROM payroll_runs WHERE id = ? AND client_id = ?',
+                [runId, clientId]
+            );
+
+            if (run.length === 0) {
+                throw new Error('Payroll run not found');
+            }
+
+            // Check if run can be cancelled
+            const cancellableStatuses = ['draft', 'calculated', 'review'];
+            if (!cancellableStatuses.includes(run[0].run_status)) {
+                throw new Error(`Cannot cancel payroll run in ${run[0].run_status} status. Only draft, calculated, or review status runs can be cancelled.`);
+            }
+
+            // Update run status to cancelled
+            await db.execute(
+                'UPDATE payroll_runs SET run_status = "cancelled", notes = ? WHERE id = ?',
+                [cancellationReason ? `CANCELLED: ${cancellationReason}` : 'CANCELLED', runId]
+            );
+
+            // Mark all payroll records as cancelled
+            await db.execute(
+                'UPDATE payroll_records SET calculation_status = "cancelled" WHERE run_id = ?',
+                [runId]
+            );
+
+            // Log cancellation
+            await this.logAuditEvent(runId, null, 'cancel', userId, {
+                cancellation_reason: cancellationReason,
+                previous_status: run[0].run_status
+            });
+
+            await db.execute('COMMIT');
+
+            return {
+                success: true,
+                data: {
+                    run_id: runId,
+                    status: 'cancelled',
+                    cancelled_by: userId,
+                    cancellation_reason: cancellationReason
+                }
+            };
+
+        } catch (error) {
+            await db.execute('ROLLBACK');
+            throw error;
+        }
+    }
+
     // =============================================
     // HELPER METHODS
     // =============================================

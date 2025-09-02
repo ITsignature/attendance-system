@@ -35,6 +35,7 @@ const PayrollRunDashboard = () => {
   const [showRunDetailsModal, setShowRunDetailsModal] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   
   // Form States
   const [createRunForm, setCreateRunForm] = useState({
@@ -58,6 +59,10 @@ const PayrollRunDashboard = () => {
     payment_method: 'bank_transfer' as 'bank_transfer' | 'cash' | 'cheque',
     payment_date: new Date().toISOString().split('T')[0],
     batch_reference: ''
+  });
+
+  const [cancelForm, setCancelForm] = useState({
+    cancellation_reason: ''
   });
 
   // =============================================
@@ -374,6 +379,29 @@ const PayrollRunDashboard = () => {
     }
   };
 
+  const submitCancel = async () => {
+    if (!selectedRun) return;
+
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await payrollRunApiService.cancelPayrollRun(selectedRun.id, cancelForm.cancellation_reason);
+      
+      if (result.success) {
+        setSuccessMessage(`Payroll run cancelled successfully.`);
+        setShowCancelModal(false);
+        loadPayrollRuns(); // Refresh the list
+      } else {
+        setError(result.message || 'Failed to cancel payroll run');
+      }
+    } catch (err) {
+      setError('Failed to cancel payroll run');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getActionButtons = (run: PayrollRun) => {
     const actions = payrollRunApiService.getAvailableActions(run);
     
@@ -420,7 +448,8 @@ const PayrollRunDashboard = () => {
         setShowProcessModal(true);
         break;
       case 'cancel':
-        // Implement cancel logic
+        setCancelForm({ cancellation_reason: '' });
+        setShowCancelModal(true);
         break;
     }
   };
@@ -1143,6 +1172,79 @@ const PayrollRunDashboard = () => {
             disabled={loading}
           >
             {loading ? 'Processing...' : 'Process Payments'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Cancel Payroll Run Modal */}
+      <Modal
+        show={showCancelModal}
+        onClose={() => {
+          setShowCancelModal(false);
+          setSelectedRun(null);
+          setCancelForm({ cancellation_reason: '' });
+        }}
+        size="md"
+      >
+        <Modal.Header>
+          Cancel Payroll Run
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            {selectedRun && (
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <h4 className="font-semibold text-red-800">{selectedRun.run_name}</h4>
+                <p className="text-sm text-red-600">{selectedRun.run_number}</p>
+                <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-red-500">Employees:</span>
+                    <span className="font-medium ml-2">{selectedRun.total_employees}</span>
+                  </div>
+                  <div>
+                    <span className="text-red-500">Total Amount:</span>
+                    <span className="font-medium ml-2">Rs. {selectedRun.total_net_amount?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <div className="flex items-center">
+                <span className="text-yellow-600 text-lg mr-2">⚠️</span>
+                <div>
+                  <h4 className="font-semibold text-yellow-800">Warning</h4>
+                  <p className="text-sm text-yellow-700">
+                    This action will permanently cancel the payroll run. All calculated payroll data will be lost and cannot be recovered.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <label htmlFor="cancellation-reason" className="block text-sm font-medium text-gray-700 mb-2">
+                Cancellation Reason (optional)
+              </label>
+              <textarea
+                id="cancellation-reason"
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="Optional: Provide a reason for cancelling this payroll run..."
+                value={cancelForm.cancellation_reason}
+                onChange={(e) => setCancelForm({ ...cancelForm, cancellation_reason: e.target.value })}
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowCancelModal(false)}>
+            Keep Run
+          </Button>
+          <Button 
+            color="red"
+            onClick={submitCancel}
+            disabled={loading}
+          >
+            {loading ? 'Cancelling...' : 'Cancel Payroll Run'}
           </Button>
         </Modal.Footer>
       </Modal>

@@ -449,7 +449,7 @@ router.post('/:id/cancel',
     checkPermission('payroll.edit'),
     param('id').isUUID(),
     [
-        body('cancellation_reason').isLength({ min: 10, max: 500 }).withMessage('Cancellation reason required (10-500 characters)')
+        body('cancellation_reason').optional().isLength({ max: 500 }).withMessage('Cancellation reason cannot exceed 500 characters')
     ],
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -464,12 +464,22 @@ router.post('/:id/cancel',
         const runId = req.params.id;
         const clientId = req.user.clientId;
         const userId = req.user.userId;
+        const cancellationReason = req.body.cancellation_reason || '';
 
-        // Implementation for cancellation logic would go here
-        res.json({
-            success: true,
-            message: 'Payroll run cancelled successfully'
-        });
+        try {
+            const result = await PayrollRunService.cancelPayrollRun(runId, clientId, userId, cancellationReason);
+            
+            res.json({
+                success: true,
+                message: 'Payroll run cancelled successfully',
+                data: result.data
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
     })
 );
 
