@@ -327,7 +327,7 @@ class PayrollRunService {
     }
 
     /**
-     * Cancel payroll run
+     * Cancel payroll run (Delete completely from system)
      */
     async cancelPayrollRun(runId, clientId, userId, cancellationReason = '') {
         const db = getDB();
@@ -351,23 +351,63 @@ class PayrollRunService {
                 throw new Error(`Cannot cancel payroll run in ${run[0].run_status} status. Only draft, calculated, or review status runs can be cancelled.`);
             }
 
-            // Update run status to cancelled
-            await db.execute(
-                'UPDATE payroll_runs SET run_status = "cancelled", notes = ? WHERE id = ?',
-                [cancellationReason ? `CANCELLED: ${cancellationReason}` : 'CANCELLED', runId]
-            );
+            // Log cancellation before deletion
+            await this.logAuditEvent(runId, null, 'cancel', userId, {
+                cancellation_reason: cancellationReason,
+                previous_status: run[0].run_status,
+                action: 'deleted'
+            });
 
-            // Mark all payroll records as cancelled
+            // Delete related records in proper order to avoid foreign key constraints
+            
+            // 1. Delete payroll record components (depends on payroll_records)
             await db.execute(
-                'UPDATE payroll_records SET calculation_status = "cancelled" WHERE run_id = ?',
+                'DELETE prc FROM payroll_record_components prc INNER JOIN payroll_records pr ON prc.record_id = pr.id WHERE pr.run_id = ?',
                 [runId]
             );
 
-            // Log cancellation
-            await this.logAuditEvent(runId, null, 'cancel', userId, {
-                cancellation_reason: cancellationReason,
-                previous_status: run[0].run_status
-            });
+            // 2. Delete payroll records
+            await db.execute(
+                'DELETE FROM payroll_records WHERE run_id = ?',
+                [runId]
+            );
+
+            // 3. Delete approval steps (depends on approval_workflows)
+            await db.execute(
+                'DELETE aps FROM approval_steps aps INNER JOIN approval_workflows aw ON aps.workflow_id = aw.id WHERE aw.run_id = ?',
+                [runId]
+            );
+
+            // 4. Delete approval workflows
+            await db.execute(
+                'DELETE FROM approval_workflows WHERE run_id = ?',
+                [runId]
+            );
+
+            // 5. Delete payroll approvals
+            await db.execute(
+                'DELETE FROM payroll_approvals WHERE run_id = ?',
+                [runId]
+            );
+
+            // 6. Delete payroll reports (if table exists - currently not implemented)
+            // await db.execute(
+            //     'DELETE FROM payroll_reports WHERE run_id = ?',
+            //     [runId]
+            // );
+
+            // 7. Delete audit logs (optional - you may want to keep these for compliance)
+            // Note: Uncomment if you want to delete audit logs as well
+            // await db.execute(
+            //     'DELETE FROM payroll_audit_log WHERE run_id = ?',
+            //     [runId]
+            // );
+
+            // 8. Finally delete the payroll run itself
+            await db.execute(
+                'DELETE FROM payroll_runs WHERE id = ?',
+                [runId]
+            );
 
             await db.execute('COMMIT');
 
@@ -375,9 +415,10 @@ class PayrollRunService {
                 success: true,
                 data: {
                     run_id: runId,
-                    status: 'cancelled',
+                    status: 'deleted',
                     cancelled_by: userId,
-                    cancellation_reason: cancellationReason
+                    cancellation_reason: cancellationReason,
+                    message: 'Payroll run has been permanently removed from the system'
                 }
             };
 
@@ -468,7 +509,7 @@ class PayrollRunService {
         const calculationMethod = runInfo[0]?.calculation_method || 'advanced';
         
         // Get employee allowances and deductions
-        const employeeData = await this.getEmployeePayrollData(record.employee_id, record.client_id);
+        const employeeData = await this.getEmployeePayrollData(record.employee_id, record.client_id, record.run_id);
         
         // Calculate gross salary with all components
         const grossComponents = await this.calculateGrossComponents(record, employeeData);
@@ -514,7 +555,7 @@ class PayrollRunService {
     /**
      * Get employee payroll configuration data
      */
-    async getEmployeePayrollData(employeeId, clientId) {
+    async getEmployeePayrollData(employeeId, clientId, runId = null) {
         const db = getDB();
         
         // Get employee allowances
@@ -531,18 +572,25 @@ class PayrollRunService {
             WHERE employee_id = ? AND client_id = ? AND is_active = 1
         `, [employeeId, clientId]);
         
-        // Get overtime hours for current period (if any)
-        const [overtime] = await db.execute(`
-            SELECT SUM(overtime_hours) as total_overtime_hours
-            FROM attendance a
-            JOIN payroll_runs pr ON DATE(a.date) BETWEEN pr.period_start_date AND pr.period_end_date
-            WHERE a.employee_id = ? AND a.client_id = ?
-        `, [employeeId, clientId]);
+        // Get overtime hours for current period (if runId provided)
+        let overtimeHours = 0;
+        if (runId) {
+            const [overtime] = await db.execute(`
+                SELECT SUM(a.overtime_hours) as total_overtime_hours
+                FROM attendance a
+                JOIN payroll_runs pr ON pr.id = ?
+                JOIN payroll_periods pp ON pr.period_id = pp.id
+                WHERE a.employee_id = ? 
+                  AND DATE(a.date) BETWEEN pp.period_start_date AND pp.period_end_date
+            `, [runId, employeeId]);
+            
+            overtimeHours = overtime[0]?.total_overtime_hours || 0;
+        }
         
         return {
             allowances: allowances || [],
             deductions: deductions || [],
-            overtimeHours: overtime[0]?.total_overtime_hours || 0
+            overtimeHours: overtimeHours
         };
     }
 
