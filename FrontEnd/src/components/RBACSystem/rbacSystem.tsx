@@ -106,6 +106,17 @@ export const MODULES = {
       { id: 'settings.edit', name: 'Edit Settings', description: 'Modify system settings' }
     ]
   },
+  holidays: {
+    id: 'holidays',
+    name: 'Holiday Management',
+    description: 'Manage holidays and working days',
+    permissions: [
+      { id: 'holidays.view', name: 'View Holidays', description: 'View holiday calendar and list' },
+      { id: 'holidays.create', name: 'Create Holidays', description: 'Add new holidays to the calendar' },
+      { id: 'holidays.edit', name: 'Edit Holidays', description: 'Modify existing holidays' },
+      { id: 'holidays.delete', name: 'Delete Holidays', description: 'Remove holidays from the calendar' }
+    ]
+  },
   rbac: {
     id: 'rbac',
     name: 'Role & Permission Management',

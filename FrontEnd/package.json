@@ -19,6 +19,7 @@
     "@types/react-router-dom": "^5.3.3",
     "aos": "^2.3.4",
     "apexcharts": "3.48.0",
+    "axios": "^1.11.0",
     "chance": "^1.1.11",
     "date-fns": "^2.30.0",
     "flowbite": "^2.5.2",

@@ -6,6 +6,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../config/database');
+const HolidayService = require('./HolidayService');
 
 class PayrollRunService {
     
@@ -639,7 +640,7 @@ class PayrollRunService {
         return {
             attendanceRecords: attendanceData,
             workingHours: workingHours,
-            summary: this.calculateAttendanceSummary(attendanceData, workingHours)
+            summary: await this.calculateAttendanceSummary(attendanceData, workingHours, employeeId, db)
         };
     }
 
@@ -676,7 +677,7 @@ class PayrollRunService {
     /**
      * Calculate attendance summary statistics
      */
-    calculateAttendanceSummary(attendanceRecords, workingHours) {
+    async calculateAttendanceSummary(attendanceRecords, workingHours, employeeId, db) {
         const summary = {
             totalWorkDays: attendanceRecords.length,
             presentDays: 0,
@@ -691,9 +692,28 @@ class PayrollRunService {
             shortfallHours: 0
         };
 
-        // Calculate expected working days and hours
-        const expectedWorkingDays = this.getExpectedWorkingDays(attendanceRecords);
-        summary.expectedHours = expectedWorkingDays * workingHours.hours_per_day;
+        // Calculate expected working days and hours (with holidays)
+        try {
+            // Get employee info for holiday calculation
+            const [employee] = await db.execute(`
+                SELECT department_id, client_id FROM employees WHERE id = ?
+            `, [employeeId]);
+            
+            const departmentId = employee[0]?.department_id || null;
+            const clientId = employee[0]?.client_id;
+            
+            const expectedWorkingDays = await this.getExpectedWorkingDays(
+                attendanceRecords, 
+                clientId, 
+                departmentId
+            );
+            summary.expectedHours = expectedWorkingDays * workingHours.hours_per_day;
+        } catch (error) {
+            console.error('Error calculating expected working days with holidays:', error);
+            // Fallback to simple calculation
+            const expectedWorkingDays = attendanceRecords.length;
+            summary.expectedHours = expectedWorkingDays * workingHours.hours_per_day;
+        }
 
         attendanceRecords.forEach(record => {
             const workedHours = parseFloat(record.total_hours) || 0;
@@ -753,12 +773,33 @@ class PayrollRunService {
     }
 
     /**
-     * Get expected working days (excluding weekends)
+     * Get expected working days (excluding weekends and holidays)
      */
-    getExpectedWorkingDays(attendanceRecords) {
-        // For now, assume all attendance records represent working days
-        // You can enhance this to exclude weekends/holidays
-        return attendanceRecords.length;
+    async getExpectedWorkingDays(attendanceRecords, clientId, departmentId = null) {
+        if (attendanceRecords.length === 0) {
+            return 0;
+        }
+        
+        // Get date range from attendance records
+        const dates = attendanceRecords.map(r => r.date).sort();
+        const startDate = dates[0];
+        const endDate = dates[dates.length - 1];
+        
+        try {
+            // Use HolidayService for accurate calculation
+            const calculation = await HolidayService.calculateWorkingDays(
+                clientId,
+                startDate.toISOString().split('T')[0],
+                endDate.toISOString().split('T')[0],
+                departmentId
+            );
+            
+            return calculation.working_days;
+        } catch (error) {
+            console.error('Error calculating expected working days:', error);
+            // Fallback to simple count
+            return attendanceRecords.length;
+        }
     }
 
     /**
@@ -780,7 +821,21 @@ class PayrollRunService {
         }
 
         const period = periodInfo[0];
-        const workingDaysInMonth = this.calculateWorkingDaysInPeriod(period.period_start_date, period.period_end_date);
+        
+        // Get employee's department for holiday calculation
+        const [employeeInfo] = await db.execute(`
+            SELECT department_id, client_id FROM employees WHERE id = ?
+        `, [employeeId]);
+        
+        const departmentId = employeeInfo[0]?.department_id || null;
+        const clientId = employeeInfo[0]?.client_id;
+        
+        const workingDaysInMonth = await this.calculateWorkingDaysInPeriod(
+            period.period_start_date, 
+            period.period_end_date, 
+            clientId,
+            departmentId
+        );
         
         // Calculate per-day and per-minute salary rates
         const perDaySalary = baseSalary / workingDaysInMonth;
@@ -856,9 +911,30 @@ class PayrollRunService {
     }
 
     /**
-     * Calculate working days in a period (excluding weekends)
+     * Calculate working days in a period (excluding weekends and holidays)
      */
-    calculateWorkingDaysInPeriod(startDate, endDate) {
+    async calculateWorkingDaysInPeriod(startDate, endDate, clientId, departmentId = null) {
+        try {
+            // Use HolidayService for accurate working days calculation
+            const calculation = await HolidayService.calculateWorkingDays(
+                clientId, 
+                startDate, 
+                endDate, 
+                departmentId
+            );
+            
+            return calculation.working_days;
+        } catch (error) {
+            console.error('Error calculating working days with holidays:', error);
+            // Fallback to old method without holidays
+            return this.calculateWorkingDaysWithoutHolidays(startDate, endDate);
+        }
+    }
+
+    /**
+     * Fallback method: Calculate working days excluding only weekends
+     */
+    calculateWorkingDaysWithoutHolidays(startDate, endDate) {
         const start = new Date(startDate);
         const end = new Date(endDate);
         let workingDays = 0;
@@ -915,25 +991,67 @@ class PayrollRunService {
             WHERE employee_id = ? AND client_id = ? AND is_active = 1
         `, [employeeId, clientId]);
         
-        // Get overtime hours for current period (if runId provided)
+        // Get overtime hours for current period with holiday multipliers (if runId provided)
         let overtimeHours = 0;
+        let overtimeDetails = [];
+        
         if (runId) {
             const [overtime] = await db.execute(`
-                SELECT SUM(a.overtime_hours) as total_overtime_hours
+                SELECT 
+                    a.date,
+                    a.overtime_hours,
+                    SUM(a.overtime_hours) OVER() as total_overtime_hours
                 FROM attendance a
                 JOIN payroll_runs pr ON pr.id = ?
                 JOIN payroll_periods pp ON pr.period_id = pp.id
                 WHERE a.employee_id = ? 
                   AND DATE(a.date) BETWEEN pp.period_start_date AND pp.period_end_date
+                  AND a.overtime_hours > 0
+                ORDER BY a.date
             `, [runId, employeeId]);
             
             overtimeHours = overtime[0]?.total_overtime_hours || 0;
+            
+            // Calculate holiday multipliers for each overtime day
+            try {
+                // Get employee department for holiday calculation
+                const [employee] = await db.execute(`
+                    SELECT department_id FROM employees WHERE id = ?
+                `, [employeeId]);
+                
+                const departmentId = employee[0]?.department_id || null;
+                
+                for (const record of overtime) {
+                    if (record.overtime_hours > 0) {
+                        const dateStr = record.date.toISOString().split('T')[0];
+                        
+                        // Check if this date is a holiday
+                        const holidayMultiplier = await HolidayService.getHolidayOvertimeMultiplier(
+                            clientId, 
+                            dateStr, 
+                            departmentId
+                        );
+                        
+                        overtimeDetails.push({
+                            date: dateStr,
+                            hours: parseFloat(record.overtime_hours),
+                            holiday_multiplier: holidayMultiplier || 1.5, // Default weekday multiplier
+                            is_holiday: !!holidayMultiplier
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error calculating holiday overtime multipliers:', error);
+                // Fallback - treat all as regular overtime
+                overtimeDetails = [];
+            }
         }
         
         return {
             allowances: allowances || [],
             deductions: deductions || [],
-            overtimeHours: overtimeHours
+            overtimeHours: overtimeHours,
+            overtimeDetails: overtimeDetails
         };
     }
 
@@ -960,11 +1078,29 @@ class PayrollRunService {
             });
         }
         
-        // Add overtime (this is an addition)
+        // Add overtime (this is an addition) - with holiday awareness
         if (employeeData.overtimeHours > 0) {
-            const hourlyRate = baseSalary / (22 * 8); // Assuming 22 working days, 8 hours
-            const overtimeRate = hourlyRate * 1.5; // 1.5x overtime rate
-            const overtimeAmount = employeeData.overtimeHours * overtimeRate;
+            const hourlyRate = baseSalary / (22 * 8); // Base hourly rate
+            let overtimeAmount = 0;
+            
+            // Try to calculate overtime with holiday multipliers
+            try {
+                if (employeeData.overtimeDetails && Array.isArray(employeeData.overtimeDetails)) {
+                    // Detailed overtime with holiday multipliers
+                    for (const overtime of employeeData.overtimeDetails) {
+                        const multiplier = overtime.holiday_multiplier || 1.5; // Default 1.5x
+                        overtimeAmount += (overtime.hours || 0) * hourlyRate * multiplier;
+                    }
+                } else {
+                    // Fallback to standard calculation
+                    overtimeAmount = employeeData.overtimeHours * hourlyRate * 1.5;
+                }
+            } catch (error) {
+                console.error('Error calculating holiday overtime:', error);
+                // Fallback to standard calculation
+                overtimeAmount = employeeData.overtimeHours * hourlyRate * 1.5;
+            }
+            
             total += overtimeAmount;
             additionsTotal += overtimeAmount;
             

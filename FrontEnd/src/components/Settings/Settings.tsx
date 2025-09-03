@@ -534,6 +534,145 @@ const hhmmToMinutes = (t) => {
                   </div>
                 </div>
               </div>
+
+              {/* WEEKEND WORKING DAYS CONFIGURATION */}
+              <div className="border-t pt-6 mt-6">
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                  Weekend Working Days
+                </h4>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="saturday_working"
+                      checked={localSettings.weekend_working_days?.saturday_working || false}
+                      onChange={(e) => {
+                        const current = localSettings.weekend_working_days || { saturday_working: false, sunday_working: false, custom_weekend_days: [] };
+                        updateLocalSetting('weekend_working_days', {
+                          ...current,
+                          saturday_working: e.target.checked
+                        });
+                      }}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="saturday_working" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Saturday is a working day
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="sunday_working"
+                      checked={localSettings.weekend_working_days?.sunday_working || false}
+                      onChange={(e) => {
+                        const current = localSettings.weekend_working_days || { saturday_working: false, sunday_working: false, custom_weekend_days: [] };
+                        updateLocalSetting('weekend_working_days', {
+                          ...current,
+                          sunday_working: e.target.checked
+                        });
+                      }}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="sunday_working" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Sunday is a working day
+                    </label>
+                  </div>
+
+                  <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                    <h5 className="text-sm font-medium text-yellow-900 dark:text-yellow-300 mb-2">
+                      Weekend Working Configuration
+                    </h5>
+                    <div className="text-sm text-yellow-800 dark:text-yellow-400 space-y-1">
+                      <p>• When weekend days are marked as working days, they will be included in payroll calculations</p>
+                      <p>• Weekend work may apply different overtime multipliers (configure in Working Hours)</p>
+                      <p>• This affects attendance tracking and working days calculations</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* WORKING HOURS CONFIGURATION */}
+              <div className="border-t pt-6 mt-6">
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                  Working Hours Configuration
+                </h4>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Standard Hours Per Day
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      max="12"
+                      value={localSettings.working_hours_config?.standard_hours_per_day || 8}
+                      onChange={(e) => {
+                        const current = localSettings.working_hours_config || {};
+                        updateLocalSetting('working_hours_config', {
+                          ...current,
+                          standard_hours_per_day: parseFloat(e.target.value)
+                        });
+                      }}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Standard working hours per day
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Weekend Hours Multiplier
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1"
+                      max="3"
+                      value={localSettings.working_hours_config?.weekend_hours_multiplier || 1.5}
+                      onChange={(e) => {
+                        const current = localSettings.working_hours_config || {};
+                        updateLocalSetting('working_hours_config', {
+                          ...current,
+                          weekend_hours_multiplier: parseFloat(e.target.value)
+                        });
+                      }}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Pay multiplier for weekend work (e.g., 1.5 = 150% of regular rate)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Holiday Hours Multiplier
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1"
+                      max="5"
+                      value={localSettings.working_hours_config?.holiday_hours_multiplier || 2.5}
+                      onChange={(e) => {
+                        const current = localSettings.working_hours_config || {};
+                        updateLocalSetting('working_hours_config', {
+                          ...current,
+                          holiday_hours_multiplier: parseFloat(e.target.value)
+                        });
+                      }}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Pay multiplier for holiday work (e.g., 2.5 = 250% of regular rate)
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );

@@ -32,6 +32,7 @@ const validateSettingKey = (key) => {
     'working_hours_per_day', 'work_start_time', 'work_end_time', 
     'late_threshold_minutes', 'overtime_rate_multiplier',
     'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours',
+    'weekend_working_days', 'working_hours_config',
     
     // Payroll Settings
     'payroll_cycle', 'salary_processing_date', 'tax_calculation_method',

@@ -203,11 +203,45 @@ class SettingsHelper {
       'language'
     ]);
   }
+
+  async getWeekendSettings() {
+    const weekendConfig = await this.getSetting('weekend_working_days') || {
+      saturday_working: false,
+      sunday_working: false,
+      custom_weekend_days: []
+    };
+    
+    const workingHoursConfig = await this.getSetting('working_hours_config') || {
+      standard_hours_per_day: 8,
+      weekend_hours_multiplier: 1.5,
+      holiday_hours_multiplier: 2.5,
+      start_time: '09:00',
+      end_time: '17:00',
+      break_duration_minutes: 60
+    };
+
+    return {
+      ...weekendConfig,
+      working_hours: workingHoursConfig
+    };
+  }
+
+  async isWeekendWorkingDay(dayOfWeek) {
+    const settings = await this.getWeekendSettings();
+    
+    // dayOfWeek: 0 = Sunday, 1 = Monday, ... 6 = Saturday
+    if (dayOfWeek === 0) { // Sunday
+      return settings.sunday_working;
+    }
+    if (dayOfWeek === 6) { // Saturday
+      return settings.saturday_working;
+    }
+    
+    // Check custom weekend days
+    return settings.custom_weekend_days && settings.custom_weekend_days.includes(dayOfWeek);
+  }
 }
 
 module.exports = {
-  SettingsHelper,
-  seedDefaultSettings,
-  seedClientSettings,
-  defaultSystemSettings
+  SettingsHelper
 };

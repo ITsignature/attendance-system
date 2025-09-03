@@ -19,6 +19,7 @@ const clientRoutes = require('./src/routes/clientsRoute');
 const departments = require('./src/routes/departmentsRoute');
 const designations = require('./src/routes/designationsRoute');
 const settingsRoutes = require('./src/routes/settingsRoute');
+const holidaysRoutes = require('./src/routes/holidaysRoute');
 const sessionCleanup = require('./src/services/sessionCleanup');
 
 
@@ -145,6 +146,7 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/departments', departments);
 app.use('/api/designations', designations);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/holidays', holidaysRoutes);
 
 // =============================================
 // ERROR HANDLING
