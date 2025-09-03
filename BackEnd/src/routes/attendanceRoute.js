@@ -5,6 +5,7 @@ const { getDB } = require('../config/database');
 const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
+const AttendanceStatusService = require('../services/AttendanceStatusService');
 
 const router = express.Router();
 
@@ -14,6 +15,31 @@ router.use(ensureClientAccess);
 // =============================================
 // UTILITY FUNCTIONS FOR DUAL STATUS DETERMINATION
 // =============================================
+
+/**
+ * Generate enhanced notes with working day context
+ */
+const generateEnhancedNotes = (originalNotes, workingDayInfo, overtimeInfo) => {
+  const notes = [];
+  
+  if (originalNotes) {
+    notes.push(originalNotes);
+  }
+
+  if (!workingDayInfo.isWorking) {
+    if (workingDayInfo.reason === 'holiday') {
+      notes.push(`Worked on holiday: ${workingDayInfo.details}`);
+    } else if (workingDayInfo.reason === 'weekend_off') {
+      notes.push(`Worked on weekend: ${workingDayInfo.details}`);
+    }
+  }
+
+  if (overtimeInfo.multiplier > 1.0) {
+    notes.push(`${overtimeInfo.reason} (${overtimeInfo.multiplier}x multiplier applied)`);
+  }
+
+  return notes.length > 0 ? notes.join(' | ') : null;
+};
 const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/;
 /**
  * Get employee work schedule from database
@@ -341,22 +367,40 @@ const calculateWorkHours = async (
 
       console.log("totalHours", totalHours, "overtimeHours", overtimeHours, "standardHours", standardHours);
 
-      // Auto-determine arrival status
-      const autoArrivalStatus = determineArrivalStatus(
+      // Get employee department for working day calculation
+      const [employeeInfo] = await db.execute(`
+        SELECT department_id FROM employees WHERE id = ? AND client_id = ?
+      `, [req.body.employee_id, req.user.clientId]);
+      
+      const departmentId = employeeInfo[0]?.department_id || null;
+
+      // Use enhanced attendance status service
+      const statusService = new AttendanceStatusService(req.user.clientId);
+      
+      const arrivalResult = await statusService.determineArrivalStatus(
         req.body.check_in_time,
         schedule,
+        req.body.date,
+        departmentId,
         req.body.arrival_status
       );
 
-      console.log("autoArrivalStatus", autoArrivalStatus);
-      // Auto-determine work duration
-      const autoWorkDuration = determineWorkDuration(
+      const durationResult = await statusService.determineWorkDuration(
         totalHours,
         durationSettings,
+        req.body.date,
+        departmentId,
         req.body.work_duration
       );
 
-      console.log("autoWorkDuration", autoWorkDuration);
+      const overtimeInfo = await statusService.getOvertimeMultiplier(req.body.date, departmentId);
+
+      console.log("Enhanced arrival status:", arrivalResult);
+      console.log("Enhanced duration status:", durationResult);
+      console.log("Overtime multiplier:", overtimeInfo);
+
+      // Calculate enhanced overtime hours with multiplier
+      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
 
       const attendanceData = {
         id: attendanceId,
@@ -365,12 +409,12 @@ const calculateWorkHours = async (
         check_in_time: req.body.check_in_time || null,
         check_out_time: req.body.check_out_time || null,
         total_hours: totalHours,
-        overtime_hours: overtimeHours,
+        overtime_hours: enhancedOvertimeHours, // Use enhanced overtime with multiplier
         break_duration: req.body.break_duration || 0,
-        arrival_status: autoArrivalStatus,
-        work_duration: autoWorkDuration,
+        arrival_status: arrivalResult.status,
+        work_duration: durationResult.status,
         work_type: req.body.work_type || 'office',
-        notes: req.body.notes || null,
+        notes: generateEnhancedNotes(req.body.notes, arrivalResult.workingDayInfo, overtimeInfo),
         created_by: req.user.userId,
         scheduled_in_time: schedule.start_time || null,
         scheduled_out_time: schedule.end_time || null
@@ -936,31 +980,46 @@ router.post('/bulk-update-status', [
           let arrivalUpdated = false;
           let durationUpdated = false;
           
+          // Get employee department
+          const [employeeInfo] = await db.execute(`
+            SELECT department_id FROM employees WHERE id = ? AND client_id = ?
+          `, [employeeId, req.user.clientId]);
+          
+          const departmentId = employeeInfo[0]?.department_id || null;
+          
+          // Use enhanced attendance status service
+          const statusService = new AttendanceStatusService(req.user.clientId);
+
           // Auto-determine arrival status if requested
           if (update_arrival) {
-            const autoArrivalStatus = determineArrivalStatus(
+            const arrivalResult = await statusService.determineArrivalStatus(
               record.check_in_time,
-              schedule
+              schedule,
+              record.date,
+              departmentId,
+              record.work_duration === 'on_leave' ? 'on_leave' : null
             );
 
-            if (record.arrival_status !== autoArrivalStatus) {
+            if (record.arrival_status !== arrivalResult.status) {
               updates.push('arrival_status = ?');
-              updateValues.push(autoArrivalStatus);
+              updateValues.push(arrivalResult.status);
               arrivalUpdated = true;
             }
           }
           
           // Auto-determine work duration if requested
           if (update_duration) {
-            const autoWorkDuration = determineWorkDuration(
+            const durationResult = await statusService.determineWorkDuration(
               record.total_hours,
               durationSettings,
+              record.date,
+              departmentId,
               record.work_duration === 'on_leave' ? 'on_leave' : null
             );
 
-            if (record.work_duration !== autoWorkDuration) {
+            if (record.work_duration !== durationResult.status) {
               updates.push('work_duration = ?');
-              updateValues.push(autoWorkDuration);
+              updateValues.push(durationResult.status);
               durationUpdated = true;
             }
           }

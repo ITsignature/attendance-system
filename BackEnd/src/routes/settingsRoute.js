@@ -60,11 +60,17 @@ const getSettingType = (key, value) => {
     'data_retention_years', 'account_lockout_duration',
     'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours' 
   ];
+
+  const objectSettings = [
+    'weekend_working_days', 'working_hours_config'
+  ];
   
   if (booleanSettings.includes(key)) {
     return 'boolean';
   } else if (numberSettings.includes(key)) {
     return 'number';
+  } else if (objectSettings.includes(key)) {
+    return 'object';
   } else {
     return 'string';
   }
@@ -78,6 +84,8 @@ const validateSettingValue = (key, value, type) => {
       return typeof value === 'number' && !isNaN(value) && value >= 0;
     case 'string':
       return typeof value === 'string' && value.length > 0;
+    case 'object':
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
     default:
       return false;
   }
@@ -335,7 +343,7 @@ router.put('/:key',
         UPDATE system_settings 
         SET setting_value = ?, setting_type = ?, description = COALESCE(?, description)
         WHERE setting_key = ? AND client_id = ?
-      `, [jsonValue, settingType, description, key, req.user.clientId]);
+      `, [jsonValue, settingType, description || null, key, req.user.clientId]);
     } else {
       // Create new setting for this client
       const settingId = require('crypto').randomUUID();
