@@ -142,7 +142,7 @@ router.get('/periods/available',
                 WHERE client_id = ? 
                   AND status = 'active'
                 ORDER BY period_year DESC, period_number DESC
-                LIMIT 12
+                LIMIT 24
             `, [clientId]);
             
             res.json({

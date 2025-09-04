@@ -348,7 +348,7 @@ const calculateWorkHours = async (
         SELECT id FROM attendance WHERE employee_id = ? AND date = ?
       `, [req.body.employee_id, req.body.date]);
 
-      if (existing.length > 1) {
+      if (existing.length > 0) {
         return res.status(400).json({
           success: false,
           message: 'Attendance record already exists for this date'
@@ -980,6 +980,16 @@ router.post('/bulk-update-status', [
           let arrivalUpdated = false;
           let durationUpdated = false;
           
+          // First recalculate work hours using the same logic as PATCH endpoint
+          const { totalHours, overtimeHours } = await calculateWorkHours(
+            record.check_in_time,
+            record.check_out_time,
+            record.break_duration,
+            req.user.clientId,
+            db,
+            schedule
+          );
+          
           // Get employee department
           const [employeeInfo] = await db.execute(`
             SELECT department_id FROM employees WHERE id = ? AND client_id = ?
@@ -997,7 +1007,7 @@ router.post('/bulk-update-status', [
               schedule,
               record.date,
               departmentId,
-              record.work_duration === 'on_leave' ? 'on_leave' : null
+              null // Force recalculation for bulk update
             );
 
             if (record.arrival_status !== arrivalResult.status) {
@@ -1010,11 +1020,11 @@ router.post('/bulk-update-status', [
           // Auto-determine work duration if requested
           if (update_duration) {
             const durationResult = await statusService.determineWorkDuration(
-              record.total_hours,
+              totalHours, // Use recalculated hours
               durationSettings,
               record.date,
               departmentId,
-              record.work_duration === 'on_leave' ? 'on_leave' : null
+              null // Force recalculation for bulk update
             );
 
             if (record.work_duration !== durationResult.status) {
@@ -1022,6 +1032,17 @@ router.post('/bulk-update-status', [
               updateValues.push(durationResult.status);
               durationUpdated = true;
             }
+          }
+
+          // Update calculated hours if they changed
+          if (record.total_hours !== totalHours) {
+            updates.push('total_hours = ?');
+            updateValues.push(totalHours);
+          }
+
+          if (record.overtime_hours !== overtimeHours) {
+            updates.push('overtime_hours = ?');
+            updateValues.push(overtimeHours);
           }
 
           // Update if any changes

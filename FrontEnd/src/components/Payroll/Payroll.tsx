@@ -1007,7 +1007,7 @@ const PayslipModal = () => (
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="w-full"
               >
-                {Array.from({ length: 12 }, (_, i) => {
+                {Array.from({ length: 24 }, (_, i) => {
                   const date = new Date();
                   date.setMonth(date.getMonth() - i);
                   const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;

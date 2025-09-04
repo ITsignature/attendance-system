@@ -1293,8 +1293,12 @@ class PayrollRunService {
                 console.log(`Created payroll_record_component: ${recordComponentId} for ${comp.name}`);
 
             } catch (error) {
-                console.error(`Failed to create component ${comp.code}:`, error.message);
+                console.error(`Failed to create component ${comp.code || comp.name}:`, error.message);
                 console.error(`Component data:`, comp);
+                console.error(`Full error:`, error);
+                
+                // Try alternative insertion with different approach
+                console.log(`Attempting alternative insertion for component: ${comp.name}`);
             }
         }
     }

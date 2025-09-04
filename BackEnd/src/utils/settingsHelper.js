@@ -14,7 +14,7 @@ class SettingsHelper {
         SELECT setting_value, setting_type
         FROM system_settings 
         WHERE setting_key = ? AND (client_id = ? OR client_id IS NULL)
-        ORDER BY client_id DESC NULLS LAST
+        ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END, client_id DESC
         LIMIT 1
       `, [key, this.clientId]);
 

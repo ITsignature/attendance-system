@@ -73,7 +73,10 @@ class HolidayService {
             includeOptionalHolidays ? true : !holiday.is_optional
         );
         
-        const holidayDates = relevantHolidays.map(h => h.date.toISOString().split('T')[0]);
+        const holidayDates = relevantHolidays.map(h => {
+            // If h.date is already a string, use it directly, otherwise convert Date to string
+            return typeof h.date === 'string' ? h.date : h.date.toISOString().split('T')[0];
+        });
         
         const start = new Date(startDate);
         const end = new Date(endDate);
