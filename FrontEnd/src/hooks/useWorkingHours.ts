@@ -68,8 +68,9 @@ export const useWorkingHours = () => {
     }
   };
 
-  const calculateOvertimeHours = (totalHours: number) => {
-    const dailyHours = workingHours.hours_per_day;
+  const calculateOvertimeHours = (totalHours: number, employeeDailyHours?: number) => {
+    // Use employee-specific daily hours if provided, otherwise fall back to company default
+    const dailyHours = employeeDailyHours || workingHours.hours_per_day;
     return totalHours > dailyHours ? totalHours - dailyHours : 0;
   };
 

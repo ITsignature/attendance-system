@@ -123,7 +123,7 @@ class HolidayService {
             weekend_working_days: weekendWorkingDays,
             holiday_count: holidayCount,
             holidays: relevantHolidays.map(h => ({
-                date: h.date.toISOString().split('T')[0],
+                date: typeof h.date === 'string' ? h.date : h.date.toISOString().split('T')[0],
                 name: h.name,
                 is_optional: h.is_optional
             }))

@@ -35,7 +35,7 @@ const validateSettingKey = (key) => {
     'weekend_working_days', 'working_hours_config',
     
     // Payroll Settings
-    'payroll_cycle', 'salary_processing_date', 'tax_calculation_method',
+    'payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'overtime_enabled',
     
     // Privacy Settings
     'data_retention_years', 'audit_logs_enabled', 'anonymize_data_enabled',
@@ -51,7 +51,7 @@ const getSettingType = (key, value) => {
   const booleanSettings = [
     'two_factor_auth_enabled', 'email_notifications_enabled', 'push_notifications_enabled',
     'sms_notifications_enabled', 'weekly_reports_enabled', 'audit_logs_enabled',
-    'anonymize_data_enabled', 'email_integration_enabled', 'calendar_sync_enabled'
+    'anonymize_data_enabled', 'email_integration_enabled', 'calendar_sync_enabled', 'overtime_enabled'
   ];
   
   const numberSettings = [
@@ -520,6 +520,86 @@ router.put('/', [
         };
         
         console.log(`✅ Updated ${result.affectedRows} employees with new company schedule`);
+      }
+    }
+
+    // Check if weekend working days settings changed
+    if (settings.hasOwnProperty('weekend_working_days')) {
+      console.log('🔄 Weekend working days changed, updating existing attendance records...');
+      
+      try {
+        // Get the new weekend working days setting
+        const weekendWorkingDays = settings.weekend_working_days;
+        
+        // Update existing Saturday attendance records
+        if (weekendWorkingDays && weekendWorkingDays.includes(6)) {
+          // Saturday is now a working day - update volunteer work to regular attendance
+          const [saturdayResult] = await db.execute(`
+            UPDATE attendance a
+            JOIN employees e ON a.employee_id = e.id
+            SET a.notes = REPLACE(COALESCE(a.notes, ''), 'Worked on weekend: ', ''),
+                a.updated_at = NOW()
+            WHERE e.client_id = ?
+              AND DAYOFWEEK(a.date) = 7
+              AND (a.notes LIKE '%Worked on weekend:%' OR a.notes LIKE '%volunteer%')
+              AND a.check_in_time IS NOT NULL
+          `, [req.user.clientId]);
+          
+          console.log(`✅ Updated ${saturdayResult.affectedRows} Saturday records to regular working day`);
+        } else {
+          // Saturday is no longer a working day - update to volunteer work
+          const [saturdayResult] = await db.execute(`
+            UPDATE attendance a
+            JOIN employees e ON a.employee_id = e.id
+            SET a.notes = CONCAT(COALESCE(a.notes, ''), 
+                                CASE WHEN COALESCE(a.notes, '') != '' THEN '; ' ELSE '' END,
+                                'Worked on weekend: Volunteer work'),
+                a.updated_at = NOW()
+            WHERE e.client_id = ?
+              AND DAYOFWEEK(a.date) = 7
+              AND a.check_in_time IS NOT NULL
+              AND (a.notes NOT LIKE '%Worked on weekend:%' AND a.notes NOT LIKE '%volunteer%')
+          `, [req.user.clientId]);
+          
+          console.log(`✅ Updated ${saturdayResult.affectedRows} Saturday records to volunteer work`);
+        }
+
+        // Update existing Sunday attendance records
+        if (weekendWorkingDays && weekendWorkingDays.includes(0)) {
+          // Sunday is now a working day - update volunteer work to regular attendance
+          const [sundayResult] = await db.execute(`
+            UPDATE attendance a
+            JOIN employees e ON a.employee_id = e.id
+            SET a.notes = REPLACE(COALESCE(a.notes, ''), 'Worked on weekend: ', ''),
+                a.updated_at = NOW()
+            WHERE e.client_id = ?
+              AND DAYOFWEEK(a.date) = 1
+              AND (a.notes LIKE '%Worked on weekend:%' OR a.notes LIKE '%volunteer%')
+              AND a.check_in_time IS NOT NULL
+          `, [req.user.clientId]);
+          
+          console.log(`✅ Updated ${sundayResult.affectedRows} Sunday records to regular working day`);
+        } else {
+          // Sunday is no longer a working day - update to volunteer work
+          const [sundayResult] = await db.execute(`
+            UPDATE attendance a
+            JOIN employees e ON a.employee_id = e.id
+            SET a.notes = CONCAT(COALESCE(a.notes, ''), 
+                                CASE WHEN COALESCE(a.notes, '') != '' THEN '; ' ELSE '' END,
+                                'Worked on weekend: Volunteer work'),
+                a.updated_at = NOW()
+            WHERE e.client_id = ?
+              AND DAYOFWEEK(a.date) = 1
+              AND a.check_in_time IS NOT NULL
+              AND (a.notes NOT LIKE '%Worked on weekend:%' AND a.notes NOT LIKE '%volunteer%')
+          `, [req.user.clientId]);
+          
+          console.log(`✅ Updated ${sundayResult.affectedRows} Sunday records to volunteer work`);
+        }
+
+      } catch (weekendUpdateError) {
+        console.error('Error updating weekend attendance records:', weekendUpdateError);
+        // Don't fail the entire transaction for this, just log the error
       }
     }
 

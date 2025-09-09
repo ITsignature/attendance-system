@@ -602,6 +602,11 @@ class PayrollRunService {
             ORDER BY a.date
         `, [runId, employeeId]);
 
+        console.log(`🔍 Fetched ${attendanceData.length} attendance records for employee ${employeeId}`);
+        if (attendanceData.length === 0) {
+            console.log(`⚠️  ATTENTION: Employee ${employeeId} has NO attendance records in this payroll period!`);
+        }
+
         // Get working hours configuration (with fallback if table doesn't exist)
         let workingHours = {
             hours_per_day: 8,
@@ -707,19 +712,33 @@ class PayrollRunService {
                 clientId, 
                 departmentId
             );
-            summary.expectedHours = expectedWorkingDays * workingHours.hours_per_day;
+            
+            // Get employee-specific daily hours instead of using company default
+            const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, workingHours.hours_per_day);
+            summary.expectedHours = expectedWorkingDays * employeeDailyHours;
         } catch (error) {
             console.error('Error calculating expected working days with holidays:', error);
-            // Fallback to simple calculation
+            // Fallback to simple calculation with employee-specific hours
             const expectedWorkingDays = attendanceRecords.length;
-            summary.expectedHours = expectedWorkingDays * workingHours.hours_per_day;
+            const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, workingHours.hours_per_day);
+            summary.expectedHours = expectedWorkingDays * employeeDailyHours;
         }
 
-        attendanceRecords.forEach(record => {
-            const workedHours = parseFloat(record.total_hours) || 0;
+        // Get employee daily hours for payroll capping
+        const employeeDailyHoursForCapping = await this.getEmployeeDailyHours(employeeId, workingHours.hours_per_day);
+        
+        for (const record of attendanceRecords) {
+            const actualWorkedHours = parseFloat(record.total_hours) || 0;
             const overtimeHours = parseFloat(record.overtime_hours) || 0;
+            
+            // Calculate payroll hours (capped at employee's daily hours if overtime not paid)
+            const payrollHours = await this.calculatePayrollHours(
+                actualWorkedHours, 
+                employeeDailyHoursForCapping,
+                employeeId
+            );
 
-            summary.totalWorkedHours += workedHours;
+            summary.totalWorkedHours += payrollHours; // Use capped hours for payroll
             summary.totalOvertimeHours += overtimeHours;
 
             switch (record.status) {
@@ -745,7 +764,7 @@ class PayrollRunService {
                     summary.onLeaveDays++;
                     break;
             }
-        });
+        }
 
         // Calculate shortfall hours (expected - actual worked)
         summary.shortfallHours = Math.max(0, summary.expectedHours - summary.totalWorkedHours);
@@ -773,10 +792,60 @@ class PayrollRunService {
     }
 
     /**
+     * Get employee-specific daily working hours
+     * @param {string} employeeId - Employee ID
+     * @param {number} defaultHours - Default company hours per day
+     * @returns {Promise<number>} Daily working hours for the employee
+     */
+    async getEmployeeDailyHours(employeeId, defaultHours) {
+        const db = getDB();
+        
+        try {
+            const [employee] = await db.execute(`
+                SELECT in_time, out_time, follows_company_schedule 
+                FROM employees WHERE id = ?
+            `, [employeeId]);
+            
+            if (!employee[0] || employee[0].follows_company_schedule) {
+                return defaultHours; // Use company default hours
+            }
+            
+            // Calculate hours from employee's custom schedule
+            if (!employee[0].in_time || !employee[0].out_time) {
+                console.log(`Employee ${employeeId} has custom schedule but missing in_time or out_time, using default`);
+                return defaultHours;
+            }
+            
+            const inTime = new Date(`2000-01-01 ${employee[0].in_time}`);
+            const outTime = new Date(`2000-01-01 ${employee[0].out_time}`);
+            
+            if (isNaN(inTime.getTime()) || isNaN(outTime.getTime())) {
+                console.log(`Employee ${employeeId} has invalid time format, using default`);
+                return defaultHours;
+            }
+            
+            const diffMs = outTime.getTime() - inTime.getTime();
+            const hours = diffMs / (1000 * 60 * 60);
+            
+            // Ensure reasonable working hours (between 1 and 16 hours)
+            const dailyHours = Math.max(1, Math.min(16, hours));
+            
+            console.log(`Employee ${employeeId} custom schedule: ${employee[0].in_time} - ${employee[0].out_time} = ${dailyHours} hours`);
+            return dailyHours;
+            
+        } catch (error) {
+            console.error(`Error getting employee daily hours for ${employeeId}:`, error);
+            return defaultHours; // Fallback to company default
+        }
+    }
+
+    /**
      * Get expected working days (excluding weekends and holidays)
      */
     async getExpectedWorkingDays(attendanceRecords, clientId, departmentId = null) {
+        console.log(`🔍 getExpectedWorkingDays: Found ${attendanceRecords.length} attendance records`);
         if (attendanceRecords.length === 0) {
+            console.log(`⚠️  No attendance records found - returning 0 working days`);
             return 0;
         }
         
@@ -789,8 +858,8 @@ class PayrollRunService {
             // Use HolidayService for accurate calculation
             const calculation = await HolidayService.calculateWorkingDays(
                 clientId,
-                startDate.toISOString().split('T')[0],
-                endDate.toISOString().split('T')[0],
+                typeof startDate === 'string' ? startDate : startDate.toISOString().split('T')[0],
+                typeof endDate === 'string' ? endDate : endDate.toISOString().split('T')[0],
                 departmentId
             );
             
@@ -830,6 +899,8 @@ class PayrollRunService {
         const departmentId = employeeInfo[0]?.department_id || null;
         const clientId = employeeInfo[0]?.client_id;
         
+        console.log(`🗓️  PAYROLL PERIOD: ${period.period_start_date} to ${period.period_end_date}`);
+        
         const workingDaysInMonth = await this.calculateWorkingDaysInPeriod(
             period.period_start_date, 
             period.period_end_date, 
@@ -837,9 +908,40 @@ class PayrollRunService {
             departmentId
         );
         
-        // Calculate per-day and per-minute salary rates
+        console.log(`📊 CALCULATED WORKING DAYS: ${workingDaysInMonth} days (excluding weekends & holidays)`);
+        
+        // Calculate per-day and per-minute salary rates using employee-specific hours
         const perDaySalary = baseSalary / workingDaysInMonth;
-        const perMinuteSalary = perDaySalary / (attendanceSummary.workingHours.hours_per_day * 60);
+        const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, attendanceSummary.workingHours.hours_per_day);
+        const perMinuteSalary = perDaySalary / (employeeDailyHours * 60);
+        
+        // Calculate hourly rate for shortfall logging
+        const hourlyRate = perDaySalary / employeeDailyHours;
+        
+        // 🔍 CONSOLE LOG: Employee Shortfall & Rate Information
+        console.log('\n📊 PAYROLL CALCULATION - EMPLOYEE SHORTFALL ANALYSIS');
+        console.log('=' .repeat(60));
+        console.log(`👤 Employee ID: ${employeeId}`);
+        console.log(`💰 Base Salary: ${baseSalary.toLocaleString()}`);
+        console.log(`📅 Working Days: ${workingDaysInMonth}`);
+        console.log(`⏰ Employee Daily Hours: ${employeeDailyHours}h/day`);
+        console.log(`💵 Per-Day Salary: ${perDaySalary.toFixed(2)}`);
+        console.log(`⏱️  Hourly Rate: ${hourlyRate.toFixed(2)}`);
+        console.log('');
+        console.log('📈 ATTENDANCE SUMMARY:');
+        console.log(`   Expected Hours: ${attendanceSummary.summary.expectedHours}`);
+        console.log(`   📋 CALCULATION CHECK: ${workingDaysInMonth} days × ${employeeDailyHours}h = ${(workingDaysInMonth * employeeDailyHours).toFixed(2)}h`);
+        console.log(`   ❗ DISCREPANCY: ${attendanceSummary.summary.expectedHours !== (workingDaysInMonth * employeeDailyHours) ? 'YES - Values don\'t match!' : 'NO - Values match'}`);
+        console.log(`   Worked Hours: ${attendanceSummary.summary.totalWorkedHours}`);
+        console.log(`   ⚠️  Shortfall Hours: ${attendanceSummary.summary.shortfallHours}`);
+        
+        if (attendanceSummary.summary.shortfallHours > 0) {
+            const shortfallDeduction = attendanceSummary.summary.shortfallHours * hourlyRate;
+            console.log(`   💸 Shortfall Deduction: ${attendanceSummary.summary.shortfallHours}h × ${hourlyRate.toFixed(2)} = ${shortfallDeduction.toFixed(2)}`);
+        } else {
+            console.log(`   ✅ No Shortfall - Employee met required hours`);
+        }
+        console.log('=' .repeat(60));
 
         const deductions = {
             absentDeduction: 0,
@@ -878,7 +980,8 @@ class PayrollRunService {
 
         // 3. Hour shortfall deduction (if total worked hours is less than expected)
         if (attendanceSummary.summary.shortfallHours > 0) {
-            const hourlyRate = perDaySalary / attendanceSummary.workingHours.hours_per_day;
+            // Use already calculated employee-specific daily hours for accurate hourly rate
+            const hourlyRate = perDaySalary / employeeDailyHours;
             deductions.shortfallDeduction = attendanceSummary.summary.shortfallHours * hourlyRate;
             deductions.components.push({
                 code: 'SHORTFALL_DEDUCTION',
@@ -922,6 +1025,14 @@ class PayrollRunService {
                 endDate, 
                 departmentId
             );
+            
+            console.log(`🏢 HOLIDAY SERVICE RESULT:`, {
+                total_days: calculation.total_days,
+                working_days: calculation.working_days,
+                weekend_days: calculation.weekend_days,
+                holiday_count: calculation.holiday_count,
+                holidays: calculation.holidays?.map(h => h.name).join(', ') || 'None'
+            });
             
             return calculation.working_days;
         } catch (error) {
@@ -1023,7 +1134,7 @@ class PayrollRunService {
                 
                 for (const record of overtime) {
                     if (record.overtime_hours > 0) {
-                        const dateStr = record.date.toISOString().split('T')[0];
+                        const dateStr = typeof record.date === 'string' ? record.date : record.date.toISOString().split('T')[0];
                         
                         // Check if this date is a holiday
                         const holidayMultiplier = await HolidayService.getHolidayOvertimeMultiplier(
@@ -1080,8 +1191,22 @@ class PayrollRunService {
         
         // Add overtime (this is an addition) - with holiday awareness
         if (employeeData.overtimeHours > 0) {
-            const hourlyRate = baseSalary / (22 * 8); // Base hourly rate
+            // Get employee-specific daily hours for accurate hourly rate
+            const employeeDailyHours = await this.getEmployeeDailyHours(record.employee_id, 8);
+            const workingDaysInMonth = await this.calculateWorkingDaysInPeriod(
+                record.period_start_date || '2024-01-01', 
+                record.period_end_date || '2024-01-31', 
+                record.client_id,
+                record.department_id
+            );
+            const hourlyRate = baseSalary / (workingDaysInMonth * employeeDailyHours);
             let overtimeAmount = 0;
+            
+            console.log(`⏰ OVERTIME CALCULATION: Employee ${record.employee_id}`);
+            console.log(`   Base Salary: ${baseSalary}`);
+            console.log(`   Working Days: ${workingDaysInMonth}`);
+            console.log(`   Employee Daily Hours: ${employeeDailyHours}h`);
+            console.log(`   Hourly Rate: ${hourlyRate.toFixed(2)} (${baseSalary} ÷ (${workingDaysInMonth} × ${employeeDailyHours}))`);
             
             // Try to calculate overtime with holiday multipliers
             try {
@@ -1099,7 +1224,12 @@ class PayrollRunService {
                 console.error('Error calculating holiday overtime:', error);
                 // Fallback to standard calculation
                 overtimeAmount = employeeData.overtimeHours * hourlyRate * 1.5;
+                console.log(`   Fallback Calculation: ${employeeData.overtimeHours}h × ${hourlyRate.toFixed(2)} × 1.5 = ${overtimeAmount.toFixed(2)}`);
             }
+            
+            console.log(`   Total Overtime Hours: ${employeeData.overtimeHours}h`);
+            console.log(`   Total Overtime Amount: ${overtimeAmount.toFixed(2)}`);
+            console.log('');
             
             total += overtimeAmount;
             additionsTotal += overtimeAmount;
@@ -1108,7 +1238,7 @@ class PayrollRunService {
                 code: 'OVERTIME',
                 name: 'Overtime Pay',
                 type: 'earning',
-                category: 'overtime',
+                category: 'earning',
                 amount: overtimeAmount
             });
         }

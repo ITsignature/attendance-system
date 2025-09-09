@@ -242,6 +242,30 @@ router.post('/',
         (!applies_to_all && department_ids) ? JSON.stringify(department_ids) : null
       ]);
 
+      // Update attendance records for new holiday date
+      try {
+        console.log(`🔄 New holiday "${name}" created for ${date}, updating existing attendance records...`);
+        
+        // Add holiday volunteer work status to existing attendance records on this date
+        await db.execute(`
+          UPDATE attendance a
+          JOIN employees e ON a.employee_id = e.id
+          SET a.notes = CONCAT(COALESCE(a.notes, ''), 
+                              CASE WHEN COALESCE(a.notes, '') != '' THEN '; ' ELSE '' END,
+                              'Worked on holiday: ${name}'),
+              a.updated_at = NOW()
+          WHERE e.client_id = ?
+            AND a.date = ?
+            AND a.check_in_time IS NOT NULL
+            AND (a.notes NOT LIKE '%Worked on holiday:%')
+        `, [clientId, date]);
+        
+        console.log(`✅ Updated existing attendance records for new holiday`);
+      } catch (attendanceUpdateError) {
+        console.error('Error updating attendance for new holiday:', attendanceUpdateError);
+        // Don't fail the creation for this
+      }
+
       await db.execute('COMMIT');
 
       res.status(201).json({
@@ -303,9 +327,9 @@ router.put('/:id',
     try {
       await db.execute('START TRANSACTION');
 
-      // Check if holiday exists
+      // Check if holiday exists and get current date for attendance updates
       const [existing] = await db.execute(`
-        SELECT id FROM holidays 
+        SELECT id, date as old_date FROM holidays 
         WHERE id = ? AND client_id = ?
       `, [id, clientId]);
 
@@ -353,6 +377,47 @@ router.put('/:id',
         (!applies_to_all && department_ids) ? JSON.stringify(department_ids) : null,
         id, clientId
       ]);
+
+      // Update attendance records if holiday date changed
+      const oldDate = existing[0].old_date;
+      const newDate = date;
+      
+      if (oldDate !== newDate) {
+        console.log(`🔄 Holiday date changed from ${oldDate} to ${newDate}, updating attendance records...`);
+        
+        try {
+          // Remove holiday volunteer work status from old date
+          await db.execute(`
+            UPDATE attendance a
+            JOIN employees e ON a.employee_id = e.id
+            SET a.notes = REPLACE(COALESCE(a.notes, ''), 'Worked on holiday: ${name}', ''),
+                a.notes = REPLACE(a.notes, 'Worked on holiday: ', ''),
+                a.updated_at = NOW()
+            WHERE e.client_id = ?
+              AND a.date = ?
+              AND a.check_in_time IS NOT NULL
+              AND a.notes LIKE '%Worked on holiday:%'
+          `, [clientId, oldDate]);
+          
+          // Add holiday volunteer work status to new date
+          await db.execute(`
+            UPDATE attendance a
+            JOIN employees e ON a.employee_id = e.id
+            SET a.notes = CONCAT(COALESCE(a.notes, ''), 
+                                CASE WHEN COALESCE(a.notes, '') != '' THEN '; ' ELSE '' END,
+                                'Worked on holiday: ${name}'),
+                a.updated_at = NOW()
+            WHERE e.client_id = ?
+              AND a.date = ?
+              AND a.check_in_time IS NOT NULL
+              AND (a.notes NOT LIKE '%Worked on holiday:%')
+          `, [clientId, newDate]);
+          
+          console.log(`✅ Updated attendance records for holiday date change`);
+        } catch (attendanceUpdateError) {
+          console.error('Error updating attendance for holiday change:', attendanceUpdateError);
+        }
+      }
 
       await db.execute('COMMIT');
 
@@ -421,6 +486,32 @@ router.delete('/:id',
         DELETE FROM holidays 
         WHERE id = ? AND client_id = ?
       `, [id, clientId]);
+
+      // Update attendance records for deleted holiday date
+      const holidayName = existing[0].name;
+      const holidayDate = existing[0].date;
+      
+      try {
+        console.log(`🔄 Holiday "${holidayName}" deleted, removing volunteer work status from attendance...`);
+        
+        // Remove holiday volunteer work status from attendance records
+        await db.execute(`
+          UPDATE attendance a
+          JOIN employees e ON a.employee_id = e.id
+          SET a.notes = REPLACE(COALESCE(a.notes, ''), 'Worked on holiday: ${holidayName}', ''),
+              a.notes = REPLACE(a.notes, 'Worked on holiday: ', ''),
+              a.updated_at = NOW()
+          WHERE e.client_id = ?
+            AND a.date = ?
+            AND a.check_in_time IS NOT NULL
+            AND a.notes LIKE '%Worked on holiday:%'
+        `, [clientId, holidayDate]);
+        
+        console.log(`✅ Removed volunteer work status from attendance records for deleted holiday`);
+      } catch (attendanceUpdateError) {
+        console.error('Error updating attendance for holiday deletion:', attendanceUpdateError);
+        // Don't fail the deletion for this
+      }
 
       res.json({
         success: true,

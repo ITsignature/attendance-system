@@ -157,6 +157,13 @@ const seedDefaultSettings = async () => {
         is_public: false
       },
       {
+        setting_key: 'overtime_enabled',
+        setting_value: JSON.stringify(true),
+        setting_type: 'boolean',
+        description: 'Enable overtime calculations for payroll',
+        is_public: false
+      },
+      {
         setting_key: 'full_day_minimum_hours',
         setting_value: JSON.stringify(7),
         setting_type: 'number',

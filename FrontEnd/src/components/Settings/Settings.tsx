@@ -442,23 +442,6 @@ const hhmmToMinutes = (t) => {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Overtime Rate Multiplier
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="1"
-                  max="3"
-                  value={localSettings.overtime_rate_multiplier || 1.5}
-                  onChange={(e) => updateLocalSetting('overtime_rate_multiplier', parseFloat(e.target.value))}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Multiplier for overtime pay calculation (e.g., 1.5 = 150% of regular rate)
-                </p>
-              </div>
 
               {/* NEW ATTENDANCE SETTINGS */}
               <div className="border-t pt-6 mt-6">
@@ -592,87 +575,6 @@ const hhmmToMinutes = (t) => {
                   </div>
                 </div>
               </div>
-
-              {/* WORKING HOURS CONFIGURATION */}
-              <div className="border-t pt-6 mt-6">
-                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
-                  Working Hours Configuration
-                </h4>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Standard Hours Per Day
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="1"
-                      max="12"
-                      value={localSettings.working_hours_config?.standard_hours_per_day || 8}
-                      onChange={(e) => {
-                        const current = localSettings.working_hours_config || {};
-                        updateLocalSetting('working_hours_config', {
-                          ...current,
-                          standard_hours_per_day: parseFloat(e.target.value)
-                        });
-                      }}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      Standard working hours per day
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Weekend Hours Multiplier
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="1"
-                      max="3"
-                      value={localSettings.working_hours_config?.weekend_hours_multiplier || 1.5}
-                      onChange={(e) => {
-                        const current = localSettings.working_hours_config || {};
-                        updateLocalSetting('working_hours_config', {
-                          ...current,
-                          weekend_hours_multiplier: parseFloat(e.target.value)
-                        });
-                      }}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      Pay multiplier for weekend work (e.g., 1.5 = 150% of regular rate)
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Holiday Hours Multiplier
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="1"
-                      max="5"
-                      value={localSettings.working_hours_config?.holiday_hours_multiplier || 2.5}
-                      onChange={(e) => {
-                        const current = localSettings.working_hours_config || {};
-                        updateLocalSetting('working_hours_config', {
-                          ...current,
-                          holiday_hours_multiplier: parseFloat(e.target.value)
-                        });
-                      }}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      Pay multiplier for holiday work (e.g., 2.5 = 250% of regular rate)
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         );
@@ -786,6 +688,100 @@ const hhmmToMinutes = (t) => {
                   <option value="itemized">Itemized Deduction</option>
                   <option value="custom">Custom Method</option>
                 </select>
+              </div>
+
+              {/* OVERTIME SETTINGS */}
+              <div className="border-t pt-6 mt-6">
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                  Overtime Configuration
+                </h4>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.overtime_enabled || false}
+                      onChange={(e) => updateLocalSetting('overtime_enabled', e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Enable Overtime Calculations
+                    </label>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    When enabled, overtime will be calculated and applied to payroll
+                  </p>
+
+                  {localSettings.overtime_enabled && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Regular Overtime Rate Multiplier
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="1"
+                          max="3"
+                          value={localSettings.overtime_rate_multiplier || 1.5}
+                          onChange={(e) => updateLocalSetting('overtime_rate_multiplier', parseFloat(e.target.value))}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Multiplier for regular overtime pay (e.g., 1.5 = 150% of regular rate)
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Weekend Hours Multiplier
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="1"
+                          max="3"
+                          value={localSettings.working_hours_config?.weekend_hours_multiplier || 1.5}
+                          onChange={(e) => {
+                            const current = localSettings.working_hours_config || {};
+                            updateLocalSetting('working_hours_config', {
+                              ...current,
+                              weekend_hours_multiplier: parseFloat(e.target.value)
+                            });
+                          }}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Pay multiplier for weekend work (e.g., 1.5 = 150% of regular rate)
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Holiday Hours Multiplier
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="1"
+                          max="5"
+                          value={localSettings.working_hours_config?.holiday_hours_multiplier || 2.5}
+                          onChange={(e) => {
+                            const current = localSettings.working_hours_config || {};
+                            updateLocalSetting('working_hours_config', {
+                              ...current,
+                              holiday_hours_multiplier: parseFloat(e.target.value)
+                            });
+                          }}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Pay multiplier for holiday work (e.g., 2.5 = 250% of regular rate)
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

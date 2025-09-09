@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/D:\\attendance-system\\BackEnd\\src\\scripts/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
