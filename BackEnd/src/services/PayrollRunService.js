@@ -518,7 +518,7 @@ class PayrollRunService {
         
         // Calculate gross salary with all components
         const grossComponents = await this.calculateGrossComponents(record, employeeData);
-        let grossSalary = grossComponents.total;
+        const grossSalary = grossComponents.total; // 🔧 FIX: Gross salary should NEVER have deductions subtracted!
         
         // Calculate attendance-based deductions BEFORE other deductions
         const attendanceDeductions = await this.calculateAttendanceDeductions(
@@ -529,8 +529,8 @@ class PayrollRunService {
             approvedLeaves
         );
         
-        // Adjust gross salary for attendance (subtract attendance deductions from gross)
-        grossSalary = grossSalary - attendanceDeductions.total;
+        // 🔧 REMOVED INCORRECT LINE: DO NOT subtract attendance deductions from gross salary!
+        // Gross salary = Base + Allowances + Overtime + Bonuses (NO deductions!)
         
         // Calculate regular deductions based on method
         const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData);
@@ -1003,7 +1003,7 @@ class PayrollRunService {
             const hourlyRate = perDaySalary / employeeDailyHours;
             deductions.shortfallDeduction = attendanceSummary.summary.shortfallHours * hourlyRate;
             deductions.components.push({
-                code: 'SHORTFALL_DEDUCTION',
+                code: 'SHORTFALL_DED', // 🔧 FIX: Shortened to be safe with varchar(20) limit
                 name: 'Working Hours Shortfall',
                 type: 'deduction',
                 category: 'attendance',
@@ -1017,7 +1017,7 @@ class PayrollRunService {
         if (unpaidLeaveDays > 0) {
             deductions.unpaidLeaveDeduction = unpaidLeaveDays * perDaySalary;
             deductions.components.push({
-                code: 'UNPAID_LEAVE_DEDUCTION',
+                code: 'UNPAID_LEAVE_DED', // 🔧 FIX: Shortened to fit varchar(20) limit
                 name: 'Unpaid Leave Deduction',
                 type: 'deduction',
                 category: 'leave',

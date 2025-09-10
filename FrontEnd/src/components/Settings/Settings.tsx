@@ -23,6 +23,7 @@ const SettingsWithBackend = () => {
     settings, 
     loading, 
     error, 
+    fetchSettings,
     updateMultipleSettings, 
     resetAllSettings 
   } = useSettings();
@@ -32,6 +33,12 @@ const SettingsWithBackend = () => {
   const [localSettings, setLocalSettings] = useState<Record<string, any> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // 🔧 FIX: Force refresh settings when component mounts to avoid stale data
+  useEffect(() => {
+    console.log('🔄 Settings component mounted - forcing fresh data fetch...');
+    fetchSettings();
+  }, []); // Run once on mount
 
   // Convert backend settings to local format
   // useEffect(() => {
@@ -59,14 +66,34 @@ const SettingsWithBackend = () => {
 
       // Remove extra quotes like "\"08:30\"" → "08:30"
       if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-        return trimmed.slice(1, -1);
+        const unquoted = trimmed.slice(1, -1);
+        
+        // 🔧 FIX: Handle boolean conversion for string booleans
+        if (unquoted === 'true') return true;
+        if (unquoted === 'false') return false;
+        
+        return unquoted;
       }
+
+      // 🔧 FIX: Handle direct boolean strings  
+      if (trimmed === 'true') return true;
+      if (trimmed === 'false') return false;
 
       return trimmed;
     };
 
     Object.entries(settings).forEach(([key, setting]) => {
       converted[key] = cleanValue(setting.value);
+      
+      // 🔧 DEBUG: Special logging for overtime_enabled to track the issue
+      if (key === 'overtime_enabled') {
+        console.log(`🔍 DEBUG overtime_enabled conversion:`, {
+          original: setting.value,
+          originalType: typeof setting.value,
+          converted: converted[key],
+          convertedType: typeof converted[key]
+        });
+      }
     });
 
     console.log('🔍 Converted settings:', converted);
@@ -132,6 +159,16 @@ useEffect(() => {
 const updateLocalSetting = (key: string, value: any) => {
   console.log(`🔍 DEBUG updateLocalSetting - Key: "${key}", Value: "${value}", Type: ${typeof value}`);
   
+  // 🔧 DEBUG: Special logging for overtime_enabled
+  if (key === 'overtime_enabled') {
+    console.log(`🔍 DEBUG overtime_enabled updateLocalSetting:`, {
+      newValue: value,
+      newValueType: typeof value,
+      currentLocalValue: localSettings?.overtime_enabled,
+      currentLocalType: typeof localSettings?.overtime_enabled
+    });
+  }
+  
   // Special handling for time inputs
   if (key === 'work_start_time' || key === 'work_end_time') {
     console.log(`⏰ DEBUG time input - Raw value: "${value}"`);
@@ -188,6 +225,22 @@ const handleSave = async () => {
       if (success) {
         setHasChanges(false);
         alert('Settings saved successfully!');
+        
+        // 🔧 FIX: Force refresh localSettings after successful save
+        // This ensures UI state matches backend immediately
+        console.log('🔄 Refreshing local settings after save...');
+        setTimeout(() => {
+          // Re-trigger the useEffect to sync localSettings with updated settings from hook
+          if (settings && Object.keys(settings).length > 0) {
+            const converted: Record<string, any> = {};
+            Object.entries(settings).forEach(([key, setting]) => {
+              converted[key] = setting.value;
+            });
+            console.log('🔄 Force-updated localSettings:', converted);
+            setLocalSettings({...converted}); // Force new object reference
+          }
+        }, 100); // Small delay to ensure hook state is updated
+        
       } else {
         alert('Failed to save settings. Please try again.');
       }

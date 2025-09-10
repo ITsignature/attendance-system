@@ -57,7 +57,7 @@ class SettingsHelper {
         params.push(...keys);
       }
       
-      query += ` ORDER BY setting_key, client_id DESC NULLS LAST`;
+      query += ` ORDER BY setting_key, CASE WHEN client_id IS NULL THEN 1 ELSE 0 END, client_id DESC`;
 
       const [settings] = await db.execute(query, params);
 
