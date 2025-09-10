@@ -1143,10 +1143,13 @@ class PayrollRunService {
                             departmentId
                         );
                         
+                        // Get regular overtime multiplier from settings (not hardcoded!)
+                        const regularOvertimeRate = await this.getRegularOvertimeMultiplier(clientId);
+                        
                         overtimeDetails.push({
                             date: dateStr,
                             hours: parseFloat(record.overtime_hours),
-                            holiday_multiplier: holidayMultiplier || 1.5, // Default weekday multiplier
+                            holiday_multiplier: holidayMultiplier || regularOvertimeRate, // Dynamic weekday multiplier
                             is_holiday: !!holidayMultiplier
                         });
                     }
@@ -1213,18 +1216,22 @@ class PayrollRunService {
                 if (employeeData.overtimeDetails && Array.isArray(employeeData.overtimeDetails)) {
                     // Detailed overtime with holiday multipliers
                     for (const overtime of employeeData.overtimeDetails) {
-                        const multiplier = overtime.holiday_multiplier || 1.5; // Default 1.5x
+                        // Get dynamic multiplier from settings (not hardcoded!)
+                        const defaultMultiplier = await this.getRegularOvertimeMultiplier(record.client_id);
+                        const multiplier = overtime.holiday_multiplier || defaultMultiplier;
                         overtimeAmount += (overtime.hours || 0) * hourlyRate * multiplier;
                     }
                 } else {
-                    // Fallback to standard calculation
-                    overtimeAmount = employeeData.overtimeHours * hourlyRate * 1.5;
+                    // Fallback to standard calculation with dynamic rate
+                    const fallbackMultiplier = await this.getRegularOvertimeMultiplier(record.client_id);
+                    overtimeAmount = employeeData.overtimeHours * hourlyRate * fallbackMultiplier;
                 }
             } catch (error) {
                 console.error('Error calculating holiday overtime:', error);
-                // Fallback to standard calculation
-                overtimeAmount = employeeData.overtimeHours * hourlyRate * 1.5;
-                console.log(`   Fallback Calculation: ${employeeData.overtimeHours}h × ${hourlyRate.toFixed(2)} × 1.5 = ${overtimeAmount.toFixed(2)}`);
+                // Fallback to standard calculation with dynamic rate
+                const emergencyFallbackMultiplier = await this.getRegularOvertimeMultiplier(record.client_id);
+                overtimeAmount = employeeData.overtimeHours * hourlyRate * emergencyFallbackMultiplier;
+                console.log(`   Fallback Calculation: ${employeeData.overtimeHours}h × ${hourlyRate.toFixed(2)} × ${emergencyFallbackMultiplier} = ${overtimeAmount.toFixed(2)}`);
             }
             
             console.log(`   Total Overtime Hours: ${employeeData.overtimeHours}h`);
@@ -1545,6 +1552,56 @@ class PayrollRunService {
             stat.total_net_amount,
             runId
         ]);
+    }
+
+    /**
+     * Get regular overtime multiplier from settings (NO HARDCODING!)
+     * @param {string} clientId - Client ID
+     * @returns {Promise<number>} Regular overtime multiplier
+     */
+    async getRegularOvertimeMultiplier(clientId) {
+        const db = getDB();
+        
+        try {
+            // First try to get from overtime_rate_multiplier setting
+            const [basicRate] = await db.execute(`
+                SELECT setting_value 
+                FROM system_settings 
+                WHERE client_id = ? AND setting_key = 'overtime_rate_multiplier'
+                LIMIT 1
+            `, [clientId]);
+            
+            if (basicRate.length > 0) {
+                const rate = parseFloat(JSON.parse(basicRate[0].setting_value));
+                console.log(`   Using overtime_rate_multiplier from settings: ${rate}x`);
+                return rate;
+            }
+            
+            // Fallback to working_hours_config if available
+            const [workingHoursConfig] = await db.execute(`
+                SELECT setting_value 
+                FROM system_settings 
+                WHERE client_id = ? AND setting_key = 'working_hours_config'
+                LIMIT 1
+            `, [clientId]);
+            
+            if (workingHoursConfig.length > 0) {
+                const config = JSON.parse(workingHoursConfig[0].setting_value);
+                if (config.weekend_hours_multiplier) {
+                    console.log(`   Using weekend_hours_multiplier from working_hours_config: ${config.weekend_hours_multiplier}x`);
+                    return parseFloat(config.weekend_hours_multiplier);
+                }
+            }
+            
+            // Ultimate fallback - but log it as a warning
+            console.warn(`⚠️  No overtime multiplier found in settings for client ${clientId}, using default 1.5x`);
+            return 1.5;
+            
+        } catch (error) {
+            console.error('Error getting regular overtime multiplier:', error);
+            console.warn(`⚠️  Error accessing settings, using fallback 1.5x multiplier`);
+            return 1.5; // Safe fallback
+        }
     }
 
     /**

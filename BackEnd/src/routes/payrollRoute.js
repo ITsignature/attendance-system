@@ -7,6 +7,8 @@ const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const { v4: uuidv4 } = require('uuid');
+const HolidayService = require('../services/HolidayService');
+const SettingsHelper = require('../utils/settingsHelper');
 
 // Apply authentication and client access to all routes
 router.use(authenticate);
@@ -99,6 +101,137 @@ const calculateOvertimeFromAttendance = async (employeeId, startDate, endDate, d
     totalOvertimeHours: overtimeRecords[0]?.total_overtime_hours || 0,
     daysWorked: overtimeRecords[0]?.days_worked || 0
   };
+};
+
+/**
+ * Calculate overtime amount using PROPER DYNAMIC METHODS (NO HARDCODING)
+ * This method replicates the sophisticated logic from PayrollRunService
+ */
+const calculateDynamicOvertimeAmount = async (employeeId, baseSalary, totalOvertimeHours, startDate, endDate, clientId, db) => {
+  try {
+    console.log(`🔧 DYNAMIC OVERTIME CALCULATION for employee ${employeeId}`);
+    
+    // 1. Get employee-specific daily hours (NOT HARDCODED 8 hours!)
+    const employeeDailyHours = await getEmployeeDailyHours(employeeId, clientId, db);
+    
+    // 2. Get actual working days in period (NOT HARDCODED 22 days!)
+    const workingDaysInPeriod = await HolidayService.calculateWorkingDays(
+      clientId, 
+      startDate, 
+      endDate
+    );
+    
+    // 3. Calculate proper hourly rate using ACTUAL values
+    const hourlyRate = baseSalary / (workingDaysInPeriod.working_days * employeeDailyHours);
+    
+    console.log(`📊 CALCULATION BREAKDOWN:`);
+    console.log(`   Base Salary: ${baseSalary}`);
+    console.log(`   Working Days: ${workingDaysInPeriod.working_days} (excluding holidays)`);
+    console.log(`   Employee Daily Hours: ${employeeDailyHours}h`);
+    console.log(`   Hourly Rate: ${hourlyRate.toFixed(2)}`);
+    console.log(`   Total Overtime Hours: ${totalOvertimeHours}h`);
+    
+    // 4. Get overtime multipliers from settings (NOT HARDCODED 1.5x!)
+    const overtimeMultipliers = await getOvertimeMultipliers(clientId);
+    
+    // 5. Calculate overtime amount with proper multiplier
+    // For now using regular multiplier - could be enhanced to check specific dates for holidays/weekends
+    const overtimeAmount = totalOvertimeHours * hourlyRate * overtimeMultipliers.regular;
+    
+    console.log(`   Overtime Multiplier: ${overtimeMultipliers.regular}x`);
+    console.log(`   Final Overtime Amount: ${overtimeAmount.toFixed(2)}`);
+    console.log(`🔧 DYNAMIC CALCULATION COMPLETE\n`);
+    
+    return Math.round(overtimeAmount * 100) / 100; // Round to 2 decimal places
+    
+  } catch (error) {
+    console.error('Error in dynamic overtime calculation:', error);
+    // Fallback to prevent system failure - but log the issue
+    console.warn('⚠️  FALLING BACK TO BASIC CALCULATION DUE TO ERROR');
+    const settingsHelper = new SettingsHelper(clientId);
+    const basicRate = await settingsHelper.getSetting('overtime_rate_multiplier') || 1.5;
+    const basicHourlyRate = baseSalary / (22 * 8); // Only as emergency fallback
+    return totalOvertimeHours * basicHourlyRate * basicRate;
+  }
+};
+
+/**
+ * Get employee-specific daily working hours
+ * Checks if employee follows company schedule or has custom hours
+ */
+const getEmployeeDailyHours = async (employeeId, clientId, db) => {
+  try {
+    // Get employee schedule info
+    const [employee] = await db.execute(`
+      SELECT in_time, out_time, follows_company_schedule 
+      FROM employees WHERE id = ? AND client_id = ?
+    `, [employeeId, clientId]);
+    
+    if (!employee[0]) {
+      throw new Error('Employee not found');
+    }
+    
+    const emp = employee[0];
+    
+    // If employee follows company schedule, get from settings
+    if (emp.follows_company_schedule || !emp.in_time || !emp.out_time) {
+      const settingsHelper = new SettingsHelper(clientId);
+      const workingHoursPerDay = await settingsHelper.getSetting('working_hours_per_day') || 8;
+      console.log(`   Using company schedule: ${workingHoursPerDay} hours/day`);
+      return workingHoursPerDay;
+    }
+    
+    // Calculate from employee's custom schedule
+    const inTime = new Date(`2000-01-01 ${emp.in_time}`);
+    const outTime = new Date(`2000-01-01 ${emp.out_time}`);
+    
+    if (isNaN(inTime.getTime()) || isNaN(outTime.getTime())) {
+      console.warn(`Invalid time format for employee ${employeeId}, using default`);
+      return 8; // Fallback
+    }
+    
+    const diffMs = outTime.getTime() - inTime.getTime();
+    const hours = diffMs / (1000 * 60 * 60);
+    const dailyHours = Math.max(1, Math.min(16, hours)); // Reasonable bounds
+    
+    console.log(`   Using employee custom schedule: ${emp.in_time} - ${emp.out_time} = ${dailyHours} hours/day`);
+    return dailyHours;
+    
+  } catch (error) {
+    console.error('Error getting employee daily hours:', error);
+    return 8; // Fallback to prevent system failure
+  }
+};
+
+/**
+ * Get overtime multipliers from system settings
+ * Returns different rates for regular, weekend, and holiday overtime
+ */
+const getOvertimeMultipliers = async (clientId) => {
+  try {
+    const settingsHelper = new SettingsHelper(clientId);
+    
+    // Get working hours config (has weekend and holiday multipliers)
+    const workingHoursConfig = await settingsHelper.getSetting('working_hours_config') || {};
+    
+    // Get basic overtime rate
+    const basicOvertimeRate = await settingsHelper.getSetting('overtime_rate_multiplier') || 1.5;
+    
+    return {
+      regular: basicOvertimeRate,
+      weekend: workingHoursConfig.weekend_hours_multiplier || 1.5,
+      holiday: workingHoursConfig.holiday_hours_multiplier || 2.5
+    };
+    
+  } catch (error) {
+    console.error('Error getting overtime multipliers:', error);
+    // Return safe defaults
+    return {
+      regular: 1.5,
+      weekend: 1.5, 
+      holiday: 2.5
+    };
+  }
 };
 
 // =============================================
@@ -857,9 +990,19 @@ router.post('/bulk-process',
             pay_period_end, 
             db
           );
-          // Assuming overtime rate is 1.5x hourly rate
-          const hourly_rate = employee.base_salary / (22 * 8); // Assuming 22 working days, 8 hours per day
-          overtime_amount = overtime.totalOvertimeHours * hourly_rate * 1.5;
+          
+          if (overtime.totalOvertimeHours > 0) {
+            // PROPER DYNAMIC CALCULATION - NO HARDCODING
+            overtime_amount = await calculateDynamicOvertimeAmount(
+              employee.id,
+              employee.base_salary,
+              overtime.totalOvertimeHours,
+              pay_period_start,
+              pay_period_end,
+              clientId,
+              db
+            );
+          }
         }
 
         // Calculate salary components
