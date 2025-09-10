@@ -840,6 +840,25 @@ class PayrollRunService {
     }
 
     /**
+     * Calculate payroll hours (capped at employee's daily hours if overtime not paid)
+     * @param {number} actualWorkedHours - Total hours worked
+     * @param {number} dailyHours - Employee's daily working hours limit
+     * @param {string} employeeId - Employee ID for logging
+     * @returns {Promise<number>} Payroll hours to be used for salary calculation
+     */
+    async calculatePayrollHours(actualWorkedHours, dailyHours, employeeId) {
+        // Cap the worked hours at the daily limit for payroll calculation
+        // This prevents paying regular wages for overtime hours
+        const payrollHours = Math.min(actualWorkedHours, dailyHours);
+        
+        if (actualWorkedHours > dailyHours) {
+            console.log(`Employee ${employeeId}: Worked ${actualWorkedHours}h, capped at ${dailyHours}h for payroll`);
+        }
+        
+        return payrollHours;
+    }
+
+    /**
      * Get expected working days (excluding weekends and holidays)
      */
     async getExpectedWorkingDays(attendanceRecords, clientId, departmentId = null) {
