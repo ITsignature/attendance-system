@@ -1,12 +1,7 @@
-// =============================================
-// PAYROLL RUN SERVICE - INDUSTRY STANDARD BATCH PROCESSING
-// =============================================
-// This service handles payroll runs (batches) instead of individual records
-// Implements industry-standard workflow: Create → Calculate → Review → Approve → Process
-
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../config/database');
 const HolidayService = require('./HolidayService');
+const SettingsHelper = require('../utils/settingsHelper');
 
 class PayrollRunService {
     
@@ -607,7 +602,14 @@ class PayrollRunService {
             console.log(`⚠️  ATTENTION: Employee ${employeeId} has NO attendance records in this payroll period!`);
         }
 
-        // Get working hours configuration (with fallback if table doesn't exist)
+        // Get client ID for settings lookup
+        const [employeeInfo] = await db.execute(`
+            SELECT client_id FROM employees WHERE id = ?
+        `, [employeeId]);
+        
+        const clientId = employeeInfo[0]?.client_id;
+        
+        // Get working hours configuration from system settings
         let workingHours = {
             hours_per_day: 8,
             late_threshold: 15,
@@ -618,28 +620,33 @@ class PayrollRunService {
             end_time: '17:00:00'
         };
 
-        try {
-            const [workingHoursConfig] = await db.execute(`
-                SELECT 
-                    hours_per_day,
-                    late_threshold,
-                    full_day_minimum_hours,
-                    half_day_minimum_hours,
-                    short_leave_minimum_hours,
-                    start_time,
-                    end_time
-                FROM working_hours_settings 
-                WHERE client_id = (
-                    SELECT client_id FROM employees WHERE id = ?
-                )
-                LIMIT 1
-            `, [employeeId]);
-
-            if (workingHoursConfig.length > 0) {
-                workingHours = { ...workingHours, ...workingHoursConfig[0] };
+        if (clientId) {
+            try {
+                const settingsHelper = new SettingsHelper(clientId);
+                
+                // Get settings from system_settings table
+                const hoursPerDay = await settingsHelper.getSetting('working_hours_per_day') || 8;
+                const startTime = await settingsHelper.getSetting('work_start_time') || '09:00:00';
+                const endTime = await settingsHelper.getSetting('work_end_time') || '17:00:00';
+                const lateThreshold = await settingsHelper.getSetting('late_threshold_minutes') || 15;
+                const fullDayHours = await settingsHelper.getSetting('full_day_minimum_hours') || 7;
+                const halfDayHours = await settingsHelper.getSetting('half_day_minimum_hours') || 4;
+                const shortLeaveHours = await settingsHelper.getSetting('short_leave_minimum_hours') || 1;
+                
+                workingHours = {
+                    hours_per_day: Number(hoursPerDay),
+                    late_threshold: Number(lateThreshold),
+                    full_day_minimum_hours: Number(fullDayHours),
+                    half_day_minimum_hours: Number(halfDayHours),
+                    short_leave_minimum_hours: Number(shortLeaveHours),
+                    start_time: startTime,
+                    end_time: endTime
+                };
+                
+                console.log(`✅ Loaded working hours from system settings: ${hoursPerDay} hours/day`);
+            } catch (error) {
+                console.log('Error loading working hours from system settings, using defaults:', error.message);
             }
-        } catch (error) {
-            console.log('Working hours settings table not found, using defaults');
         }
 
         return {
