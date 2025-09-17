@@ -628,6 +628,143 @@ const hhmmToMinutes = (t) => {
                   </div>
                 </div>
               </div>
+
+              {/* Day-Specific Schedules Configuration */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                  Day-Specific Schedule Override
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Configure special working hours for specific days (e.g., Saturday half-day)
+                </p>
+
+                <div className="space-y-4">
+                  {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                    const daySchedule = localSettings.day_specific_schedules?.[day];
+                    const isEnabled = daySchedule?.enabled || false;
+                    
+                    return (
+                      <div key={day} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              id={`${day}_schedule_override`}
+                              checked={isEnabled}
+                              onChange={(e) => {
+                                const current = localSettings.day_specific_schedules || {};
+                                const dayConfig = current[day] || { scheduled_hours: 8, salary_weight: 8, apply_to_all: true };
+                                updateLocalSetting('day_specific_schedules', {
+                                  ...current,
+                                  [day]: {
+                                    ...dayConfig,
+                                    enabled: e.target.checked
+                                  }
+                                });
+                              }}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`${day}_schedule_override`} className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                              {day} Override
+                            </label>
+                          </div>
+                        </div>
+
+                        {isEnabled && (
+                          <div className="grid grid-cols-2 gap-4 ml-7">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                Scheduled Hours
+                              </label>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="24"
+                                value={daySchedule?.scheduled_hours || 8}
+                                onChange={(e) => {
+                                  const current = localSettings.day_specific_schedules || {};
+                                  const dayConfig = current[day] || { scheduled_hours: 8, salary_weight: 8, apply_to_all: true };
+                                  updateLocalSetting('day_specific_schedules', {
+                                    ...current,
+                                    [day]: {
+                                      ...dayConfig,
+                                      scheduled_hours: parseFloat(e.target.value) || 0
+                                    }
+                                  });
+                                }}
+                                className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                                placeholder="8"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                Salary Weight (Hours)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="24"
+                                value={daySchedule?.salary_weight || 8}
+                                onChange={(e) => {
+                                  const current = localSettings.day_specific_schedules || {};
+                                  const dayConfig = current[day] || { scheduled_hours: 8, salary_weight: 8, apply_to_all: true };
+                                  updateLocalSetting('day_specific_schedules', {
+                                    ...current,
+                                    [day]: {
+                                      ...dayConfig,
+                                      salary_weight: parseFloat(e.target.value) || 0
+                                    }
+                                  });
+                                }}
+                                className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                                placeholder="8"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id={`${day}_apply_to_all`}
+                                  checked={daySchedule?.apply_to_all !== false}
+                                  onChange={(e) => {
+                                    const current = localSettings.day_specific_schedules || {};
+                                    const dayConfig = current[day] || { scheduled_hours: 8, salary_weight: 8, apply_to_all: true };
+                                    updateLocalSetting('day_specific_schedules', {
+                                      ...current,
+                                      [day]: {
+                                        ...dayConfig,
+                                        apply_to_all: e.target.checked
+                                      }
+                                    });
+                                  }}
+                                  className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor={`${day}_apply_to_all`} className="text-xs text-gray-600 dark:text-gray-400">
+                                  Apply to all employees
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <h5 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
+                      Day-Specific Schedule Example
+                    </h5>
+                    <div className="text-sm text-blue-800 dark:text-blue-400 space-y-1">
+                      <p>• <strong>Saturday Half-Day:</strong> Scheduled Hours: 4, Salary Weight: 8.5</p>
+                      <p>• Employee works 4 hours but gets paid for 8.5 hours (full day salary)</p>
+                      <p>• If overtime is disabled, extra hours beyond scheduled won't add overtime pay</p>
+                      <p>• Use "Apply to all employees" to set organization-wide policies</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );

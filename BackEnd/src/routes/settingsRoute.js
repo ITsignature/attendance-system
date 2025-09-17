@@ -32,7 +32,7 @@ const validateSettingKey = (key) => {
     'working_hours_per_day', 'work_start_time', 'work_end_time', 
     'late_threshold_minutes', 'overtime_rate_multiplier',
     'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours',
-    'weekend_working_days', 'working_hours_config',
+    'weekend_working_days', 'working_hours_config', 'day_specific_schedules',
     
     // Payroll Settings
     'payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'overtime_enabled',
@@ -805,6 +805,210 @@ router.get('/export/backup',
     res.setHeader('Content-Disposition', `attachment; filename="settings-backup-${new Date().toISOString().split('T')[0]}.json"`);
     
     res.status(200).json(backup);
+  })
+);
+
+// =============================================
+// DAY-SPECIFIC SCHEDULES MANAGEMENT
+// =============================================
+
+// GET day-specific schedules
+router.get('/day-specific-schedules',
+  checkPermission('settings.view'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    
+    try {
+      const [setting] = await db.execute(`
+        SELECT setting_value
+        FROM system_settings
+        WHERE client_id = ? AND setting_key = 'day_specific_schedules'
+        LIMIT 1
+      `, [req.user.clientId]);
+      
+      let daySpecificSchedules = {};
+      if (setting.length > 0) {
+        daySpecificSchedules = JSON.parse(setting[0].setting_value);
+      }
+      
+      res.status(200).json({
+        success: true,
+        data: daySpecificSchedules
+      });
+      
+    } catch (error) {
+      console.error('Error fetching day-specific schedules:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch day-specific schedules',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  })
+);
+
+// POST/PUT day-specific schedules
+router.post('/day-specific-schedules',
+  checkPermission('settings.edit'),
+  [
+    body('schedules').isObject().withMessage('Schedules must be an object'),
+    body('schedules.*.scheduled_hours').optional().isFloat({ min: 0, max: 24 }).withMessage('Scheduled hours must be between 0 and 24'),
+    body('schedules.*.salary_weight').optional().isFloat({ min: 0, max: 24 }).withMessage('Salary weight must be between 0 and 24'),
+    body('schedules.*.apply_to_all').optional().isBoolean().withMessage('Apply to all must be boolean')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+    
+    const db = getDB();
+    const { schedules } = req.body;
+    
+    try {
+      await db.execute('START TRANSACTION');
+      
+      // Validate day names
+      const validDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      for (const dayName of Object.keys(schedules)) {
+        if (!validDays.includes(dayName.toLowerCase())) {
+          throw new Error(`Invalid day name: ${dayName}. Must be one of: ${validDays.join(', ')}`);
+        }
+      }
+      
+      // Convert to lowercase for consistency
+      const normalizedSchedules = {};
+      for (const [dayName, schedule] of Object.entries(schedules)) {
+        if (schedule.scheduled_hours !== undefined || schedule.salary_weight !== undefined) {
+          normalizedSchedules[dayName.toLowerCase()] = {
+            scheduled_hours: parseFloat(schedule.scheduled_hours),
+            salary_weight: parseFloat(schedule.salary_weight),
+            apply_to_all: schedule.apply_to_all !== false // Default to true
+          };
+        }
+      }
+      
+      // Check if setting exists
+      const [existing] = await db.execute(`
+        SELECT id FROM system_settings
+        WHERE client_id = ? AND setting_key = 'day_specific_schedules'
+      `, [req.user.clientId]);
+      
+      const settingValue = JSON.stringify(normalizedSchedules);
+      
+      if (existing.length > 0) {
+        // Update existing setting
+        await db.execute(`
+          UPDATE system_settings
+          SET setting_value = ?, updated_at = NOW()
+          WHERE client_id = ? AND setting_key = 'day_specific_schedules'
+        `, [settingValue, req.user.clientId]);
+      } else {
+        // Create new setting
+        const { v4: uuidv4 } = require('uuid');
+        await db.execute(`
+          INSERT INTO system_settings (
+            id, client_id, setting_key, setting_value, setting_type, 
+            description, is_public, created_at, updated_at
+          ) VALUES (?, ?, 'day_specific_schedules', ?, 'json', 
+                   'Day-specific schedule configurations for different working hours', FALSE, NOW(), NOW())
+        `, [uuidv4(), req.user.clientId, settingValue]);
+      }
+      
+      await db.execute('COMMIT');
+      
+      res.status(200).json({
+        success: true,
+        message: 'Day-specific schedules updated successfully',
+        data: normalizedSchedules
+      });
+      
+    } catch (error) {
+      await db.execute('ROLLBACK');
+      console.error('Error updating day-specific schedules:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update day-specific schedules',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  })
+);
+
+// DELETE specific day schedule
+router.delete('/day-specific-schedules/:dayName',
+  checkPermission('settings.edit'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const { dayName } = req.params;
+    
+    const validDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    if (!validDays.includes(dayName.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid day name: ${dayName}. Must be one of: ${validDays.join(', ')}`
+      });
+    }
+    
+    try {
+      await db.execute('START TRANSACTION');
+      
+      // Get current schedules
+      const [setting] = await db.execute(`
+        SELECT setting_value
+        FROM system_settings
+        WHERE client_id = ? AND setting_key = 'day_specific_schedules'
+        LIMIT 1
+      `, [req.user.clientId]);
+      
+      if (setting.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'No day-specific schedules found'
+        });
+      }
+      
+      const schedules = JSON.parse(setting[0].setting_value);
+      const normalizedDayName = dayName.toLowerCase();
+      
+      if (!schedules[normalizedDayName]) {
+        return res.status(404).json({
+          success: false,
+          message: `No schedule found for ${dayName}`
+        });
+      }
+      
+      // Remove the day from schedules
+      delete schedules[normalizedDayName];
+      
+      // Update the setting
+      await db.execute(`
+        UPDATE system_settings
+        SET setting_value = ?, updated_at = NOW()
+        WHERE client_id = ? AND setting_key = 'day_specific_schedules'
+      `, [JSON.stringify(schedules), req.user.clientId]);
+      
+      await db.execute('COMMIT');
+      
+      res.status(200).json({
+        success: true,
+        message: `Day-specific schedule for ${dayName} deleted successfully`,
+        data: schedules
+      });
+      
+    } catch (error) {
+      await db.execute('ROLLBACK');
+      console.error('Error deleting day-specific schedule:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete day-specific schedule',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   })
 );
 
