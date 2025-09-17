@@ -7,6 +7,7 @@ import { useNavigate, useParams } from "react-router";
 import { DynamicProtectedComponent } from "../RBACSystem/rbacSystem";
 import apiService from '../../services/api';
 import leaveApiService from '../../services/leaveApi';
+import payrollApiService, { PayrollRecord } from '../../services/payrollService';
 
 // Types
 interface Employee {
@@ -103,6 +104,8 @@ interface FinancialRecord {
   slip?: File | null;
   slipUrl?: string;
   status: 'Paid' | 'Pending' | 'Approved' | 'Rejected';
+  payrollRecord?: PayrollRecord;
+  canDownloadSlip?: boolean;
 }
 
 interface EmployeeDocument {
@@ -161,6 +164,26 @@ const EmployeeDetails: React.FC = () => {
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
   const [documents, setDocuments] = useState<{[key: string]: EmployeeDocument[]}>({});
+  const [financialLoading, setFinancialLoading] = useState(false);
+  const [payrollSummary, setPayrollSummary] = useState<any>(null);
+  const [showAddRecordModal, setShowAddRecordModal] = useState(false);
+  const [addingRecord, setAddingRecord] = useState(false);
+  const [newRecordData, setNewRecordData] = useState({
+    type: 'loan' as 'loan' | 'advance' | 'bonus',
+    amount: '',
+    description: '',
+    loanType: 'personal',
+    interestRate: '',
+    tenureMonths: '',
+    startDate: new Date().toISOString().split('T')[0],
+    bonusType: 'performance',
+    bonusPeriod: '',
+    advanceType: 'salary',
+    deductionMonths: '1',
+    requiredDate: '',
+    justification: '',
+    notes: ''
+  });
   
   // UI State
   const [loading, setLoading] = useState(true);
@@ -355,42 +378,36 @@ const EmployeeDetails: React.FC = () => {
 
   const loadFinancialData = async (empId: string) => {
     try {
-      // Mock financial data - replace with actual API call
-      const mockFinancial: FinancialRecord[] = [
-        {
-          id: '1',
-          type: 'salary',
-          amount: 85000,
-          date: '2024-07-31',
-          monthYear: '2024-07',
-          description: 'Monthly Salary - July 2024',
-          slipUrl: 'salary_july_2024.pdf',
-          status: 'Paid'
-        },
-        {
-          id: '2',
-          type: 'salary',
-          amount: 85000,
-          date: '2024-06-30',
-          monthYear: '2024-06',
-          description: 'Monthly Salary - June 2024',
-          slipUrl: 'salary_june_2024.pdf',
-          status: 'Paid'
-        },
-        {
-          id: '3',
-          type: 'bonus',
-          amount: 15000,
-          date: '2024-06-15',
-          description: 'Performance Bonus Q2 2024',
-          status: 'Paid'
-        }
-      ];
-      
-      setFinancialRecords(mockFinancial);
+      setFinancialLoading(true);
+      console.log('🔄 Loading financial data for employee:', empId);
+
+      // Get financial records from our new API
+      const response = await loadFinancialRecordsFromAPI(empId);
+
+      if (response && response.length > 0) {
+        setFinancialRecords(response);
+        console.log('✅ Financial data loaded:', response.length, 'records');
+
+        // Calculate summary from the loaded records
+        const totalEarned = response.reduce((sum, record) => sum + record.amount, 0);
+        setPayrollSummary({
+          total_records: response.length,
+          total_earned: totalEarned,
+          average_salary: response.length > 0 ? totalEarned / response.length : 0,
+          highest_salary: Math.max(...response.map(r => r.amount), 0),
+          lowest_salary: Math.min(...response.map(r => r.amount), 0)
+        });
+      } else {
+        console.warn('No financial records found for employee');
+        setFinancialRecords([]);
+        setPayrollSummary(null);
+      }
     } catch (error) {
-      console.warn('Failed to load financial data:', error);
+      console.error('❌ Failed to load financial data:', error);
       setFinancialRecords([]);
+      setPayrollSummary(null);
+    } finally {
+      setFinancialLoading(false);
     }
   };
 
@@ -530,6 +547,261 @@ const EmployeeDetails: React.FC = () => {
     } catch {
       return timeString;
     }
+  };
+
+  // Helper functions for financial data
+  const formatMonthYear = (dateString: string) => {
+    const date = new Date(dateString);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const formatMonthYearDescription = (startDate: string, endDate: string) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return `${start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+  };
+
+  const mapPaymentStatus = (status: string): 'Paid' | 'Pending' | 'Approved' | 'Rejected' => {
+    switch (status) {
+      case 'paid': return 'Paid';
+      case 'pending': return 'Pending';
+      case 'processing': return 'Approved';
+      case 'failed': return 'Rejected';
+      default: return 'Pending';
+    }
+  };
+
+  // Handle payslip download
+  const handleDownloadPayslip = async (recordId: string, description: string) => {
+    try {
+      console.log('🔄 Downloading payslip for record:', recordId);
+      const response = await payrollApiService.getPayslip(recordId);
+
+      if (response.success && response.data) {
+        // Generate and download PDF from payslip data
+        generatePayslipPDF(response.data, description);
+      } else {
+        setError('Failed to generate payslip');
+      }
+    } catch (error) {
+      console.error('❌ Failed to download payslip:', error);
+      setError('Failed to download payslip');
+    }
+  };
+
+  // Handle adding new financial record
+  const handleAddFinancialRecord = async () => {
+    try {
+      setAddingRecord(true);
+      console.log('🔄 Adding financial record:', newRecordData);
+
+      // Validate form data
+      const validation = validateFinancialRecord(newRecordData);
+      if (!validation.isValid) {
+        setError(validation.errors.join(', '));
+        return;
+      }
+
+      // Prepare API payload based on record type
+      let apiPayload: any = {
+        employee_id: employee?.id,
+        type: newRecordData.type,
+        amount: parseFloat(newRecordData.amount),
+        description: newRecordData.description,
+        notes: newRecordData.notes,
+        created_by: 'current_user' // This should come from auth context
+      };
+
+      // Add type-specific fields
+      if (newRecordData.type === 'loan') {
+        apiPayload = {
+          ...apiPayload,
+          loan_type: newRecordData.loanType,
+          interest_rate: parseFloat(newRecordData.interestRate) || 0,
+          tenure_months: parseInt(newRecordData.tenureMonths) || 12,
+          start_date: newRecordData.startDate
+        };
+      } else if (newRecordData.type === 'advance') {
+        apiPayload = {
+          ...apiPayload,
+          advance_type: newRecordData.advanceType,
+          deduction_months: parseInt(newRecordData.deductionMonths) || 1,
+          required_date: newRecordData.requiredDate,
+          justification: newRecordData.justification
+        };
+      } else if (newRecordData.type === 'bonus') {
+        apiPayload = {
+          ...apiPayload,
+          bonus_type: newRecordData.bonusType,
+          bonus_period: newRecordData.bonusPeriod,
+          effective_date: new Date().toISOString().split('T')[0]
+        };
+      }
+
+      // Call appropriate API based on record type
+      let response;
+      switch (newRecordData.type) {
+        case 'loan':
+          response = await createEmployeeLoan(apiPayload);
+          break;
+        case 'advance':
+          response = await createAdvancePayment(apiPayload);
+          break;
+        case 'bonus':
+          response = await createBonusRecord(apiPayload);
+          break;
+        default:
+          throw new Error('Invalid record type');
+      }
+
+      if (response.success) {
+        // Refresh financial data
+        await loadFinancialData(employee!.id);
+
+        // Reset form and close modal
+        setNewRecordData({
+          type: 'loan',
+          amount: '',
+          description: '',
+          loanType: 'personal',
+          interestRate: '',
+          tenureMonths: '',
+          startDate: new Date().toISOString().split('T')[0],
+          bonusType: 'performance',
+          bonusPeriod: '',
+          advanceType: 'salary',
+          deductionMonths: '1',
+          requiredDate: '',
+          justification: '',
+          notes: ''
+        });
+        setShowAddRecordModal(false);
+
+        console.log('✅ Financial record added successfully');
+      } else {
+        setError(response.message || 'Failed to add financial record');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to add financial record:', error);
+      setError(error.message || 'Failed to add financial record');
+    } finally {
+      setAddingRecord(false);
+    }
+  };
+
+  // Validate financial record data
+  const validateFinancialRecord = (data: typeof newRecordData) => {
+    const errors: string[] = [];
+
+    if (!data.amount || parseFloat(data.amount) <= 0) {
+      errors.push('Amount must be greater than 0');
+    }
+
+    if (!data.description.trim()) {
+      errors.push('Description is required');
+    }
+
+    if (data.type === 'loan') {
+      if (!data.tenureMonths || parseInt(data.tenureMonths) <= 0) {
+        errors.push('Tenure months must be greater than 0');
+      }
+      if (data.interestRate && parseFloat(data.interestRate) < 0) {
+        errors.push('Interest rate cannot be negative');
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  };
+
+  // API functions for creating financial records
+  const createEmployeeLoan = async (data: any) => {
+    return apiService.apiCall('/api/employees/loans', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  };
+
+  const createAdvancePayment = async (data: any) => {
+    return apiService.apiCall('/api/employees/advances', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        advance_type: data.advance_type || 'salary',
+        deduction_months: parseInt(data.deduction_months) || 1
+      })
+    });
+  };
+
+  const createBonusRecord = async (data: any) => {
+    return apiService.apiCall('/api/employees/bonuses', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        bonus_type: data.bonus_type || 'performance',
+        effective_date: data.effective_date || new Date().toISOString().split('T')[0]
+      })
+    });
+  };
+
+  // Load financial records from dedicated endpoints
+  const loadFinancialRecordsFromAPI = async (empId: string) => {
+    try {
+      const response = await apiService.apiCall(`/api/employees/${empId}/financial-records`);
+
+      if (response.success && response.data) {
+        const records = response.data.map((record: any) => ({
+          id: record.id,
+          type: record.type,
+          amount: record.amount,
+          date: record.created_at?.split('T')[0] || record.effective_date || record.start_date || record.request_date,
+          monthYear: formatMonthYear(record.created_at || record.effective_date || record.start_date || record.request_date),
+          description: record.description || `${record.type} - ${record.loan_type || record.advance_type || record.bonus_type}`,
+          status: mapFinancialStatus(record.status),
+          canDownloadSlip: record.status === 'paid' || record.status === 'approved',
+          financialRecord: record
+        }));
+
+        setFinancialRecords(records);
+        setPayrollSummary(response.summary);
+        return records;
+      }
+    } catch (error) {
+      console.error('Failed to load financial records from API:', error);
+      return [];
+    }
+  };
+
+  // Map financial record status to display status
+  const mapFinancialStatus = (status: string): 'Paid' | 'Pending' | 'Approved' | 'Rejected' => {
+    switch (status) {
+      case 'paid':
+      case 'completed': return 'Paid';
+      case 'approved':
+      case 'active': return 'Approved';  // Active loans/advances/bonuses are approved
+      case 'pending': return 'Pending';
+      case 'rejected':
+      case 'cancelled': return 'Rejected';
+      default: return 'Pending';
+    }
+  };
+
+  // Generate PDF from payslip data (you can use libraries like jsPDF or html2pdf)
+  const generatePayslipPDF = (payslipData: any, filename: string) => {
+    // For now, create a simple download with JSON data
+    // In production, you'd use a proper PDF generation library
+    const dataStr = JSON.stringify(payslipData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const formatHours = (hours?: number) => {
@@ -1346,8 +1618,12 @@ const EmployeeDetails: React.FC = () => {
                       <option value="loan">Loan</option>
                     </Select>
 
-                    <DynamicProtectedComponent permission="payroll.view">
-                      <Button size="sm" color="purple">
+                    <DynamicProtectedComponent permission="payroll.edit">
+                      <Button
+                        size="sm"
+                        color="purple"
+                        onClick={() => setShowAddRecordModal(true)}
+                      >
                         <FaPlus className="w-3 h-3 mr-2" />
                         Add Record
                       </Button>
@@ -1489,6 +1765,333 @@ const EmployeeDetails: React.FC = () => {
             ← Back to Employees
           </Button>
         </div>
+
+        {/* Add Financial Record Modal */}
+        <Modal show={showAddRecordModal} onClose={() => setShowAddRecordModal(false)} size="lg">
+          <Modal.Header>Add Financial Record for {employee.first_name} {employee.last_name}</Modal.Header>
+          <Modal.Body>
+            <div className="space-y-6">
+              {/* Record Type Selection */}
+              <div>
+                <Label htmlFor="recordType" value="Record Type" className="mb-2" />
+                <Select
+                  id="recordType"
+                  value={newRecordData.type}
+                  onChange={(e) => setNewRecordData(prev => ({
+                    ...prev,
+                    type: e.target.value as 'loan' | 'advance' | 'bonus'
+                  }))}
+                >
+                  <option value="loan">Loan</option>
+                  <option value="advance">Advance Payment</option>
+                  <option value="bonus">Bonus</option>
+                </Select>
+              </div>
+
+              {/* Amount */}
+              <div>
+                <Label htmlFor="amount" value="Amount (LKR)" className="mb-2" />
+                <TextInput
+                  id="amount"
+                  type="number"
+                  placeholder="Enter amount"
+                  value={newRecordData.amount}
+                  onChange={(e) => setNewRecordData(prev => ({ ...prev, amount: e.target.value }))}
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <Label htmlFor="description" value="Description" className="mb-2" />
+                <TextInput
+                  id="description"
+                  placeholder="Enter description"
+                  value={newRecordData.description}
+                  onChange={(e) => setNewRecordData(prev => ({ ...prev, description: e.target.value }))}
+                  required
+                />
+              </div>
+
+              {/* Loan-specific fields */}
+              {newRecordData.type === 'loan' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="loanType" value="Loan Type" className="mb-2" />
+                      <Select
+                        id="loanType"
+                        value={newRecordData.loanType}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, loanType: e.target.value }))}
+                      >
+                        <option value="personal">Personal Loan</option>
+                        <option value="advance">Salary Advance</option>
+                        <option value="emergency">Emergency Loan</option>
+                        <option value="housing">Housing Loan</option>
+                        <option value="education">Education Loan</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="interestRate" value="Interest Rate (%)" className="mb-2" />
+                      <TextInput
+                        id="interestRate"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={newRecordData.interestRate}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, interestRate: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="tenureMonths" value="Tenure (Months)" className="mb-2" />
+                      <TextInput
+                        id="tenureMonths"
+                        type="number"
+                        placeholder="12"
+                        value={newRecordData.tenureMonths}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, tenureMonths: e.target.value }))}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="startDate" value="Start Date" className="mb-2" />
+                      <TextInput
+                        id="startDate"
+                        type="date"
+                        value={newRecordData.startDate}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, startDate: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Loan Calculation Preview */}
+                  {newRecordData.amount && newRecordData.tenureMonths && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                      <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Loan Calculation Preview</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-400">Monthly EMI:</p>
+                          <p className="font-semibold">
+                            LKR {(
+                              parseFloat(newRecordData.amount) / parseInt(newRecordData.tenureMonths || '1')
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-400">Total Payable:</p>
+                          <p className="font-semibold">
+                            LKR {(
+                              parseFloat(newRecordData.amount) *
+                              (1 + (parseFloat(newRecordData.interestRate || '0') / 100))
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Advance-specific fields */}
+              {newRecordData.type === 'advance' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="advanceType" value="Advance Type" className="mb-2" />
+                      <Select
+                        id="advanceType"
+                        value={newRecordData.advanceType}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, advanceType: e.target.value }))}
+                      >
+                        <option value="salary">Salary Advance</option>
+                        <option value="emergency">Emergency Advance</option>
+                        <option value="travel">Travel Advance</option>
+                        <option value="medical">Medical Advance</option>
+                        <option value="educational">Educational Advance</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="deductionMonths" value="Deduction Period (Months)" className="mb-2" />
+                      <TextInput
+                        id="deductionMonths"
+                        type="number"
+                        min="1"
+                        max="12"
+                        placeholder="1"
+                        value={newRecordData.deductionMonths}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, deductionMonths: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="requiredDate" value="Required Date" className="mb-2" />
+                      <TextInput
+                        id="requiredDate"
+                        type="date"
+                        value={newRecordData.requiredDate}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, requiredDate: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="justification" value="Justification" className="mb-2" />
+                      <TextInput
+                        id="justification"
+                        placeholder="Reason for advance request"
+                        value={newRecordData.justification}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, justification: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Advance Calculation Preview */}
+                  {newRecordData.amount && newRecordData.deductionMonths && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+                      <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">Deduction Schedule</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-400">Monthly Deduction:</p>
+                          <p className="font-semibold">
+                            LKR {(
+                              parseFloat(newRecordData.amount) / parseInt(newRecordData.deductionMonths || '1')
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-400">Deduction Period:</p>
+                          <p className="font-semibold">
+                            {newRecordData.deductionMonths} month{parseInt(newRecordData.deductionMonths) > 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Bonus-specific fields */}
+              {newRecordData.type === 'bonus' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="bonusType" value="Bonus Type" className="mb-2" />
+                      <Select
+                        id="bonusType"
+                        value={newRecordData.bonusType}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, bonusType: e.target.value }))}
+                      >
+                        <option value="performance">Performance Bonus</option>
+                        <option value="annual">Annual Bonus</option>
+                        <option value="quarterly">Quarterly Bonus</option>
+                        <option value="project">Project Bonus</option>
+                        <option value="spot">Spot Bonus</option>
+                        <option value="retention">Retention Bonus</option>
+                        <option value="referral">Referral Bonus</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="bonusPeriod" value="Bonus Period" className="mb-2" />
+                      <TextInput
+                        id="bonusPeriod"
+                        placeholder="e.g., Q4 2024, Annual 2024"
+                        value={newRecordData.bonusPeriod}
+                        onChange={(e) => setNewRecordData(prev => ({ ...prev, bonusPeriod: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Bonus Payment Info</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400">Payment Method:</p>
+                        <p className="font-semibold">Next Payroll</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600 dark:text-gray-400">Bonus Amount:</p>
+                        <p className="font-semibold">
+                          LKR {newRecordData.amount ? parseFloat(newRecordData.amount).toLocaleString() : '0'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Notes */}
+              <div>
+                <Label htmlFor="notes" value="Additional Notes" className="mb-2" />
+                <TextInput
+                  id="notes"
+                  placeholder="Optional notes"
+                  value={newRecordData.notes}
+                  onChange={(e) => setNewRecordData(prev => ({ ...prev, notes: e.target.value }))}
+                />
+              </div>
+
+              {/* Approval Notice */}
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">Approval Required</h4>
+                <p className="text-sm text-purple-700 dark:text-purple-300">
+                  This {newRecordData.type} request will be sent for approval before processing.
+                </p>
+              </div>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              color="purple"
+              onClick={handleAddFinancialRecord}
+              disabled={addingRecord || !newRecordData.amount || !newRecordData.description}
+            >
+              {addingRecord ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Creating...
+                </>
+              ) : (
+                `Create ${newRecordData.type.charAt(0).toUpperCase() + newRecordData.type.slice(1)}`
+              )}
+            </Button>
+            <Button
+              color="gray"
+              onClick={() => {
+                setShowAddRecordModal(false);
+                setNewRecordData({
+                  type: 'loan',
+                  amount: '',
+                  description: '',
+                  loanType: 'personal',
+                  interestRate: '',
+                  tenureMonths: '',
+                  startDate: new Date().toISOString().split('T')[0],
+                  bonusType: 'performance',
+                  bonusPeriod: '',
+                  advanceType: 'salary',
+                  deductionMonths: '1',
+                  requiredDate: '',
+                  justification: '',
+                  notes: ''
+                });
+              }}
+              disabled={addingRecord}
+            >
+              Cancel
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
         {/* Terminate Confirmation Modal */}
         <Modal show={showTerminateModal} onClose={() => setShowTerminateModal(false)}>

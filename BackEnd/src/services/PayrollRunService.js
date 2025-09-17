@@ -2,6 +2,8 @@ const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../config/database');
 const HolidayService = require('./HolidayService');
 const SettingsHelper = require('../utils/settingsHelper');
+const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
+const payrollLogger = require('../utils/payrollLogger');
 
 class PayrollRunService {
     
@@ -93,7 +95,12 @@ class PayrollRunService {
      */
     async calculatePayrollRun(runId, clientId, userId) {
         const db = getDB();
-        
+
+        // Start logging for this payroll calculation
+        payrollLogger.startLogging(runId);
+        console.log(`🚀 Starting payroll calculation for run: ${runId}`);
+        console.log(`👤 Client ID: ${clientId}, User ID: ${userId}`);
+
         try {
             await db.execute('START TRANSACTION');
 
@@ -107,11 +114,14 @@ class PayrollRunService {
                 throw new Error('Payroll run not found or cannot be calculated');
             }
 
+            console.log(`✅ Payroll run verified: ${run[0].run_name} (${run[0].run_number})`);
+
             // Update status to calculating
             await db.execute(
                 'UPDATE payroll_runs SET run_status = "calculating", calculation_started_at = NOW() WHERE id = ?',
                 [runId]
             );
+            console.log(`📊 Status updated to 'calculating'`);
 
             // Get all records in this run
             const [records] = await db.execute(`
@@ -124,18 +134,34 @@ class PayrollRunService {
             let successCount = 0;
             let errorCount = 0;
 
+            console.log(`👥 Processing ${records.length} employee records:`);
+            console.log('=' .repeat(60));
+
             // Calculate each record
             for (const record of records) {
+                console.log(`\n🧮 Processing: ${record.employee_name} (${record.employee_code})`);
+                console.log(`📋 Record ID: ${record.id}`);
+
                 try {
                     await this.calculateSingleRecord(record);
                     successCount++;
+                    console.log(`✅ ${record.employee_name}: Calculation completed successfully`);
                 } catch (error) {
+                    console.error(`❌ ${record.employee_name}: Calculation failed`);
                     console.error(`Error calculating record ${record.id}:`, error.message);
                     console.error('Error details:', error);
                     await this.markRecordError(record.id, error.message);
                     errorCount++;
                 }
+
+                // Progress indicator
+                const processed = successCount + errorCount;
+                const progress = ((processed / records.length) * 100).toFixed(1);
+                console.log(`📊 Progress: ${processed}/${records.length} (${progress}%)`);
             }
+
+            console.log('\n' + '=' .repeat(60));
+            console.log(`📈 Processing Summary: ${successCount} successful, ${errorCount} failed`);
 
             // Update run statistics and status
             await this.updateRunStatistics(runId);
@@ -154,19 +180,37 @@ class PayrollRunService {
 
             await db.execute('COMMIT');
 
+            console.log(`🎉 Payroll calculation completed successfully!`);
+            console.log(`📊 Final Summary: ${successCount} processed, ${errorCount} errors`);
+
+            // Stop logging and save to file
+            const logFilePath = await payrollLogger.stopLogging();
+
             return {
                 success: true,
                 data: {
                     run_id: runId,
                     processed_records: successCount,
                     error_records: errorCount,
-                    status: finalStatus
+                    status: finalStatus,
+                    log_file_path: logFilePath // Include log file path in response
                 }
             };
 
         } catch (error) {
+            console.error(`❌ Payroll calculation failed:`, error);
+
+            // Stop logging even on error and save error logs
+            const logFilePath = await payrollLogger.stopLogging();
+
             await db.execute('ROLLBACK');
-            throw error;
+
+            // Add log file path to error for debugging
+            const enhancedError = new Error(error.message);
+            enhancedError.logFilePath = logFilePath;
+            enhancedError.originalError = error;
+
+            throw enhancedError;
         }
     }
 
@@ -496,53 +540,104 @@ class PayrollRunService {
      */
     async calculateSingleRecord(record) {
         const db = getDB();
-        
+
         // Get the calculation method from the run
         const [runInfo] = await db.execute(
-            'SELECT calculation_method FROM payroll_runs WHERE id = ?',
+            'SELECT calculation_method, period_id FROM payroll_runs WHERE id = ?',
             [record.run_id]
         );
         const calculationMethod = runInfo[0]?.calculation_method || 'advanced';
-        
+        const periodId = runInfo[0]?.period_id;
+
+        // Get payroll period information for financial records processing
+        const [periodInfo] = await db.execute(
+            'SELECT period_start_date, period_end_date FROM payroll_periods WHERE id = ?',
+            [periodId]
+        );
+        const payrollPeriod = {
+            start: periodInfo[0]?.period_start_date,
+            end: periodInfo[0]?.period_end_date
+        };
+
         // Get employee allowances and deductions
         const employeeData = await this.getEmployeePayrollData(record.employee_id, record.client_id, record.run_id);
-        
+
         // Get attendance summary and leave data for attendance-based calculations
         const attendanceSummary = await this.getAttendanceSummary(record.employee_id, record.run_id);
         const approvedLeaves = await this.getApprovedLeaves(record.employee_id, record.run_id);
-        
+
+        // =============================================
+        // PROCESS FINANCIAL RECORDS (LOANS, ADVANCES, BONUSES)
+        // =============================================
+        console.log(`🔄 Processing financial records for employee ${record.employee_id}...`);
+        const financialAdjustments = await FinancialRecordsIntegration.processFinancialRecords(
+            record.employee_id,
+            payrollPeriod,
+            record.run_id
+        );
+
         // Calculate gross salary with all components
         const grossComponents = await this.calculateGrossComponents(record, employeeData);
-        const grossSalary = grossComponents.total; // 🔧 FIX: Gross salary should NEVER have deductions subtracted!
-        
+        let grossSalary = grossComponents.total; // Base + Allowances + Overtime
+
+        // Add financial bonuses to gross salary
+        if (financialAdjustments.bonuses > 0) {
+            grossSalary += financialAdjustments.bonuses;
+            console.log(`💰 Added financial bonuses: LKR ${financialAdjustments.bonuses} to gross salary`);
+        }
+
         // Calculate attendance-based deductions BEFORE other deductions
         const attendanceDeductions = await this.calculateAttendanceDeductions(
-            record.employee_id, 
-            record.run_id, 
-            parseFloat(record.base_salary) || 0, 
-            attendanceSummary, 
+            record.employee_id,
+            record.run_id,
+            parseFloat(record.base_salary) || 0,
+            attendanceSummary,
             approvedLeaves
         );
-        
-        // 🔧 REMOVED INCORRECT LINE: DO NOT subtract attendance deductions from gross salary!
-        // Gross salary = Base + Allowances + Overtime + Bonuses (NO deductions!)
-        
+
         // Calculate regular deductions based on method
         const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData);
         console.log(`Regular deductions for ${record.employee_name}:`, deductionComponents);
-        
-        // Combine regular deductions with attendance deductions
+
+        // Combine all deductions: regular + attendance + financial
         const combinedDeductions = {
-            components: [...deductionComponents.components, ...attendanceDeductions.components],
-            total: deductionComponents.total + attendanceDeductions.total
+            components: [
+                ...deductionComponents.components,
+                ...attendanceDeductions.components
+            ],
+            total: deductionComponents.total + attendanceDeductions.total + financialAdjustments.summary.totalDeductions
         };
+
+        // Add financial deduction components
+        if (financialAdjustments.loanDeductions > 0) {
+            combinedDeductions.components.push({
+                code: 'LOAN_DED',
+                name: 'Loan Deductions',
+                type: 'deduction',
+                category: 'loan', // Use existing enum value
+                amount: financialAdjustments.loanDeductions,
+                details: `${financialAdjustments.records.loans.length} loan(s)`
+            });
+        }
+
+        if (financialAdjustments.advanceDeductions > 0) {
+            combinedDeductions.components.push({
+                code: 'ADVANCE_DED',
+                name: 'Advance Deductions',
+                type: 'deduction',
+                category: 'other', // Use existing enum value
+                amount: financialAdjustments.advanceDeductions,
+                details: `${financialAdjustments.records.advances.length} advance(s)`
+            });
+        }
+
         console.log(`Combined deductions for ${record.employee_name}:`, combinedDeductions);
         const totalDeductions = combinedDeductions.total;
-        
+
         // Calculate taxes based on method
         const taxComponents = await this.calculateTaxes(grossSalary, calculationMethod, employeeData);
         const totalTaxes = taxComponents.total;
-        
+
         const netSalary = grossSalary - totalDeductions - totalTaxes;
 
         // Update record with calculated amounts
@@ -557,12 +652,28 @@ class PayrollRunService {
                 calculation_status = 'calculated',
                 calculated_at = NOW()
             WHERE id = ?
-        `, [grossComponents.additionsTotal, totalDeductions, totalTaxes, grossSalary, grossSalary, netSalary, record.id]);
+        `, [grossComponents.additionsTotal + financialAdjustments.bonuses, totalDeductions, totalTaxes, grossSalary, grossSalary, netSalary, record.id]);
 
-        // Create detailed component records
+        // Create detailed component records with financial components
+        const updatedGrossComponents = {
+            components: [...grossComponents.components]
+        };
+
+        // Add bonus components to gross
+        if (financialAdjustments.bonuses > 0) {
+            updatedGrossComponents.components.push({
+                code: 'BONUS',
+                name: 'Financial Bonuses',
+                type: 'earning',
+                category: 'bonus', // Use existing enum value
+                amount: financialAdjustments.bonuses,
+                details: `${financialAdjustments.records.bonuses.length} bonus(es)`
+            });
+        }
+
         try {
             await this.createPayrollComponents(record.id, {
-                grossComponents: { components: grossComponents.components }, // Only pass components, not totals
+                grossComponents: { components: updatedGrossComponents.components },
                 deductionComponents: combinedDeductions,
                 taxComponents
             }, record.client_id);
@@ -570,6 +681,21 @@ class PayrollRunService {
             console.log(`Component creation failed for record ${record.id}: ${componentError.message}`);
             console.log(`Combined deductions structure:`, JSON.stringify(combinedDeductions, null, 2));
             // Continue with calculation even if component creation fails
+        }
+
+        // =============================================
+        // UPDATE FINANCIAL RECORDS BALANCES
+        // =============================================
+        try {
+            await FinancialRecordsIntegration.updateFinancialBalances(
+                record.employee_id,
+                financialAdjustments,
+                record.run_id
+            );
+            console.log(`✅ Financial balances updated for employee ${record.employee_id}`);
+        } catch (error) {
+            console.error(`❌ Error updating financial balances for employee ${record.employee_id}:`, error);
+            // Log but don't fail the payroll calculation
         }
     }
 
@@ -985,7 +1111,7 @@ class PayrollRunService {
                 code: 'ABSENT_DEDUCTION',
                 name: 'Absent Days Deduction',
                 type: 'deduction',
-                category: 'attendance',
+                category: 'other', // Use existing enum value
                 amount: deductions.absentDeduction,
                 details: `${unpaidAbsentDays} days × ${perDaySalary.toFixed(2)}`
             });
@@ -998,7 +1124,7 @@ class PayrollRunService {
                 code: 'LATE_DEDUCTION',
                 name: 'Late Arrival Deduction',
                 type: 'deduction',
-                category: 'attendance',
+                category: 'other', // Use existing enum value
                 amount: deductions.lateDeduction,
                 details: `${attendanceSummary.summary.lateMinutes} minutes × ${perMinuteSalary.toFixed(4)}`
             });
@@ -1013,7 +1139,7 @@ class PayrollRunService {
                 code: 'SHORTFALL_DED', // 🔧 FIX: Shortened to be safe with varchar(20) limit
                 name: 'Working Hours Shortfall',
                 type: 'deduction',
-                category: 'attendance',
+                category: 'other', // Use existing enum value
                 amount: deductions.shortfallDeduction,
                 details: `${attendanceSummary.summary.shortfallHours} hours × ${hourlyRate.toFixed(2)}`
             });
@@ -1027,7 +1153,7 @@ class PayrollRunService {
                 code: 'UNPAID_LEAVE_DED', // 🔧 FIX: Shortened to fit varchar(20) limit
                 name: 'Unpaid Leave Deduction',
                 type: 'deduction',
-                category: 'leave',
+                category: 'other', // Use existing enum value
                 amount: deductions.unpaidLeaveDeduction,
                 details: `${unpaidLeaveDays} days × ${perDaySalary.toFixed(2)}`
             });
@@ -1219,7 +1345,9 @@ class PayrollRunService {
         }
         
         // Add overtime (this is an addition) - with holiday awareness
-        if (employeeData.overtimeHours > 0) {
+        // First check if overtime is enabled in settings
+        const overtimeEnabled = await this.isOvertimeEnabled(record.client_id);
+        if (employeeData.overtimeHours > 0 && overtimeEnabled) {
             // Get employee-specific daily hours for accurate hourly rate
             const employeeDailyHours = await this.getEmployeeDailyHours(record.employee_id, 8);
             const workingDaysInMonth = await this.calculateWorkingDaysInPeriod(
@@ -1321,27 +1449,21 @@ class PayrollRunService {
         const components = [];
         let total = 0;
         
-        // EPF (Employee Provident Fund) - 8%
+        // EPF (Employee Provident Fund) - 8% EMPLOYEE CONTRIBUTION
         const epfAmount = baseSalary * 0.08;
         components.push({
             code: 'EPF',
-            name: 'Employee Provident Fund',
+            name: 'Employee Provident Fund (8%)',
             type: 'deduction',
-            category: 'statutory',
+            category: 'other', // Use existing enum value instead of 'statutory'
             amount: epfAmount
         });
         total += epfAmount;
-        
-        // ETF (Employee Trust Fund) - 3% (employer contribution, but shown for transparency)
-        const etfAmount = baseSalary * 0.03;
-        components.push({
-            code: 'ETF',
-            name: 'Employee Trust Fund',
-            type: 'deduction', 
-            category: 'statutory',
-            amount: etfAmount
-        });
-        total += etfAmount;
+
+        // ETF (Employee Trust Fund) - 3% EMPLOYER CONTRIBUTION ONLY
+        // ❌ REMOVED: ETF should NOT be deducted from employee salary
+        // ETF is paid entirely by the employer (3%) and not deducted from employee
+        console.log(`ℹ️  ETF Note: 3% employer contribution (LKR ${(baseSalary * 0.03).toFixed(2)}) - NOT deducted from employee`);
         
         // Add custom employee deductions
         for (const deduction of employeeData.deductions) {
@@ -1578,6 +1700,38 @@ class PayrollRunService {
             stat.total_net_amount,
             runId
         ]);
+    }
+
+    /**
+     * Check if overtime calculation is enabled in settings
+     * @param {string} clientId - Client ID
+     * @returns {Promise<boolean>} Whether overtime is enabled
+     */
+    async isOvertimeEnabled(clientId) {
+        const db = getDB();
+
+        try {
+            const [setting] = await db.execute(`
+                SELECT setting_value
+                FROM system_settings
+                WHERE client_id = ? AND setting_key = 'enable_overtime_calculation'
+                LIMIT 1
+            `, [clientId]);
+
+            if (setting.length > 0) {
+                const enabled = JSON.parse(setting[0].setting_value);
+                console.log(`⚙️  Overtime enabled setting: ${enabled}`);
+                return enabled === true || enabled === 'true' || enabled === 1;
+            }
+
+            // Default to disabled if no setting found
+            console.log(`⚠️  No overtime enable setting found for client ${clientId}, defaulting to disabled`);
+            return false;
+
+        } catch (error) {
+            console.error('Error checking overtime enabled setting:', error);
+            return false; // Safe default - disable overtime if error
+        }
     }
 
     /**

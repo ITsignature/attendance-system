@@ -10,6 +10,8 @@ const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const PayrollRunService = require('../services/PayrollRunService');
+const path = require('path');
+const fs = require('fs').promises;
 
 // Apply authentication and client access to all routes
 router.use(authenticate);
@@ -661,6 +663,134 @@ router.get('/records/:recordId/components',
                 success: false,
                 message: error.message
             });
+        }
+    })
+);
+
+/**
+ * GET /api/payroll-runs/logs/:filename/download
+ * Download payroll calculation log file
+ */
+router.get('/logs/:filename/download',
+    checkPermission('payroll.view'),
+    param('filename').matches(/^payroll-run-[a-f0-9-]+\.txt$/),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid filename format',
+                errors: errors.array()
+            });
+        }
+
+        const filename = req.params.filename;
+        const logsDir = path.join(__dirname, '../logs');
+        const logFilePath = path.join(logsDir, filename);
+
+        try {
+            // Security check - ensure file exists and is within logs directory
+            const resolvedPath = path.resolve(logFilePath);
+            const resolvedLogsDir = path.resolve(logsDir);
+
+            if (!resolvedPath.startsWith(resolvedLogsDir)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied'
+                });
+            }
+
+            // Check if file exists
+            await fs.access(logFilePath);
+
+            // Get file stats for headers
+            const stats = await fs.stat(logFilePath);
+
+            // Set appropriate headers for download
+            res.setHeader('Content-Type', 'text/plain');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            res.setHeader('Content-Length', stats.size);
+
+            // Read and send file
+            const content = await fs.readFile(logFilePath, 'utf8');
+            res.send(content);
+
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                res.status(404).json({
+                    success: false,
+                    message: 'Log file not found'
+                });
+            } else {
+                res.status(500).json({
+                    success: false,
+                    message: 'Error accessing log file'
+                });
+            }
+        }
+    })
+);
+
+/**
+ * GET /api/payroll-runs/logs/:filename/view
+ * View payroll calculation log file content
+ */
+router.get('/logs/:filename/view',
+    checkPermission('payroll.view'),
+    param('filename').matches(/^payroll-run-[a-f0-9-]+\.txt$/),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid filename format',
+                errors: errors.array()
+            });
+        }
+
+        const filename = req.params.filename;
+        const logsDir = path.join(__dirname, '../logs');
+        const logFilePath = path.join(logsDir, filename);
+
+        try {
+            // Security check - ensure file exists and is within logs directory
+            const resolvedPath = path.resolve(logFilePath);
+            const resolvedLogsDir = path.resolve(logsDir);
+
+            if (!resolvedPath.startsWith(resolvedLogsDir)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied'
+                });
+            }
+
+            // Read file content
+            const content = await fs.readFile(logFilePath, 'utf8');
+            const stats = await fs.stat(logFilePath);
+
+            res.json({
+                success: true,
+                data: {
+                    filename: filename,
+                    size: stats.size,
+                    created_at: stats.birthtime,
+                    modified_at: stats.mtime,
+                    content: content
+                }
+            });
+
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                res.status(404).json({
+                    success: false,
+                    message: 'Log file not found'
+                });
+            } else {
+                res.status(500).json({
+                    success: false,
+                    message: 'Error reading log file'
+                });
+            }
         }
     })
 );
