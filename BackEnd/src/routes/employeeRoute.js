@@ -5,6 +5,7 @@ const { getDB } = require('../config/database');
 const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
+const { SettingsHelper } = require('../utils/settingsHelper');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -1652,5 +1653,150 @@ const getEmployeeWorkHours = async (employeeId, clientId, db) => {
 
   
 
+
+// =============================================
+// GET EMPLOYEE WEEKEND SETTINGS
+// =============================================
+router.get('/:id/weekend-settings',
+  checkPermission('employees.view'),
+  checkResourceOwnership('employee'),
+  asyncHandler(async (req, res) => {
+    const employeeId = req.params.id;
+    const settingsHelper = new SettingsHelper(req.user.clientId);
+
+    try {
+      // Get employee-specific weekend settings
+      const employeeSettings = await settingsHelper.getEmployeeWeekendSettings(employeeId);
+
+      // Get company default settings for comparison
+      const companySettings = await settingsHelper.getWeekendSettings();
+
+      res.status(200).json({
+        success: true,
+        data: {
+          employee_settings: employeeSettings,
+          company_settings: companySettings,
+          using_company_default: employeeSettings === null
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get employee weekend settings',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  })
+);
+
+// =============================================
+// UPDATE EMPLOYEE WEEKEND SETTINGS
+// =============================================
+router.put('/:id/weekend-settings',
+  checkPermission('employees.edit'),
+  checkResourceOwnership('employee'),
+  [
+    body('saturday_working')
+      .optional()
+      .isBoolean()
+      .withMessage('saturday_working must be a boolean'),
+    body('sunday_working')
+      .optional()
+      .isBoolean()
+      .withMessage('sunday_working must be a boolean'),
+    body('custom_weekend_days')
+      .optional()
+      .isArray()
+      .withMessage('custom_weekend_days must be an array')
+      .custom((value) => {
+        if (value && !Array.isArray(value)) {
+          throw new Error('custom_weekend_days must be an array');
+        }
+        if (value && value.some(day => !Number.isInteger(day) || day < 0 || day > 6)) {
+          throw new Error('custom_weekend_days must contain integers between 0-6 (0=Sunday, 6=Saturday)');
+        }
+        return true;
+      })
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const employeeId = req.params.id;
+    const { saturday_working, sunday_working, custom_weekend_days } = req.body;
+    const settingsHelper = new SettingsHelper(req.user.clientId);
+
+    try {
+      // If all values are null/undefined, remove employee override (use company default)
+      if (saturday_working === undefined && sunday_working === undefined && custom_weekend_days === undefined) {
+        await settingsHelper.setEmployeeWeekendSettings(employeeId, null);
+
+        return res.status(200).json({
+          success: true,
+          message: 'Employee weekend settings reset to company default',
+          data: { using_company_default: true }
+        });
+      }
+
+      // Build settings object
+      const weekendSettings = {
+        saturday_working: saturday_working !== undefined ? saturday_working : false,
+        sunday_working: sunday_working !== undefined ? sunday_working : false,
+        custom_weekend_days: custom_weekend_days || []
+      };
+
+      await settingsHelper.setEmployeeWeekendSettings(employeeId, weekendSettings);
+
+      res.status(200).json({
+        success: true,
+        message: 'Employee weekend settings updated successfully',
+        data: {
+          settings: weekendSettings,
+          using_company_default: false
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update employee weekend settings',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  })
+);
+
+// =============================================
+// DELETE EMPLOYEE WEEKEND SETTINGS (Reset to company default)
+// =============================================
+router.delete('/:id/weekend-settings',
+  checkPermission('employees.edit'),
+  checkResourceOwnership('employee'),
+  asyncHandler(async (req, res) => {
+    const employeeId = req.params.id;
+    const settingsHelper = new SettingsHelper(req.user.clientId);
+
+    try {
+      await settingsHelper.setEmployeeWeekendSettings(employeeId, null);
+
+      res.status(200).json({
+        success: true,
+        message: 'Employee weekend settings reset to company default',
+        data: { using_company_default: true }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to reset employee weekend settings',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  })
+);
 
 module.exports = { router, getEmployeeWorkHours };

@@ -305,3 +305,38 @@ export const MARITAL_STATUS_OPTIONS = [
   { value: 'divorced', label: 'Divorced' },
   { value: 'widowed', label: 'Widowed' }
 ];
+
+// Weekend Settings Types
+export interface EmployeeWeekendSettings {
+  saturday_working: boolean;
+  sunday_working: boolean;
+  custom_weekend_days: number[]; // Array of day numbers (0=Sunday, 6=Saturday)
+}
+
+export interface CompanyWeekendSettings {
+  saturday_working: boolean;
+  sunday_working: boolean;
+  custom_weekend_days: number[];
+  working_hours: {
+    standard_hours_per_day: number;
+    weekend_hours_multiplier: number;
+    holiday_hours_multiplier: number;
+    start_time: string;
+    end_time: string;
+    break_duration_minutes: number;
+  };
+}
+
+export const DAY_NAMES = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+];
+
+export const WEEKEND_DAY_OPTIONS = [
+  { value: 0, label: 'Sunday' },
+  { value: 1, label: 'Monday' },
+  { value: 2, label: 'Tuesday' },
+  { value: 3, label: 'Wednesday' },
+  { value: 4, label: 'Thursday' },
+  { value: 5, label: 'Friday' },
+  { value: 6, label: 'Saturday' }
+];

@@ -1,5 +1,5 @@
 // services/api.ts
-import { EmployeeFilters, CreateEmployeeData, UpdateEmployeeData } from '../types/employee';
+import { EmployeeFilters, CreateEmployeeData, UpdateEmployeeData, EmployeeWeekendSettings, CompanyWeekendSettings } from '../types/employee';
 import {
   LeaveType,
   LeaveRequest,
@@ -826,10 +826,37 @@ async upsertManualRows(rows: Array<{
   }));
 }
 
+  /* ---------------------------- Employee Weekend Settings ----------------------------- */
 
+  async getEmployeeWeekendSettings(employeeId: string): Promise<ApiResponse<{
+    employee_settings: EmployeeWeekendSettings | null;
+    company_settings: CompanyWeekendSettings;
+    using_company_default: boolean;
+  }>> {
+    return this.apiCall(`/api/employees/${employeeId}/weekend-settings`);
+  }
 
+  async updateEmployeeWeekendSettings(
+    employeeId: string,
+    settings: Partial<EmployeeWeekendSettings>
+  ): Promise<ApiResponse<{
+    settings: EmployeeWeekendSettings;
+    using_company_default: boolean;
+  }>> {
+    return this.apiCall(`/api/employees/${employeeId}/weekend-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
-
+  async resetEmployeeWeekendSettings(employeeId: string): Promise<ApiResponse<{
+    using_company_default: boolean;
+  }>> {
+    return this.apiCall(`/api/employees/${employeeId}/weekend-settings`, {
+      method: 'DELETE',
+    });
+  }
 
   /* ---------------------------- UI Utilities ----------------------------- */
 
