@@ -652,7 +652,15 @@ class PayrollRunService {
                 calculation_status = 'calculated',
                 calculated_at = NOW()
             WHERE id = ?
-        `, [grossComponents.additionsTotal + financialAdjustments.bonuses, totalDeductions, totalTaxes, grossSalary, grossSalary, netSalary, record.id]);
+        `, [
+            Math.round((grossComponents.additionsTotal + financialAdjustments.bonuses) * 100) / 100,
+            Math.round(totalDeductions * 100) / 100,
+            Math.round(totalTaxes * 100) / 100,
+            Math.round(grossSalary * 100) / 100,
+            Math.round(grossSalary * 100) / 100,
+            Math.round(netSalary * 100) / 100,
+            record.id
+        ]);
 
         // Create detailed component records with financial components
         const updatedGrossComponents = {
@@ -862,17 +870,17 @@ class PayrollRunService {
             const periodStartDate = period.period_start_date;
             const periodEndDate = period.period_end_date;
             
-            // Calculate expected hours with day-specific schedules
-            summary.expectedHours = await this.calculateExpectedHoursWithDaySpecificSchedules(
-                periodStartDate, 
-                periodEndDate, 
-                clientId, 
-                departmentId,
-                employeeId,
-                workingHours.hours_per_day
+            // Calculate expected hours using simple working days calculation
+            const workingDays = await this.calculateWorkingDaysInPeriod(
+                periodStartDate,
+                periodEndDate,
+                clientId,
+                departmentId
             );
-            
-            console.log(`✅ Expected hours calculation with day-specific schedules: ${summary.expectedHours}h`);
+            const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, workingHours.hours_per_day, periodStartDate, periodEndDate);
+            summary.expectedHours = workingDays * employeeDailyHours;
+
+            console.log(`✅ Expected hours calculation: ${workingDays} days × ${employeeDailyHours}h = ${summary.expectedHours}h`);
         } catch (error) {
             console.error('Error calculating expected working days with holidays:', error);
             // Fallback to simple calculation using attendance date range
@@ -880,24 +888,21 @@ class PayrollRunService {
             const periodStartDate = dates[0];
             const periodEndDate = dates[dates.length - 1];
             
-            // Use day-specific schedules for fallback calculation too
-            summary.expectedHours = await this.calculateExpectedHoursWithDaySpecificSchedules(
-                periodStartDate, 
-                periodEndDate, 
-                clientId, 
-                departmentId,
-                employeeId,
-                workingHours.hours_per_day
+            // Use simple calculation for fallback too
+            const fallbackWorkingDays = await this.calculateWorkingDaysInPeriod(
+                periodStartDate,
+                periodEndDate,
+                clientId,
+                departmentId
             );
-            
-            console.log(`⚠️ Fallback calculation with day-specific schedules: ${summary.expectedHours}h`);
+            const fallbackEmployeeDailyHours = await this.getEmployeeDailyHours(employeeId, workingHours.hours_per_day, periodStartDate, periodEndDate);
+            summary.expectedHours = fallbackWorkingDays * fallbackEmployeeDailyHours;
+
+            console.log(`⚠️ Fallback calculation: ${fallbackWorkingDays} days × ${fallbackEmployeeDailyHours}h = ${summary.expectedHours}h`);
         }
 
         // Check if overtime is enabled for this client
         const overtimeEnabled = await this.isOvertimeEnabled(attendanceRecords[0]?.client_id);
-        
-        // Get day-specific schedules for this client
-        const daySpecificSchedules = await this.getDaySpecificSchedules(attendanceRecords[0]?.client_id);
         
         console.log(`\n📊 DAILY WORKED HOURS BREAKDOWN for Employee ${employeeId}:`);
         console.log(`⚙️  Overtime Enabled: ${overtimeEnabled ? 'YES' : 'NO'}`);
@@ -910,42 +915,51 @@ class PayrollRunService {
             let workedHoursToCount = actualWorkedHours;
             let cappingInfo = '';
             
-            // If overtime is disabled, cap worked hours to scheduled hours (considering day-specific schedules)
+            // If overtime is disabled, calculate payable hours based on actual work time overlap with scheduled hours
             if (!overtimeEnabled) {
-                // Check for day-specific schedule first
-                const scheduleInfo = this.getDateScheduleInfo(record.date, daySpecificSchedules);
-                let scheduledHours = null;
+                let scheduledInTime = null;
+                let scheduledOutTime = null;
                 let scheduleSource = '';
-                
-                if (scheduleInfo && scheduleInfo.enabled) {
-                    // Use day-specific scheduled hours for capping
-                    scheduledHours = scheduleInfo.scheduled_hours;
-                    scheduleSource = 'day-specific schedule';
-                    cappingInfo = ` (day-specific: ${scheduledHours}h scheduled)`;
-                } else if (record.scheduled_in_time && record.scheduled_out_time) {
-                    // Fallback to attendance table scheduled times
-                    const scheduledInTime = new Date(`2000-01-01 ${record.scheduled_in_time}`);
-                    const scheduledOutTime = new Date(`2000-01-01 ${record.scheduled_out_time}`);
-                    
-                    if (!isNaN(scheduledInTime.getTime()) && !isNaN(scheduledOutTime.getTime())) {
-                        const diffMs = scheduledOutTime.getTime() - scheduledInTime.getTime();
-                        scheduledHours = Math.max(0, Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100);
-                        scheduleSource = 'attendance table';
-                        cappingInfo = ` (scheduled: ${record.scheduled_in_time}-${record.scheduled_out_time})`;
-                    } else {
-                        cappingInfo = ` (invalid scheduled times)`;
-                    }
+
+                if (record.scheduled_in_time && record.scheduled_out_time) {
+                    // Use attendance table scheduled times
+                    scheduledInTime = new Date(`2000-01-01 ${record.scheduled_in_time}`);
+                    scheduledOutTime = new Date(`2000-01-01 ${record.scheduled_out_time}`);
+                    scheduleSource = 'attendance table';
                 } else {
                     cappingInfo = ` (no scheduled times available)`;
                 }
-                
-                // Apply capping if we have valid scheduled hours
-                if (scheduledHours !== null) {
-                    workedHoursToCount = Math.min(actualWorkedHours, scheduledHours);
-                    
-                    if (actualWorkedHours > scheduledHours) {
-                        cappingInfo = ` → CAPPED to ${scheduledHours}h (${scheduleSource})`;
+
+                // Calculate overlap between actual work time and scheduled work time
+                if (scheduledInTime && scheduledOutTime && record.check_in_time && record.check_out_time &&
+                    !isNaN(scheduledInTime.getTime()) && !isNaN(scheduledOutTime.getTime())) {
+
+                    const actualInTime = new Date(`2000-01-01 ${record.check_in_time}`);
+                    const actualOutTime = new Date(`2000-01-01 ${record.check_out_time}`);
+
+                    if (!isNaN(actualInTime.getTime()) && !isNaN(actualOutTime.getTime())) {
+                        // Calculate the overlap between actual work time and scheduled time
+                        const overlapStart = new Date(Math.max(actualInTime.getTime(), scheduledInTime.getTime()));
+                        const overlapEnd = new Date(Math.min(actualOutTime.getTime(), scheduledOutTime.getTime()));
+
+                        if (overlapEnd > overlapStart) {
+                            const overlapMs = overlapEnd.getTime() - overlapStart.getTime();
+                            const overlapHours = Math.max(0, overlapMs / (1000 * 60 * 60)); // No rounding here
+                            workedHoursToCount = overlapHours;
+
+                            const overlapStartTime = overlapStart.toTimeString().substring(0, 5);
+                            const overlapEndTime = overlapEnd.toTimeString().substring(0, 5);
+                            cappingInfo = ` → OVERLAP ${overlapStartTime}-${overlapEndTime} = ${overlapHours.toFixed(3)}h (${scheduleSource})`;
+                        } else {
+                            // No overlap between actual work time and scheduled time
+                            workedHoursToCount = 0;
+                            cappingInfo = ` → NO OVERLAP with scheduled time (${scheduleSource})`;
+                        }
+                    } else {
+                        cappingInfo = ` (invalid actual check-in/out times)`;
                     }
+                } else {
+                    cappingInfo = ` (missing times for overlap calculation)`;
                 }
             } else {
                 cappingInfo = ` (overtime allowed)`;
@@ -982,10 +996,13 @@ class PayrollRunService {
             }
         }
 
+        // Round the final sum to 4 decimal places for higher precision, then to 2 for display
+        summary.totalWorkedHours = Math.round(summary.totalWorkedHours * 10000) / 10000;
+
         // Log the final total calculation
         console.log('=' .repeat(80));
         console.log(`📊 TOTAL WORKED HOURS CALCULATION:`);
-        console.log(`   Sum of all daily counted hours: ${summary.totalWorkedHours.toFixed(2)}h`);
+        console.log(`   Sum of all daily counted hours (rounded): ${summary.totalWorkedHours}h`);
         console.log(`   Expected hours: ${summary.expectedHours}h`);
         console.log(`   Shortfall: ${Math.max(0, summary.expectedHours - summary.totalWorkedHours).toFixed(2)}h`);
         console.log('=' .repeat(80));
@@ -1271,63 +1288,6 @@ class PayrollRunService {
     }
 
     /**
-     * Calculate expected hours considering day-specific schedules
-     */
-    async calculateExpectedHoursWithDaySpecificSchedules(startDate, endDate, clientId, departmentId, employeeId, defaultHoursPerDay) {
-        try {
-            // Get day-specific schedules configuration
-            const daySpecificSchedules = await this.getDaySpecificSchedules(clientId);
-            
-            // Get working days calculation from HolidayService
-            const workingDaysCalculation = await HolidayService.calculateWorkingDays(
-                clientId, 
-                startDate, 
-                endDate, 
-                departmentId
-            );
-            
-            const workingDays = workingDaysCalculation.working_days_details || [];
-            console.log(`🗓️  Working days details for expected hours calculation:`, workingDays);
-            
-            let totalExpectedHours = 0;
-            const employeeDefaultDailyHours = await this.getEmployeeDailyHours(employeeId, defaultHoursPerDay, startDate, endDate);
-            
-            // Process each working day
-            for (const dayInfo of workingDays) {
-                const dayName = dayInfo.day_name?.toLowerCase();
-                const scheduleInfo = this.getDateScheduleInfo(dayInfo.date, daySpecificSchedules);
-                
-                let dailyExpectedHours = employeeDefaultDailyHours;
-                
-                // Check if this day has a specific schedule override
-                if (scheduleInfo && scheduleInfo.enabled) {
-                    // Use salary_weight for expected hours calculation
-                    dailyExpectedHours = scheduleInfo.salary_weight;
-                    console.log(`📅 Day-specific schedule for ${dayInfo.date} (${dayName}): ${scheduleInfo.salary_weight}h (salary weight)`);
-                }
-                
-                totalExpectedHours += dailyExpectedHours;
-            }
-            
-            console.log(`✅ Total expected hours with day-specific schedules: ${totalExpectedHours}h`);
-            console.log(`   Breakdown: ${workingDays.length} working days processed`);
-            
-            return totalExpectedHours;
-            
-        } catch (error) {
-            console.error('Error calculating expected hours with day-specific schedules:', error);
-            
-            // Fallback to simple calculation
-            const workingDays = await this.calculateWorkingDaysInPeriod(startDate, endDate, clientId, departmentId);
-            const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, defaultHoursPerDay, startDate, endDate);
-            const fallbackHours = workingDays * employeeDailyHours;
-            
-            console.log(`⚠️ Fallback to simple calculation: ${workingDays} × ${employeeDailyHours}h = ${fallbackHours}h`);
-            return fallbackHours;
-        }
-    }
-
-    /**
      * Fallback method: Calculate working days excluding only weekends
      */
     calculateWorkingDaysWithoutHolidays(startDate, endDate) {
@@ -1540,7 +1500,7 @@ class PayrollRunService {
         return { 
             components, 
             total,
-            additionsTotal: Math.round(additionsTotal * 100) / 100 // Separate additions total
+            additionsTotal: additionsTotal // Keep raw precision, round only at final storage
         };
     }
 
@@ -1646,7 +1606,7 @@ class PayrollRunService {
             remainingSalary -= taxableInSlab;
         }
 
-        return Math.round(tax * 100) / 100;
+        return tax; // Return raw precision, round at final storage
     }
 
     /**
@@ -1915,76 +1875,6 @@ class PayrollRunService {
             console.warn(`⚠️  Error accessing settings, using fallback 1.5x multiplier`);
             return 1.5; // Safe fallback
         }
-    }
-
-    /**
-     * Get day-specific schedule configuration for a client
-     * @param {string} clientId - Client ID
-     * @returns {Promise<Object>} Day-specific schedule configuration
-     */
-    async getDaySpecificSchedules(clientId) {
-        const db = getDB();
-        
-        try {
-            const [setting] = await db.execute(`
-                SELECT setting_value
-                FROM system_settings
-                WHERE client_id = ? AND setting_key = 'day_specific_schedules'
-                LIMIT 1
-            `, [clientId]);
-            
-            if (setting.length > 0) {
-                const config = JSON.parse(setting[0].setting_value);
-                console.log(`📅 Day-specific schedules loaded for client ${clientId}:`, config);
-                return config;
-            }
-            
-            // Return empty config if no setting found
-            console.log(`📅 No day-specific schedules found for client ${clientId}`);
-            return {};
-            
-        } catch (error) {
-            console.error('Error loading day-specific schedules:', error);
-            return {};
-        }
-    }
-
-    /**
-     * Get schedule info for a specific date
-     * @param {string} clientId - Client ID
-     * @param {string} dateStr - Date string (YYYY-MM-DD)
-     * @returns {Promise<Object>} Schedule info for the date
-     */
-    async getDateScheduleInfo(clientId, dateStr) {
-        const daySpecificSchedules = await this.getDaySpecificSchedules(clientId);
-        const date = new Date(dateStr);
-        const dayOfWeek = date.getDay(); // 0=Sunday, 6=Saturday
-        
-        // Map day numbers to day names
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const dayName = dayNames[dayOfWeek];
-        
-        // Check if this day has special schedule configuration
-        if (daySpecificSchedules[dayName]) {
-            const schedule = daySpecificSchedules[dayName];
-            console.log(`📅 ${dateStr} (${dayName}): Using day-specific schedule - ${schedule.scheduled_hours}h work = ${schedule.salary_weight}h pay`);
-            return {
-                isDaySpecific: true,
-                dayName: dayName,
-                scheduledHours: schedule.scheduled_hours,
-                salaryWeight: schedule.salary_weight,
-                applyToAll: schedule.apply_to_all
-            };
-        }
-        
-        // Return normal schedule for regular days
-        return {
-            isDaySpecific: false,
-            dayName: dayName,
-            scheduledHours: null,
-            salaryWeight: null,
-            applyToAll: false
-        };
     }
 
     /**

@@ -113,7 +113,6 @@ router.get('/',
     //   ORDER BY setting_key ASC
     // `, [req.user.clientId]);
 
-
        // Get all settings for the client
     const [settings] = await db.execute(`
         SELECT 
@@ -914,7 +913,7 @@ router.post('/day-specific-schedules',
           INSERT INTO system_settings (
             id, client_id, setting_key, setting_value, setting_type, 
             description, is_public, created_at, updated_at
-          ) VALUES (?, ?, 'day_specific_schedules', ?, 'json', 
+          ) VALUES (?, ?, 'day_specific_schedules', ?, 'object',
                    'Day-specific schedule configurations for different working hours', FALSE, NOW(), NOW())
         `, [uuidv4(), req.user.clientId, settingValue]);
       }
