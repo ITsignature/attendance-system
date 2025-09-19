@@ -225,25 +225,8 @@ class SettingsHelper {
       working_hours: workingHoursConfig
     };
   }
+    async isWeekendWorkingDay(dayOfWeek) {
 
-  async isWeekendWorkingDay(dayOfWeek, employeeId = null) {
-    // If employeeId is provided, check for employee-specific settings first
-    if (employeeId) {
-      const employeeSettings = await this.getEmployeeWeekendSettings(employeeId);
-      if (employeeSettings) {
-        // Employee has custom weekend settings, use those
-        if (dayOfWeek === 0) { // Sunday
-          return employeeSettings.sunday_working;
-        }
-        if (dayOfWeek === 6) { // Saturday
-          return employeeSettings.saturday_working;
-        }
-        // Check custom weekend days
-        return employeeSettings.custom_weekend_days && employeeSettings.custom_weekend_days.includes(dayOfWeek);
-      }
-    }
-
-    // Fall back to company settings
     const settings = await this.getWeekendSettings();
 
     // dayOfWeek: 0 = Sunday, 1 = Monday, ... 6 = Saturday
@@ -256,58 +239,6 @@ class SettingsHelper {
 
     // Check custom weekend days
     return settings.custom_weekend_days && settings.custom_weekend_days.includes(dayOfWeek);
-  }
-
-  async getEmployeeWeekendSettings(employeeId) {
-    const db = getDB();
-
-    try {
-      const [employees] = await db.execute(`
-        SELECT weekend_settings
-        FROM employees
-        WHERE id = ?
-      `, [employeeId]);
-
-      if (employees.length === 0 || !employees[0].weekend_settings) {
-        return null; // No employee-specific settings
-      }
-
-      let settings = employees[0].weekend_settings;
-
-      // Parse JSON if it's a string
-      if (typeof settings === 'string') {
-        try {
-          settings = JSON.parse(settings);
-        } catch (e) {
-          console.error('Error parsing employee weekend settings:', e);
-          return null;
-        }
-      }
-
-      return settings;
-    } catch (error) {
-      console.error(`Error getting employee weekend settings for ${employeeId}:`, error);
-      return null;
-    }
-  }
-
-  async setEmployeeWeekendSettings(employeeId, settings) {
-    const db = getDB();
-
-    try {
-      const jsonSettings = settings ? JSON.stringify(settings) : null;
-
-      await db.execute(`
-        UPDATE employees
-        SET weekend_settings = ?
-        WHERE id = ?
-      `, [jsonSettings, employeeId]);
-
-      return true;
-    } catch (error) {
-      console.error(`Error setting employee weekend settings for ${employeeId}:`, error);
-      throw error;
-    }
   }
 }
 

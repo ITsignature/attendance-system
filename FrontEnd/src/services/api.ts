@@ -1,5 +1,5 @@
 // services/api.ts
-import { EmployeeFilters, CreateEmployeeData, UpdateEmployeeData, EmployeeWeekendSettings, CompanyWeekendSettings } from '../types/employee';
+import { EmployeeFilters, CreateEmployeeData, UpdateEmployeeData } from '../types/employee';
 import {
   LeaveType,
   LeaveRequest,
@@ -108,7 +108,6 @@ export interface AttendanceFormData {
 
 class ApiService {
   
-
   private baseURL: string;
   private token: string | null = null;
 
@@ -118,7 +117,6 @@ class ApiService {
   // 🔽 NEW: proactive refresh timer
   private refreshTimer: number | null = null;
   private maxRefreshRetries = 2;
-
 
   constructor() {
     this.baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
@@ -130,10 +128,8 @@ class ApiService {
     localStorage.setItem('accessToken', token);
   }
 
-  
  removeToken() {
  
-
   this.token = null;
 
   // NEW: clear scheduled refresh
@@ -147,9 +143,7 @@ class ApiService {
   localStorage.removeItem('user');
   localStorage.removeItem('accessTokenExpiresIn');
 
-  
 }
-
 
   /** Build headers including tenant header */
   private getHeaders(): HeadersInit {
@@ -212,7 +206,6 @@ class ApiService {
   //     throw error;
   //   }
   // }
-
 
   public async apiCall<T>(endpoint: string, options: RequestInit = {}, _retryOn401 = true): Promise<ApiResponse<T>> {
   const url = `${this.baseURL}${endpoint}`;
@@ -307,7 +300,6 @@ class ApiService {
   return response as LoginResponse;
 }
 
-
   async getCurrentUser(): Promise<ApiResponse<{ user: User }>> {
     return this.apiCall('/auth/me');
   }
@@ -374,9 +366,6 @@ async refreshToken(): Promise<ApiResponse<{ accessToken: string; refreshToken: s
   return data;
 }
 
-
-
-
   // services/api.ts (inside class)
 private scheduleTokenRefresh(expiresInSeconds?: number) {
   // clear any existing timer
@@ -399,7 +388,6 @@ private scheduleTokenRefresh(expiresInSeconds?: number) {
   }, refreshInMs);
 }
 
-
 // services/api.ts (inside class)
 private async queueRefresh(): Promise<void> {
   if (this.refreshPromise) {
@@ -418,7 +406,6 @@ private async queueRefresh(): Promise<void> {
   })();
   return this.refreshPromise;
 }
-
 
   /* --------------------------- Dashboard Methods ------------------------- */
 
@@ -736,8 +723,6 @@ private async queueRefresh(): Promise<void> {
     return this.apiCall(url);
   }
 
-
-
   /* -------------------- Manual Attendance helpers -------------------- */
 
 private normalizeTime(t?: string) {
@@ -825,40 +810,7 @@ async upsertManualRows(rows: Array<{
       : this.createAttendanceRow(r as any);
   }));
 }
-
-  /* ---------------------------- Employee Weekend Settings ----------------------------- */
-
-  async getEmployeeWeekendSettings(employeeId: string): Promise<ApiResponse<{
-    employee_settings: EmployeeWeekendSettings | null;
-    company_settings: CompanyWeekendSettings;
-    using_company_default: boolean;
-  }>> {
-    return this.apiCall(`/api/employees/${employeeId}/weekend-settings`);
-  }
-
-  async updateEmployeeWeekendSettings(
-    employeeId: string,
-    settings: Partial<EmployeeWeekendSettings>
-  ): Promise<ApiResponse<{
-    settings: EmployeeWeekendSettings;
-    using_company_default: boolean;
-  }>> {
-    return this.apiCall(`/api/employees/${employeeId}/weekend-settings`, {
-      method: 'PUT',
-      body: JSON.stringify(settings),
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  async resetEmployeeWeekendSettings(employeeId: string): Promise<ApiResponse<{
-    using_company_default: boolean;
-  }>> {
-    return this.apiCall(`/api/employees/${employeeId}/weekend-settings`, {
-      method: 'DELETE',
-    });
-  }
-
-  /* ---------------------------- UI Utilities ----------------------------- */
+ /* ---------------------------- UI Utilities ----------------------------- */
 
   formatTime(time?: string): string {
     if (!time) return 'Not Recorded';
@@ -909,7 +861,6 @@ async upsertManualRows(rows: Array<{
     }
   }
 }
-
 
 /* Singleton */
 export const apiService = new ApiService();

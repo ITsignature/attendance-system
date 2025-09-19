@@ -2,13 +2,12 @@
 import React, { useState, useEffect } from "react";
 import { Tabs, Button, Select, Modal, TextInput, Label, Badge, Spinner, Alert, Card, Breadcrumb, Table } from "flowbite-react";
 import { HiUser, HiBriefcase, HiDocumentText, HiCash, HiHome, HiCalendar, HiClock, HiPhone, HiMail, HiLocationMarker, HiIdentification, HiRefresh } from "react-icons/hi";
-import { FaEye, FaDownload, FaPlus, FaTrash, FaEdit, FaCheck, FaTimes, FaBusinessTime } from "react-icons/fa";
+import { FaEye, FaDownload, FaPlus, FaTrash, FaEdit, FaCheck, FaTimes } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router";
 import { DynamicProtectedComponent } from "../RBACSystem/rbacSystem";
 import apiService from '../../services/api';
 import leaveApiService from '../../services/leaveApi';
 import payrollApiService, { PayrollRecord } from '../../services/payrollService';
-import EmployeeWeekendSettings from './EmployeeWeekendSettings';
 
 // Types
 interface Employee {
@@ -236,7 +235,6 @@ const EmployeeDetails: React.FC = () => {
     { id: "Profile", label: "Profile", icon: HiUser },
     { id: "Attendance", label: "Attendance", icon: HiClock },
     { id: "Leave", label: "Leave", icon: HiCalendar },
-    { id: "Weekend Settings", label: "Weekend Settings", icon: FaBusinessTime },
     { id: "Financial Records", label: "Financial", icon: HiCash }
   ];
 
@@ -1575,16 +1573,6 @@ const EmployeeDetails: React.FC = () => {
                   )}
                 </Card>
               </div>
-            )}
-
-            {/* Weekend Settings Tab */}
-            {activeSidebarTab === "Weekend Settings" && (
-              <DynamicProtectedComponent requiredPermission="employees.edit">
-                <EmployeeWeekendSettings
-                  employeeId={employee.id}
-                  employeeName={`${employee.first_name} ${employee.last_name}`}
-                />
-              </DynamicProtectedComponent>
             )}
 
             {/* Financial Records Tab - Keeping existing implementation */}

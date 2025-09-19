@@ -62,10 +62,9 @@ class HolidayService {
      * @param {string} endDate - End date (YYYY-MM-DD)
      * @param {string} departmentId - Optional department ID
      * @param {boolean} includeOptionalHolidays - Whether to include optional holidays
-     * @param {string} employeeId - Optional employee ID for employee-specific weekend settings
      * @returns {Promise<Object>} Working days calculation result
      */
-    async calculateWorkingDays(clientId, startDate, endDate, departmentId = null, includeOptionalHolidays = false, employeeId = null) {
+    async calculateWorkingDays(clientId, startDate, endDate, departmentId = null, includeOptionalHolidays = false) {
         const holidays = await this.getHolidaysInPeriod(clientId, startDate, endDate, departmentId);
         const settingsHelper = new SettingsHelper(clientId);
         
@@ -101,7 +100,8 @@ class HolidayService {
             else if (dayOfWeek === 0 || dayOfWeek === 6) {
                 weekendDays++;
                 // Check if weekend days are configured as working days (with employee-specific override)
-                const isWeekendWorking = await settingsHelper.isWeekendWorkingDay(dayOfWeek, employeeId);
+                const isWeekendWorking = await settingsHelper.isWeekendWorkingDay(dayOfWeek);
+                if (isWeekendWorking) {
                 if (isWeekendWorking) {
                     workingDays++;
                     weekendWorkingDays++;
