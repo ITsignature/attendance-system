@@ -140,10 +140,23 @@ router.get('/',
     queryParams.push(parseInt(limit), parseInt(offset));
     const [employees] = await db.execute(query, queryParams);
 
+    // Parse weekend_working_config JSON fields for all employees
+    const employeesWithParsedConfig = employees.map(employee => {
+      if (employee.weekend_working_config) {
+        try {
+          employee.weekend_working_config = JSON.parse(employee.weekend_working_config);
+        } catch (e) {
+          console.warn('Failed to parse weekend_working_config for employee:', employee.id, e);
+          employee.weekend_working_config = null;
+        }
+      }
+      return employee;
+    });
+
     res.status(200).json({
       success: true,
       data: {
-        employees,
+        employees: employeesWithParsedConfig,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(total / limit),
@@ -400,7 +413,52 @@ router.put('/:id',
       }
       return true;
     }),
-    body('follows_company_schedule').optional().isBoolean().withMessage('follows_company_schedule must be true or false')
+    body('follows_company_schedule').optional().isBoolean().withMessage('follows_company_schedule must be true or false'),
+
+    // Weekend Working Configuration Validation
+    body('weekend_working_config')
+      .optional({ nullable: true })
+      .custom((value) => {
+        if (value === null || value === undefined) {
+          return true; // Allow null/undefined
+        }
+
+        if (typeof value !== 'object') {
+          throw new Error('Weekend working config must be an object');
+        }
+
+        // Validate Saturday config if provided
+        if (value.saturday) {
+          if (typeof value.saturday.working !== 'boolean') {
+            throw new Error('Saturday working must be a boolean');
+          }
+          if (value.saturday.working) {
+            if (!value.saturday.in_time || !value.saturday.out_time) {
+              throw new Error('Saturday in_time and out_time are required when Saturday working is true');
+            }
+            if (typeof value.saturday.full_day_salary !== 'boolean') {
+              throw new Error('Saturday full_day_salary must be a boolean');
+            }
+          }
+        }
+
+        // Validate Sunday config if provided
+        if (value.sunday) {
+          if (typeof value.sunday.working !== 'boolean') {
+            throw new Error('Sunday working must be a boolean');
+          }
+          if (value.sunday.working) {
+            if (!value.sunday.in_time || !value.sunday.out_time) {
+              throw new Error('Sunday in_time and out_time are required when Sunday working is true');
+            }
+            if (typeof value.sunday.full_day_salary !== 'boolean') {
+              throw new Error('Sunday full_day_salary must be a boolean');
+            }
+          }
+        }
+
+        return true;
+      })
   ],
   asyncHandler(async (req, res) => {
     // Check validation errors first
@@ -498,7 +556,10 @@ router.put('/:id',
       'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
       
       // Work Schedule - NEW FIELDS
-      'in_time', 'out_time', 'follows_company_schedule'
+      'in_time', 'out_time', 'follows_company_schedule',
+
+      // Weekend Working Configuration
+      'weekend_working_config'
     ];
 
     const updateFields = [];
@@ -513,6 +574,13 @@ router.put('/:id',
         if ((field === 'in_time' || field === 'out_time') && typeof value === 'string') {
           // Remove quotes if present: "08:00" -> 08:00
           value = value.replace(/^["']|["']$/g, '');
+        }
+
+        // Handle weekend_working_config JSON field
+        if (field === 'weekend_working_config') {
+          if (value !== null && value !== undefined) {
+            value = JSON.stringify(value);
+          }
         }
         
         // Convert undefined to null for MySQL compatibility
@@ -578,11 +646,22 @@ router.put('/:id',
         WHERE e.id = ? AND e.client_id = ?
       `, [employeeId, req.user.clientId]);
 
+      // Parse weekend_working_config JSON field
+      const employee = updatedEmployee[0];
+      if (employee.weekend_working_config) {
+        try {
+          employee.weekend_working_config = JSON.parse(employee.weekend_working_config);
+        } catch (e) {
+          console.warn('Failed to parse weekend_working_config:', e);
+          employee.weekend_working_config = null;
+        }
+      }
+
       res.status(200).json({
         success: true,
         message: 'Employee updated successfully',
         data: {
-          employee: updatedEmployee[0]
+          employee: employee
         }
       });
 
@@ -640,10 +719,21 @@ router.get('/:id',
       WHERE employee_id = ? AND date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
     `, [req.params.id]);
 
+    // Parse weekend_working_config JSON field
+    const employee = employees[0];
+    if (employee.weekend_working_config) {
+      try {
+        employee.weekend_working_config = JSON.parse(employee.weekend_working_config);
+      } catch (e) {
+        console.warn('Failed to parse weekend_working_config:', e);
+        employee.weekend_working_config = null;
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: {
-        employee: employees[0],
+        employee: employee,
         attendanceSummary: attendanceSummary[0]
       }
     });
@@ -689,7 +779,52 @@ router.post('/',
     body('follows_company_schedule')
       .optional({ checkFalsy: true })
       .isBoolean()
-      .withMessage('Valid boolean value is required')
+      .withMessage('Valid boolean value is required'),
+
+    // Weekend Working Configuration Validation
+    body('weekend_working_config')
+      .optional({ nullable: true })
+      .custom((value) => {
+        if (value === null || value === undefined) {
+          return true; // Allow null/undefined
+        }
+
+        if (typeof value !== 'object') {
+          throw new Error('Weekend working config must be an object');
+        }
+
+        // Validate Saturday config if provided
+        if (value.saturday) {
+          if (typeof value.saturday.working !== 'boolean') {
+            throw new Error('Saturday working must be a boolean');
+          }
+          if (value.saturday.working) {
+            if (!value.saturday.in_time || !value.saturday.out_time) {
+              throw new Error('Saturday in_time and out_time are required when Saturday working is true');
+            }
+            if (typeof value.saturday.full_day_salary !== 'boolean') {
+              throw new Error('Saturday full_day_salary must be a boolean');
+            }
+          }
+        }
+
+        // Validate Sunday config if provided
+        if (value.sunday) {
+          if (typeof value.sunday.working !== 'boolean') {
+            throw new Error('Sunday working must be a boolean');
+          }
+          if (value.sunday.working) {
+            if (!value.sunday.in_time || !value.sunday.out_time) {
+              throw new Error('Sunday in_time and out_time are required when Sunday working is true');
+            }
+            if (typeof value.sunday.full_day_salary !== 'boolean') {
+              throw new Error('Sunday full_day_salary must be a boolean');
+            }
+          }
+        }
+
+        return true;
+      })
   ],
   asyncHandler(async (req, res) => {
 
@@ -723,7 +858,10 @@ router.post('/',
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
         
         // Work Schedule Information - NEW
-        in_time, out_time, follows_company_schedule = true
+        in_time, out_time, follows_company_schedule = true,
+
+        // Weekend Working Configuration
+        weekend_working_config
       } = req.body;
 
       // Validation for time fields
@@ -849,19 +987,20 @@ router.post('/',
         INSERT INTO employees (
           id, client_id, employee_code, first_name, last_name, email, phone,
           date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
-          hire_date, department_id, designation_id, manager_id, employee_type, 
+          hire_date, department_id, designation_id, manager_id, employee_type,
           employment_status, base_salary,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-          in_time, out_time, follows_company_schedule,
+          in_time, out_time, follows_company_schedule, weekend_working_config,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
-        date_of_birth, gender, address || null, city || null, state || null, zip_code || null, 
-        nationality || null, marital_status || null, hire_date, department_id, designation_id, 
+        date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
+        nationality || null, marital_status || null, hire_date, department_id, designation_id,
         manager_id || null, employee_type, employment_status, base_salary || null,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-        finalInTime, finalOutTime, follows_company_schedule
+        finalInTime, finalOutTime, follows_company_schedule,
+        weekend_working_config ? JSON.stringify(weekend_working_config) : null
       ]);
 
       // Get created employee with relations (same as your existing code)
@@ -879,12 +1018,23 @@ router.post('/',
         WHERE e.id = ?
       `, [employeeUuid]);
 
+      // Parse weekend_working_config JSON field
+      const employee = newEmployee[0];
+      if (employee.weekend_working_config) {
+        try {
+          employee.weekend_working_config = JSON.parse(employee.weekend_working_config);
+        } catch (e) {
+          console.warn('Failed to parse weekend_working_config:', e);
+          employee.weekend_working_config = null;
+        }
+      }
+
       console.log('✅ Employee creation successful');
       res.status(201).json({
         success: true,
         message: 'Employee created successfully',
         data: {
-          employee: newEmployee[0]
+          employee: employee
         }
       });
 
@@ -1087,12 +1237,12 @@ router.post('/',
       INSERT INTO employees (
         id, client_id, employee_code, first_name, last_name, email, phone,
         date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
-        hire_date, department_id, designation_id, manager_id, employee_type, 
+        hire_date, department_id, designation_id, manager_id, employee_type,
         employment_status, base_salary,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-        in_time, out_time, follows_company_schedule,
+        in_time, out_time, follows_company_schedule, weekend_working_config,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `, [
       employeeUuid, req.user.clientId, employee_code, first_name, 
       last_name || null,  // Optional
@@ -1110,7 +1260,8 @@ router.post('/',
       emergency_contact_relation || null,  // Optional
       in_time || null,  // Optional
       out_time || null,  // Optional
-      follows_company_schedule !== undefined ? follows_company_schedule : true
+      follows_company_schedule !== undefined ? follows_company_schedule : true,
+      weekend_working_config ? JSON.stringify(weekend_working_config) : null
     ]);
 
     res.status(201).json({

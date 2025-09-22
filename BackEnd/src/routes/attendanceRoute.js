@@ -44,22 +44,73 @@ const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/;
 /**
  * Get employee work schedule from database
  */
-const getEmployeeSchedule = async (employeeId, clientId, db) => {
+const getEmployeeSchedule = async (employeeId, clientId, db, date = null) => {
   const [employee] = await db.execute(`
-    SELECT 
-      e.in_time, 
-      e.out_time, 
+    SELECT
+      e.in_time,
+      e.out_time,
       e.follows_company_schedule,
+      e.weekend_working_config,
       CONCAT(e.first_name, ' ', e.last_name) as employee_name
-    FROM employees e 
+    FROM employees e
     WHERE e.id = ? AND e.client_id = ? AND e.employment_status = 'active'
   `, [employeeId, clientId]);
-  
+
   if (employee.length === 0) {
     throw new Error('Employee not found or inactive');
   }
-  
+
   const emp = employee[0];
+
+  // Parse weekend working config if present
+  let weekendConfig = null;
+  if (emp.weekend_working_config) {
+    try {
+      weekendConfig = JSON.parse(emp.weekend_working_config);
+    } catch (e) {
+      console.warn('Failed to parse weekend_working_config for employee:', employeeId, e);
+    }
+  }
+
+  // Check if date is provided and if it's a weekend working day
+  if (date && weekendConfig) {
+    const dayOfWeek = new Date(date).getDay(); // 0=Sunday, 6=Saturday
+
+    // Saturday working day
+    if (dayOfWeek === 6 && weekendConfig.saturday?.working) {
+      return {
+        start_time: weekendConfig.saturday.in_time,
+        end_time: weekendConfig.saturday.out_time,
+        late_threshold_minutes: 0, // You can adjust this as needed
+        employee_name: emp.employee_name,
+        follows_company_schedule: false, // Weekend schedules are custom
+        is_weekend_working: true,
+        weekend_day: 'saturday',
+        full_day_salary: weekendConfig.saturday.full_day_salary
+      };
+    }
+
+    // Sunday working day
+    if (dayOfWeek === 0 && weekendConfig.sunday?.working) {
+      return {
+        start_time: weekendConfig.sunday.in_time,
+        end_time: weekendConfig.sunday.out_time,
+        late_threshold_minutes: 0, // You can adjust this as needed
+        employee_name: emp.employee_name,
+        follows_company_schedule: false, // Weekend schedules are custom
+        is_weekend_working: true,
+        weekend_day: 'sunday',
+        full_day_salary: weekendConfig.sunday.full_day_salary
+      };
+    }
+
+    // Non-working weekend day
+    if ((dayOfWeek === 6 || dayOfWeek === 0) &&
+        !(weekendConfig.saturday?.working && dayOfWeek === 6) &&
+        !(weekendConfig.sunday?.working && dayOfWeek === 0)) {
+      throw new Error('Employee does not work on this weekend day');
+    }
+  }
   
   // Get late threshold from settings
   const [thresholdSetting] = await db.execute(`
@@ -333,8 +384,8 @@ const calculateWorkHours = async (
     const attendanceId = uuidv4();
     
     try {
-      // Get employee schedule
-      const schedule = await getEmployeeSchedule(req.body.employee_id, req.user.clientId, db);
+      // Get employee schedule (pass date for weekend working detection)
+      const schedule = await getEmployeeSchedule(req.body.employee_id, req.user.clientId, db, req.body.date);
       
       console.log("schedule", schedule);
 
@@ -816,7 +867,7 @@ router.patch(
 
     console.log('🔍 Debug - Current record:', current);
     
-    const schedule         = await getEmployeeSchedule(current.employee_id, req.user.clientId, db);
+    const schedule         = await getEmployeeSchedule(current.employee_id, req.user.clientId, db, current.date);
     const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
 
     /* ───────── 3. figure out the “effective” values after merge ───────── */
@@ -964,7 +1015,7 @@ router.post('/bulk-update-status', [
     for (const employeeId of employee_ids) {
       try {
         // Get employee schedule and duration settings
-        const schedule = await getEmployeeSchedule(employeeId, req.user.clientId, db);
+        const schedule = await getEmployeeSchedule(employeeId, req.user.clientId, db, date);
         const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
         
         // Check if attendance record exists

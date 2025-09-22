@@ -43,6 +43,20 @@ interface Employee {
   in_time?: string;
   out_time?: string;
   follows_company_schedule?: boolean;
+  weekend_working_config?: {
+    saturday?: {
+      working: boolean;
+      in_time: string;
+      out_time: string;
+      full_day_salary: boolean;
+    };
+    sunday?: {
+      working: boolean;
+      in_time: string;
+      out_time: string;
+      full_day_salary: boolean;
+    };
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -1136,34 +1150,113 @@ const EmployeeDetails: React.FC = () => {
                     <HiClock className="w-6 h-6 text-purple-600" />
                     Work Schedule
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Field 
-                      label="In Time" 
-                      value={employee.in_time ? formatTime(employee.in_time) : undefined}
-                      icon={<HiClock className="w-4 h-4 text-gray-500" />}
-                    />
-                    <Field 
-                      label="Out Time" 
-                      value={employee.out_time ? formatTime(employee.out_time) : undefined}
-                      icon={<HiClock className="w-4 h-4 text-gray-500" />}
-                    />
-                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                      <div className="flex items-center gap-2 mb-1">
-                        <HiClock className="w-4 h-4 text-gray-500" />
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Follows Company Schedule</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge 
-                          color={employee.follows_company_schedule ? 'green' : 'gray'} 
-                          size="sm"
-                        >
-                          {employee.follows_company_schedule ? 'Yes' : 'No'}
-                        </Badge>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {employee.follows_company_schedule ? 'Uses company standard hours' : 'Custom schedule'}
-                        </p>
+
+                  {/* Regular Work Schedule */}
+                  <div className="mb-6">
+                    <h4 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-3">Regular Working Days</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Field
+                        label="In Time"
+                        value={employee.in_time ? formatTime(employee.in_time) : undefined}
+                        icon={<HiClock className="w-4 h-4 text-gray-500" />}
+                      />
+                      <Field
+                        label="Out Time"
+                        value={employee.out_time ? formatTime(employee.out_time) : undefined}
+                        icon={<HiClock className="w-4 h-4 text-gray-500" />}
+                      />
+                      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-1">
+                          <HiClock className="w-4 h-4 text-gray-500" />
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Follows Company Schedule</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            color={employee.follows_company_schedule ? 'green' : 'gray'}
+                            size="sm"
+                          >
+                            {employee.follows_company_schedule ? 'Yes' : 'No'}
+                          </Badge>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {employee.follows_company_schedule ? 'Uses company standard hours' : 'Custom schedule'}
+                          </p>
+                        </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Weekend Working Configuration */}
+                  <div>
+                    <h4 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-3">Weekend Working Days</h4>
+
+                    {employee.weekend_working_config ? (
+                      <div className="space-y-4">
+                        {/* Saturday Configuration */}
+                        {employee.weekend_working_config.saturday?.working && (
+                          <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge color="green" size="sm">Saturday Working</Badge>
+                              {employee.weekend_working_config.saturday.full_day_salary && (
+                                <Badge color="blue" size="sm">Full Day Salary</Badge>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <Field
+                                label="Saturday In Time"
+                                value={formatTime(employee.weekend_working_config.saturday.in_time)}
+                                icon={<HiClock className="w-4 h-4 text-green-600" />}
+                              />
+                              <Field
+                                label="Saturday Out Time"
+                                value={formatTime(employee.weekend_working_config.saturday.out_time)}
+                                icon={<HiClock className="w-4 h-4 text-green-600" />}
+                              />
+                            </div>
+                            <div className="mt-2 text-sm text-green-700 dark:text-green-300">
+                              <span className="font-medium">Salary Type:</span> {employee.weekend_working_config.saturday.full_day_salary ? 'Full weekday salary weight' : 'Proportional to hours worked'}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Sunday Configuration */}
+                        {employee.weekend_working_config.sunday?.working && (
+                          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge color="blue" size="sm">Sunday Working</Badge>
+                              {employee.weekend_working_config.sunday.full_day_salary && (
+                                <Badge color="purple" size="sm">Full Day Salary</Badge>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <Field
+                                label="Sunday In Time"
+                                value={formatTime(employee.weekend_working_config.sunday.in_time)}
+                                icon={<HiClock className="w-4 h-4 text-blue-600" />}
+                              />
+                              <Field
+                                label="Sunday Out Time"
+                                value={formatTime(employee.weekend_working_config.sunday.out_time)}
+                                icon={<HiClock className="w-4 h-4 text-blue-600" />}
+                              />
+                            </div>
+                            <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                              <span className="font-medium">Salary Type:</span> {employee.weekend_working_config.sunday.full_day_salary ? 'Full weekday salary weight' : 'Proportional to hours worked'}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* No Weekend Working Days */}
+                        {!employee.weekend_working_config.saturday?.working && !employee.weekend_working_config.sunday?.working && (
+                          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
+                            <p className="text-gray-600 dark:text-gray-400">No weekend working days configured</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
+                        <p className="text-gray-600 dark:text-gray-400">No weekend working configuration</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 

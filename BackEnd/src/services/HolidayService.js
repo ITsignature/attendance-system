@@ -64,8 +64,27 @@ class HolidayService {
      * @param {boolean} includeOptionalHolidays - Whether to include optional holidays
      * @returns {Promise<Object>} Working days calculation result
      */
-    async calculateWorkingDays(clientId, startDate, endDate, departmentId = null, includeOptionalHolidays = false) {
+    async calculateWorkingDays(clientId, startDate, endDate, departmentId = null, includeOptionalHolidays = false, employeeId = null) {
         const holidays = await this.getHolidaysInPeriod(clientId, startDate, endDate, departmentId);
+        const db = require('../config/database').getDB();
+
+        // Get employee weekend working configuration if employeeId provided
+        let employeeWeekendConfig = null;
+        if (employeeId) {
+            const [employeeData] = await db.execute(`
+                SELECT weekend_working_config FROM employees WHERE id = ?
+            `, [employeeId]);
+
+            if (employeeData.length > 0 && employeeData[0].weekend_working_config) {
+                try {
+                    employeeWeekendConfig = JSON.parse(employeeData[0].weekend_working_config);
+                } catch (e) {
+                    console.warn(`Invalid weekend_working_config JSON for employee ${employeeId}:`, e);
+                }
+            }
+        }
+
+        // Fallback to system settings if no employee-specific config
         const settingsHelper = new SettingsHelper(clientId);
         
         // Filter holidays based on optional flag
@@ -85,6 +104,8 @@ class HolidayService {
         let weekendDays = 0;
         let holidayCount = 0;
         let weekendWorkingDays = 0;
+        let weekendFullDayWeight = 0;
+        let weekendProportionalDays = 0;
         
         const currentDate = new Date(start);
         while (currentDate <= end) {
@@ -99,12 +120,35 @@ class HolidayService {
             // Check if it's a weekend
             else if (dayOfWeek === 0 || dayOfWeek === 6) {
                 weekendDays++;
-                // Check if weekend days are configured as working days (with employee-specific override)
-                const isWeekendWorking = await settingsHelper.isWeekendWorkingDay(dayOfWeek);
-                if (isWeekendWorking) {
+
+                // Check weekend working configuration
+                let isWeekendWorking = false;
+                let isFullDaySalary = false;
+
+                if (employeeWeekendConfig) {
+                    // Use employee-specific weekend configuration
+                    if (dayOfWeek === 6 && employeeWeekendConfig.saturday?.working) {
+                        isWeekendWorking = true;
+                        isFullDaySalary = employeeWeekendConfig.saturday.full_day_salary || false;
+                    } else if (dayOfWeek === 0 && employeeWeekendConfig.sunday?.working) {
+                        isWeekendWorking = true;
+                        isFullDaySalary = employeeWeekendConfig.sunday.full_day_salary || false;
+                    }
+                } else {
+                    // Fallback to system-wide weekend settings
+                    isWeekendWorking = await settingsHelper.isWeekendWorkingDay(dayOfWeek);
+                }
+
                 if (isWeekendWorking) {
                     workingDays++;
                     weekendWorkingDays++;
+
+                    // Track salary weight for weekend days
+                    if (isFullDaySalary) {
+                        weekendFullDayWeight++;
+                    } else {
+                        weekendProportionalDays++;
+                    }
                 }
             }
             // It's a regular working day
@@ -122,6 +166,8 @@ class HolidayService {
             working_days: workingDays,
             weekend_days: weekendDays,
             weekend_working_days: weekendWorkingDays,
+            weekend_full_day_weight: weekendFullDayWeight,
+            weekend_proportional_days: weekendProportionalDays,
             holiday_count: holidayCount,
             holidays: relevantHolidays.map(h => ({
                 date: typeof h.date === 'string' ? h.date : h.date.toISOString().split('T')[0],

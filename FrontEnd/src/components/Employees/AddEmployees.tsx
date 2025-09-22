@@ -58,6 +58,22 @@ interface EmployeeFormData {
   in_time: string;
   out_time: string;
   follows_company_schedule: boolean;
+
+  // Weekend Working Configuration
+  weekend_working_config: {
+    saturday?: {
+      working: boolean;
+      in_time: string;
+      out_time: string;
+      full_day_salary: boolean;
+    };
+    sunday?: {
+      working: boolean;
+      in_time: string;
+      out_time: string;
+      full_day_salary: boolean;
+    };
+  } | null;
 }
 
 // Validation errors interface
@@ -166,7 +182,10 @@ const AddEmployees: React.FC = () => {
     // Work Schedule Information
     in_time: '',
     out_time: '',
-    follows_company_schedule: true
+    follows_company_schedule: true,
+
+    // Weekend Working Configuration
+    weekend_working_config: null
   });
 
   // Steps configuration - Updated structure
@@ -520,7 +539,10 @@ const AddEmployees: React.FC = () => {
         // Work Schedule Information
         in_time: formData.in_time,
         out_time: formData.out_time,
-        follows_company_schedule: formData.follows_company_schedule
+        follows_company_schedule: formData.follows_company_schedule,
+
+        // Weekend Working Configuration
+        weekend_working_config: formData.weekend_working_config
       };
 
       console.log('🚀 Submitting employee data:', submitData);
@@ -648,7 +670,10 @@ const debugAuth = () => {
       // Work Schedule Information
       in_time: '',
       out_time: '',
-      follows_company_schedule: true
+      follows_company_schedule: true,
+
+      // Weekend Working Configuration
+      weekend_working_config: null
     });
     setCurrentStep(0);
     setValidationErrors({});
@@ -1208,6 +1233,227 @@ const debugAuth = () => {
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+
+                {/* Weekend Working Section */}
+                <div className="col-span-full">
+                  <div className="border-t pt-6 mt-6">
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                      Weekend Working Configuration
+                    </h4>
+
+                    {/* Saturday Working */}
+                    <div className="mb-6">
+                      <div className="flex items-center mb-3">
+                        <input
+                          id="saturday_working"
+                          type="checkbox"
+                          checked={formData.weekend_working_config?.saturday?.working || false}
+                          onChange={(e) => {
+                            const working = e.target.checked;
+                            setFormData(prev => ({
+                              ...prev,
+                              weekend_working_config: {
+                                ...prev.weekend_working_config,
+                                saturday: working ? {
+                                  working: true,
+                                  in_time: '09:00',
+                                  out_time: '17:00',
+                                  full_day_salary: false
+                                } : undefined
+                              }
+                            }));
+                          }}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="saturday_working" className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                          Saturday Working Day
+                        </label>
+                      </div>
+
+                      {formData.weekend_working_config?.saturday?.working && (
+                        <div className="ml-6 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="saturday_in_time" value="Saturday In Time" />
+                              <TextInput
+                                id="saturday_in_time"
+                                type="time"
+                                value={formData.weekend_working_config.saturday.in_time}
+                                onChange={(e) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    weekend_working_config: {
+                                      ...prev.weekend_working_config,
+                                      saturday: {
+                                        ...prev.weekend_working_config!.saturday!,
+                                        in_time: e.target.value
+                                      }
+                                    }
+                                  }));
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="saturday_out_time" value="Saturday Out Time" />
+                              <TextInput
+                                id="saturday_out_time"
+                                type="time"
+                                value={formData.weekend_working_config.saturday.out_time}
+                                onChange={(e) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    weekend_working_config: {
+                                      ...prev.weekend_working_config,
+                                      saturday: {
+                                        ...prev.weekend_working_config!.saturday!,
+                                        out_time: e.target.value
+                                      }
+                                    }
+                                  }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center">
+                            <input
+                              id="saturday_full_day_salary"
+                              type="checkbox"
+                              checked={formData.weekend_working_config.saturday.full_day_salary}
+                              onChange={(e) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  weekend_working_config: {
+                                    ...prev.weekend_working_config,
+                                    saturday: {
+                                      ...prev.weekend_working_config!.saturday!,
+                                      full_day_salary: e.target.checked
+                                    }
+                                  }
+                                }));
+                              }}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="saturday_full_day_salary" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                              Saturday Full Day Salary (same weight as weekday)
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Sunday Working */}
+                    <div className="mb-6">
+                      <div className="flex items-center mb-3">
+                        <input
+                          id="sunday_working"
+                          type="checkbox"
+                          checked={formData.weekend_working_config?.sunday?.working || false}
+                          onChange={(e) => {
+                            const working = e.target.checked;
+                            setFormData(prev => ({
+                              ...prev,
+                              weekend_working_config: {
+                                ...prev.weekend_working_config,
+                                sunday: working ? {
+                                  working: true,
+                                  in_time: '09:00',
+                                  out_time: '17:00',
+                                  full_day_salary: false
+                                } : undefined
+                              }
+                            }));
+                          }}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <label htmlFor="sunday_working" className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                          Sunday Working Day
+                        </label>
+                      </div>
+
+                      {formData.weekend_working_config?.sunday?.working && (
+                        <div className="ml-6 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="sunday_in_time" value="Sunday In Time" />
+                              <TextInput
+                                id="sunday_in_time"
+                                type="time"
+                                value={formData.weekend_working_config.sunday.in_time}
+                                onChange={(e) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    weekend_working_config: {
+                                      ...prev.weekend_working_config,
+                                      sunday: {
+                                        ...prev.weekend_working_config!.sunday!,
+                                        in_time: e.target.value
+                                      }
+                                    }
+                                  }));
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="sunday_out_time" value="Sunday Out Time" />
+                              <TextInput
+                                id="sunday_out_time"
+                                type="time"
+                                value={formData.weekend_working_config.sunday.out_time}
+                                onChange={(e) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    weekend_working_config: {
+                                      ...prev.weekend_working_config,
+                                      sunday: {
+                                        ...prev.weekend_working_config!.sunday!,
+                                        out_time: e.target.value
+                                      }
+                                    }
+                                  }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center">
+                            <input
+                              id="sunday_full_day_salary"
+                              type="checkbox"
+                              checked={formData.weekend_working_config.sunday.full_day_salary}
+                              onChange={(e) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  weekend_working_config: {
+                                    ...prev.weekend_working_config,
+                                    sunday: {
+                                      ...prev.weekend_working_config!.sunday!,
+                                      full_day_salary: e.target.checked
+                                    }
+                                  }
+                                }));
+                              }}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="sunday_full_day_salary" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                              Sunday Full Day Salary (same weight as weekday)
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Weekend Working Info */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                      <h5 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                        Weekend Working Information
+                      </h5>
+                      <div className="text-sm text-blue-600 dark:text-blue-300 space-y-1">
+                        <p>• <strong>Full Day Salary:</strong> If checked, this day gets the same salary weight as a regular weekday</p>
+                        <p>• <strong>Hourly Salary:</strong> If unchecked, salary is calculated proportionally based on hours worked</p>
+                        <p>• Weekend working days will be included in attendance and payroll calculations</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
