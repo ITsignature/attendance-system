@@ -1146,17 +1146,37 @@ class PayrollRunService {
         
         console.log(`🗓️  PAYROLL PERIOD: ${period.period_start_date} to ${period.period_end_date}`);
         
-        const workingDaysInMonth = await this.calculateWorkingDaysInPeriod(
-            period.period_start_date, 
-            period.period_end_date, 
+        const workingDaysCalculation = await HolidayService.calculateWorkingDays(
             clientId,
-            departmentId
+            period.period_start_date,
+            period.period_end_date,
+            departmentId,
+            false, // includeOptionalHolidays
+            employeeId // Pass employeeId for individual weekend config
         );
+
+        const workingDaysInMonth = workingDaysCalculation.working_days;
         
         console.log(`📊 CALCULATED WORKING DAYS: ${workingDaysInMonth} days (excluding weekends & holidays)`);
         
-        // Calculate per-day and per-minute salary rates using employee-specific hours
-        const perDaySalary = baseSalary / workingDaysInMonth;
+        // Calculate effective working days considering weekend salary weights
+        const effectiveWorkingDays = await this.calculateEffectiveWorkingDays(
+            workingDaysCalculation,
+            employeeId,
+            period.period_start_date,
+            period.period_end_date
+        );
+
+        console.log(`🏗️  WEEKEND WORKING BREAKDOWN:`, {
+            standard_working_days: workingDaysCalculation.working_days - workingDaysCalculation.weekend_working_days,
+            weekend_working_days: workingDaysCalculation.weekend_working_days,
+            weekend_full_day_weight: workingDaysCalculation.weekend_full_day_weight,
+            weekend_proportional_days: workingDaysCalculation.weekend_proportional_days,
+            effective_working_days: effectiveWorkingDays
+        });
+
+        // Calculate per-day and per-minute salary rates using effective working days
+        const perDaySalary = baseSalary / effectiveWorkingDays;
         const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, attendanceSummary.workingHours.hours_per_day, period.period_start_date, period.period_end_date);
         const perMinuteSalary = perDaySalary / (employeeDailyHours * 60);
         
@@ -1168,15 +1188,16 @@ class PayrollRunService {
         console.log('=' .repeat(60));
         console.log(`👤 Employee ID: ${employeeId}`);
         console.log(`💰 Base Salary: ${baseSalary.toLocaleString()}`);
-        console.log(`📅 Working Days: ${workingDaysInMonth}`);
+        console.log(`📅 Working Days: ${workingDaysInMonth} (Raw: ${workingDaysCalculation.working_days})`);
+        console.log(`🎯 Effective Working Days (with weekend weights): ${effectiveWorkingDays}`);
         console.log(`⏰ Employee Daily Hours: ${employeeDailyHours}h/day`);
         console.log(`💵 Per-Day Salary: ${perDaySalary.toFixed(2)}`);
         console.log(`⏱️  Hourly Rate: ${hourlyRate.toFixed(2)}`);
         console.log('');
         console.log('📈 ATTENDANCE SUMMARY:');
         console.log(`   Expected Hours: ${attendanceSummary.summary.expectedHours}`);
-        console.log(`   📋 CALCULATION CHECK: ${workingDaysInMonth} days × ${employeeDailyHours}h = ${(workingDaysInMonth * employeeDailyHours).toFixed(2)}h`);
-        console.log(`   ❗ DISCREPANCY: ${attendanceSummary.summary.expectedHours !== (workingDaysInMonth * employeeDailyHours) ? 'YES - Values don\'t match!' : 'NO - Values match'}`);
+        console.log(`   📋 CALCULATION CHECK: ${effectiveWorkingDays} days × ${employeeDailyHours}h = ${(effectiveWorkingDays * employeeDailyHours).toFixed(2)}h`);
+        console.log(`   ❗ DISCREPANCY: ${attendanceSummary.summary.expectedHours !== (effectiveWorkingDays * employeeDailyHours) ? 'YES - Values don\'t match!' : 'NO - Values match'}`);
         console.log(`   Worked Hours: ${attendanceSummary.summary.totalWorkedHours}`);
         console.log(`   ⚠️  Shortfall Hours: ${attendanceSummary.summary.shortfallHours}`);
         
@@ -1193,6 +1214,7 @@ class PayrollRunService {
             lateDeduction: 0,
             shortfallDeduction: 0,
             unpaidLeaveDeduction: 0,
+            weekendProportionalDeduction: 0,
             components: []
         };
 
@@ -1210,7 +1232,23 @@ class PayrollRunService {
             });
         }
 
-        // 2. Late arrival deduction (per minute)
+        // 2. Weekend working deductions (only for proportional days)
+        const weekendDeductions = await this.calculateWeekendDeductions(
+            employeeId,
+            workingDaysCalculation,
+            attendanceSummary,
+            period.period_start_date,
+            period.period_end_date,
+            perDaySalary,
+            employeeDailyHours
+        );
+
+        deductions.weekendProportionalDeduction = weekendDeductions.totalDeduction;
+        if (weekendDeductions.components.length > 0) {
+            deductions.components.push(...weekendDeductions.components);
+        }
+
+        // 3. Late arrival deduction (per minute)
         if (attendanceSummary.summary.lateMinutes > 0) {
             deductions.lateDeduction = attendanceSummary.summary.lateMinutes * perMinuteSalary;
             deductions.components.push({
@@ -1252,29 +1290,163 @@ class PayrollRunService {
             });
         }
 
-        deductions.total = deductions.absentDeduction + deductions.lateDeduction + 
-                          deductions.shortfallDeduction + deductions.unpaidLeaveDeduction;
+        deductions.total = deductions.absentDeduction + deductions.lateDeduction +
+                          deductions.shortfallDeduction + deductions.unpaidLeaveDeduction +
+                          deductions.weekendProportionalDeduction;
 
         return deductions;
     }
 
     /**
+     * Calculate effective working days considering weekend salary weights
+     */
+    async calculateEffectiveWorkingDays(workingDaysCalculation, employeeId, startDate, endDate) {
+        const db = getDB();
+
+        // Get employee weekend configuration
+        const [employeeData] = await db.execute(`
+            SELECT weekend_working_config FROM employees WHERE id = ?
+        `, [employeeId]);
+
+        let employeeWeekendConfig = null;
+        if (employeeData.length > 0 && employeeData[0].weekend_working_config) {
+            try {
+                employeeWeekendConfig = JSON.parse(employeeData[0].weekend_working_config);
+            } catch (e) {
+                console.warn(`Invalid weekend_working_config JSON for employee ${employeeId}:`, e);
+            }
+        }
+
+        // Calculate effective working days
+        let effectiveWorkingDays = workingDaysCalculation.working_days - workingDaysCalculation.weekend_working_days;
+
+        // Add weekend working days with proper weights
+        effectiveWorkingDays += workingDaysCalculation.weekend_full_day_weight; // Full weight weekend days
+        effectiveWorkingDays += workingDaysCalculation.weekend_proportional_days; // Proportional weekend days still count as working days
+
+        return effectiveWorkingDays;
+    }
+
+    /**
+     * Calculate weekend-specific attendance deductions
+     */
+    async calculateWeekendDeductions(employeeId, workingDaysCalculation, attendanceSummary, startDate, endDate, perDaySalary, employeeDailyHours) {
+        const db = getDB();
+
+        // Get employee weekend configuration
+        const [employeeData] = await db.execute(`
+            SELECT weekend_working_config FROM employees WHERE id = ?
+        `, [employeeId]);
+
+        let employeeWeekendConfig = null;
+        if (employeeData.length > 0 && employeeData[0].weekend_working_config) {
+            try {
+                employeeWeekendConfig = JSON.parse(employeeData[0].weekend_working_config);
+            } catch (e) {
+                console.warn(`Invalid weekend_working_config JSON for employee ${employeeId}:`, e);
+            }
+        }
+
+        const deductions = {
+            totalDeduction: 0,
+            components: []
+        };
+
+        // If no weekend config or no proportional days, return empty
+        if (!employeeWeekendConfig || workingDaysCalculation.weekend_proportional_days === 0) {
+            return deductions;
+        }
+
+        // Get actual weekend attendance for proportional calculation
+        const [weekendAttendance] = await db.execute(`
+            SELECT
+                date,
+                DAYOFWEEK(date) as day_of_week,
+                actual_in_time,
+                actual_out_time,
+                total_hours,
+                status
+            FROM attendance
+            WHERE employee_id = ?
+                AND date BETWEEN ? AND ?
+                AND DAYOFWEEK(date) IN (1, 7)  -- Sunday = 1, Saturday = 7
+        `, [employeeId, startDate, endDate]);
+
+        for (const attendance of weekendAttendance) {
+            const dayOfWeek = attendance.day_of_week === 7 ? 6 : 0; // Convert MySQL DAYOFWEEK to JS (Saturday=6, Sunday=0)
+            let weekendDayConfig = null;
+
+            if (dayOfWeek === 6 && employeeWeekendConfig.saturday?.working && !employeeWeekendConfig.saturday?.full_day_salary) {
+                weekendDayConfig = employeeWeekendConfig.saturday;
+            } else if (dayOfWeek === 0 && employeeWeekendConfig.sunday?.working && !employeeWeekendConfig.sunday?.full_day_salary) {
+                weekendDayConfig = employeeWeekendConfig.sunday;
+            }
+
+            if (weekendDayConfig) {
+                // Calculate scheduled hours for this weekend day
+                const inTime = weekendDayConfig.in_time;
+                const outTime = weekendDayConfig.out_time;
+                const scheduledHours = this.calculateScheduledHours(inTime, outTime);
+
+                // Calculate shortfall
+                const actualHours = attendance.total_hours || 0;
+                const shortfallHours = Math.max(0, scheduledHours - actualHours);
+
+                if (shortfallHours > 0) {
+                    const hourlyRate = perDaySalary / employeeDailyHours;
+                    const shortfallDeduction = shortfallHours * hourlyRate;
+
+                    deductions.totalDeduction += shortfallDeduction;
+                    deductions.components.push({
+                        code: 'WEEKEND_SHORTFALL',
+                        name: `${dayOfWeek === 6 ? 'Saturday' : 'Sunday'} Shortfall Deduction`,
+                        type: 'deduction',
+                        category: 'other',
+                        amount: shortfallDeduction,
+                        details: `${attendance.date}: ${shortfallHours}h shortfall × ${hourlyRate.toFixed(2)}`
+                    });
+                }
+            }
+        }
+
+        return deductions;
+    }
+
+    /**
+     * Calculate scheduled hours between two time strings
+     */
+    calculateScheduledHours(inTime, outTime) {
+        const [inHour, inMinute] = inTime.split(':').map(Number);
+        const [outHour, outMinute] = outTime.split(':').map(Number);
+
+        const inMinutes = inHour * 60 + inMinute;
+        const outMinutes = outHour * 60 + outMinute;
+
+        return (outMinutes - inMinutes) / 60;
+    }
+
+    /**
      * Calculate working days in a period (excluding weekends and holidays)
      */
-    async calculateWorkingDaysInPeriod(startDate, endDate, clientId, departmentId = null) {
+    async calculateWorkingDaysInPeriod(startDate, endDate, clientId, departmentId = null, employeeId = null) {
         try {
             // Use HolidayService for accurate working days calculation
             const calculation = await HolidayService.calculateWorkingDays(
-                clientId, 
-                startDate, 
-                endDate, 
-                departmentId
+                clientId,
+                startDate,
+                endDate,
+                departmentId,
+                false, // includeOptionalHolidays
+                employeeId // Pass employeeId for individual weekend config
             );
             
             console.log(`🏢 HOLIDAY SERVICE RESULT:`, {
                 total_days: calculation.total_days,
                 working_days: calculation.working_days,
                 weekend_days: calculation.weekend_days,
+                weekend_working_days: calculation.weekend_working_days,
+                weekend_full_day_weight: calculation.weekend_full_day_weight,
+                weekend_proportional_days: calculation.weekend_proportional_days,
                 holiday_count: calculation.holiday_count,
                 holidays: calculation.holidays?.map(h => h.name).join(', ') || 'None'
             });
