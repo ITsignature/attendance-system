@@ -870,17 +870,24 @@ class PayrollRunService {
             const periodStartDate = period.period_start_date;
             const periodEndDate = period.period_end_date;
             
-            // Calculate expected hours using simple working days calculation
-            const workingDays = await this.calculateWorkingDaysInPeriod(
+            // Calculate expected hours using working days calculation, excluding weekend days to avoid double-counting
+            const workingDaysCalculation = await HolidayService.calculateWorkingDays(
+                clientId,
                 periodStartDate,
                 periodEndDate,
-                clientId,
-                departmentId
+                departmentId,
+                false, // includeOptionalHolidays
+                employeeId // Pass employeeId for individual weekend config
             );
-            const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, workingHours.hours_per_day, periodStartDate, periodEndDate);
-            summary.expectedHours = workingDays * employeeDailyHours;
 
-            console.log(`✅ Expected hours calculation: ${workingDays} days × ${employeeDailyHours}h = ${summary.expectedHours}h`);
+            // CRITICAL FIX: Use only weekday working days for main expected hours calculation
+            // Weekend expected hours will be handled separately in weekend shortfall calculation
+            const weekdayWorkingDays = workingDaysCalculation.working_days - workingDaysCalculation.weekend_working_days;
+            const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, workingHours.hours_per_day, periodStartDate, periodEndDate);
+            summary.expectedHours = weekdayWorkingDays * employeeDailyHours;
+
+            console.log(`✅ Expected hours calculation (WEEKDAYS ONLY): ${weekdayWorkingDays} weekday days × ${employeeDailyHours}h = ${summary.expectedHours}h`);
+            console.log(`   📊 Working days breakdown: Total=${workingDaysCalculation.working_days}, Weekdays=${weekdayWorkingDays}, Weekend=${workingDaysCalculation.weekend_working_days}`);
         } catch (error) {
             console.error('Error calculating expected working days with holidays:', error);
             // Fallback to simple calculation using attendance date range
@@ -911,10 +918,15 @@ class PayrollRunService {
         for (const record of attendanceRecords) {
             const actualWorkedHours = parseFloat(record.total_hours) || 0;
             const overtimeHours = parseFloat(record.overtime_hours) || 0;
-            
+
+            // Check if this is a weekend day
+            const recordDate = new Date(record.date);
+            const dayOfWeek = recordDate.getDay(); // 0=Sunday, 6=Saturday
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
             let workedHoursToCount = actualWorkedHours;
             let cappingInfo = '';
-            
+
             // If overtime is disabled, calculate payable hours based on actual work time overlap with scheduled hours
             if (!overtimeEnabled) {
                 let scheduledInTime = null;
@@ -964,11 +976,19 @@ class PayrollRunService {
             } else {
                 cappingInfo = ` (overtime allowed)`;
             }
-            
+
             // Log each day's contribution
-            console.log(`📅 ${record.date}: ${actualWorkedHours}h worked → ${workedHoursToCount}h counted${cappingInfo}`);
-            
-            summary.totalWorkedHours += workedHoursToCount;
+            const dayType = isWeekend ? '(WEEKEND)' : '(WEEKDAY)';
+            console.log(`📅 ${record.date} ${dayType}: ${actualWorkedHours}h worked → ${workedHoursToCount}h counted${cappingInfo}`);
+
+            // CRITICAL FIX: Only count weekday hours in main total to avoid double-counting weekend shortfalls
+            if (!isWeekend) {
+                summary.totalWorkedHours += workedHoursToCount;
+                console.log(`   ✅ Added to weekday total: ${workedHoursToCount}h`);
+            } else {
+                console.log(`   ⏭️  Skipped weekend hours (handled separately): ${workedHoursToCount}h`);
+            }
+
             summary.totalOvertimeHours += overtimeHours;
 
             switch (record.status) {
