@@ -1352,20 +1352,22 @@ class PayrollRunService {
             components: []
         };
 
-        // If no weekend config or no proportional days, return empty
-        if (!employeeWeekendConfig || workingDaysCalculation.weekend_proportional_days === 0) {
+        // If no weekend config, return empty (no weekend work configured)
+        if (!employeeWeekendConfig) {
             return deductions;
         }
 
-        // Get actual weekend attendance for proportional calculation
+        // Get actual weekend attendance for shortfall calculation
         const [weekendAttendance] = await db.execute(`
             SELECT
                 date,
                 DAYOFWEEK(date) as day_of_week,
-                actual_in_time,
-                actual_out_time,
+                check_in_time,
+                check_out_time,
                 total_hours,
-                status
+                status,
+                scheduled_in_time,
+                scheduled_out_time
             FROM attendance
             WHERE employee_id = ?
                 AND date BETWEEN ? AND ?
@@ -1376,9 +1378,10 @@ class PayrollRunService {
             const dayOfWeek = attendance.day_of_week === 7 ? 6 : 0; // Convert MySQL DAYOFWEEK to JS (Saturday=6, Sunday=0)
             let weekendDayConfig = null;
 
-            if (dayOfWeek === 6 && employeeWeekendConfig.saturday?.working && !employeeWeekendConfig.saturday?.full_day_salary) {
+            // Check if this weekend day is configured for work (regardless of full_day_salary setting)
+            if (dayOfWeek === 6 && employeeWeekendConfig.saturday?.working) {
                 weekendDayConfig = employeeWeekendConfig.saturday;
-            } else if (dayOfWeek === 0 && employeeWeekendConfig.sunday?.working && !employeeWeekendConfig.sunday?.full_day_salary) {
+            } else if (dayOfWeek === 0 && employeeWeekendConfig.sunday?.working) {
                 weekendDayConfig = employeeWeekendConfig.sunday;
             }
 
@@ -1388,13 +1391,49 @@ class PayrollRunService {
                 const outTime = weekendDayConfig.out_time;
                 const scheduledHours = this.calculateScheduledHours(inTime, outTime);
 
-                // Calculate shortfall
-                const actualHours = attendance.total_hours || 0;
-                const shortfallHours = Math.max(0, scheduledHours - actualHours);
+                // Calculate actual payable hours using overlap logic (same as weekdays)
+                let actualPayableHours = 0;
+                let calculationInfo = '';
+
+                if (attendance.check_in_time && attendance.check_out_time) {
+                    // Create Date objects for time comparison
+                    const scheduledInTime = new Date(`2000-01-01 ${inTime}`);
+                    const scheduledOutTime = new Date(`2000-01-01 ${outTime}`);
+                    const actualInTime = new Date(`2000-01-01 ${attendance.check_in_time}`);
+                    const actualOutTime = new Date(`2000-01-01 ${attendance.check_out_time}`);
+
+                    if (!isNaN(scheduledInTime.getTime()) && !isNaN(scheduledOutTime.getTime()) &&
+                        !isNaN(actualInTime.getTime()) && !isNaN(actualOutTime.getTime())) {
+
+                        // Calculate overlap between actual work time and scheduled time
+                        const overlapStart = new Date(Math.max(actualInTime.getTime(), scheduledInTime.getTime()));
+                        const overlapEnd = new Date(Math.min(actualOutTime.getTime(), scheduledOutTime.getTime()));
+
+                        if (overlapEnd > overlapStart) {
+                            const overlapMs = overlapEnd.getTime() - overlapStart.getTime();
+                            actualPayableHours = Math.max(0, overlapMs / (1000 * 60 * 60));
+
+                            const overlapStartTime = overlapStart.toTimeString().substring(0, 5);
+                            const overlapEndTime = overlapEnd.toTimeString().substring(0, 5);
+                            calculationInfo = `OVERLAP ${overlapStartTime}-${overlapEndTime} = ${actualPayableHours.toFixed(3)}h`;
+                        } else {
+                            actualPayableHours = 0;
+                            calculationInfo = 'NO OVERLAP with scheduled time';
+                        }
+                    } else {
+                        calculationInfo = 'Invalid time format';
+                    }
+                } else {
+                    calculationInfo = 'Missing check-in/out times';
+                }
+
+                // Calculate shortfall based on overlap hours, not total_hours
+                const shortfallHours = Math.max(0, scheduledHours - actualPayableHours);
 
                 if (shortfallHours > 0) {
-                    const hourlyRate = perDaySalary / employeeDailyHours;
-                    const shortfallDeduction = shortfallHours * hourlyRate;
+                    // Calculate hourly rate based on weekend day's scheduled hours
+                    const weekendDayHourlyRate = perDaySalary / scheduledHours;
+                    const shortfallDeduction = shortfallHours * weekendDayHourlyRate;
 
                     deductions.totalDeduction += shortfallDeduction;
                     deductions.components.push({
@@ -1403,8 +1442,20 @@ class PayrollRunService {
                         type: 'deduction',
                         category: 'other',
                         amount: shortfallDeduction,
-                        details: `${attendance.date}: ${shortfallHours}h shortfall × ${hourlyRate.toFixed(2)}`
+                        details: `${attendance.date}: ${shortfallHours.toFixed(3)}h shortfall × ${weekendDayHourlyRate.toFixed(2)}`
                     });
+
+                    console.log(`🏗️  Weekend Shortfall: ${attendance.date} (${dayOfWeek === 6 ? 'Saturday' : 'Sunday'})`);
+                    console.log(`   Scheduled: ${inTime} - ${outTime} = ${scheduledHours}h`);
+                    console.log(`   Actual: ${attendance.check_in_time || 'N/A'} - ${attendance.check_out_time || 'N/A'}`);
+                    console.log(`   Calculation: ${calculationInfo}`);
+                    console.log(`   Payable Hours: ${actualPayableHours.toFixed(3)}h`);
+                    console.log(`   Shortfall: ${shortfallHours.toFixed(3)}h`);
+                    console.log(`   Hourly Rate: ${weekendDayHourlyRate.toFixed(2)} (Day Salary ${perDaySalary} ÷ ${scheduledHours}h)`);
+                    console.log(`   Deduction: ${shortfallDeduction.toFixed(2)}`);
+                } else {
+                    console.log(`✅ Weekend Day Met: ${attendance.date} (${dayOfWeek === 6 ? 'Saturday' : 'Sunday'})`);
+                    console.log(`   Scheduled: ${scheduledHours}h, Payable: ${actualPayableHours.toFixed(3)}h - No shortfall`);
                 }
             }
         }
