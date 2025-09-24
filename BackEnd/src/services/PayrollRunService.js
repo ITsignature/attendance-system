@@ -1424,6 +1424,11 @@ class PayrollRunService {
             components: []
         };
 
+        // Collect all weekend shortfall data for consolidated display
+        let totalWeekendShortfallHours = 0;
+        let totalWeekendShortfallDeduction = 0;
+        const shortfallDetails = [];
+
         // If no weekend config, return empty (no weekend work configured)
         if (!employeeWeekendConfig) {
             return deductions;
@@ -1507,15 +1512,12 @@ class PayrollRunService {
                     const weekendDayHourlyRate = perDaySalary / scheduledHours;
                     const shortfallDeduction = shortfallHours * weekendDayHourlyRate;
 
+                    // Collect shortfall data for consolidated display
+                    totalWeekendShortfallHours += shortfallHours;
+                    totalWeekendShortfallDeduction += shortfallDeduction;
+                    shortfallDetails.push(`${attendance.date} (${dayOfWeek === 6 ? 'Saturday' : 'Sunday'}): ${shortfallHours.toFixed(2)}h`);
+
                     deductions.totalDeduction += shortfallDeduction;
-                    deductions.components.push({
-                        code: 'WEEKEND_SHORTFALL',
-                        name: `${dayOfWeek === 6 ? 'Saturday' : 'Sunday'} Shortfall Deduction`,
-                        type: 'deduction',
-                        category: 'other',
-                        amount: shortfallDeduction,
-                        details: `${attendance.date}: ${shortfallHours.toFixed(3)}h shortfall × ${weekendDayHourlyRate.toFixed(2)}`
-                    });
 
                     console.log(`🏗️  Weekend Shortfall: ${attendance.date} (${dayOfWeek === 6 ? 'Saturday' : 'Sunday'})`);
                     console.log(`   Scheduled: ${inTime} - ${outTime} = ${scheduledHours}h`);
@@ -1530,6 +1532,18 @@ class PayrollRunService {
                     console.log(`   Scheduled: ${scheduledHours}h, Payable: ${actualPayableHours.toFixed(3)}h - No shortfall`);
                 }
             }
+        }
+
+        // Add consolidated weekend shortfall component if there are any shortfalls
+        if (totalWeekendShortfallDeduction > 0) {
+            deductions.components.push({
+                code: 'WEEKEND_SHORTFALL',
+                name: 'Weekend Shortfall Deduction',
+                type: 'deduction',
+                category: 'other',
+                amount: totalWeekendShortfallDeduction,
+                details: `Total ${totalWeekendShortfallHours.toFixed(2)}h shortfall - ${shortfallDetails.join(', ')}`
+            });
         }
 
         return deductions;
