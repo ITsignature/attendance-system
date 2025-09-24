@@ -136,9 +136,6 @@ const getEmployeeSchedule = async (employeeId, clientId, db, date = null) => {
   };
 };  
 
-
-
-
 /**
  * Get work duration thresholds from settings
  */
@@ -151,7 +148,6 @@ const getWorkDurationSettings = async (clientId, db) => {
     ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END, client_id DESC
   `, [clientId]);
   
-
   const settingsMap = {};
   settings.forEach(setting => {
     try {
@@ -189,7 +185,6 @@ const normalizeTimeFormat = (timeString) => {
   // If no colons, assume it's invalid
   return null;
 };
-
 
 /**
  * Determine arrival status based on check-in time and employee schedule
@@ -276,7 +271,6 @@ const determineWorkDuration = (
   return null;
 };
 
-
 /**
  * Calculate work hours and overtime based on system settings
  */
@@ -304,9 +298,6 @@ const calculateWorkHours = async (
     const SS = s.padStart(2, '0');
     return /^\d\d:\d\d:\d\d$/.test(`${HH}:${MM}:${SS}`) ? `${HH}:${MM}:${SS}` : null;
   };
-
-
-
 
   const inNorm  = normalise(checkInTime);
   const outNorm = normalise(checkOutTime);
@@ -352,9 +343,6 @@ const calculateWorkHours = async (
     standardHours : +standard.toFixed(2)     //  number
   };
 };
-
-
-
 
 // =============================================
 // CREATE ATTENDANCE RECORD WITH DUAL AUTO STATUS
@@ -522,8 +510,6 @@ const calculateWorkHours = async (
           }
         }
 
-
-      
       });
 
       console.log("newRecord", res.data);
@@ -536,9 +522,6 @@ const calculateWorkHours = async (
       });
     }
   }));
-
-
-
 
 // =============================================
 // GET ATTENDANCE RECORDS
@@ -637,7 +620,6 @@ LIMIT ? OFFSET ?
     });
   })
 );
-
 
 // =============================================
 // UPDATE ATTENDANCE RECORD WITH DUAL AUTO STATUS
@@ -934,7 +916,6 @@ if (leaveRow) {
 // (optional) log
 console.log('final workDuration:', workDuration);
 
-
     /* ───────── 4. build UPDATE SET list (only cols that changed) ───────── */
     const cols = [];
     const vals = [];
@@ -985,7 +966,6 @@ console.log('final workDuration:', workDuration);
     res.json({ success:true, message:'Attendance updated', data:updated });
   })
 );
-
 
 // =============================================
 // BULK STATUS UPDATE ENDPOINT (DUAL STATUS)

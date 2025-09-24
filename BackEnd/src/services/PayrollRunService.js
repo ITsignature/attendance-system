@@ -1065,38 +1065,70 @@ class PayrollRunService {
             let query, params;
             
             if (periodStartDate && periodEndDate) {
-                // Get scheduled hours from attendance records within the payroll period
+                // First try to get scheduled hours from weekdays (Monday-Friday) within the payroll period
                 query = `
-                    SELECT scheduled_in_time, scheduled_out_time 
-                    FROM attendance 
-                    WHERE employee_id = ? 
+                    SELECT scheduled_in_time, scheduled_out_time
+                    FROM attendance
+                    WHERE employee_id = ?
                     AND date BETWEEN ? AND ?
-                    AND scheduled_in_time IS NOT NULL 
+                    AND DAYOFWEEK(date) BETWEEN 2 AND 6
+                    AND scheduled_in_time IS NOT NULL
                     AND scheduled_out_time IS NOT NULL
-                    ORDER BY date DESC 
+                    ORDER BY date DESC
                     LIMIT 1
                 `;
                 params = [employeeId, periodStartDate, periodEndDate];
             } else {
-                // Fallback to most recent record if no period specified
+                // First try to get scheduled hours from weekdays (Monday-Friday)
                 query = `
-                    SELECT scheduled_in_time, scheduled_out_time 
-                    FROM attendance 
-                    WHERE employee_id = ? 
-                    AND scheduled_in_time IS NOT NULL 
+                    SELECT scheduled_in_time, scheduled_out_time
+                    FROM attendance
+                    WHERE employee_id = ?
+                    AND DAYOFWEEK(date) BETWEEN 2 AND 6
+                    AND scheduled_in_time IS NOT NULL
                     AND scheduled_out_time IS NOT NULL
-                    ORDER BY date DESC 
+                    ORDER BY date DESC
                     LIMIT 1
                 `;
                 params = [employeeId];
             }
             
-            const [attendance] = await db.execute(query, params);
-            
+            let [attendance] = await db.execute(query, params);
+
+            // If no weekday records found, fallback to any day
             if (!attendance[0]) {
-                const periodInfo = periodStartDate && periodEndDate ? ` for period ${periodStartDate} to ${periodEndDate}` : '';
-                console.log(`Employee ${employeeId} has no attendance records with scheduled times${periodInfo}, using default: ${defaultHours}h`);
-                return defaultHours;
+                if (periodStartDate && periodEndDate) {
+                    query = `
+                        SELECT scheduled_in_time, scheduled_out_time
+                        FROM attendance
+                        WHERE employee_id = ?
+                        AND date BETWEEN ? AND ?
+                        AND scheduled_in_time IS NOT NULL
+                        AND scheduled_out_time IS NOT NULL
+                        ORDER BY date DESC
+                        LIMIT 1
+                    `;
+                    params = [employeeId, periodStartDate, periodEndDate];
+                } else {
+                    query = `
+                        SELECT scheduled_in_time, scheduled_out_time
+                        FROM attendance
+                        WHERE employee_id = ?
+                        AND scheduled_in_time IS NOT NULL
+                        AND scheduled_out_time IS NOT NULL
+                        ORDER BY date DESC
+                        LIMIT 1
+                    `;
+                    params = [employeeId];
+                }
+
+                [attendance] = await db.execute(query, params);
+
+                if (!attendance[0]) {
+                    const periodInfo = periodStartDate && periodEndDate ? ` for period ${periodStartDate} to ${periodEndDate}` : '';
+                    console.log(`Employee ${employeeId} has no attendance records with scheduled times${periodInfo}, using default: ${defaultHours}h`);
+                    return defaultHours;
+                }
             }
             
             // Calculate hours from scheduled times in attendance record
@@ -1235,6 +1267,7 @@ class PayrollRunService {
             shortfallDeduction: 0,
             unpaidLeaveDeduction: 0,
             weekendProportionalDeduction: 0,
+            weekendAbsentDeduction: 0,
             components: []
         };
 
@@ -1310,9 +1343,28 @@ class PayrollRunService {
             });
         }
 
+        // 5. Weekend absent days deduction (for employees scheduled to work weekends)
+        const weekendAbsentDays = await this.calculateWeekendAbsentDays(
+            employeeId,
+            period.period_start_date,
+            period.period_end_date
+        );
+        if (weekendAbsentDays > 0) {
+            // For weekend absent days, use per-day salary (same rate as weekday absences)
+            deductions.weekendAbsentDeduction = weekendAbsentDays * perDaySalary;
+            deductions.components.push({
+                code: 'WEEKEND_ABSENT_DED',
+                name: 'Weekend Absent Days',
+                type: 'deduction',
+                category: 'other',
+                amount: deductions.weekendAbsentDeduction,
+                details: `${weekendAbsentDays} weekend days × ${perDaySalary.toFixed(2)}`
+            });
+        }
+
         deductions.total = deductions.absentDeduction + deductions.lateDeduction +
                           deductions.shortfallDeduction + deductions.unpaidLeaveDeduction +
-                          deductions.weekendProportionalDeduction;
+                          deductions.weekendProportionalDeduction + deductions.weekendAbsentDeduction;
 
         return deductions;
     }
@@ -1568,6 +1620,81 @@ class PayrollRunService {
         return approvedLeaves
             .filter(leave => !leave.is_paid)
             .reduce((total, leave) => total + leave.days_requested, 0);
+    }
+
+    /**
+     * Calculate weekend absent days (days where employee was scheduled to work but has no attendance record)
+     */
+    async calculateWeekendAbsentDays(employeeId, periodStartDate, periodEndDate) {
+        const db = getDB();
+
+        try {
+            // Get employee's weekend working configuration
+            const [employee] = await db.execute(`
+                SELECT weekend_working_config FROM employees WHERE id = ?
+            `, [employeeId]);
+
+            if (!employee[0] || !employee[0].weekend_working_config) {
+                return 0; // No weekend work configured
+            }
+
+            let employeeWeekendConfig;
+            try {
+                employeeWeekendConfig = JSON.parse(employee[0].weekend_working_config);
+            } catch (e) {
+                console.warn(`Invalid weekend_working_config JSON for employee ${employeeId}:`, e);
+                return 0;
+            }
+
+            // Generate all weekend dates in the period where employee should work
+            const scheduledWeekendDates = [];
+            const startDate = new Date(periodStartDate);
+            const endDate = new Date(periodEndDate);
+
+            for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+                const dayOfWeek = date.getDay(); // 0=Sunday, 6=Saturday
+
+                // Check if employee is scheduled to work on this weekend day
+                if (dayOfWeek === 6 && employeeWeekendConfig.saturday?.working) { // Saturday
+                    scheduledWeekendDates.push(new Date(date).toISOString().split('T')[0]);
+                } else if (dayOfWeek === 0 && employeeWeekendConfig.sunday?.working) { // Sunday
+                    scheduledWeekendDates.push(new Date(date).toISOString().split('T')[0]);
+                }
+            }
+
+            if (scheduledWeekendDates.length === 0) {
+                return 0; // No weekend days scheduled
+            }
+
+            // Get attendance records for these weekend dates
+            const placeholders = scheduledWeekendDates.map(() => '?').join(',');
+            const [attendanceRecords] = await db.execute(`
+                SELECT DATE(date) as attendance_date
+                FROM attendance
+                WHERE employee_id = ?
+                AND DATE(date) IN (${placeholders})
+            `, [employeeId, ...scheduledWeekendDates]);
+
+            // Find dates with no attendance records
+            const attendedDates = attendanceRecords.map(record => record.attendance_date);
+            const absentWeekendDates = scheduledWeekendDates.filter(date =>
+                !attendedDates.some(attendedDate =>
+                    attendedDate === date ||
+                    (attendedDate instanceof Date ? attendedDate.toISOString().split('T')[0] : attendedDate) === date
+                )
+            );
+
+            console.log(`📅 Weekend absence check for employee ${employeeId}:`);
+            console.log(`   Scheduled weekend dates: ${scheduledWeekendDates.length} days`);
+            console.log(`   Attended weekend dates: ${attendedDates.length} days`);
+            console.log(`   Absent weekend dates: ${absentWeekendDates.length} days`);
+
+            return absentWeekendDates.length;
+
+        } catch (error) {
+            console.error('Error calculating weekend absent days:', error);
+            return 0;
+        }
     }
 
     /**
