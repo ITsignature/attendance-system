@@ -10,6 +10,8 @@ const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const PayrollRunService = require('../services/PayrollRunService');
+const { getDB } = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -155,6 +157,792 @@ router.get('/periods/available',
             res.status(500).json({
                 success: false,
                 message: 'Failed to load available periods',
+                error: error.message
+            });
+        }
+    })
+);
+
+// =============================================
+// PAYROLL CONFIGURATION ROUTES
+// =============================================
+
+/**
+ * GET /api/payroll-runs/components
+ * Get all payroll components
+ */
+router.get('/components',
+    checkPermission('payroll.view'),
+    asyncHandler(async (req, res) => {
+        const clientId = req.user.clientId;
+        const db = await getDB();
+
+        try {
+            const [components] = await db.execute(`
+                SELECT
+                    id,
+                    component_name,
+                    component_type,
+                    category,
+                    calculation_type,
+                    calculation_value,
+                    calculation_formula,
+                    is_taxable,
+                    is_mandatory,
+                    applies_to,
+                    applies_to_ids,
+                    is_active,
+                    created_at,
+                    updated_at
+                FROM payroll_components
+                WHERE client_id = ?
+                ORDER BY component_type, component_name
+            `, [clientId]);
+
+            res.json({
+                success: true,
+                data: components
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch payroll components',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * POST /api/payroll-runs/components
+ * Create new payroll component
+ */
+router.post('/components',
+    checkPermission('payroll.edit'),
+    [
+        body('component_name').notEmpty().withMessage('Component name is required'),
+        body('component_type').isIn(['earning', 'deduction']).withMessage('Component type must be earning or deduction'),
+        body('category').notEmpty().withMessage('Category is required'),
+        body('calculation_type').isIn(['fixed', 'percentage', 'formula']).withMessage('Invalid calculation type'),
+        body('calculation_value').optional().isNumeric().withMessage('Calculation value must be numeric'),
+        body('calculation_formula').optional().isString(),
+        body('is_taxable').optional().isBoolean(),
+        body('is_mandatory').optional().isBoolean(),
+        body('applies_to').optional().isIn(['all', 'department', 'designation', 'individual']),
+        body('applies_to_ids').optional().isArray()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+        const componentId = uuidv4();
+
+        const {
+            component_name,
+            component_type,
+            category,
+            calculation_type,
+            calculation_value,
+            calculation_formula,
+            is_taxable = false,
+            is_mandatory = false,
+            applies_to = 'all',
+            applies_to_ids = null
+        } = req.body;
+
+        try {
+            await db.execute(`
+            INSERT INTO payroll_components (
+                id, client_id, component_name, component_type, category,
+                calculation_type, calculation_value, calculation_formula,
+                is_taxable, is_mandatory, applies_to, applies_to_ids,
+                is_active, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        `, [
+            componentId, clientId, component_name, component_type, category,
+            calculation_type,
+            calculation_value ?? null,          // handle missing numeric
+            calculation_formula ?? null,        // handle missing formula
+            is_taxable, is_mandatory, applies_to,
+            applies_to_ids ? JSON.stringify(applies_to_ids) : null,
+            true
+        ]);
+
+            res.status(201).json({
+                success: true,
+                message: 'Payroll component created successfully',
+                data: { id: componentId }
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create payroll component',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * PUT /api/payroll-runs/components/:id
+ * Update payroll component
+ */
+router.put('/components/:id',
+    checkPermission('payroll.edit'),
+    [
+        param('id').isUUID().withMessage('Valid component ID is required'),
+        body('component_name').optional().notEmpty(),
+        body('component_type').optional().isIn(['earning', 'deduction']),
+        body('category').optional().notEmpty(),
+        body('calculation_type').optional().isIn(['fixed', 'percentage', 'formula']),
+        body('calculation_value').optional().isNumeric(),
+        body('calculation_formula').optional().isString(),
+        body('is_taxable').optional().isBoolean(),
+        body('is_mandatory').optional().isBoolean(),
+        body('applies_to').optional().isIn(['all', 'department', 'designation', 'individual']),
+        body('applies_to_ids').optional().isArray()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const componentId = req.params.id;
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+
+        try {
+            const updateFields = [];
+            const updateValues = [];
+
+            Object.keys(req.body).forEach(key => {
+                if (key === 'applies_to_ids' && req.body[key]) {
+                    updateFields.push(`${key} = ?`);
+                    updateValues.push(JSON.stringify(req.body[key]));
+                } else if (req.body[key] !== undefined) {
+                    updateFields.push(`${key} = ?`);
+                    updateValues.push(req.body[key]);
+                }
+            });
+
+            if (updateFields.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No fields to update'
+                });
+            }
+
+            updateFields.push('updated_at = NOW()');
+            updateValues.push(componentId, clientId);
+
+            const [result] = await db.execute(`
+                UPDATE payroll_components
+                SET ${updateFields.join(', ')}
+                WHERE id = ? AND client_id = ?
+            `, updateValues);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Component not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                message: 'Payroll component updated successfully'
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update payroll component',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * DELETE /api/payroll-runs/components/:id
+ * Delete payroll component
+ */
+router.delete('/components/:id',
+    checkPermission('payroll.edit'),
+    param('id').isUUID().withMessage('Valid component ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const componentId = req.params.id;
+        const clientId = req.user.clientId;
+        const db = await getDB();
+
+        try {
+            const [result] = await db.execute(`
+                DELETE FROM payroll_components
+                WHERE id = ? AND client_id = ?
+            `, [componentId, clientId]);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Component not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                message: 'Payroll component deleted successfully'
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to delete payroll component',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * GET /api/payroll-runs/employee-allowances
+ * Get employee allowances
+ */
+router.get('/employee-allowances',
+    checkPermission('payroll.view'),
+    [
+        query('employee_id').optional().isUUID(),
+        query('active_only').optional().isBoolean()
+    ],
+    asyncHandler(async (req, res) => {
+        const clientId = req.user.clientId;
+        const db = await getDB();
+        const { employee_id, active_only = 'true' } = req.query;
+
+        try {
+            let whereClause = 'WHERE ea.client_id = ?';
+            let queryParams = [clientId];
+
+            if (employee_id) {
+                whereClause += ' AND ea.employee_id = ?';
+                queryParams.push(employee_id);
+            }
+
+            if (active_only === 'true') {
+                whereClause += ' AND ea.is_active = true';
+            }
+
+            const [allowances] = await db.execute(`
+                SELECT
+                    ea.id,
+                    ea.employee_id,
+                    e.employee_code,
+                    CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+                    ea.allowance_type,
+                    ea.allowance_name,
+                    ea.amount,
+                    ea.is_percentage,
+                    ea.is_taxable,
+                    ea.is_active,
+                    ea.effective_from,
+                    ea.effective_to,
+                    ea.created_at
+                FROM employee_allowances ea
+                JOIN employees e ON ea.employee_id = e.id
+                ${whereClause}
+                ORDER BY e.employee_code, ea.allowance_name
+            `, queryParams);
+
+            res.json({
+                success: true,
+                data: allowances
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch employee allowances',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * POST /api/payroll-runs/employee-allowances
+ * Create employee allowance
+ */
+router.post('/employee-allowances',
+    checkPermission('payroll.edit'),
+    [
+        body('employee_id').isUUID().withMessage('Valid employee ID is required'),
+        body('allowance_type').notEmpty().withMessage('Allowance type is required'),
+        body('allowance_name').notEmpty().withMessage('Allowance name is required'),
+        body('amount').isNumeric().withMessage('Amount must be numeric'),
+        body('is_percentage').optional().isBoolean(),
+        body('is_taxable').optional().isBoolean(),
+        body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
+        body('effective_to').optional().isISO8601()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+        const allowanceId = uuidv4();
+
+        const {
+            employee_id,
+            allowance_type,
+            allowance_name,
+            amount,
+            is_percentage = false,
+            is_taxable = true,
+            effective_from,
+            effective_to
+        } = req.body;
+
+        try {
+            await db.execute(`
+                INSERT INTO employee_allowances (
+                    id, client_id, employee_id, allowance_type, allowance_name,
+                    amount, is_percentage, is_taxable, is_active,
+                    effective_from, effective_to, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `, [
+                allowanceId, clientId, employee_id, allowance_type, allowance_name,
+                amount, is_percentage, is_taxable, true,
+                effective_from, effective_to, userId
+            ]);
+
+            res.status(201).json({
+                success: true,
+                message: 'Employee allowance created successfully',
+                data: { id: allowanceId }
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create employee allowance',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * PUT /api/payroll-runs/employee-allowances/:id
+ * Update employee allowance
+ */
+router.put('/employee-allowances/:id',
+    checkPermission('payroll.edit'),
+    [
+        param('id').isUUID().withMessage('Valid allowance ID is required'),
+        body('allowance_type').optional().notEmpty(),
+        body('allowance_name').optional().notEmpty(),
+        body('amount').optional().isNumeric(),
+        body('is_percentage').optional().isBoolean(),
+        body('is_taxable').optional().isBoolean(),
+        body('effective_from').optional().isISO8601(),
+        body('effective_to').optional().isISO8601()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const allowanceId = req.params.id;
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+
+        try {
+            const updateFields = [];
+            const updateValues = [];
+
+            Object.keys(req.body).forEach(key => {
+                if (req.body[key] !== undefined) {
+                    updateFields.push(`${key} = ?`);
+                    updateValues.push(req.body[key]);
+                }
+            });
+
+            if (updateFields.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No fields to update'
+                });
+            }
+
+            updateFields.push('updated_by = ?', 'updated_at = NOW()');
+            updateValues.push(userId, allowanceId, clientId);
+
+            const [result] = await db.execute(`
+                UPDATE employee_allowances
+                SET ${updateFields.join(', ')}
+                WHERE id = ? AND client_id = ?
+            `, updateValues);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Allowance not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                message: 'Employee allowance updated successfully'
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update employee allowance',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * DELETE /api/payroll-runs/employee-allowances/:id
+ * Delete employee allowance
+ */
+router.delete('/employee-allowances/:id',
+    checkPermission('payroll.delete'),
+    param('id').isUUID().withMessage('Valid allowance ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const allowanceId = req.params.id;
+        const clientId = req.user.clientId;
+        const db = await getDB();
+
+        try {
+            const [result] = await db.execute(`
+                DELETE FROM employee_allowances
+                WHERE id = ? AND client_id = ?
+            `, [allowanceId, clientId]);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Allowance not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                message: 'Employee allowance deleted successfully'
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to delete employee allowance',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * GET /api/payroll-runs/employee-deductions
+ * Get employee deductions
+ */
+router.get('/employee-deductions',
+    checkPermission('payroll.view'),
+    [
+        query('employee_id').optional().isUUID(),
+        query('active_only').optional().isBoolean()
+    ],
+    asyncHandler(async (req, res) => {
+        const clientId = req.user.clientId;
+        const db = await getDB();
+        const { employee_id, active_only = 'true' } = req.query;
+
+        try {
+            let whereClause = 'WHERE ed.client_id = ?';
+            let queryParams = [clientId];
+
+            if (employee_id) {
+                whereClause += ' AND ed.employee_id = ?';
+                queryParams.push(employee_id);
+            }
+
+            if (active_only === 'true') {
+                whereClause += ' AND ed.is_active = true';
+            }
+
+            const [deductions] = await db.execute(`
+                SELECT
+                    ed.id,
+                    ed.employee_id,
+                    e.employee_code,
+                    CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+                    ed.deduction_type,
+                    ed.deduction_name,
+                    ed.amount,
+                    ed.is_percentage,
+                    ed.is_recurring,
+                    ed.remaining_installments,
+                    ed.is_active,
+                    ed.effective_from,
+                    ed.effective_to,
+                    ed.created_at
+                FROM employee_deductions ed
+                JOIN employees e ON ed.employee_id = e.id
+                ${whereClause}
+                ORDER BY e.employee_code, ed.deduction_name
+            `, queryParams);
+
+            res.json({
+                success: true,
+                data: deductions
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch employee deductions',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * POST /api/payroll-runs/employee-deductions
+ * Create employee deduction
+ */
+router.post('/employee-deductions',
+    checkPermission('payroll.edit'),
+    [
+        body('employee_id').isUUID().withMessage('Valid employee ID is required'),
+        body('deduction_type').notEmpty().withMessage('Deduction type is required'),
+        body('deduction_name').notEmpty().withMessage('Deduction name is required'),
+        body('amount').isNumeric().withMessage('Amount must be numeric'),
+        body('is_percentage').optional().isBoolean(),
+        body('is_recurring').optional().isBoolean(),
+        body('remaining_installments').optional().isInt({ min: 1 }),
+        body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
+        body('effective_to').optional().isISO8601()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+        const deductionId = uuidv4();
+
+        const {
+            employee_id,
+            deduction_type,
+            deduction_name,
+            amount,
+            is_percentage = false,
+            is_recurring = false,
+            remaining_installments,
+            effective_from,
+            effective_to
+        } = req.body;
+
+        try {
+            await db.execute(`
+                INSERT INTO employee_deductions (
+                    id, client_id, employee_id, deduction_type, deduction_name,
+                    amount, is_percentage, is_recurring, remaining_installments,
+                    is_active, effective_from, effective_to, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `, [
+                deductionId, clientId, employee_id, deduction_type, deduction_name,
+                amount, is_percentage, is_recurring, remaining_installments,
+                true, effective_from, effective_to, userId
+            ]);
+
+            res.status(201).json({
+                success: true,
+                message: 'Employee deduction created successfully',
+                data: { id: deductionId }
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create employee deduction',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * PUT /api/payroll-runs/employee-deductions/:id
+ * Update employee deduction
+ */
+router.put('/employee-deductions/:id',
+    checkPermission('payroll.edit'),
+    [
+        param('id').isUUID().withMessage('Valid deduction ID is required'),
+        body('deduction_type').optional().notEmpty(),
+        body('deduction_name').optional().notEmpty(),
+        body('amount').optional().isNumeric(),
+        body('is_percentage').optional().isBoolean(),
+        body('is_recurring').optional().isBoolean(),
+        body('remaining_installments').optional().isInt({ min: 0 }),
+        body('effective_from').optional().isISO8601(),
+        body('effective_to').optional().isISO8601()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const deductionId = req.params.id;
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+
+        try {
+            const updateFields = [];
+            const updateValues = [];
+
+            Object.keys(req.body).forEach(key => {
+                if (req.body[key] !== undefined) {
+                    updateFields.push(`${key} = ?`);
+                    updateValues.push(req.body[key]);
+                }
+            });
+
+            if (updateFields.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No fields to update'
+                });
+            }
+
+            updateFields.push('updated_by = ?', 'updated_at = NOW()');
+            updateValues.push(userId, deductionId, clientId);
+
+            const [result] = await db.execute(`
+                UPDATE employee_deductions
+                SET ${updateFields.join(', ')}
+                WHERE id = ? AND client_id = ?
+            `, updateValues);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Deduction not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                message: 'Employee deduction updated successfully'
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update employee deduction',
+                error: error.message
+            });
+        }
+    })
+);
+
+/**
+ * DELETE /api/payroll-runs/employee-deductions/:id
+ * Delete employee deduction
+ */
+router.delete('/employee-deductions/:id',
+    checkPermission('payroll.delete'),
+    param('id').isUUID().withMessage('Valid deduction ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const deductionId = req.params.id;
+        const clientId = req.user.clientId;
+        const db = await getDB();
+
+        try {
+            const [result] = await db.execute(`
+                DELETE FROM employee_deductions
+                WHERE id = ? AND client_id = ?
+            `, [deductionId, clientId]);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Deduction not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                message: 'Employee deduction deleted successfully'
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to delete employee deduction',
                 error: error.message
             });
         }
@@ -594,7 +1382,6 @@ router.get('/:id/summary',
         }
     })
 );
-
 
 // =============================================
 // PAYROLL PERIODS MANAGEMENT

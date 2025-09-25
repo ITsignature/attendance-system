@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import settingsApi from '../../services/settingsApi';
-import { 
-  Settings, 
-  Shield, 
-  Bell, 
+import PayrollSettings from './PayrollSettings';
+import {
+  Settings,
+  Shield,
+  Bell,
   Clock,
   DollarSign,
   Eye,
@@ -152,6 +153,7 @@ useEffect(() => {
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'attendance', label: 'Attendance', icon: Clock },
     { id: 'payroll', label: 'Payroll', icon: DollarSign },
+    { id: 'payroll-config', label: 'Payroll Configuration', icon: Building },
     { id: 'privacy', label: 'Privacy', icon: Eye },
     { id: 'integration', label: 'Integration', icon: Database }
   ];
@@ -1071,6 +1073,9 @@ const hhmmToMinutes = (t) => {
             </div>
           </div>
         );
+
+      case 'payroll-config':
+        return <PayrollSettings />;
 
       default:
         return (

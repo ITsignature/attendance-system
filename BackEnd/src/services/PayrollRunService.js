@@ -1716,19 +1716,66 @@ class PayrollRunService {
      */
     async getEmployeePayrollData(employeeId, clientId, runId = null) {
         const db = getDB();
-        
-        // Get employee allowances
-        const [allowances] = await db.execute(`
-            SELECT allowance_type, amount 
-            FROM employee_allowances 
-            WHERE employee_id = ? AND client_id = ? AND is_active = 1
+
+        // =============================================
+        // FETCH CONFIGURED PAYROLL COMPONENTS
+        // =============================================
+
+        // Get active payroll components that apply to this employee
+        const [payrollComponents] = await db.execute(`
+            SELECT
+                pc.id,
+                pc.component_name,
+                pc.component_type,
+                pc.category,
+                pc.calculation_type,
+                pc.calculation_value,
+                pc.calculation_formula,
+                pc.is_taxable,
+                pc.is_mandatory,
+                pc.applies_to,
+                pc.applies_to_ids
+            FROM payroll_components pc
+            WHERE pc.client_id = ? AND pc.is_active = 1
+        `, [clientId]);
+
+        // Filter components based on applies_to logic
+        const applicableComponents = await this.filterApplicableComponents(payrollComponents, employeeId, clientId);
+
+        // Get employee-specific allowances (manual assignments)
+        const [employeeAllowances] = await db.execute(`
+            SELECT
+                ea.id,
+                ea.allowance_type,
+                ea.allowance_name,
+                ea.amount,
+                ea.is_percentage,
+                ea.is_taxable,
+                ea.effective_from,
+                ea.effective_to
+            FROM employee_allowances ea
+            WHERE ea.employee_id = ? AND ea.client_id = ? AND ea.is_active = 1
+            AND (ea.effective_to IS NULL OR ea.effective_to >= CURDATE())
+            AND ea.effective_from <= CURDATE()
         `, [employeeId, clientId]);
-        
-        // Get employee deductions  
-        const [deductions] = await db.execute(`
-            SELECT deduction_type, amount, is_percentage
-            FROM employee_deductions 
-            WHERE employee_id = ? AND client_id = ? AND is_active = 1
+
+        // Get employee-specific deductions (manual assignments)
+        const [employeeDeductions] = await db.execute(`
+            SELECT
+                ed.id,
+                ed.deduction_type,
+                ed.deduction_name,
+                ed.amount,
+                ed.is_percentage,
+                ed.is_recurring,
+                ed.remaining_installments,
+                ed.effective_from,
+                ed.effective_to
+            FROM employee_deductions ed
+            WHERE ed.employee_id = ? AND ed.client_id = ? AND ed.is_active = 1
+            AND (ed.effective_to IS NULL OR ed.effective_to >= CURDATE())
+            AND ed.effective_from <= CURDATE()
+            AND (ed.is_recurring = 0 OR ed.remaining_installments > 0 OR ed.remaining_installments IS NULL)
         `, [employeeId, clientId]);
         
         // Get overtime hours for current period with holiday multipliers (if runId provided)
@@ -1791,11 +1838,201 @@ class PayrollRunService {
         }
         
         return {
-            allowances: allowances || [],
-            deductions: deductions || [],
+            // Legacy format for backward compatibility
+            allowances: employeeAllowances || [],
+            deductions: employeeDeductions || [],
+
+            // New enhanced format with configured components
+            configuredComponents: {
+                earnings: applicableComponents.filter(c => c.component_type === 'earning'),
+                deductions: applicableComponents.filter(c => c.component_type === 'deduction')
+            },
+            employeeAllowances: employeeAllowances || [],
+            employeeDeductions: employeeDeductions || [],
+
             overtimeHours: overtimeHours,
             overtimeDetails: overtimeDetails
         };
+    }
+
+    /**
+     * Filter payroll components based on applies_to logic
+     */
+    async filterApplicableComponents(payrollComponents, employeeId, clientId) {
+        if (!payrollComponents || payrollComponents.length === 0) {
+            return [];
+        }
+
+        const db = getDB();
+        const applicableComponents = [];
+
+        // Get employee details for filtering
+        const [employee] = await db.execute(`
+            SELECT
+                e.id,
+                e.department_id,
+                e.designation_id,
+                d.department_name,
+                des.title as designation_title
+            FROM employees e
+            LEFT JOIN departments d ON e.department_id = d.id
+            LEFT JOIN designations des ON e.designation_id = des.id
+            WHERE e.id = ? AND e.client_id = ?
+        `, [employeeId, clientId]);
+
+        if (employee.length === 0) {
+            console.warn(`Employee ${employeeId} not found for component filtering`);
+            return [];
+        }
+
+        const emp = employee[0];
+
+        for (const component of payrollComponents) {
+            let isApplicable = false;
+
+            switch (component.applies_to) {
+                case 'all':
+                    isApplicable = true;
+                    break;
+
+                case 'department':
+                    if (component.applies_to_ids && emp.department_id) {
+                        const departmentIds = JSON.parse(component.applies_to_ids || '[]');
+                        isApplicable = departmentIds.includes(emp.department_id);
+                    }
+                    break;
+
+                case 'designation':
+                    if (component.applies_to_ids && emp.designation_id) {
+                        const designationIds = JSON.parse(component.applies_to_ids || '[]');
+                        isApplicable = designationIds.includes(emp.designation_id);
+                    }
+                    break;
+
+                case 'individual':
+                    if (component.applies_to_ids) {
+                        const employeeIds = JSON.parse(component.applies_to_ids || '[]');
+                        isApplicable = employeeIds.includes(employeeId);
+                    }
+                    break;
+
+                default:
+                    console.warn(`Unknown applies_to value: ${component.applies_to}`);
+                    break;
+            }
+
+            if (isApplicable) {
+                applicableComponents.push({
+                    ...component,
+                    // Add metadata for debugging
+                    _applied_via: component.applies_to,
+                    _employee_department: emp.department_name,
+                    _employee_designation: emp.designation_title
+                });
+            }
+        }
+
+        console.log(`🔍 Component filtering for employee ${employeeId}:`);
+        console.log(`   Total components: ${payrollComponents.length}`);
+        console.log(`   Applicable components: ${applicableComponents.length}`);
+        console.log(`   Employee dept: ${emp.department_name}, designation: ${emp.designation_title}`);
+
+        return applicableComponents;
+    }
+
+    /**
+     * Calculate the amount for a configured payroll component
+     */
+    async calculateComponentAmount(component, baseSalary, employeeRecord = null) {
+        const calculationType = component.calculation_type;
+        let amount = 0;
+
+        console.log(`🧮 Calculating component: ${component.component_name} (${calculationType})`);
+
+        switch (calculationType) {
+            case 'fixed':
+                amount = parseFloat(component.calculation_value) || 0;
+                console.log(`   Fixed amount: ${amount}`);
+                break;
+
+            case 'percentage':
+                const percentage = parseFloat(component.calculation_value) || 0;
+                amount = (baseSalary * percentage) / 100;
+                console.log(`   Percentage: ${percentage}% of ${baseSalary} = ${amount}`);
+                break;
+
+            case 'formula':
+                if (component.calculation_formula) {
+                    try {
+                        amount = await this.evaluatePayrollFormula(
+                            component.calculation_formula,
+                            baseSalary,
+                            employeeRecord
+                        );
+                        console.log(`   Formula result: ${amount}`);
+                    } catch (error) {
+                        console.error(`   Formula evaluation failed: ${error.message}`);
+                        console.error(`   Formula: ${component.calculation_formula}`);
+                        amount = 0; // Default to 0 if formula fails
+                    }
+                } else {
+                    console.warn(`   No formula provided for component: ${component.component_name}`);
+                    amount = 0;
+                }
+                break;
+
+            default:
+                console.warn(`   Unknown calculation type: ${calculationType}`);
+                amount = 0;
+                break;
+        }
+
+        // Ensure amount is positive for earnings, allow negative for deductions
+        if (component.component_type === 'earning' && amount < 0) {
+            console.warn(`   Negative earning amount corrected to 0 for: ${component.component_name}`);
+            amount = 0;
+        }
+
+        return Math.round(amount * 100) / 100; // Round to 2 decimal places
+    }
+
+    /**
+     * Evaluate a payroll formula with safety checks
+     */
+    async evaluatePayrollFormula(formula, baseSalary, employeeRecord) {
+        // Simple formula evaluator with basic variables
+        // Security note: This is a basic implementation. In production, consider using a proper formula parser
+
+        const variables = {
+            BASE_SALARY: baseSalary,
+            base_salary: baseSalary,
+            // Add more variables as needed
+        };
+
+        // Replace variables in formula
+        let processedFormula = formula;
+        for (const [key, value] of Object.entries(variables)) {
+            processedFormula = processedFormula.replace(new RegExp(`\\b${key}\\b`, 'g'), value);
+        }
+
+        console.log(`   Original formula: ${formula}`);
+        console.log(`   Processed formula: ${processedFormula}`);
+
+        // Basic safety check - only allow numbers, operators, and parentheses
+        if (!/^[\d\s+\-*/.()]+$/.test(processedFormula)) {
+            throw new Error('Formula contains invalid characters');
+        }
+
+        try {
+            // Use Function constructor for safer evaluation than eval
+            const result = new Function(`return ${processedFormula}`)();
+            if (isNaN(result) || !isFinite(result)) {
+                throw new Error('Formula evaluation resulted in invalid number');
+            }
+            return result;
+        } catch (error) {
+            throw new Error(`Formula evaluation failed: ${error.message}`);
+        }
     }
 
     /**
@@ -1806,19 +2043,93 @@ class PayrollRunService {
         const components = [];
         let total = baseSalary; // Start with base salary
         let additionsTotal = 0; // Track additions separately
-        
-        // Add allowances (these are additions)
-        for (const allowance of employeeData.allowances) {
-            const amount = parseFloat(allowance.amount) || 0;
-            total += amount;
-            additionsTotal += amount;
-            components.push({
-                code: allowance.allowance_type.toUpperCase(),
-                name: allowance.allowance_type.replace('_', ' '),
-                type: 'earning',
-                category: 'allowance',
-                amount: amount
-            });
+
+        console.log(`💰 GROSS CALCULATION for ${record.employee_name}:`);
+        console.log(`   Base Salary: ${baseSalary}`);
+
+        // =============================================
+        // 1. ADD CONFIGURED EARNING COMPONENTS
+        // =============================================
+        if (employeeData.configuredComponents && employeeData.configuredComponents.earnings) {
+            console.log(`   📋 Processing ${employeeData.configuredComponents.earnings.length} configured earning components`);
+
+            for (const component of employeeData.configuredComponents.earnings) {
+                const calculatedAmount = await this.calculateComponentAmount(component, baseSalary, record);
+
+                if (calculatedAmount > 0) {
+                    total += calculatedAmount;
+                    additionsTotal += calculatedAmount;
+                    components.push({
+                        code: component.component_name.replace(/\s+/g, '_').toUpperCase(),
+                        name: component.component_name,
+                        type: 'earning',
+                        category: component.category,
+                        amount: calculatedAmount,
+                        is_taxable: component.is_taxable,
+                        calculation_type: component.calculation_type,
+                        _component_id: component.id
+                    });
+
+                    console.log(`   ✅ ${component.component_name}: ${calculatedAmount} (${component.calculation_type})`);
+                }
+            }
+        }
+
+        // =============================================
+        // 2. ADD EMPLOYEE-SPECIFIC ALLOWANCES
+        // =============================================
+        if (employeeData.employeeAllowances && employeeData.employeeAllowances.length > 0) {
+            console.log(`   📝 Processing ${employeeData.employeeAllowances.length} employee-specific allowances`);
+
+            for (const allowance of employeeData.employeeAllowances) {
+                let amount = parseFloat(allowance.amount) || 0;
+
+                // Handle percentage-based allowances
+                if (allowance.is_percentage) {
+                    amount = (baseSalary * amount) / 100;
+                }
+
+                if (amount > 0) {
+                    total += amount;
+                    additionsTotal += amount;
+                    components.push({
+                        code: allowance.allowance_type.toUpperCase(),
+                        name: allowance.allowance_name || allowance.allowance_type.replace('_', ' '),
+                        type: 'earning',
+                        category: 'allowance',
+                        amount: amount,
+                        is_taxable: allowance.is_taxable,
+                        _allowance_id: allowance.id
+                    });
+
+                    console.log(`   ✅ ${allowance.allowance_name}: ${amount} ${allowance.is_percentage ? '(%)' : ''}`);
+                }
+            }
+        }
+
+        // =============================================
+        // 3. LEGACY ALLOWANCES (for backward compatibility)
+        // =============================================
+        if (employeeData.allowances && employeeData.allowances.length > 0) {
+            console.log(`   🔄 Processing ${employeeData.allowances.length} legacy allowances`);
+
+            for (const allowance of employeeData.allowances) {
+                const amount = parseFloat(allowance.amount) || 0;
+                if (amount > 0) {
+                    total += amount;
+                    additionsTotal += amount;
+                    components.push({
+                        code: allowance.allowance_type.toUpperCase(),
+                        name: allowance.allowance_type.replace('_', ' '),
+                        type: 'earning',
+                        category: 'allowance',
+                        amount: amount,
+                        _legacy: true
+                    });
+
+                    console.log(`   ✅ Legacy ${allowance.allowance_type}: ${amount}`);
+                }
+            }
         }
         
         // Add overtime (this is an addition) - with holiday awareness
@@ -1925,45 +2236,164 @@ class PayrollRunService {
         const baseSalary = parseFloat(grossSalary) || 0;
         const components = [];
         let total = 0;
-        
-        // EPF (Employee Provident Fund) - 8% EMPLOYEE CONTRIBUTION
-        const epfAmount = baseSalary * 0.08;
-        components.push({
-            code: 'EPF',
-            name: 'Employee Provident Fund (8%)',
-            type: 'deduction',
-            category: 'other', // Use existing enum value instead of 'statutory'
-            amount: epfAmount
-        });
-        total += epfAmount;
 
-        // ETF (Employee Trust Fund) - 3% EMPLOYER CONTRIBUTION ONLY
-        // ❌ REMOVED: ETF should NOT be deducted from employee salary
-        // ETF is paid entirely by the employer (3%) and not deducted from employee
-        console.log(`ℹ️  ETF Note: 3% employer contribution (LKR ${(baseSalary * 0.03).toFixed(2)}) - NOT deducted from employee`);
-        
-        // Add custom employee deductions
-        for (const deduction of employeeData.deductions) {
-            let amount;
-            if (deduction.is_percentage) {
-                amount = grossSalary * (parseFloat(deduction.amount) / 100);
-            } else {
-                amount = parseFloat(deduction.amount) || 0;
-            }
-            
-            if (amount > 0) {
-                components.push({
-                    code: deduction.deduction_type.toUpperCase(),
-                    name: deduction.deduction_type.replace('_', ' '),
-                    type: 'deduction',
-                    category: 'custom',
-                    amount: amount
-                });
-                total += amount;
+        console.log(`💸 DEDUCTION CALCULATION:`);
+        console.log(`   Gross Salary: ${grossSalary}`);
+
+        // =============================================
+        // 1. CONFIGURED DEDUCTION COMPONENTS
+        // =============================================
+        if (employeeData.configuredComponents && employeeData.configuredComponents.deductions) {
+            console.log(`   📋 Processing ${employeeData.configuredComponents.deductions.length} configured deduction components`);
+
+            for (const component of employeeData.configuredComponents.deductions) {
+                const calculatedAmount = await this.calculateComponentAmount(component, grossSalary, null);
+
+                if (calculatedAmount > 0) {
+                    components.push({
+                        code: component.component_name.replace(/\s+/g, '_').toUpperCase(),
+                        name: component.component_name,
+                        type: 'deduction',
+                        category: component.category,
+                        amount: calculatedAmount,
+                        is_taxable: component.is_taxable,
+                        calculation_type: component.calculation_type,
+                        _component_id: component.id
+                    });
+                    total += calculatedAmount;
+
+                    console.log(`   ✅ ${component.component_name}: ${calculatedAmount} (${component.calculation_type})`);
+                }
             }
         }
-        
+
+        // =============================================
+        // 2. EMPLOYEE-SPECIFIC DEDUCTIONS
+        // =============================================
+        if (employeeData.employeeDeductions && employeeData.employeeDeductions.length > 0) {
+            console.log(`   📝 Processing ${employeeData.employeeDeductions.length} employee-specific deductions`);
+
+            for (const deduction of employeeData.employeeDeductions) {
+                let amount = parseFloat(deduction.amount) || 0;
+
+                // Handle percentage-based deductions
+                if (deduction.is_percentage) {
+                    amount = (grossSalary * amount) / 100;
+                }
+
+                if (amount > 0) {
+                    components.push({
+                        code: deduction.deduction_type.toUpperCase(),
+                        name: deduction.deduction_name || deduction.deduction_type.replace('_', ' '),
+                        type: 'deduction',
+                        category: 'custom',
+                        amount: amount,
+                        is_recurring: deduction.is_recurring,
+                        remaining_installments: deduction.remaining_installments,
+                        _deduction_id: deduction.id
+                    });
+                    total += amount;
+
+                    console.log(`   ✅ ${deduction.deduction_name}: ${amount} ${deduction.is_percentage ? '(%)' : ''}`);
+
+                    // Update remaining installments if it's a recurring deduction
+                    if (deduction.is_recurring && deduction.remaining_installments > 0) {
+                        await this.updateDeductionInstallments(deduction.id, deduction.remaining_installments - 1);
+                    }
+                }
+            }
+        }
+
+        // =============================================
+        // 3. LEGACY DEDUCTIONS (for backward compatibility)
+        // =============================================
+        if (employeeData.deductions && employeeData.deductions.length > 0) {
+            console.log(`   🔄 Processing ${employeeData.deductions.length} legacy deductions`);
+
+            for (const deduction of employeeData.deductions) {
+                let amount;
+                if (deduction.is_percentage) {
+                    amount = grossSalary * (parseFloat(deduction.amount) / 100);
+                } else {
+                    amount = parseFloat(deduction.amount) || 0;
+                }
+
+                if (amount > 0) {
+                    components.push({
+                        code: deduction.deduction_type.toUpperCase(),
+                        name: deduction.deduction_type.replace('_', ' '),
+                        type: 'deduction',
+                        category: 'custom',
+                        amount: amount,
+                        _legacy: true
+                    });
+                    total += amount;
+
+                    console.log(`   ✅ Legacy ${deduction.deduction_type}: ${amount}`);
+                }
+            }
+        }
+
+        // =============================================
+        // 4. FALLBACK: DEFAULT EPF IF NO CONFIGURED COMPONENTS
+        // =============================================
+        const hasEPFComponent = components.some(c =>
+            c.name.toLowerCase().includes('epf') ||
+            c.name.toLowerCase().includes('provident fund')
+        );
+
+        if (!hasEPFComponent && (!employeeData.configuredComponents ||
+            employeeData.configuredComponents.deductions.length === 0)) {
+
+            console.log(`   🔧 Adding fallback EPF deduction (8%)`);
+
+            // EPF (Employee Provident Fund) - 8% EMPLOYEE CONTRIBUTION
+            const epfAmount = baseSalary * 0.08;
+            components.push({
+                code: 'EPF',
+                name: 'Employee Provident Fund (8%)',
+                type: 'deduction',
+                category: 'other',
+                amount: epfAmount,
+                _fallback: true
+            });
+            total += epfAmount;
+
+            console.log(`   ✅ Fallback EPF: ${epfAmount}`);
+        }
+
+        console.log(`   📊 Total Deductions: ${total}`);
+
         return { components, total };
+    }
+
+    /**
+     * Update remaining installments for recurring deductions
+     */
+    async updateDeductionInstallments(deductionId, remainingInstallments) {
+        try {
+            const db = getDB();
+            await db.execute(`
+                UPDATE employee_deductions
+                SET remaining_installments = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            `, [remainingInstallments, deductionId]);
+
+            // Mark as inactive if no installments remaining
+            if (remainingInstallments <= 0) {
+                await db.execute(`
+                    UPDATE employee_deductions
+                    SET is_active = 0,
+                        updated_at = NOW()
+                    WHERE id = ?
+                `, [deductionId]);
+
+                console.log(`   📝 Deduction ${deductionId} marked as inactive (installments completed)`);
+            }
+        } catch (error) {
+            console.error(`Error updating deduction installments:`, error);
+        }
     }
 
     /**
