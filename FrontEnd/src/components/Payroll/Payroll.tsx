@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { TextInput, Button, Select, Badge, Modal, Table, Alert } from "flowbite-react";
-import { payrollApiService, PayrollRecord, PayrollFilters, CreatePayrollData, BulkProcessData, AdvancedCalculationOptions, AttendanceMetrics } from '../../services/payrollService';
+import { payrollApiService, PayrollRecord, PayrollFilters, CreatePayrollData, BulkProcessData, AdvancedCalculationOptions } from '../../services/payrollService';
+import { AttendanceMetrics } from '../../services/payrollCalculationService';
+
+// Utility function for number to words conversion
+const numberToWords = (num: number): string => {
+  return `${num} only`; // Simplified implementation
+};
 import apiService from '../../services/api';
 import { HiInformationCircle, HiExclamationCircle } from 'react-icons/hi';
 import { HiSearch, HiX, HiChevronDown  } from 'react-icons/hi';

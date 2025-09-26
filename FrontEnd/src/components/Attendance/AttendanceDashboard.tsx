@@ -41,7 +41,7 @@ const AttendanceDashboard: React.FC = () => {
       // This would be a new API endpoint for dashboard stats
       const response = await apiService.apiCall(`/api/attendance/stats?date=${selectedDate}`);
       if (response.success) {
-        setStats(response.data);
+        setStats(response.data as AttendanceStats);
       }
 
       console.log("stats",stats);

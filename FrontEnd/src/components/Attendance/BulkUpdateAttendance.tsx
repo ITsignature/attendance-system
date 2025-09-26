@@ -8,6 +8,7 @@ import {
   Spinner,
   Table,
   Checkbox,
+  Badge,
   Card
 } from 'flowbite-react';
 import { HiBriefcase, HiClock, HiRefresh } from 'react-icons/hi';

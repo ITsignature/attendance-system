@@ -23,7 +23,6 @@ const settingsRoutes = require('./src/routes/settingsRoute');
 const holidaysRoutes = require('./src/routes/holidaysRoute');
 const sessionCleanup = require('./src/services/sessionCleanup');
 
-
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
 const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
 const { connectDB, closeDB } = require('./src/config/database');
@@ -31,26 +30,28 @@ const { connectDB, closeDB } = require('./src/config/database');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration
+// CORS configuration - Allow all origins during development
 const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://localhost:5174',
-      '*'  // Add any other ports you use
-    ];
+  // origin: function (origin, callback) {
+  //   const allowedOrigins = [
+  //     'http://localhost:5173',
+  //     'http://localhost:3000',
+  //     'http://localhost:5174',
+  //     'http://localhost:4173'  // Preview port
+  //   ];
     
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+  //   // Allow requests with no origin (like mobile apps or curl requests)
+  //   if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true, // If you're using cookies/sessions
+  //   if (allowedOrigins.indexOf(origin) !== -1) {
+  //     callback(null, true);
+  //   } else {
+  //     callback(new Error('Not allowed by CORS'));
+  //   }
+  // },
+  // credentials: true, // If you're using cookies/sessions
+  origin: true,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS','PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization','X-Client-ID','X-Requested-With']
 };
@@ -78,8 +79,6 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use('/api/', limiter);
-
-
 
 // =============================================
 // GENERAL MIDDLEWARE

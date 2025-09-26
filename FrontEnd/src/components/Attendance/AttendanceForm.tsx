@@ -146,29 +146,30 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     return Math.max(0, hours - (formData.break_duration || 0));
   };
 
-const handleSubmit = async (e) => {
+const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setLoading(true);
   setError('');
 
   try {
     /* helper functions */
-    const padSeconds = (t) => (t && t.length === 5 ? `${t}:00` : t);  // "17:30" → "17:30:00"
-    const stripEmpty = (v) => (v === '' ? undefined : v);
+    const padSeconds = (t: string) => (t && t.length === 5 ? `${t}:00` : t);  // "17:30" → "17:30:00"
+    const stripEmpty = (v: string) => (v === '' ? undefined : v);
 
     /* 1️⃣ build payload with ONLY changed keys */
-    const payload = {};
+    const payload: Record<string, any> = {};
     Object.keys(formData).forEach((k) => {
-      let v = formData[k];
+      const key = k as keyof AttendanceFormData;
+      let v = formData[key];
 
       /* strip seconds + empty strings for time fields */
-      if (k === 'check_in_time' || k === 'check_out_time') v = padSeconds(v);
-      v = stripEmpty(v);
+      if (k === 'check_in_time' || k === 'check_out_time') v = padSeconds(v as string);
+      v = stripEmpty(v as string);
 
       /* include key only if value changed vs original */
       if (
         editingRecord && v !== undefined &&
-        v !== editingRecord[k]
+        v !== (editingRecord as any)[k]
       ) {
         payload[k] = v;
       }
@@ -190,7 +191,7 @@ const handleSubmit = async (e) => {
     if (editingRecord) {
       response = await apiService.updateAttendanceRecord(editingRecord.id, payload);
     } else {
-      response = await apiService.createAttendanceRecord(payload); // POST helper
+      response = await apiService.createAttendanceRecord(payload as AttendanceFormData); // POST helper
     }
 
     /* 4️⃣ handle server reply */
