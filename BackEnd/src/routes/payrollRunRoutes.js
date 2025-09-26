@@ -1582,4 +1582,108 @@ router.get('/logs/:filename/view',
     })
 );
 
+// =============================================
+// LIVE PAYROLL CALCULATION ENDPOINTS
+// =============================================
+
+/**
+ * GET /api/payroll-runs/live/:employeeId
+ * Calculate live payroll for an employee up to current date
+ */
+router.get('/live/:employeeId',
+    [
+        param('employeeId').isUUID().withMessage('Valid employee ID is required'),
+        query('calculateUpTo').optional().isISO8601().withMessage('Calculate up to date must be valid date'),
+        query('projectFullMonth').optional().isBoolean().withMessage('Project full month must be boolean')
+    ],
+    checkPermission('payroll', 'read'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { employeeId } = req.params;
+        const { calculateUpTo, projectFullMonth = 'true' } = req.query;
+        const clientId = req.user.client_id;
+
+        console.log(`📊 Live payroll request for employee ${employeeId} by user ${req.user.id}`);
+
+        const result = await PayrollRunService.calculateLivePayroll(
+            employeeId,
+            clientId,
+            calculateUpTo,
+            projectFullMonth === 'true'
+        );
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: 'Live payroll calculated successfully',
+                data: result.data
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                message: result.message || 'Failed to calculate live payroll',
+                error: result.error
+            });
+        }
+    })
+);
+
+/**
+ * GET /api/payroll-runs/live/:employeeId/range
+ * Calculate payroll for custom date range
+ */
+router.get('/live/:employeeId/range',
+    [
+        param('employeeId').isUUID().withMessage('Valid employee ID is required'),
+        query('startDate').isISO8601().withMessage('Start date is required and must be valid'),
+        query('endDate').isISO8601().withMessage('End date is required and must be valid')
+    ],
+    checkPermission('payroll', 'read'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { employeeId } = req.params;
+        const { startDate, endDate } = req.query;
+        const clientId = req.user.client_id;
+
+        console.log(`📅 Date range payroll request for employee ${employeeId} from ${startDate} to ${endDate}`);
+
+        const result = await PayrollRunService.calculateDateRangePayroll(
+            employeeId,
+            clientId,
+            startDate,
+            endDate
+        );
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: 'Date range payroll calculated successfully',
+                data: result.data
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                message: result.message || 'Failed to calculate date range payroll',
+                error: result.error
+            });
+        }
+    })
+);
+
 module.exports = router;
