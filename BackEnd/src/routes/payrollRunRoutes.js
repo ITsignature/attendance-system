@@ -1596,7 +1596,7 @@ router.get('/live/:employeeId',
         query('calculateUpTo').optional().isISO8601().withMessage('Calculate up to date must be valid date'),
         query('projectFullMonth').optional().isBoolean().withMessage('Project full month must be boolean')
     ],
-    checkPermission('payroll', 'read'),
+    checkPermission('payroll.view'),
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -1646,7 +1646,7 @@ router.get('/live/:employeeId/range',
         query('startDate').isISO8601().withMessage('Start date is required and must be valid'),
         query('endDate').isISO8601().withMessage('End date is required and must be valid')
     ],
-    checkPermission('payroll', 'read'),
+    checkPermission('payroll.view'),
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {

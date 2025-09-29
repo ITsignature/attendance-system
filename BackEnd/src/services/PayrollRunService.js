@@ -2933,11 +2933,35 @@ class PayrollRunService {
                 employeeId
             );
 
-            // Calculate pro-rated base salary
-            const totalDaysInMonth = endOfMonth.date();
-            const daysCalculated = endDate.diff(startOfMonth, 'days') + 1;
-            const prorationFactor = daysCalculated / totalDaysInMonth;
+            // Calculate pro-rated base salary using working days
+            const HolidayService = require('./HolidayService');
+
+            const totalWorkingDaysInMonth = await HolidayService.calculateWorkingDays(
+                clientId,
+                startOfMonth.format('YYYY-MM-DD'),
+                endOfMonth.format('YYYY-MM-DD'),
+                employeeData.department_id,
+                false,
+                employeeId
+            );
+
+            const workingDaysCalculated = await HolidayService.calculateWorkingDays(
+                clientId,
+                startOfMonth.format('YYYY-MM-DD'),
+                endDate.format('YYYY-MM-DD'),
+                employeeData.department_id,
+                false,
+                employeeId
+            );
+
+            const prorationFactor = workingDaysCalculated.working_days / totalWorkingDaysInMonth.working_days;
             const proratedBaseSalary = Math.round(employeeData.base_salary * prorationFactor * 100) / 100;
+
+            console.log(`💰 Live payroll proration calculation:`);
+            console.log(`   Working days calculated: ${workingDaysCalculated.working_days}`);
+            console.log(`   Total working days in month: ${totalWorkingDaysInMonth.working_days}`);
+            console.log(`   Proration factor: ${prorationFactor.toFixed(4)}`);
+            console.log(`   Base salary: ${employeeData.base_salary} → Prorated: ${proratedBaseSalary}`);
 
             // Calculate gross components (reuse existing method)
             tempRecord.base_salary = proratedBaseSalary;
