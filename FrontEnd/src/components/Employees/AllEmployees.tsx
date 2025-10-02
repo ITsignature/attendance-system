@@ -25,7 +25,6 @@ import {
 import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 import apiService from '../../services/api';
 import { Employee, EmployeeFilters } from '../../types/employee';
-import LiveSalaryCell from './LiveSalaryCell';
 
 interface EmployeesResponse {
   employees: Employee[];
@@ -738,11 +737,6 @@ const AllEmployees: React.FC = () => {
                 <Table.HeadCell>Status</Table.HeadCell>
                 <Table.HeadCell>Type</Table.HeadCell>
                 <Table.HeadCell>Base Salary</Table.HeadCell>
-                <Table.HeadCell>
-                  <Tooltip content="Current month salary up to today">
-                    Live Salary
-                  </Tooltip>
-                </Table.HeadCell>
                 <Table.HeadCell>Hire Date</Table.HeadCell>
               </Table.Head>
               <Table.Body className="divide-y">
@@ -813,9 +807,6 @@ const AllEmployees: React.FC = () => {
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <LiveSalaryCell employeeId={employee.id} />
-                      </Table.Cell>
-                      <Table.Cell>
                         <div className="text-sm text-gray-900 dark:text-white">
                           {new Date(employee.hire_date).toLocaleDateString()}
                         </div>
@@ -829,7 +820,7 @@ const AllEmployees: React.FC = () => {
                   ))
                 ) : (
                   <Table.Row>
-                    <Table.Cell colSpan={8} className="text-center py-8">
+                    <Table.Cell colSpan={7} className="text-center py-8">
                       <div className="flex flex-col items-center">
                         <HiOutlineUsers className="h-12 w-12 text-gray-300 mb-4" />
                         <p className="text-lg text-gray-500 dark:text-gray-400">No employees found</p>
