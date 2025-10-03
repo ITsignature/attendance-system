@@ -1582,4 +1582,40 @@ router.get('/logs/:filename/view',
     })
 );
 
+// =============================================
+// CRON JOB ENDPOINT - AUTO-CREATE PAYROLL RUNS
+// =============================================
+
+/**
+ * POST /api/payroll-runs/cron/auto-create
+ * Auto-create monthly payroll runs for all clients
+ * This endpoint should be called by a cron job at the start of each month
+ *
+ * Security: This endpoint should be protected by API key or internal-only access
+ */
+router.post('/cron/auto-create',
+    asyncHandler(async (req, res) => {
+        // Optional: Add API key validation for security
+        const apiKey = req.headers['x-cron-api-key'];
+        const expectedKey = process.env.CRON_API_KEY || 'your-secure-cron-key-here';
+
+        if (apiKey !== expectedKey) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized: Invalid API key'
+            });
+        }
+
+        console.log('🤖 CRON JOB: Auto-create payroll runs triggered');
+
+        const result = await PayrollRunService.autoCreateMonthlyPayrollRuns();
+
+        res.json({
+            success: true,
+            message: 'Auto-create process completed',
+            data: result
+        });
+    })
+);
+
 module.exports = router;

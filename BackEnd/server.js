@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const cron = require('node-cron');
 require('dotenv').config();
 
 // Import routes and middleware
@@ -26,6 +27,7 @@ const sessionCleanup = require('./src/services/sessionCleanup');
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
 const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
 const { connectDB, closeDB } = require('./src/config/database');
+const PayrollRunService = require('./src/services/PayrollRunService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -105,11 +107,65 @@ app.use(requestLogger);
 app.use('/uploads', express.static('uploads'));
 
 // =============================================
+// CRON JOBS - AUTO-CREATE PAYROLL RUNS
+// =============================================
+
+/**
+ * Start cron jobs for automated payroll run creation
+ * Runs daily at 6 AM to check if a new month payroll run needs to be created
+ */
+function startPayrollCronJobs() {
+  // Run daily at 6:00 AM (0 6 * * *)
+  // For testing, you can use '* * * * *' to run every minute
+  const cronSchedule = process.env.PAYROLL_CRON_SCHEDULE || '0 6 * * *';
+
+  cron.schedule(cronSchedule, async () => {
+    try {
+      console.log('⏰ CRON: Payroll auto-create job triggered at', new Date().toISOString());
+
+      const result = await PayrollRunService.autoCreateMonthlyPayrollRuns();
+
+      console.log('✅ CRON: Payroll auto-create completed successfully');
+      console.log(`   Created: ${result.summary.created}, Skipped: ${result.summary.skipped}, Errors: ${result.summary.errors}`);
+    } catch (error) {
+      console.error('❌ CRON: Payroll auto-create failed:', error.message);
+    }
+  });
+
+  console.log(`⏰ Cron job scheduled: Auto-create payroll runs at ${cronSchedule}`);
+}
+
+// Manual trigger endpoint for testing (optional)
+app.post('/api/admin/trigger-payroll-cron', async (req, res) => {
+  try {
+    // Add authentication check here if needed
+    console.log('🔧 MANUAL TRIGGER: Payroll auto-create');
+
+    const result = await PayrollRunService.autoCreateMonthlyPayrollRuns();
+
+    res.json({
+      success: true,
+      message: 'Payroll auto-create triggered successfully',
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Payroll auto-create failed',
+      error: error.message
+    });
+  }
+});
+
+// =============================================
 // DATABASE CONNECTION
 // =============================================
 connectDB().then(() => {
   // Start session cleanup service after database is connected
-  // sessionCleanup.start(30);  
+  // sessionCleanup.start(30);
+
+  // Start cron job for auto-creating monthly payroll runs
+  startPayrollCronJobs();
 }).catch(err => {
   console.error('Database connection failed:', err);
   process.exit(1);

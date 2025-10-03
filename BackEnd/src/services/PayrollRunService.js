@@ -26,7 +26,7 @@ class PayrollRunService {
 
         const db = getDB();
         const runId = uuidv4();
-        
+
         try {
             await db.execute('START TRANSACTION');
 
@@ -43,6 +43,9 @@ class PayrollRunService {
             const period = periodInfo[0];
             const run_number = `${period.period_type.toUpperCase()}_${period.period_year}_${String(period.period_number).padStart(2, '0')}_${run_type.toUpperCase()}`;
 
+            // Auto-generate run_name if not provided
+            const finalRunName = run_name || `${period.period_type} Payroll - ${period.period_year}/${String(period.period_number).padStart(2, '0')}`;
+
             // Check for duplicate run number
             const [existing] = await db.execute(
                 'SELECT id FROM payroll_runs WHERE client_id = ? AND run_number = ?',
@@ -56,10 +59,10 @@ class PayrollRunService {
             // Create payroll run
             await db.execute(`
                 INSERT INTO payroll_runs (
-                    id, client_id, run_number, period_id, run_name, run_type, 
+                    id, client_id, run_number, period_id, run_name, run_type,
                     run_status, calculation_method, notes, created_by
                 ) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
-            `, [runId, clientId, run_number, period_id, run_name, run_type, calculation_method, notes, userId]);
+            `, [runId, clientId, run_number, period_id, finalRunName, run_type, calculation_method, notes, userId]);
 
             // Get eligible employees based on filters
             const employees = await this.getEligibleEmployees(clientId, period_id, employee_filters);
@@ -2876,6 +2879,153 @@ class PayrollRunService {
         }
 
         return components;
+    }
+
+    // =============================================
+    // AUTO-CREATE PAYROLL RUNS
+    // =============================================
+
+    /**
+     * Auto-create payroll runs for all clients for the current month
+     * This is designed to be called by a cron job at the start of each month
+     */
+    async autoCreateMonthlyPayrollRuns() {
+        const db = getDB();
+        const results = {
+            success: [],
+            skipped: [],
+            errors: []
+        };
+
+        try {
+            // Get current month and year
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed
+
+            console.log(`🤖 AUTO-CREATE: Starting auto-create for ${currentYear}-${String(currentMonth).padStart(2, '0')}`);
+
+            // Get all active clients
+            const [clients] = await db.execute(`
+                SELECT id, name FROM clients WHERE is_active = 1
+            `);
+
+            console.log(`📊 Found ${clients.length} active clients`);
+
+            for (const client of clients) {
+                try {
+                    // Check if a payroll period exists for current month
+                    const [periods] = await db.execute(`
+                        SELECT id, period_start_date, period_end_date, period_type, period_number
+                        FROM payroll_periods
+                        WHERE client_id = ?
+                          AND period_year = ?
+                          AND period_number = ?
+                          AND period_type = 'monthly'
+                          AND status = 'active'
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    `, [client.id, currentYear, currentMonth]);
+
+                    if (periods.length === 0) {
+                        results.skipped.push({
+                            client_id: client.id,
+                            client_name: client.name,
+                            reason: `No active payroll period found for ${currentYear}-${String(currentMonth).padStart(2, '0')}`
+                        });
+                        console.log(`⏭️  SKIPPED ${client.name}: No payroll period for current month`);
+                        continue;
+                    }
+
+                    const period = periods[0];
+
+                    // Check if payroll run already exists for this period
+                    const [existingRuns] = await db.execute(`
+                        SELECT id, run_number FROM payroll_runs
+                        WHERE client_id = ?
+                          AND period_id = ?
+                          AND run_type = 'regular'
+                    `, [client.id, period.id]);
+
+                    if (existingRuns.length > 0) {
+                        results.skipped.push({
+                            client_id: client.id,
+                            client_name: client.name,
+                            reason: `Payroll run already exists: ${existingRuns[0].run_number}`
+                        });
+                        console.log(`⏭️  SKIPPED ${client.name}: Run already exists (${existingRuns[0].run_number})`);
+                        continue;
+                    }
+
+                    // Get a valid admin user ID for this client (use first available admin)
+                    const [adminUsers] = await db.execute(`
+                        SELECT id FROM admin_users
+                        WHERE client_id = ?
+                        ORDER BY created_at ASC
+                        LIMIT 1
+                    `, [client.id]);
+
+                    if (adminUsers.length === 0) {
+                        results.errors.push({
+                            client_id: client.id,
+                            client_name: client.name,
+                            error: 'No admin user found for client'
+                        });
+                        console.log(`⏭️  SKIPPED ${client.name}: No admin user found`);
+                        continue;
+                    }
+
+                    const systemUserId = adminUsers[0].id;
+
+                    // Create payroll run automatically
+                    const createResult = await this.createPayrollRun(client.id, systemUserId, {
+                        period_id: period.id,
+                        run_name: null, // Will auto-generate
+                        run_type: 'regular',
+                        calculation_method: 'advanced',
+                        employee_filters: {}, // All employees
+                        notes: 'Automatically created by system on ' + now.toISOString().split('T')[0]
+                    });
+
+                    results.success.push({
+                        client_id: client.id,
+                        client_name: client.name,
+                        run_id: createResult.data.run_id,
+                        run_number: createResult.data.run_number,
+                        total_employees: createResult.data.total_employees
+                    });
+
+                    console.log(`✅ CREATED ${client.name}: ${createResult.data.run_number} (${createResult.data.total_employees} employees)`);
+
+                } catch (clientError) {
+                    results.errors.push({
+                        client_id: client.id,
+                        client_name: client.name,
+                        error: clientError.message
+                    });
+                    console.error(`❌ ERROR ${client.name}:`, clientError.message);
+                }
+            }
+
+            console.log(`\n📈 AUTO-CREATE SUMMARY:`);
+            console.log(`   ✅ Created: ${results.success.length}`);
+            console.log(`   ⏭️  Skipped: ${results.skipped.length}`);
+            console.log(`   ❌ Errors: ${results.errors.length}`);
+
+            return {
+                success: true,
+                summary: {
+                    created: results.success.length,
+                    skipped: results.skipped.length,
+                    errors: results.errors.length
+                },
+                details: results
+            };
+
+        } catch (error) {
+            console.error('❌ AUTO-CREATE FAILED:', error);
+            throw error;
+        }
     }
 }
 
