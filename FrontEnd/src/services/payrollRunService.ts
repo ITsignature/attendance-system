@@ -2,7 +2,7 @@
 // PAYROLL RUN SERVICE - INDUSTRY STANDARD FRONTEND
 // =============================================
 // Frontend service for managing payroll runs (batches) instead of individual records
-// Implements modern payroll workflow: Create Run → Calculate → Review → Approve → Process
+// Implements modern payroll workflow: Create Run → Calculate → Process
 
 import apiService, { ApiResponse } from './api';
 
@@ -15,7 +15,7 @@ export interface PayrollRun {
   run_number: string;
   run_name: string;
   run_type: 'regular' | 'bonus' | 'correction' | 'off-cycle';
-  run_status: 'draft' | 'calculating' | 'calculated' | 'review' | 'approved' | 'processing' | 'completed' | 'cancelled';
+  run_status: 'draft' | 'calculating' | 'calculated' | 'processing' | 'completed' | 'cancelled';
   period_id: string;
   period_start_date: string;
   period_end_date: string;
@@ -31,17 +31,11 @@ export interface PayrollRun {
   // Workflow tracking
   created_by: string;
   created_by_name: string;
-  reviewed_by?: string;
-  reviewed_by_name?: string;
-  approved_by?: string;
-  approved_by_name?: string;
   processed_by?: string;
   processed_by_name?: string;
-  
+
   // Timestamps
   created_at: string;
-  reviewed_at?: string;
-  approved_at?: string;
   processed_at?: string;
   completed_at?: string;
   
@@ -64,16 +58,11 @@ export interface CreatePayrollRunData {
 }
 
 export interface PayrollRunFilters {
-  status?: 'draft' | 'calculating' | 'calculated' | 'review' | 'approved' | 'processing' | 'completed' | 'cancelled' | 'all';
+  status?: 'draft' | 'calculating' | 'calculated' | 'processing' | 'completed' | 'cancelled' | 'all';
   period_id?: string;
   run_type?: 'regular' | 'bonus' | 'correction' | 'off-cycle';
   limit?: number;
   offset?: number;
-}
-
-export interface ApprovalAction {
-  approval_level: 'review' | 'approve';
-  comments?: string;
 }
 
 export interface ProcessPaymentData {
@@ -194,21 +183,7 @@ class PayrollRunApiService {
   }
 
   /**
-   * Approve payroll run (review or final approval)
-   */
-  async approvePayrollRun(runId: string, approvalData: ApprovalAction): Promise<ApiResponse<{
-    run_id: string;
-    status: string;
-    approved_by: string;
-  }>> {
-    return apiService.apiCall(`/api/payroll-runs/${runId}/approve`, {
-      method: 'POST',
-      body: JSON.stringify(approvalData)
-    });
-  }
-
-  /**
-   * Process payments for approved payroll run
+   * Process payments for calculated payroll run
    */
   async processPayrollRun(runId: string, paymentData: ProcessPaymentData = {}): Promise<ApiResponse<{
     run_id: string;
@@ -447,13 +422,11 @@ class PayrollRunApiService {
       'draft': 'gray',
       'calculating': 'yellow',
       'calculated': 'blue',
-      'review': 'orange',
-      'approved': 'green',
       'processing': 'purple',
       'completed': 'success',
       'cancelled': 'failure'
     };
-    
+
     return colorMap[status] || 'gray';
   }
 
@@ -465,13 +438,11 @@ class PayrollRunApiService {
       'draft': '📝',
       'calculating': '⚙️',
       'calculated': '🧮',
-      'review': '👀',
-      'approved': '✅',
       'processing': '💳',
       'completed': '🎉',
       'cancelled': '❌'
     };
-    
+
     return iconMap[status] || '📄';
   }
 
@@ -483,13 +454,11 @@ class PayrollRunApiService {
       'draft': 'Draft',
       'calculating': 'Calculating...',
       'calculated': 'Calculated',
-      'review': 'Under Review',
-      'approved': 'Approved',
       'processing': 'Processing Payments',
       'completed': 'Completed',
       'cancelled': 'Cancelled'
     };
-    
+
     return textMap[status] || status;
   }
 
@@ -499,12 +468,10 @@ class PayrollRunApiService {
   canPerformAction(run: PayrollRun, action: string): boolean {
     const actionMatrix: Record<string, string[]> = {
       'calculate': ['draft', 'calculating'],
-      'review': ['calculated'],
-      'approve': ['review'],
-      'process': ['approved'],
-      'cancel': ['draft', 'calculated', 'review']
+      'process': ['calculated'],
+      'cancel': ['draft', 'calculated']
     };
-    
+
     return actionMatrix[action]?.includes(run.run_status) || false;
   }
 
@@ -527,25 +494,7 @@ class PayrollRunApiService {
         permission: 'payroll.process'
       });
     }
-    
-    if (this.canPerformAction(run, 'review')) {
-      actions.push({
-        action: 'review',
-        label: 'Submit for Review',
-        color: 'orange',
-        permission: 'payroll.review'
-      });
-    }
-    
-    if (this.canPerformAction(run, 'approve')) {
-      actions.push({
-        action: 'approve',
-        label: 'Approve Payroll',
-        color: 'green',
-        permission: 'payroll.approve'
-      });
-    }
-    
+
     if (this.canPerformAction(run, 'process')) {
       actions.push({
         action: 'process',

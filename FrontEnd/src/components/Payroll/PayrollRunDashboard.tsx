@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TextInput, Button, Select, Badge, Modal, Table, Alert, Card } from "flowbite-react";
 import { payrollRunApiService, PayrollRun, PayrollRunFilters } from '../../services/payrollRunService';
-import { HiPlay, HiEye, HiCheck, HiX, HiCreditCard, HiDocumentReport, HiUsers } from 'react-icons/hi';
+import { HiPlus, HiPlay, HiEye, HiCheck, HiX, HiCreditCard, HiDocumentReport, HiUsers } from 'react-icons/hi';
 
 const PayrollRunDashboard = () => {
   // =============================================
@@ -18,26 +18,33 @@ const PayrollRunDashboard = () => {
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
   const [runSummary, setRunSummary] = useState<any>(null);
-  const [workflowStatus, setWorkflowStatus] = useState<any>(null);
-  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
-  
+  const [availablePeriods, setAvailablePeriods] = useState<any[]>([]);
+
+
   // Filter States
   const [filters, setFilters] = useState<PayrollRunFilters>({
     status: 'all',
     limit: 20,
     offset: 0
   });
-  
+
   // Modal States
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRunDetailsModal, setShowRunDetailsModal] = useState(false);
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
 
   // Form States
-  const [approvalForm, setApprovalForm] = useState({
-    approval_level: 'review' as 'review' | 'approve',
-    comments: ''
+    const [createRunForm, setCreateRunForm] = useState({
+    period_id: '',
+    run_name: '',
+    run_type: 'regular' as 'regular' | 'bonus' | 'correction' | 'off-cycle',
+    calculation_method: 'advanced' as 'simple' | 'advanced',
+    employee_filters: {
+      department_id: '',
+      employee_type: ''
+    },
+    notes: ''
   });
   
   const [processForm, setProcessForm] = useState({
@@ -56,7 +63,7 @@ const PayrollRunDashboard = () => {
   
   useEffect(() => {
     loadPayrollRuns();
-    loadPendingApprovals();
+    loadAvailablePeriods();
   }, [filters]);
 
   useEffect(() => {
@@ -89,23 +96,72 @@ const PayrollRunDashboard = () => {
     }
   };
 
-  const loadPendingApprovals = async () => {
+  const loadAvailablePeriods = async () => {
     try {
-      const response = await payrollRunApiService.getPendingApprovals();
+      const response = await payrollRunApiService.getAvailablePeriods();
       if (response.success) {
-        setPendingApprovals(response.data || []);
+        setAvailablePeriods(response.data || []);
       } else {
-        setPendingApprovals([]);
+        setAvailablePeriods([]);
       }
     } catch (err) {
-      console.warn('Failed to load pending approvals:', err);
-      setPendingApprovals([]);
+      console.warn('Failed to load payroll periods:', err);
+      setAvailablePeriods([]);
     }
   };
+
 
   // =============================================
   // PAYROLL RUN OPERATIONS
   // =============================================
+
+  const handleCreateRun = async () => {
+    try {
+      setLoading(true);
+      
+      // Clean the form data - remove empty optional fields
+      const cleanFormData: any = {
+        period_id: createRunForm.period_id,
+        run_name: createRunForm.run_name,
+        run_type: createRunForm.run_type,
+        calculation_method: createRunForm.calculation_method
+      };
+      
+      // Only add employee_filters if they have values
+      const filters: any = {};
+      if (createRunForm.employee_filters.department_id) {
+        filters.department_id = createRunForm.employee_filters.department_id;
+      }
+      if (createRunForm.employee_filters.employee_type) {
+        filters.employee_type = createRunForm.employee_filters.employee_type;
+      }
+      
+      // Only add employee_filters object if it has properties
+      if (Object.keys(filters).length > 0) {
+        cleanFormData.employee_filters = filters;
+      }
+      
+      // Only add notes if not empty
+      if (createRunForm.notes.trim()) {
+        cleanFormData.notes = createRunForm.notes.trim();
+      }
+      
+      const response = await payrollRunApiService.createPayrollRun(cleanFormData);
+      
+      if (response.success) {
+        setSuccessMessage(`Payroll run created successfully with ${response.data.total_employees} employees`);
+        setShowCreateModal(false);
+        resetCreateForm();
+        loadPayrollRuns();
+      } else {
+        setError(response.message || 'Failed to create payroll run');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to create payroll run');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCalculateRun = async (runId: string) => {
     try {
@@ -125,27 +181,6 @@ const PayrollRunDashboard = () => {
     }
   };
 
-  const handleApproveRun = async () => {
-    if (!selectedRun) return;
-    
-    try {
-      setLoading(true);
-      const response = await payrollRunApiService.approvePayrollRun(selectedRun.id, approvalForm);
-      
-      if (response.success) {
-        setSuccessMessage(`Payroll run ${approvalForm.approval_level}ed successfully`);
-        setShowApprovalModal(false);
-        loadPayrollRuns();
-        loadPendingApprovals();
-      } else {
-        setError(response.message || 'Failed to approve payroll run');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to approve payroll run');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleProcessRun = async () => {
     if (!selectedRun) return;
@@ -172,22 +207,29 @@ const PayrollRunDashboard = () => {
   // UI HELPERS
   // =============================================
   
+  const resetCreateForm = () => {
+    setCreateRunForm({
+      period_id: '',
+      run_name: '',
+      run_type: 'regular',
+      calculation_method: 'advanced',
+      employee_filters: {
+        department_id: '',
+        employee_type: ''
+      },
+      notes: ''
+    });
+  };
+
   const openRunDetails = async (run: PayrollRun) => {
     setSelectedRun(run);
     try {
-      const [summaryResponse, workflowResponse] = await Promise.all([
-        payrollRunApiService.getRunSummary(run.id),
-        payrollRunApiService.getWorkflowStatus(run.id)
-      ]);
-      
+      const summaryResponse = await payrollRunApiService.getRunSummary(run.id);
+
       if (summaryResponse.success) {
         setRunSummary(summaryResponse.data);
       }
-      
-      if (workflowResponse.success) {
-        setWorkflowStatus(workflowResponse.data);
-      }
-      
+
       setShowRunDetailsModal(true);
     } catch (err) {
       console.warn('Failed to load run details:', err);
@@ -199,41 +241,6 @@ const PayrollRunDashboard = () => {
     navigate(`/payroll/runs/${runId}/employees`);
   };
 
-  const handleApproval = async (run: PayrollRun, approvalLevel: 'review' | 'approve') => {
-    setSelectedRun(run);
-    setApprovalForm({ 
-      approval_level: approvalLevel, 
-      comments: '' 
-    });
-    setShowApprovalModal(true);
-  };
-
-  const submitApproval = async () => {
-    if (!selectedRun) return;
-
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const result = await payrollRunApiService.approvePayrollRun(selectedRun.id, approvalForm);
-      
-      if (result.success) {
-        setSuccessMessage(
-          approvalForm.approval_level === 'review' 
-            ? 'Payroll run submitted for review successfully' 
-            : 'Payroll run approved successfully'
-        );
-        setShowApprovalModal(false);
-        loadPayrollRuns(); // Refresh the list
-      } else {
-        setError(result.message || 'Failed to update payroll run');
-      }
-    } catch (err) {
-      setError('Failed to update payroll run');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleProcess = async (run: PayrollRun) => {
     setSelectedRun(run);
@@ -309,29 +316,19 @@ const PayrollRunDashboard = () => {
   const getActionIcon = (action: string) => {
     const icons: Record<string, JSX.Element> = {
       'calculate': <HiPlay className="w-3 h-3 mr-1" />,
-      'review': <HiEye className="w-3 h-3 mr-1" />,
-      'approve': <HiCheck className="w-3 h-3 mr-1" />,
       'process': <HiCreditCard className="w-3 h-3 mr-1" />,
       'cancel': <HiX className="w-3 h-3 mr-1" />
     };
-    
+
     return icons[action] || null;
   };
 
   const handleAction = (run: PayrollRun, action: string) => {
     setSelectedRun(run);
-    
+
     switch (action) {
       case 'calculate':
         handleCalculateRun(run.id);
-        break;
-      case 'review':
-        setApprovalForm({ approval_level: 'review', comments: '' });
-        setShowApprovalModal(true);
-        break;
-      case 'approve':
-        setApprovalForm({ approval_level: 'approve', comments: '' });
-        setShowApprovalModal(true);
         break;
       case 'process':
         setShowProcessModal(true);
@@ -356,6 +353,10 @@ const PayrollRunDashboard = () => {
             Payroll Management
           </h1>
         </div>
+        <Button color="blue" onClick={() => setShowCreateModal(true)}>
+          <HiPlus className="w-4 h-4 mr-2" />
+          Create Payroll Run
+        </Button>
       </div>
 
       {/* Alerts */}
@@ -371,40 +372,13 @@ const PayrollRunDashboard = () => {
         </Alert>
       )}
 
-      {/* Pending Approvals Card */}
-      {pendingApprovals && pendingApprovals.length > 0 && (
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">⚠️ Pending Approvals</h3>
-            <Badge color="warning">{pendingApprovals?.length || 0}</Badge>
-          </div>
-          
-          <div className="space-y-2">
-            {pendingApprovals.slice(0, 3).map((approval, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                <div>
-                  <div className="font-medium">{approval.run_name}</div>
-                  <div className="text-sm text-gray-600">
-                    {approval.step_title} • {approval.total_employees} employees • 
-                    Pending for {approval.hours_pending}h
-                  </div>
-                </div>
-                <Button size="xs" color="yellow">
-                  Review
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
       {/* Filters */}
       <Card>
+        
         <div className="flex justify-between items-center">
           <Select
             value={filters.limit || 20}
             onChange={(e) => setFilters({ ...filters, limit: parseInt(e.target.value) })}
-            className="w-48"
           >
             <option value="10">10 per page</option>
             <option value="20">20 per page</option>
@@ -519,6 +493,131 @@ const PayrollRunDashboard = () => {
         </div>
       </Card>
 
+      {/* Create Payroll Run Modal */}
+      <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="lg">
+        <Modal.Header>Create New Payroll Run</Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Payroll Period *</label>
+              <Select
+                value={createRunForm.period_id}
+                onChange={(e) => setCreateRunForm({ ...createRunForm, period_id: e.target.value })}
+                required
+              >
+                <option value="">Select a payroll period...</option>
+                {availablePeriods && availablePeriods.length > 0 ? 
+                  availablePeriods.map((period) => (
+                    <option key={period.id} value={period.id}>
+                      {period.period_type} - {new Date(period.period_start_date).toLocaleDateString()} to {new Date(period.period_end_date).toLocaleDateString()}
+                    </option>
+                  )) : 
+                  <option disabled>No periods available</option>
+                }
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Run Name *</label>
+              <TextInput
+                value={createRunForm.run_name}
+                onChange={(e) => setCreateRunForm({ ...createRunForm, run_name: e.target.value })}
+                placeholder="e.g., January 2024 Regular Payroll"
+                required
+              />
+            </div>
+
+            {/* <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Run Type</label>
+                <Select
+                  value={createRunForm.run_type}
+                  onChange={(e) => setCreateRunForm({ ...createRunForm, run_type: e.target.value as any })}
+                >
+                  <option value="regular">Regular Payroll</option>
+                  <option value="bonus">Bonus Payroll</option>
+                  <option value="correction">Correction</option>
+                  <option value="off-cycle">Off-cycle</option>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Calculation Method</label>
+                <Select
+                  value={createRunForm.calculation_method}
+                  onChange={(e) => setCreateRunForm({ ...createRunForm, calculation_method: e.target.value as any })}
+                >
+                  <option value="advanced">Advanced (Progressive Tax)</option>
+                  <option value="simple">Simple (Flat Tax)</option>
+                </Select>
+              </div>
+            </div> */}
+
+            {/* <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Department Filter (Optional)</label>
+                <Select
+                  value={createRunForm.employee_filters.department_id}
+                  onChange={(e) => setCreateRunForm({
+                    ...createRunForm,
+                    employee_filters: {
+                      ...createRunForm.employee_filters,
+                      department_id: e.target.value
+                    }
+                  })}
+                >
+                  <option value="">All Departments</option>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Employee Type Filter (Optional)</label>
+                <Select
+                  value={createRunForm.employee_filters.employee_type}
+                  onChange={(e) => setCreateRunForm({ 
+                    ...createRunForm, 
+                    employee_filters: { 
+                      ...createRunForm.employee_filters, 
+                      employee_type: e.target.value 
+                    } 
+                  })}
+                >
+                  <option value="">All Employee Types</option>
+                  <option value="full-time">Full-time</option>
+                  <option value="part-time">Part-time</option>
+                  <option value="contract">Contract</option>
+                  <option value="intern">Intern</option>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Notes</label>
+              <textarea
+                className="w-full p-3 border border-gray-300 rounded-md"
+                rows={3}
+                value={createRunForm.notes}
+                onChange={(e) => setCreateRunForm({ ...createRunForm, notes: e.target.value })}
+                placeholder="Optional notes about this payroll run..."
+              />
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">🏭 Payroll Workflow</h4>
+              <div className="text-sm text-blue-700 space-y-1">
+                <div>1. ✅ <strong>Create Run</strong> - Setup payroll batch with employees</div>
+                <div>2. ⚙️ <strong>Calculate</strong> - Process all employee payroll calculations</div>
+                <div>3. 💳 <strong>Process</strong> - Process payments to employees</div>
+                <div>4. 🎉 <strong>Complete</strong> - Payroll run is completed</div>
+              </div>
+            </div> */}
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+          <Button color="blue" onClick={handleCreateRun} disabled={!createRunForm.run_name || !createRunForm.period_id}>
+            Create Payroll Run
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
       {/* Run Details Modal */}
       <Modal
         show={showRunDetailsModal}
@@ -526,7 +625,6 @@ const PayrollRunDashboard = () => {
           setShowRunDetailsModal(false);
           setSelectedRun(null);
           setRunSummary(null);
-          setWorkflowStatus(null);
         }}
         size="4xl"
       >
@@ -593,41 +691,6 @@ const PayrollRunDashboard = () => {
                 </div>
               </div>
 
-              {/* Workflow Status */}
-              {workflowStatus?.workflow && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Workflow Status</h3>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-sm font-medium text-gray-500">Created</span>
-                        <p className="text-sm">
-                          {new Date(workflowStatus.workflow.created_at).toLocaleString()} 
-                          <br />by {workflowStatus.workflow.created_by}
-                        </p>
-                      </div>
-                      {workflowStatus.workflow.approved_at && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-500">Approved</span>
-                          <p className="text-sm">
-                            {new Date(workflowStatus.workflow.approved_at).toLocaleString()} 
-                            <br />by {workflowStatus.workflow.approved_by}
-                          </p>
-                        </div>
-                      )}
-                      {workflowStatus.workflow.processed_at && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-500">Processed</span>
-                          <p className="text-sm">
-                            {new Date(workflowStatus.workflow.processed_at).toLocaleString()} 
-                            <br />by {workflowStatus.workflow.processed_by}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -640,66 +703,6 @@ const PayrollRunDashboard = () => {
         <Modal.Footer>
           <Button color="gray" onClick={() => setShowRunDetailsModal(false)}>
             Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Approval Modal */}
-      <Modal
-        show={showApprovalModal}
-        onClose={() => {
-          setShowApprovalModal(false);
-          setSelectedRun(null);
-          setApprovalForm({ approval_level: 'review', comments: '' });
-        }}
-        size="md"
-      >
-        <Modal.Header>
-          {approvalForm.approval_level === 'review' ? 'Submit for Review' : 'Approve Payroll Run'}
-        </Modal.Header>
-        <Modal.Body>
-          <div className="space-y-4">
-            {selectedRun && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-semibold">{selectedRun.run_name}</h4>
-                <p className="text-sm text-gray-600">{selectedRun.run_number}</p>
-                <p className="text-sm text-gray-600">
-                  {selectedRun.total_employees} employees • Rs. {selectedRun.total_net_amount?.toLocaleString()}
-                </p>
-              </div>
-            )}
-            
-            <div>
-              <label htmlFor="approval-comments" className="block text-sm font-medium text-gray-700 mb-2">
-                Comments (optional)
-              </label>
-              <textarea
-                id="approval-comments"
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={
-                  approvalForm.approval_level === 'review' 
-                    ? 'Add any notes for the reviewer...' 
-                    : 'Add approval comments...'
-                }
-                value={approvalForm.comments}
-                onChange={(e) => setApprovalForm({ ...approvalForm, comments: e.target.value })}
-              />
-            </div>
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button color="gray" onClick={() => setShowApprovalModal(false)}>
-            Cancel
-          </Button>
-          <Button 
-            color={approvalForm.approval_level === 'review' ? 'orange' : 'green'}
-            onClick={submitApproval}
-            disabled={loading}
-          >
-            {loading ? 'Processing...' : (
-              approvalForm.approval_level === 'review' ? 'Submit for Review' : 'Approve Payroll'
-            )}
           </Button>
         </Modal.Footer>
       </Modal>

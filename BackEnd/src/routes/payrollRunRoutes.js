@@ -33,11 +33,6 @@ const validateCreateRun = [
     body('employee_filters.employee_type').optional().isIn(['full-time', 'part-time', 'contract', 'intern']).withMessage('Invalid employee type')
 ];
 
-const validateApproval = [
-    body('approval_level').isIn(['review', 'approve']).withMessage('Invalid approval level'),
-    body('comments').optional().isLength({ max: 500 }).withMessage('Comments cannot exceed 500 characters')
-];
-
 const validateProcessPayment = [
     body('payment_method').optional().isIn(['bank_transfer', 'cash', 'cheque']).withMessage('Invalid payment method'),
     body('payment_date').optional().isISO8601().withMessage('Invalid payment date'),
@@ -55,7 +50,7 @@ const validateProcessPayment = [
 router.get('/',
     checkPermission('payroll.view'),
     [
-        query('status').optional().isIn(['draft', 'calculating', 'calculated', 'review', 'approved', 'processing', 'completed', 'cancelled']),
+        query('status').optional().isIn(['draft', 'calculating', 'calculated', 'processing', 'completed', 'cancelled']),
         query('period_id').optional().isUUID(),
         query('run_type').optional().isIn(['regular', 'bonus', 'correction', 'off-cycle']),
         query('limit').optional().isInt({ min: 1, max: 100 }),
@@ -1015,10 +1010,6 @@ router.get('/:id/workflow',
                         status: run.run_status,
                         created_at: run.created_at,
                         created_by: run.created_by_name || 'System User',
-                        reviewed_at: run.reviewed_at,
-                        reviewed_by: run.reviewed_by_name || null,
-                        approved_at: run.approved_at,
-                        approved_by: run.approved_by_name || null,
                         processed_at: run.processed_at,
                         processed_by: run.processed_by_name || null,
                         completed_at: run.completed_at
@@ -1150,49 +1141,8 @@ router.post('/:id/calculate',
 );
 
 /**
- * POST /api/payroll-runs/:id/approve
- * Approve payroll run (review or final approval)
- */
-router.post('/:id/approve',
-    checkPermission('payroll.edit'),
-    [
-        param('id').isUUID(),
-        ...validateApproval
-    ],
-    asyncHandler(async (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                success: false,
-                message: 'Validation failed',
-                errors: errors.array()
-            });
-        }
-
-        const runId = req.params.id;
-        const clientId = req.user.clientId;
-        const approverId = req.user.userId;
-
-        try {
-            const result = await PayrollRunService.approvePayrollRun(runId, clientId, approverId, req.body);
-            
-            res.json({
-                success: true,
-                message: `Payroll run ${req.body.approval_level}ed successfully`,
-                data: result.data
-            });
-        } catch (error) {
-            res.status(400).json({
-                success: false,
-                message: error.message
-            });
-        }
-    })
-);
-
-/**
  * POST /api/payroll-runs/:id/process
- * Process payments for approved payroll run
+ * Process payments for calculated payroll run
  */
 router.post('/:id/process',
     checkPermission('payroll.process'),
@@ -1361,10 +1311,6 @@ router.get('/:id/summary',
                 workflow: {
                     created_at: run.created_at,
                     created_by: run.created_by_name,
-                    reviewed_at: run.reviewed_at,
-                    reviewed_by: run.reviewed_by_name,
-                    approved_at: run.approved_at,
-                    approved_by: run.approved_by_name,
                     processed_at: run.processed_at,
                     processed_by: run.processed_by_name
                 }

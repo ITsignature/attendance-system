@@ -218,86 +218,7 @@ class PayrollRunService {
     }
 
     /**
-     * Approve payroll run (workflow step)
-     */
-    async approvePayrollRun(runId, clientId, approverId, approvalData) {
-        const {
-            approval_level, // 'review' or 'approve'
-            comments = null
-        } = approvalData;
-
-        const db = getDB();
-        
-        try {
-            await db.execute('START TRANSACTION');
-
-            // Verify run status
-            const [run] = await db.execute(
-                'SELECT run_status FROM payroll_runs WHERE id = ? AND client_id = ?',
-                [runId, clientId]
-            );
-
-            if (run.length === 0) {
-                throw new Error('Payroll run not found');
-            }
-
-            const validStatusMap = {
-                'review': ['calculated'],
-                'approve': ['review']
-            };
-
-            if (!validStatusMap[approval_level].includes(run[0].run_status)) {
-                throw new Error(`Cannot ${approval_level} payroll run in ${run[0].run_status} status`);
-            }
-
-            // Record approval
-            await db.execute(`
-                INSERT INTO payroll_approvals (
-                    id, run_id, approval_level, approver_id, 
-                    approval_status, approval_date, comments
-                ) VALUES (?, ?, ?, ?, 'approved', NOW(), ?)
-            `, [uuidv4(), runId, approval_level, approverId, comments]);
-
-            // Update run status and approver
-            const statusMap = {
-                'review': 'review',
-                'approve': 'approved'
-            };
-            
-            const approverField = approval_level === 'review' ? 'reviewed_by' : 'approved_by';
-            const dateField = approval_level === 'review' ? 'reviewed_at' : 'approved_at';
-
-            await db.execute(`
-                UPDATE payroll_runs 
-                SET run_status = ?, ${approverField} = ?, ${dateField} = NOW() 
-                WHERE id = ?
-            `, [statusMap[approval_level], approverId, runId]);
-
-            // Log approval
-            await this.logAuditEvent(runId, null, approval_level, approverId, {
-                comments,
-                approval_level
-            });
-
-            await db.execute('COMMIT');
-
-            return {
-                success: true,
-                data: {
-                    run_id: runId,
-                    status: statusMap[approval_level],
-                    approved_by: approverId
-                }
-            };
-
-        } catch (error) {
-            await db.execute('ROLLBACK');
-            throw error;
-        }
-    }
-
-    /**
-     * Process payments for approved payroll run
+     * Process payments for calculated payroll run
      */
     async processPayrollRun(runId, clientId, userId, paymentData = {}) {
         const {
@@ -311,14 +232,14 @@ class PayrollRunService {
         try {
             await db.execute('START TRANSACTION');
 
-            // Verify run is approved
+            // Verify run is calculated
             const [run] = await db.execute(
-                'SELECT run_status FROM payroll_runs WHERE id = ? AND client_id = ? AND run_status = "approved"',
+                'SELECT run_status FROM payroll_runs WHERE id = ? AND client_id = ? AND run_status = "calculated"',
                 [runId, clientId]
             );
 
             if (run.length === 0) {
-                throw new Error('Payroll run not found or not approved for processing');
+                throw new Error('Payroll run not found or not calculated for processing');
             }
 
             // Update run status to processing
@@ -389,9 +310,9 @@ class PayrollRunService {
             }
 
             // Check if run can be cancelled
-            const cancellableStatuses = ['draft', 'calculated', 'review'];
+            const cancellableStatuses = ['draft', 'calculated'];
             if (!cancellableStatuses.includes(run[0].run_status)) {
-                throw new Error(`Cannot cancel payroll run in ${run[0].run_status} status. Only draft, calculated, or review status runs can be cancelled.`);
+                throw new Error(`Cannot cancel payroll run in ${run[0].run_status} status. Only draft or calculated status runs can be cancelled.`);
             }
 
             // Log cancellation before deletion
@@ -415,38 +336,20 @@ class PayrollRunService {
                 [runId]
             );
 
-            // 3. Delete approval steps (depends on approval_workflows)
-            await db.execute(
-                'DELETE aps FROM approval_steps aps INNER JOIN approval_workflows aw ON aps.workflow_id = aw.id WHERE aw.run_id = ?',
-                [runId]
-            );
-
-            // 4. Delete approval workflows
-            await db.execute(
-                'DELETE FROM approval_workflows WHERE run_id = ?',
-                [runId]
-            );
-
-            // 5. Delete payroll approvals
-            await db.execute(
-                'DELETE FROM payroll_approvals WHERE run_id = ?',
-                [runId]
-            );
-
-            // 6. Delete payroll reports (if table exists - currently not implemented)
+            // 3. Delete payroll reports (if table exists - currently not implemented)
             // await db.execute(
             //     'DELETE FROM payroll_reports WHERE run_id = ?',
             //     [runId]
             // );
 
-            // 7. Delete audit logs (optional - you may want to keep these for compliance)
+            // 4. Delete audit logs (optional - you may want to keep these for compliance)
             // Note: Uncomment if you want to delete audit logs as well
             // await db.execute(
             //     'DELETE FROM payroll_audit_log WHERE run_id = ?',
             //     [runId]
             // );
 
-            // 8. Finally delete the payroll run itself
+            // 5. Finally delete the payroll run itself
             await db.execute(
                 'DELETE FROM payroll_runs WHERE id = ?',
                 [runId]
@@ -2722,11 +2625,9 @@ class PayrollRunService {
         const db = getDB();
         
         const [run] = await db.execute(`
-            SELECT 
+            SELECT
                 pr.*, pp.period_start_date, pp.period_end_date, pp.pay_date,
                 'System User' as created_by_name,
-                'System User' as reviewed_by_name,
-                'System User' as approved_by_name,
                 'System User' as processed_by_name
             FROM payroll_runs pr
             JOIN payroll_periods pp ON pr.period_id = pp.id
@@ -2772,11 +2673,11 @@ class PayrollRunService {
         }
 
         const [runs] = await db.execute(`
-            SELECT 
+            SELECT
                 pr.id, pr.run_number, pr.run_name, pr.run_type, pr.run_status,
                 pr.total_employees, pr.processed_employees,
                 pr.total_gross_amount, pr.total_net_amount,
-                pr.created_at, pr.approved_at, pr.completed_at,
+                pr.created_at, pr.completed_at,
                 pp.period_start_date, pp.period_end_date,
                 'System User' as created_by_name
             FROM payroll_runs pr

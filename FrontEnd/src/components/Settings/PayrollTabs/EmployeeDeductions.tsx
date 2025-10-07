@@ -40,7 +40,7 @@ const EmployeeDeductions: React.FC = () => {
       setLoading(true);
       const [deductionsData, employeesResponse] = await Promise.all([
         payrollConfigApi.getEmployeeDeductions(),
-        apiService.apiCall('/api/employee')
+        apiService.getEmployees({ limit: 10000, page: 1, status: 'active' })
       ]);
 
       setDeductions(deductionsData);
