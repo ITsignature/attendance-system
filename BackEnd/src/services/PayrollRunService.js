@@ -93,6 +93,281 @@ class PayrollRunService {
         }
     }
 
+    // =============================================
+    // DAILY INCREMENTAL CALCULATION METHODS
+    // =============================================
+
+    /**
+     * Calculate payroll for a SINGLE DAY only (incremental calculation)
+     * Reuses existing calculation methods for consistency
+     */
+    async calculateSingleDay(employeeId, runId, targetDate, clientId) {
+        const db = getDB();
+
+        try {
+            // Get period info and employee base salary
+            const [periodInfo] = await db.execute(`
+                SELECT pp.*, pr.calculation_method, e.base_salary, e.department_id, e.in_time, e.out_time
+                FROM payroll_runs pr
+                JOIN payroll_periods pp ON pr.period_id = pp.id
+                JOIN employees e ON e.id = ?
+                WHERE pr.id = ? AND pr.client_id = ?
+            `, [employeeId, runId, clientId]);
+
+            if (periodInfo.length === 0) {
+                throw new Error('Payroll run or employee not found');
+            }
+
+            const period = periodInfo[0];
+            const baseSalary = parseFloat(period.base_salary);
+            const departmentId = period.department_id;
+
+            // Calculate total working days in FULL MONTH for per-day rate (consistent across all days)
+            const fullMonthWorkingDaysCalc = await HolidayService.calculateWorkingDays(
+                clientId,
+                period.period_start_date,
+                period.period_end_date,
+                departmentId,
+                false,
+                employeeId
+            );
+
+            const effectiveWorkingDays = await this.calculateEffectiveWorkingDays(
+                fullMonthWorkingDaysCalc,
+                employeeId,
+                period.period_start_date,
+                period.period_end_date
+            );
+
+            const perDaySalary = baseSalary / effectiveWorkingDays;
+
+            // Calculate employee daily hours from scheduled times
+            let employeeDailyHours = 8; // Default fallback
+            if (period.in_time && period.out_time) {
+                const inTime = new Date(`1970-01-01T${period.in_time}`);
+                const outTime = new Date(`1970-01-01T${period.out_time}`);
+                employeeDailyHours = (outTime - inTime) / (1000 * 60 * 60);
+            } else {
+                employeeDailyHours = await this.getEmployeeDailyHours(employeeId, 8, targetDate, targetDate);
+            }
+
+            const hourlyRate = perDaySalary / employeeDailyHours;
+
+            // Get attendance for this specific day
+            const [attendanceRecords] = await db.execute(`
+                SELECT
+                    date,
+                    check_in_time,
+                    check_out_time,
+                    total_hours,
+                    total_work_duration,
+                    overtime_hours,
+                    break_duration,
+                    is_late,
+                    is_early_leave,
+                    late_minutes,
+                    early_leave_minutes,
+                    status,
+                    scheduled_in_time,
+                    scheduled_out_time
+                FROM attendance
+                WHERE employee_id = ?
+                  AND DATE(date) = ?
+            `, [employeeId, targetDate]);
+
+            // Create mock working hours object for existing methods
+            const workingHours = { hours_per_day: employeeDailyHours };
+
+            // Use existing calculateAttendanceSummary method
+            const attendanceSummary = await this.calculateAttendanceSummary(
+                attendanceRecords,
+                workingHours,
+                employeeId,
+                db,
+                runId
+            );
+
+            // Get approved leaves for this day
+            const [leaves] = await db.execute(`
+                SELECT leave_type, is_paid, deduction_percentage
+                FROM leave_requests
+                WHERE employee_id = ?
+                  AND status = 'approved'
+                  AND ? BETWEEN start_date AND end_date
+            `, [employeeId, targetDate]);
+
+            const dailyLeaves = leaves.map(l => ({
+                leave_type: l.leave_type,
+                is_paid: l.is_paid,
+                deduction_percentage: l.deduction_percentage,
+                days: 1
+            }));
+
+            // Calculate earnings for this day
+            let dailyEarnings = attendanceSummary.summary.totalWorkedHours * hourlyRate;
+
+            // Use existing calculateAttendanceDeductions method for consistency
+            const deductionResult = await this.calculateAttendanceDeductions(
+                employeeId,
+                runId,
+                baseSalary,
+                attendanceSummary,
+                dailyLeaves
+            );
+
+            const dailyDeductions = deductionResult.total;
+            const dailyNetSalary = dailyEarnings - dailyDeductions;
+
+            console.log(`📊 Day ${targetDate}: Worked=${attendanceSummary.summary.totalWorkedHours}h, Earnings=Rs.${dailyEarnings.toFixed(2)}, Deductions=Rs.${dailyDeductions.toFixed(2)}, Net=Rs.${dailyNetSalary.toFixed(2)}`);
+
+            return {
+                worked_hours: attendanceSummary.summary.totalWorkedHours,
+                earnings: dailyEarnings,
+                deductions: dailyDeductions,
+                net_salary: dailyNetSalary,
+                target_date: targetDate,
+                deduction_components: deductionResult.components
+            };
+
+        } catch (error) {
+            console.error(`❌ Error calculating single day for employee ${employeeId} on ${targetDate}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Calculate daily increment and update cumulative totals
+     */
+    async calculateDailyIncrement(runId, employeeId, clientId) {
+        const db = getDB();
+        const today = new Date().toISOString().split('T')[0];
+
+        try {
+            // Get current payroll record state
+            const [records] = await db.execute(`
+                SELECT
+                    last_processed_date,
+                    net_salary,
+                    total_earnings,
+                    total_deductions,
+                    worked_hours,
+                    calculation_status
+                FROM payroll_records
+                WHERE run_id = ? AND employee_id = ?
+            `, [runId, employeeId]);
+
+            if (records.length === 0) {
+                throw new Error('Payroll record not found');
+            }
+
+            const record = records[0];
+            const lastProcessedDate = record.last_processed_date;
+
+            // Check if already processed today
+            if (lastProcessedDate === today) {
+                console.log(`✅ Employee ${employeeId} already processed for ${today}`);
+                return {
+                    success: true,
+                    message: 'Already processed today',
+                    skipped: true
+                };
+            }
+
+            // Determine which date to process
+            // If never processed before, start from period start
+            // If processed before, process the next day after last_processed_date
+            let dateToProcess;
+            if (!lastProcessedDate) {
+                // First time processing - get period start date
+                const [periodInfo] = await db.execute(`
+                    SELECT pp.period_start_date
+                    FROM payroll_runs pr
+                    JOIN payroll_periods pp ON pr.period_id = pp.id
+                    WHERE pr.id = ?
+                `, [runId]);
+                dateToProcess = periodInfo[0].period_start_date;
+            } else {
+                // Process next day after last processed
+                const nextDate = new Date(lastProcessedDate);
+                nextDate.setDate(nextDate.getDate() + 1);
+                dateToProcess = nextDate.toISOString().split('T')[0];
+            }
+
+            // Make sure we don't process future dates
+            if (dateToProcess > today) {
+                console.log(`✅ No new days to process for employee ${employeeId}`);
+                return {
+                    success: true,
+                    message: 'No new days to process',
+                    skipped: true
+                };
+            }
+
+            // Calculate only today's data
+            const todayData = await this.calculateSingleDay(employeeId, runId, dateToProcess, clientId);
+
+            // Update cumulative totals by ADDING today's values
+            await db.execute(`
+                UPDATE payroll_records SET
+                    net_salary = COALESCE(net_salary, 0) + ?,
+                    total_earnings = COALESCE(total_earnings, 0) + ?,
+                    total_deductions = COALESCE(total_deductions, 0) + ?,
+                    worked_hours = COALESCE(worked_hours, 0) + ?,
+                    last_processed_date = ?,
+                    calculated_at = NOW(),
+                    calculation_status = 'calculated'
+                WHERE run_id = ? AND employee_id = ?
+            `, [
+                todayData.net_salary,
+                todayData.earnings,
+                todayData.deductions,
+                todayData.worked_hours,
+                dateToProcess,
+                runId,
+                employeeId
+            ]);
+
+            console.log(`✅ Processed ${dateToProcess} for employee ${employeeId}:`, {
+                earnings: todayData.earnings,
+                deductions: todayData.deductions,
+                net_salary: todayData.net_salary
+            });
+
+            return {
+                success: true,
+                processed_date: dateToProcess,
+                daily_data: todayData
+            };
+
+        } catch (error) {
+            console.error(`❌ Error in daily increment calculation:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Check if a date is a weekend for an employee
+     */
+    async isWeekendDate(date, employeeId) {
+        const targetDate = new Date(date);
+        const dayOfWeek = targetDate.getDay(); // 0 = Sunday, 6 = Saturday
+
+        // Get employee's weekend configuration
+        const db = getDB();
+        const [employee] = await db.execute(
+            'SELECT department_id FROM employees WHERE id = ?',
+            [employeeId]
+        );
+
+        if (employee.length === 0) return false;
+
+        // Default weekends (Saturday and Sunday)
+        const defaultWeekends = [0, 6];
+
+        // You can enhance this to check department-specific weekend configurations
+        return defaultWeekends.includes(dayOfWeek);
+    }
+
     /**
      * Calculate payroll for entire run
      */
@@ -1123,58 +1398,69 @@ class PayrollRunService {
         const departmentId = employeeInfo[0]?.department_id || null;
         const clientId = employeeInfo[0]?.client_id;
 
+        // IMPORTANT: Calculate working days for FULL MONTH for per-day salary calculation
+        const fullMonthWorkingDaysCalc = await HolidayService.calculateWorkingDays(
+            clientId,
+            period.period_start_date,
+            period.period_end_date, // Full period end date
+            departmentId,
+            false,
+            employeeId
+        );
+
+        // Calculate working days UP TO TODAY for expected hours calculation
         const workingDaysCalculation = await HolidayService.calculateWorkingDays(
             clientId,
             period.period_start_date,
-            calculationEndDate,
+            calculationEndDate, // Today or period end
             departmentId,
-            false, // includeOptionalHolidays
-            employeeId // Pass employeeId for individual weekend config
+            false,
+            employeeId
         );
 
         const workingDaysInMonth = workingDaysCalculation.working_days;
         
-        console.log(`📊 CALCULATED WORKING DAYS: ${workingDaysInMonth} days (excluding weekends & holidays)`);
-        
-        // Calculate effective working days considering weekend salary weights
+        console.log(`📊 CALCULATED WORKING DAYS UP TO TODAY: ${workingDaysInMonth} days (excluding weekends & holidays)`);
+        console.log(`📊 FULL MONTH WORKING DAYS: ${fullMonthWorkingDaysCalc.working_days} days (for salary rate calculation)`);
+
+        // Calculate effective working days considering weekend salary weights (USE FULL MONTH)
         const effectiveWorkingDays = await this.calculateEffectiveWorkingDays(
-            workingDaysCalculation,
+            fullMonthWorkingDaysCalc, // Use full month for per-day salary calculation
             employeeId,
             period.period_start_date,
             period.period_end_date
         );
 
-        console.log(`🏗️  WEEKEND WORKING BREAKDOWN:`, {
-            standard_working_days: workingDaysCalculation.working_days - workingDaysCalculation.weekend_working_days,
-            weekend_working_days: workingDaysCalculation.weekend_working_days,
-            weekend_full_day_weight: workingDaysCalculation.weekend_full_day_weight,
-            weekend_proportional_days: workingDaysCalculation.weekend_proportional_days,
+        console.log(`🏗️  WEEKEND WORKING BREAKDOWN (FULL MONTH):`, {
+            standard_working_days: fullMonthWorkingDaysCalc.working_days - fullMonthWorkingDaysCalc.weekend_working_days,
+            weekend_working_days: fullMonthWorkingDaysCalc.weekend_working_days,
+            weekend_full_day_weight: fullMonthWorkingDaysCalc.weekend_full_day_weight,
+            weekend_proportional_days: fullMonthWorkingDaysCalc.weekend_proportional_days,
             effective_working_days: effectiveWorkingDays
         });
 
-        // Calculate per-day and per-minute salary rates using effective working days
+        // Calculate per-day and per-minute salary rates using effective working days (FULL MONTH)
         const perDaySalary = baseSalary / effectiveWorkingDays;
         const employeeDailyHours = await this.getEmployeeDailyHours(employeeId, attendanceSummary.workingHours.hours_per_day, period.period_start_date, period.period_end_date);
         const perMinuteSalary = perDaySalary / (employeeDailyHours * 60);
-        
+
         // Calculate hourly rate for shortfall logging
         const hourlyRate = perDaySalary / employeeDailyHours;
-        
+
         // 🔍 CONSOLE LOG: Employee Shortfall & Rate Information
         console.log('\n📊 PAYROLL CALCULATION - EMPLOYEE SHORTFALL ANALYSIS');
         console.log('=' .repeat(60));
         console.log(`👤 Employee ID: ${employeeId}`);
         console.log(`💰 Base Salary: ${baseSalary.toLocaleString()}`);
-        console.log(`📅 Working Days: ${workingDaysInMonth} (Raw: ${workingDaysCalculation.working_days})`);
+        console.log(`📅 FULL MONTH Working Days: ${fullMonthWorkingDaysCalc.working_days} days (for rate calculation)`);
+        console.log(`📅 UP TO TODAY Working Days: ${workingDaysInMonth} days (for expected hours)`);
         console.log(`🎯 Effective Working Days (with weekend weights): ${effectiveWorkingDays}`);
         console.log(`⏰ Employee Daily Hours: ${employeeDailyHours}h/day`);
-        console.log(`💵 Per-Day Salary: ${perDaySalary.toFixed(2)}`);
-        console.log(`⏱️  Hourly Rate: ${hourlyRate.toFixed(2)}`);
+        console.log(`💵 Per-Day Salary: ${perDaySalary.toFixed(2)} (${baseSalary} ÷ ${effectiveWorkingDays})`);
+        console.log(`⏱️  Hourly Rate: ${hourlyRate.toFixed(2)} (${perDaySalary.toFixed(2)} ÷ ${employeeDailyHours})`);
         console.log('');
         console.log('📈 ATTENDANCE SUMMARY:');
-        console.log(`   Expected Hours: ${attendanceSummary.summary.expectedHours}`);
-        console.log(`   📋 CALCULATION CHECK: ${effectiveWorkingDays} days × ${employeeDailyHours}h = ${(effectiveWorkingDays * employeeDailyHours).toFixed(2)}h`);
-        console.log(`   ❗ DISCREPANCY: ${attendanceSummary.summary.expectedHours !== (effectiveWorkingDays * employeeDailyHours) ? 'YES - Values don\'t match!' : 'NO - Values match'}`);
+        console.log(`   Expected Hours (up to today): ${attendanceSummary.summary.expectedHours}`);
         console.log(`   Worked Hours: ${attendanceSummary.summary.totalWorkedHours}`);
         console.log(`   ⚠️  Shortfall Hours: ${attendanceSummary.summary.shortfallHours}`);
         
