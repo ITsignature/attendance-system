@@ -618,9 +618,13 @@ class PayrollRunService {
      */
     async getAttendanceSummary(employeeId, runId) {
         const db = getDB();
-        
+
+        // Calculate up to today instead of full period
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+
         const [attendanceData] = await db.execute(`
-            SELECT 
+            SELECT
                 a.date,
                 a.check_in_time,
                 a.check_out_time,
@@ -634,8 +638,8 @@ class PayrollRunService {
             FROM attendance a
             JOIN payroll_runs pr ON pr.id = ?
             JOIN payroll_periods pp ON pr.period_id = pp.id
-            WHERE a.employee_id = ? 
-              AND DATE(a.date) BETWEEN pp.period_start_date AND pp.period_end_date
+            WHERE a.employee_id = ?
+              AND DATE(a.date) BETWEEN pp.period_start_date AND LEAST(pp.period_end_date, CURDATE())
             ORDER BY a.date
         `, [runId, employeeId]);
 
@@ -703,9 +707,10 @@ class PayrollRunService {
      */
     async getApprovedLeaves(employeeId, runId) {
         const db = getDB();
-        
+
+        // Only get leaves up to today
         const [leaves] = await db.execute(`
-            SELECT 
+            SELECT
                 lr.start_date,
                 lr.end_date,
                 lr.days_requested,
@@ -716,12 +721,13 @@ class PayrollRunService {
             JOIN leave_types lt ON lr.leave_type_id = lt.id
             JOIN payroll_runs pr ON pr.id = ?
             JOIN payroll_periods pp ON pr.period_id = pp.id
-            WHERE lr.employee_id = ? 
+            WHERE lr.employee_id = ?
               AND lr.status = 'approved'
+              AND lr.start_date <= CURDATE()
               AND (
-                (lr.start_date BETWEEN pp.period_start_date AND pp.period_end_date)
-                OR (lr.end_date BETWEEN pp.period_start_date AND pp.period_end_date)
-                OR (lr.start_date <= pp.period_start_date AND lr.end_date >= pp.period_end_date)
+                (lr.start_date BETWEEN pp.period_start_date AND LEAST(pp.period_end_date, CURDATE()))
+                OR (lr.end_date BETWEEN pp.period_start_date AND LEAST(pp.period_end_date, CURDATE()))
+                OR (lr.start_date <= pp.period_start_date AND lr.end_date >= pp.period_start_date)
               )
         `, [runId, employeeId]);
 
@@ -767,15 +773,22 @@ class PayrollRunService {
                 JOIN payroll_periods pp ON pr.period_id = pp.id
                 WHERE pr.id = ?
             `, [runId]);
-            
+
             if (periodInfo.length === 0) {
                 throw new Error('Could not find payroll period for this run');
             }
-            
+
             const period = periodInfo[0];
             const periodStartDate = period.period_start_date;
-            const periodEndDate = period.period_end_date;
-            
+
+            // Use today's date if we're still in the period, otherwise use period end date
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const periodEndDateFull = new Date(period.period_end_date);
+            const periodEndDate = today < periodEndDateFull ? today : periodEndDateFull;
+
+            console.log(`📅 Calculating expected hours from ${periodStartDate} to ${periodEndDate.toISOString().split('T')[0]} (today or period end)`);
+
             // Calculate expected hours using working days calculation, excluding weekend days to avoid double-counting
             const workingDaysCalculation = await HolidayService.calculateWorkingDays(
                 clientId,
@@ -1093,21 +1106,27 @@ class PayrollRunService {
         }
 
         const period = periodInfo[0];
-        
+
+        // Use today's date if we're still in the period, otherwise use period end date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const periodEndDateFull = new Date(period.period_end_date);
+        const calculationEndDate = today < periodEndDateFull ? today : periodEndDateFull;
+
+        console.log(`🗓️  PAYROLL PERIOD: ${period.period_start_date} to ${calculationEndDate.toISOString().split('T')[0]} (today or period end)`);
+
         // Get employee's department for holiday calculation
         const [employeeInfo] = await db.execute(`
             SELECT department_id, client_id FROM employees WHERE id = ?
         `, [employeeId]);
-        
+
         const departmentId = employeeInfo[0]?.department_id || null;
         const clientId = employeeInfo[0]?.client_id;
-        
-        console.log(`🗓️  PAYROLL PERIOD: ${period.period_start_date} to ${period.period_end_date}`);
-        
+
         const workingDaysCalculation = await HolidayService.calculateWorkingDays(
             clientId,
             period.period_start_date,
-            period.period_end_date,
+            calculationEndDate,
             departmentId,
             false, // includeOptionalHolidays
             employeeId // Pass employeeId for individual weekend config
@@ -1197,7 +1216,7 @@ class PayrollRunService {
             workingDaysCalculation,
             attendanceSummary,
             period.period_start_date,
-            period.period_end_date,
+            calculationEndDate,
             perDaySalary,
             employeeDailyHours
         );
@@ -1253,7 +1272,7 @@ class PayrollRunService {
         const weekendAbsentDays = await this.calculateWeekendAbsentDays(
             employeeId,
             period.period_start_date,
-            period.period_end_date
+            calculationEndDate
         );
         if (weekendAbsentDays > 0) {
             // For weekend absent days, use per-day salary (same rate as weekday absences)
@@ -1567,9 +1586,15 @@ class PayrollRunService {
             }
 
             // Generate all weekend dates in the period where employee should work
+            // Only count weekends up to today
             const scheduledWeekendDates = [];
             const startDate = new Date(periodStartDate);
-            const endDate = new Date(periodEndDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const periodEndDateFull = new Date(periodEndDate);
+            const endDate = today < periodEndDateFull ? today : periodEndDateFull;
+
+            console.log(`📅 Checking weekend absences from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]} (today or period end)`);
 
             for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
                 const dayOfWeek = date.getDay(); // 0=Sunday, 6=Saturday
