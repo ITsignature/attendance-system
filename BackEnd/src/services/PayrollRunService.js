@@ -101,272 +101,278 @@ class PayrollRunService {
      * Calculate payroll for a SINGLE DAY only (incremental calculation)
      * Reuses existing calculation methods for consistency
      */
-    async calculateSingleDay(employeeId, runId, targetDate, clientId) {
-        const db = getDB();
+    // async calculateSingleDay(employeeId, runId, targetDate, clientId) {
+    //     const db = getDB();
 
-        try {
-            // Get period info and employee base salary
-            const [periodInfo] = await db.execute(`
-                SELECT pp.*, pr.calculation_method, e.base_salary, e.department_id, e.in_time, e.out_time
-                FROM payroll_runs pr
-                JOIN payroll_periods pp ON pr.period_id = pp.id
-                JOIN employees e ON e.id = ?
-                WHERE pr.id = ? AND pr.client_id = ?
-            `, [employeeId, runId, clientId]);
+    //     try {
+    //         // Get period info and employee base salary
+    //         const [periodInfo] = await db.execute(`
+    //             SELECT pp.*, pr.calculation_method, e.base_salary, e.department_id, e.in_time, e.out_time
+    //             FROM payroll_runs pr
+    //             JOIN payroll_periods pp ON pr.period_id = pp.id
+    //             JOIN employees e ON e.id = ?
+    //             WHERE pr.id = ? AND pr.client_id = ?
+    //         `, [employeeId, runId, clientId]);
 
-            if (periodInfo.length === 0) {
-                throw new Error('Payroll run or employee not found');
-            }
+    //         if (periodInfo.length === 0) {
+    //             throw new Error('Payroll run or employee not found');
+    //         }
 
-            const period = periodInfo[0];
-            const baseSalary = parseFloat(period.base_salary);
-            const departmentId = period.department_id;
+    //         const period = periodInfo[0];
+    //         const baseSalary = parseFloat(period.base_salary);
+    //         const departmentId = period.department_id;
 
-            // Calculate total working days in FULL MONTH for per-day rate (consistent across all days)
-            const fullMonthWorkingDaysCalc = await HolidayService.calculateWorkingDays(
-                clientId,
-                period.period_start_date,
-                period.period_end_date,
-                departmentId,
-                false,
-                employeeId
-            );
+    //         // Calculate total working days in FULL MONTH for per-day rate (consistent across all days)
+    //         const fullMonthWorkingDaysCalc = await HolidayService.calculateWorkingDays(
+    //             clientId,
+    //             period.period_start_date,
+    //             period.period_end_date,
+    //             departmentId,
+    //             false,
+    //             employeeId
+    //         );
 
-            const effectiveWorkingDays = await this.calculateEffectiveWorkingDays(
-                fullMonthWorkingDaysCalc,
-                employeeId,
-                period.period_start_date,
-                period.period_end_date
-            );
+    //         const effectiveWorkingDays = await this.calculateEffectiveWorkingDays(
+    //             fullMonthWorkingDaysCalc,
+    //             employeeId,
+    //             period.period_start_date,
+    //             period.period_end_date
+    //         );
 
-            const perDaySalary = baseSalary / effectiveWorkingDays;
+    //         const perDaySalary = baseSalary / effectiveWorkingDays;
 
-            // Calculate employee daily hours from scheduled times
-            let employeeDailyHours = 8; // Default fallback
-            if (period.in_time && period.out_time) {
-                const inTime = new Date(`1970-01-01T${period.in_time}`);
-                const outTime = new Date(`1970-01-01T${period.out_time}`);
-                employeeDailyHours = (outTime - inTime) / (1000 * 60 * 60);
-            } else {
-                employeeDailyHours = await this.getEmployeeDailyHours(employeeId, 8, targetDate, targetDate);
-            }
+    //         // Calculate employee daily hours from scheduled times
+    //         // Priority: 1) Attendance records, 2) Employee profile times, 3) Default 8 hours
+    //         let employeeDailyHours = await this.getEmployeeDailyHoursForDate(employeeId, targetDate, null);
 
-            const hourlyRate = perDaySalary / employeeDailyHours;
+    //         // If attendance lookup didn't find scheduled times, try employee's profile in_time/out_time
+    //         if (!employeeDailyHours && period.in_time && period.out_time) {
+    //             const inTime = new Date(`1970-01-01T${period.in_time}`);
+    //             const outTime = new Date(`1970-01-01T${period.out_time}`);
+    //             employeeDailyHours = (outTime - inTime) / (1000 * 60 * 60);
+    //         }
 
-            // Get attendance for this specific day
-            const [attendanceRecords] = await db.execute(`
-                SELECT
-                    date,
-                    check_in_time,
-                    check_out_time,
-                    total_hours,
-                    total_work_duration,
-                    overtime_hours,
-                    break_duration,
-                    is_late,
-                    is_early_leave,
-                    late_minutes,
-                    early_leave_minutes,
-                    status,
-                    scheduled_in_time,
-                    scheduled_out_time
-                FROM attendance
-                WHERE employee_id = ?
-                  AND DATE(date) = ?
-            `, [employeeId, targetDate]);
+    //         // Final fallback to 8 hours if nothing found
+    //         if (!employeeDailyHours) {
+    //             employeeDailyHours = 8;
+    //         }
 
-            // Create mock working hours object for existing methods
-            const workingHours = { hours_per_day: employeeDailyHours };
+    //         const hourlyRate = perDaySalary / employeeDailyHours;
 
-            // Use existing calculateAttendanceSummary method
-            const attendanceSummary = await this.calculateAttendanceSummary(
-                attendanceRecords,
-                workingHours,
-                employeeId,
-                db,
-                runId
-            );
+    //         // Get attendance for this specific day
+    //         const [attendanceRecords] = await db.execute(`
+    //             SELECT
+    //                 date,
+    //                 check_in_time,
+    //                 check_out_time,
+    //                 total_hours,
+    //                 total_work_duration,
+    //                 overtime_hours,
+    //                 break_duration,
+    //                 is_late,
+    //                 is_early_leave,
+    //                 late_minutes,
+    //                 early_leave_minutes,
+    //                 status,
+    //                 scheduled_in_time,
+    //                 scheduled_out_time
+    //             FROM attendance
+    //             WHERE employee_id = ?
+    //               AND DATE(date) = ?
+    //         `, [employeeId, targetDate]);
 
-            // Get approved leaves for this day
-            const [leaves] = await db.execute(`
-                SELECT leave_type, is_paid, deduction_percentage
-                FROM leave_requests
-                WHERE employee_id = ?
-                  AND status = 'approved'
-                  AND ? BETWEEN start_date AND end_date
-            `, [employeeId, targetDate]);
+    //         // Create mock working hours object for existing methods
+    //         const workingHours = { hours_per_day: employeeDailyHours };
 
-            const dailyLeaves = leaves.map(l => ({
-                leave_type: l.leave_type,
-                is_paid: l.is_paid,
-                deduction_percentage: l.deduction_percentage,
-                days: 1
-            }));
+    //         // Use existing calculateAttendanceSummary method
+    //         const attendanceSummary = await this.calculateAttendanceSummary(
+    //             attendanceRecords,
+    //             workingHours,
+    //             employeeId,
+    //             db,
+    //             runId
+    //         );
 
-            // Calculate earnings for this day
-            let dailyEarnings = attendanceSummary.summary.totalWorkedHours * hourlyRate;
+    //         // Get approved leaves for this day
+    //         const [leaves] = await db.execute(`
+    //             SELECT leave_type, is_paid, deduction_percentage
+    //             FROM leave_requests
+    //             WHERE employee_id = ?
+    //               AND status = 'approved'
+    //               AND ? BETWEEN start_date AND end_date
+    //         `, [employeeId, targetDate]);
 
-            // Use existing calculateAttendanceDeductions method for consistency
-            const deductionResult = await this.calculateAttendanceDeductions(
-                employeeId,
-                runId,
-                baseSalary,
-                attendanceSummary,
-                dailyLeaves
-            );
+    //         const dailyLeaves = leaves.map(l => ({
+    //             leave_type: l.leave_type,
+    //             is_paid: l.is_paid,
+    //             deduction_percentage: l.deduction_percentage,
+    //             days: 1
+    //         }));
 
-            const dailyDeductions = deductionResult.total;
-            const dailyNetSalary = dailyEarnings - dailyDeductions;
+    //         // Calculate earnings for this day
+    //         let dailyEarnings = attendanceSummary.summary.totalWorkedHours * hourlyRate;
 
-            console.log(`📊 Day ${targetDate}: Worked=${attendanceSummary.summary.totalWorkedHours}h, Earnings=Rs.${dailyEarnings.toFixed(2)}, Deductions=Rs.${dailyDeductions.toFixed(2)}, Net=Rs.${dailyNetSalary.toFixed(2)}`);
+    //         // Use existing calculateAttendanceDeductions method for consistency
+    //         const deductionResult = await this.calculateAttendanceDeductions(
+    //             employeeId,
+    //             runId,
+    //             baseSalary,
+    //             attendanceSummary,
+    //             dailyLeaves
+    //         );
 
-            return {
-                worked_hours: attendanceSummary.summary.totalWorkedHours,
-                earnings: dailyEarnings,
-                deductions: dailyDeductions,
-                net_salary: dailyNetSalary,
-                target_date: targetDate,
-                deduction_components: deductionResult.components
-            };
+    //         const dailyDeductions = deductionResult.total;
+    //         const dailyNetSalary = dailyEarnings - dailyDeductions;
 
-        } catch (error) {
-            console.error(`❌ Error calculating single day for employee ${employeeId} on ${targetDate}:`, error);
-            throw error;
-        }
-    }
+    //         console.log(`📊 Day ${targetDate}: Worked=${attendanceSummary.summary.totalWorkedHours}h, Earnings=Rs.${dailyEarnings.toFixed(2)}, Deductions=Rs.${dailyDeductions.toFixed(2)}, Net=Rs.${dailyNetSalary.toFixed(2)}`);
 
-    /**
-     * Calculate daily increment and update cumulative totals
-     */
-    async calculateDailyIncrement(runId, employeeId, clientId) {
-        const db = getDB();
-        const today = new Date().toISOString().split('T')[0];
+    //         return {
+    //             worked_hours: attendanceSummary.summary.totalWorkedHours,
+    //             earnings: dailyEarnings,
+    //             deductions: dailyDeductions,
+    //             net_salary: dailyNetSalary,
+    //             target_date: targetDate,
+    //             deduction_components: deductionResult.components
+    //         };
 
-        try {
-            // Get current payroll record state
-            const [records] = await db.execute(`
-                SELECT
-                    last_processed_date,
-                    net_salary,
-                    total_earnings,
-                    total_deductions,
-                    worked_hours,
-                    calculation_status
-                FROM payroll_records
-                WHERE run_id = ? AND employee_id = ?
-            `, [runId, employeeId]);
+    //     } catch (error) {
+    //         console.error(`❌ Error calculating single day for employee ${employeeId} on ${targetDate}:`, error);
+    //         throw error;
+    //     }
+    // }
 
-            if (records.length === 0) {
-                throw new Error('Payroll record not found');
-            }
+    // /**
+    //  * Calculate daily increment and update cumulative totals
+    //  */
+    // async calculateDailyIncrement(runId, employeeId, clientId) {
+    //     const db = getDB();
+    //     const today = new Date().toISOString().split('T')[0];
 
-            const record = records[0];
-            const lastProcessedDate = record.last_processed_date;
+    //     try {
+    //         // Get current payroll record state
+    //         const [records] = await db.execute(`
+    //             SELECT
+    //                 last_processed_date,
+    //                 net_salary,
+    //                 total_earnings,
+    //                 total_deductions,
+    //                 worked_hours,
+    //                 calculation_status
+    //             FROM payroll_records
+    //             WHERE run_id = ? AND employee_id = ?
+    //         `, [runId, employeeId]);
 
-            // Check if already processed today
-            if (lastProcessedDate === today) {
-                console.log(`✅ Employee ${employeeId} already processed for ${today}`);
-                return {
-                    success: true,
-                    message: 'Already processed today',
-                    skipped: true
-                };
-            }
+    //         if (records.length === 0) {
+    //             throw new Error('Payroll record not found');
+    //         }
 
-            // Determine which date to process
-            // If never processed before, start from period start
-            // If processed before, process the next day after last_processed_date
-            let dateToProcess;
-            if (!lastProcessedDate) {
-                // First time processing - get period start date
-                const [periodInfo] = await db.execute(`
-                    SELECT pp.period_start_date
-                    FROM payroll_runs pr
-                    JOIN payroll_periods pp ON pr.period_id = pp.id
-                    WHERE pr.id = ?
-                `, [runId]);
-                dateToProcess = periodInfo[0].period_start_date;
-            } else {
-                // Process next day after last processed
-                const nextDate = new Date(lastProcessedDate);
-                nextDate.setDate(nextDate.getDate() + 1);
-                dateToProcess = nextDate.toISOString().split('T')[0];
-            }
+    //         const record = records[0];
+    //         const lastProcessedDate = record.last_processed_date;
 
-            // Make sure we don't process future dates
-            if (dateToProcess > today) {
-                console.log(`✅ No new days to process for employee ${employeeId}`);
-                return {
-                    success: true,
-                    message: 'No new days to process',
-                    skipped: true
-                };
-            }
+    //         // Check if already processed today
+    //         if (lastProcessedDate === today) {
+    //             console.log(`✅ Employee ${employeeId} already processed for ${today}`);
+    //             return {
+    //                 success: true,
+    //                 message: 'Already processed today',
+    //                 skipped: true
+    //             };
+    //         }
 
-            // Calculate only today's data
-            const todayData = await this.calculateSingleDay(employeeId, runId, dateToProcess, clientId);
+    //         // Determine which date to process
+    //         // If never processed before, start from period start
+    //         // If processed before, process the next day after last_processed_date
+    //         let dateToProcess;
+    //         if (!lastProcessedDate) {
+    //             // First time processing - get period start date
+    //             const [periodInfo] = await db.execute(`
+    //                 SELECT pp.period_start_date
+    //                 FROM payroll_runs pr
+    //                 JOIN payroll_periods pp ON pr.period_id = pp.id
+    //                 WHERE pr.id = ?
+    //             `, [runId]);
+    //             dateToProcess = periodInfo[0].period_start_date;
+    //         } else {
+    //             // Process next day after last processed
+    //             const nextDate = new Date(lastProcessedDate);
+    //             nextDate.setDate(nextDate.getDate() + 1);
+    //             dateToProcess = nextDate.toISOString().split('T')[0];
+    //         }
 
-            // Update cumulative totals by ADDING today's values
-            await db.execute(`
-                UPDATE payroll_records SET
-                    net_salary = COALESCE(net_salary, 0) + ?,
-                    total_earnings = COALESCE(total_earnings, 0) + ?,
-                    total_deductions = COALESCE(total_deductions, 0) + ?,
-                    worked_hours = COALESCE(worked_hours, 0) + ?,
-                    last_processed_date = ?,
-                    calculated_at = NOW(),
-                    calculation_status = 'calculated'
-                WHERE run_id = ? AND employee_id = ?
-            `, [
-                todayData.net_salary,
-                todayData.earnings,
-                todayData.deductions,
-                todayData.worked_hours,
-                dateToProcess,
-                runId,
-                employeeId
-            ]);
+    //         // Make sure we don't process future dates
+    //         if (dateToProcess > today) {
+    //             console.log(`✅ No new days to process for employee ${employeeId}`);
+    //             return {
+    //                 success: true,
+    //                 message: 'No new days to process',
+    //                 skipped: true
+    //             };
+    //         }
 
-            console.log(`✅ Processed ${dateToProcess} for employee ${employeeId}:`, {
-                earnings: todayData.earnings,
-                deductions: todayData.deductions,
-                net_salary: todayData.net_salary
-            });
+    //         // Calculate only today's data
+    //         const todayData = await this.calculateSingleDay(employeeId, runId, dateToProcess, clientId);
 
-            return {
-                success: true,
-                processed_date: dateToProcess,
-                daily_data: todayData
-            };
+    //         // Update cumulative totals by ADDING today's values
+    //         await db.execute(`
+    //             UPDATE payroll_records SET
+    //                 net_salary = COALESCE(net_salary, 0) + ?,
+    //                 total_earnings = COALESCE(total_earnings, 0) + ?,
+    //                 total_deductions = COALESCE(total_deductions, 0) + ?,
+    //                 worked_hours = COALESCE(worked_hours, 0) + ?,
+    //                 last_processed_date = ?,
+    //                 calculated_at = NOW(),
+    //                 calculation_status = 'calculated'
+    //             WHERE run_id = ? AND employee_id = ?
+    //         `, [
+    //             todayData.net_salary,
+    //             todayData.earnings,
+    //             todayData.deductions,
+    //             todayData.worked_hours,
+    //             dateToProcess,
+    //             runId,
+    //             employeeId
+    //         ]);
 
-        } catch (error) {
-            console.error(`❌ Error in daily increment calculation:`, error);
-            throw error;
-        }
-    }
+    //         console.log(`✅ Processed ${dateToProcess} for employee ${employeeId}:`, {
+    //             earnings: todayData.earnings,
+    //             deductions: todayData.deductions,
+    //             net_salary: todayData.net_salary
+    //         });
 
-    /**
-     * Check if a date is a weekend for an employee
-     */
-    async isWeekendDate(date, employeeId) {
-        const targetDate = new Date(date);
-        const dayOfWeek = targetDate.getDay(); // 0 = Sunday, 6 = Saturday
+    //         return {
+    //             success: true,
+    //             processed_date: dateToProcess,
+    //             daily_data: todayData
+    //         };
 
-        // Get employee's weekend configuration
-        const db = getDB();
-        const [employee] = await db.execute(
-            'SELECT department_id FROM employees WHERE id = ?',
-            [employeeId]
-        );
+    //     } catch (error) {
+    //         console.error(`❌ Error in daily increment calculation:`, error);
+    //         throw error;
+    //     }
+    // }
 
-        if (employee.length === 0) return false;
+    // /**
+    //  * Check if a date is a weekend for an employee
+    //  */
+    // async isWeekendDate(date, employeeId) {
+    //     const targetDate = new Date(date);
+    //     const dayOfWeek = targetDate.getDay(); // 0 = Sunday, 6 = Saturday
 
-        // Default weekends (Saturday and Sunday)
-        const defaultWeekends = [0, 6];
+    //     // Get employee's weekend configuration
+    //     const db = getDB();
+    //     const [employee] = await db.execute(
+    //         'SELECT department_id FROM employees WHERE id = ?',
+    //         [employeeId]
+    //     );
 
-        // You can enhance this to check department-specific weekend configurations
-        return defaultWeekends.includes(dayOfWeek);
-    }
+    //     if (employee.length === 0) return false;
+
+    //     // Default weekends (Saturday and Sunday)
+    //     const defaultWeekends = [0, 6];
+
+    //     // You can enhance this to check department-specific weekend configurations
+    //     return defaultWeekends.includes(dayOfWeek);
+    // }
 
     /**
      * Calculate payroll for entire run
@@ -1351,6 +1357,87 @@ class PayrollRunService {
     }
 
     /**
+     * Get employee daily hours for a specific target date
+     * More efficient than getEmployeeDailyHours when querying a single day
+     */
+    // async getEmployeeDailyHoursForDate(employeeId, targetDate, defaultHours = 8) {
+    //     const db = getDB();
+
+    //     try {
+    //         // First, check if the specific target date has scheduled times
+    //         let query = `
+    //             SELECT scheduled_in_time, scheduled_out_time
+    //             FROM attendance
+    //             WHERE employee_id = ?
+    //             AND date = ?
+    //             AND scheduled_in_time IS NOT NULL
+    //             AND scheduled_out_time IS NOT NULL
+    //             LIMIT 1
+    //         `;
+    //         let params = [employeeId, targetDate];
+    //         let [attendance] = await db.execute(query, params);
+
+    //         // If not found for the specific date, try to get from any recent weekday
+    //         if (!attendance[0]) {
+    //             query = `
+    //                 SELECT scheduled_in_time, scheduled_out_time
+    //                 FROM attendance
+    //                 WHERE employee_id = ?
+    //                 AND DAYOFWEEK(date) BETWEEN 2 AND 6
+    //                 AND scheduled_in_time IS NOT NULL
+    //                 AND scheduled_out_time IS NOT NULL
+    //                 ORDER BY date DESC
+    //                 LIMIT 1
+    //             `;
+    //             params = [employeeId];
+    //             [attendance] = await db.execute(query, params);
+
+    //             // If still no weekday records, fallback to any day
+    //             if (!attendance[0]) {
+    //                 query = `
+    //                     SELECT scheduled_in_time, scheduled_out_time
+    //                     FROM attendance
+    //                     WHERE employee_id = ?
+    //                     AND scheduled_in_time IS NOT NULL
+    //                     AND scheduled_out_time IS NOT NULL
+    //                     ORDER BY date DESC
+    //                     LIMIT 1
+    //                 `;
+    //                 params = [employeeId];
+    //                 [attendance] = await db.execute(query, params);
+
+    //                 if (!attendance[0]) {
+    //                     console.log(`Employee ${employeeId} has no attendance records with scheduled times for ${targetDate}, using default: ${defaultHours}h`);
+    //                     return defaultHours;
+    //                 }
+    //             }
+    //         }
+
+    //         // Calculate hours from scheduled times in attendance record
+    //         const scheduledInTime = new Date(`2000-01-01 ${attendance[0].scheduled_in_time}`);
+    //         const scheduledOutTime = new Date(`2000-01-01 ${attendance[0].scheduled_out_time}`);
+
+    //         if (isNaN(scheduledInTime.getTime()) || isNaN(scheduledOutTime.getTime())) {
+    //             console.log(`Employee ${employeeId} has invalid scheduled time format for ${targetDate}, using default: ${defaultHours}h`);
+    //             return defaultHours;
+    //         }
+
+    //         const diffMs = scheduledOutTime.getTime() - scheduledInTime.getTime();
+    //         const hours = diffMs / (1000 * 60 * 60);
+
+    //         // Ensure reasonable working hours (between 1 and 16 hours) and round to 2 decimal places
+    //         const dailyHours = Math.max(1, Math.min(16, Math.round(hours * 100) / 100));
+
+    //         console.log(`Employee ${employeeId} scheduled hours for ${targetDate}: ${attendance[0].scheduled_in_time} - ${attendance[0].scheduled_out_time} = ${dailyHours} hours`);
+    //         return dailyHours;
+
+    //     } catch (error) {
+    //         console.error(`Error getting employee daily hours for ${employeeId} on ${targetDate}:`, error);
+    //         return defaultHours;
+    //     }
+    // }
+
+    /**
      * Calculate payroll hours (capped at employee's daily hours if overtime not paid)
      * @param {number} actualWorkedHours - Total hours worked
      * @param {number} dailyHours - Employee's daily working hours limit
@@ -1399,23 +1486,23 @@ class PayrollRunService {
         const clientId = employeeInfo[0]?.client_id;
 
         // IMPORTANT: Calculate working days for FULL MONTH for per-day salary calculation
-        const fullMonthWorkingDaysCalc = await HolidayService.calculateWorkingDays(
-            clientId,
-            period.period_start_date,
-            period.period_end_date, // Full period end date
-            departmentId,
-            false,
-            employeeId
-        );
+        // const fullMonthWorkingDaysCalc = await HolidayService.calculateWorkingDays(
+        //     clientId,
+        //     period.period_start_date,
+        //     period.period_end_date, // Full period end date
+        //     departmentId,
+        //     false,
+        //     employeeId
+        // );
 
         // Calculate working days UP TO TODAY for expected hours calculation
         const workingDaysCalculation = await HolidayService.calculateWorkingDays(
             clientId,
-            period.period_start_date,
+            period.period_start_date,// Today or period end
             calculationEndDate, // Today or period end
             departmentId,
-            false,
-            employeeId
+            false, // includeOptionalHolidays
+            employeeId // Pass employeeId for individual weekend config
         );
 
         const workingDaysInMonth = workingDaysCalculation.working_days;
