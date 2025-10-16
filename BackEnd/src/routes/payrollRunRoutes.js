@@ -1564,4 +1564,125 @@ router.post('/cron/auto-create',
     })
 );
 
+//--------------------------------------------------------------------------------------------------------------------------
+
+router.get("/live/all", 
+  checkPermission('payroll.view'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const { month, year, page = 1, limit = 20 } = req.query;
+
+    if (!month || !year) {
+      return res.status(400).json({ success: false, message: "Missing required parameters" });
+    }
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get paginated employees
+    const [employees] = await db.execute(
+      `SELECT id, first_name, last_name, in_time, out_time, weekend_working_config, base_salary
+       FROM employees
+       WHERE client_id = ?
+       ORDER BY first_name, last_name
+       LIMIT ? OFFSET ?`,
+      [clientId, parseInt(limit), offset]
+    );
+
+    if (employees.length === 0) {
+      return res.json({ success: true, data: [], page: parseInt(page), limit: parseInt(limit), total: 0 });
+    }
+
+    const results = [];
+
+    for (const emp of employees) {
+      const weekendConfig = JSON.parse(emp.weekend_working_config);
+
+      // Attendance stats
+      const [attendanceRows] = await db.execute(
+        `SELECT is_weekend, SUM(payable_duration) AS total_payable, COUNT(*) AS days
+         FROM attendance
+         WHERE employee_id = ? AND MONTH(date) = ? AND YEAR(date) = ?
+         GROUP BY is_weekend`,
+        [emp.id, month, year]
+      );
+
+      // Last active check-in
+      const [activeCheckInRows] = await db.execute(
+        `SELECT check_in_time
+         FROM attendance
+         WHERE employee_id = ? AND check_out_time IS NULL
+         ORDER BY date DESC, check_in_time DESC
+         LIMIT 1`,
+        [emp.id]
+      );
+
+      let last_check_in_time = activeCheckInRows.length > 0 ? activeCheckInRows[0].check_in_time : null;
+
+      // Build live data
+      let liveData = {
+        empid: emp.id,
+        month: parseInt(month),
+        year: parseInt(year),
+        base_salary: emp.base_salary ?? 0,
+        weekdays_of_month: 0,
+        saturdays_of_month: 0,
+        sundays_of_month: 0,
+        is_over_time_paid: false,
+        is_sunday_workday: weekendConfig.sunday.working,
+        is_saturday_workday: weekendConfig.saturday.working,
+        ïs_fullday_salary_sunday: weekendConfig.sunday.full_day_salary,
+        ïs_fullday_salary_satuday: weekendConfig.saturday.full_day_salary,
+        weekday_shedule_in_time: emp.in_time,
+        weekday_shedule_out_time: emp.out_time,
+        saturday_shedule_in_time: weekendConfig.saturday.in_time,
+        saturday_shedule_out_time: weekendConfig.saturday.out_time,
+        sunday_shedule_in_time: weekendConfig.sunday.in_time,
+        sunday_shedule_out_time: weekendConfig.sunday.out_time,
+        overtime_hours: 0,
+        sum_of_weekday_payable_hours: 0,
+        sum_of_saturday_payable_hours: 0,
+        sum_of_sunday_payable_hours: 0,
+        last_check_in_time
+      };
+
+      // Fill attendance stats
+      attendanceRows.forEach(row => {
+        const totalHours = Number(row.total_payable) || 0;
+        const days = Number(row.days) || 0;
+
+        if (row.is_weekend === 1) { // Sunday
+          liveData.sundays_of_month = days;
+          liveData.sum_of_sunday_payable_hours = totalHours;
+        } else if (row.is_weekend === 7) { // Saturday
+          liveData.saturdays_of_month = days;
+          liveData.sum_of_saturday_payable_hours = totalHours;
+        } else {
+          liveData.weekdays_of_month += days;
+          liveData.sum_of_weekday_payable_hours += totalHours;
+        }
+      });
+
+      results.push({
+        employee: { id: emp.id, name: `${emp.first_name} ${emp.last_name}` },
+        live: liveData
+      });
+    }
+
+    // Get total employee count
+    const [totalCountRows] = await db.execute(
+      `SELECT COUNT(*) AS total FROM employees WHERE client_id = ?`,
+      [clientId]
+    );
+
+    res.json({
+      success: true,
+      data: results,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total: totalCountRows[0].total
+    });
+  })
+);
+
 module.exports = router;

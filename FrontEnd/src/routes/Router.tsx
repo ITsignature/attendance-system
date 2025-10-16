@@ -51,7 +51,7 @@ const RoleManagement = Loadable(lazy(() => import('../components/RBACSystem/role
 const AdminUserManagement = Loadable(lazy(() => import('../components/RBACSystem/adminUserManagement')));
 const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLogin')));
 const ManualAttendance =Loadable(lazy(() => import('../components/Attendance/ManualAttendance')));
-
+const LivePayroll = Loadable(lazy(() => import('../components/LivePayrol/PayrollEmployeeRecords')));
 
 // ==============================================
 // SINGLE AUTHENTICATION WRAPPER FOR ENTIRE APP
@@ -250,7 +250,18 @@ const Router = [
     </DynamicProtectedRoute>
   )
 },
+
       // Payroll Management
+
+      { 
+        path: '/live-payroll', 
+        exact: true, 
+        element: (
+          <DynamicProtectedRoute permission="payroll.view">
+            <LivePayroll />
+          </DynamicProtectedRoute>
+        )
+      },
       { 
         path: '/payroll', 
         exact: true, 

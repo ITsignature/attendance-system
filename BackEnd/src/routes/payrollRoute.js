@@ -257,7 +257,6 @@ router.get('/',
 
   console.log("xxx",req)
 
-
     // Build WHERE clause
     let whereConditions = ['e.client_id = ?'];
     let queryParams = [clientId];
@@ -327,7 +326,6 @@ router.get('/',
       LIMIT ? OFFSET ?
     `, [...queryParams, parseInt(limit), parseInt(offset)]);
   
-    
     console.log('records', records);
 
     // Format the response
@@ -418,7 +416,6 @@ router.get('/',
 
      console.log('response 1',res.data)
 
-   
   })
 );
 
@@ -1483,5 +1480,118 @@ router.get('/export/:format',
   })
 );
 
+router.get("/live", async (req, res) => {
+  const { employee_id, month, year } = req.query;
+  if (!employee_id || !month || !year) {
+    return res.status(400).json({ message: "Missing required parameters" });
+  }
+
+  const connection = await mysql.createConnection({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME
+  });
+
+  try {
+    // 🔸 1. Total attendance stats
+    const [attendanceRows] = await connection.execute(
+      `
+      SELECT is_weekend, SUM(payable_duration) as total_payable, COUNT(*) as days
+      FROM attendance
+      WHERE employee_id = ? AND MONTH(date) = ? AND YEAR(date) = ?
+      GROUP BY is_weekend
+      `,
+      [employee_id, month, year]
+    );
+
+    // 🔸 2. Fetch weekend config
+    const [employeeRows] = await connection.execute(
+      `SELECT weekend_working_config, in_time, out_time FROM employees WHERE id = ?`,
+      [employee_id]
+    );
+
+    if (employeeRows.length === 0) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const weekendConfig = JSON.parse(employeeRows[0].weekend_working_config);
+    const weekdayInTime = employeeRows[0].in_time;
+    const weekdayOutTime = employeeRows[0].out_time;
+
+    // 🔸 3. Find last active check-in
+    const [activeCheckIn] = await connection.execute(
+      `
+      SELECT date, check_in_time
+      FROM attendance
+      WHERE employee_id = ? 
+        AND check_out_time IS NULL
+      ORDER BY date DESC, check_in_time DESC
+      LIMIT 1
+      `,
+      [employee_id]
+    );
+
+    let lastCheckInTime = null;
+    let lastCheckInDate = null;
+    if (activeCheckIn.length > 0) {
+      lastCheckInTime = activeCheckIn[0].check_in_time;
+      lastCheckInDate = activeCheckIn[0].date;
+    }
+
+    // 🧮 4. Initialize response
+    let jsonResponse = {
+      empid: employee_id,
+      month: parseInt(month),
+      year: parseInt(year),
+      weekdays_of_month: 0,
+      saturdays_of_month: 0,
+      sundays_of_month: 0,
+      is_over_time_paid: false,
+      is_sunday_workday: weekendConfig.sunday.working,
+      is_saturday_workday: weekendConfig.saturday.working,
+      ïs_fullday_salary_sunday: weekendConfig.sunday.full_day_salary,
+      ïs_fullday_salary_satuday: weekendConfig.saturday.full_day_salary,
+      weekday_shedule_in_time: weekdayInTime,
+      weekday_shedule_out_time: weekdayOutTime,
+      saturday_shedule_in_time: weekendConfig.saturday.in_time,
+      saturday_shedule_out_time: weekendConfig.saturday.out_time,
+      sunday_shedule_in_time: weekendConfig.sunday.in_time,
+      sunday_shedule_out_time: weekendConfig.sunday.out_time,
+      overtime_hours: 0,
+      sum_of_weekday_payable_hours: 0,
+      sum_of_saturday_payable_hours: 0,
+      sum_of_sunday_payable_hours: 0,
+      last_check_in_date: lastCheckInDate,
+      last_check_in_time: lastCheckInTime
+    };
+
+    // 🧮 5. Fill in stats
+    attendanceRows.forEach(row => {
+      const dayOfWeek = row.is_weekend;
+      const totalHours = Number(row.total_payable) || 0;
+      const days = Number(row.days) || 0;
+
+      if (dayOfWeek === 1) { // Sunday
+        jsonResponse.sundays_of_month = days;
+        jsonResponse.sum_of_sunday_payable_hours = totalHours;
+      } else if (dayOfWeek === 7) { // Saturday
+        jsonResponse.saturdays_of_month = days;
+        jsonResponse.sum_of_saturday_payable_hours = totalHours;
+      } else {
+        jsonResponse.weekdays_of_month += days;
+        jsonResponse.sum_of_weekday_payable_hours += totalHours;
+      }
+    });
+
+    res.json(jsonResponse);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  } finally {
+    connection.end();
+  }
+});
 
 module.exports = router;

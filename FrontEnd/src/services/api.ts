@@ -104,6 +104,11 @@ export interface AttendanceFormData {
   notes?: string;
 }
 
+interface GetLiveDataParams {
+  month?: string | number;
+  year?: string | number;
+}
+
 /* ------------------------------ Api Service ----------------------------- */
 
 class ApiService {
@@ -508,6 +513,16 @@ private async queueRefresh(): Promise<void> {
     return this.apiCall(`/api/employees/managers${qs}`);
   }
 
+async getPayrollLiveAll(params?: GetLiveDataParams): Promise<ApiResponse> {
+  const query = params 
+    ? `?${new URLSearchParams({
+        month: params.month?.toString() || '',
+        year: params.year?.toString() || ''
+      }).toString()}`
+    : '';
+  
+  return this.apiCall(`/api/payroll-runs/live/all${query}`);
+}
   /* ---------------------------- Attendance APIs -------------------------- */
 
   /**
