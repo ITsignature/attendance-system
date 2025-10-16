@@ -106,6 +106,8 @@ class HolidayService {
         let weekendWorkingDays = 0;
         let weekendFullDayWeight = 0;
         let weekendProportionalDays = 0;
+        let workingSaturdays = 0; // Track working Saturdays separately
+        let workingSundays = 0;   // Track working Sundays separately
         
         const currentDate = new Date(start);
         while (currentDate <= end) {
@@ -143,6 +145,13 @@ class HolidayService {
                     workingDays++;
                     weekendWorkingDays++;
 
+                    // Track Saturday and Sunday separately
+                    if (dayOfWeek === 6) {
+                        workingSaturdays++;
+                    } else if (dayOfWeek === 0) {
+                        workingSundays++;
+                    }
+
                     // Track salary weight for weekend days
                     if (isFullDaySalary) {
                         weekendFullDayWeight++;
@@ -166,6 +175,8 @@ class HolidayService {
             working_days: workingDays,
             weekend_days: weekendDays,
             weekend_working_days: weekendWorkingDays,
+            working_saturdays: workingSaturdays,  // Separate Saturday count
+            working_sundays: workingSundays,      // Separate Sunday count
             weekend_full_day_weight: weekendFullDayWeight,
             weekend_proportional_days: weekendProportionalDays,
             holiday_count: holidayCount,

@@ -497,6 +497,15 @@ const PayrollRunDashboard = () => {
       <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="lg">
         <Modal.Header>Create New Payroll Run</Modal.Header>
         <Modal.Body>
+          {loading && (
+            <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50 rounded-lg">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-lg font-semibold text-gray-700">Creating Payroll Run...</p>
+                <p className="text-sm text-gray-500 mt-2">This may take a few moments</p>
+              </div>
+            </div>
+          )}
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Payroll Period *</label>
@@ -611,9 +620,16 @@ const PayrollRunDashboard = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="gray" onClick={() => setShowCreateModal(false)}>Cancel</Button>
-          <Button color="blue" onClick={handleCreateRun} disabled={!createRunForm.run_name || !createRunForm.period_id}>
-            Create Payroll Run
+          <Button color="gray" onClick={() => setShowCreateModal(false)} disabled={loading}>Cancel</Button>
+          <Button color="blue" onClick={handleCreateRun} disabled={!createRunForm.run_name || !createRunForm.period_id || loading}>
+            {loading ? (
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Creating...
+              </div>
+            ) : (
+              'Create Payroll Run'
+            )}
           </Button>
         </Modal.Footer>
       </Modal>

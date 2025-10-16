@@ -326,8 +326,8 @@ class FinancialRecordsIntegration {
                 console.log(`✅ Updated bonus ${bonus.id}: Status changed to 'paid'`);
             }
 
-            // Create audit log for financial adjustments
-            await this.createFinancialAuditLog(employeeId, runId, adjustments);
+            // Create audit log for financial adjustments (disabled - table doesn't exist)
+            // await this.createFinancialAuditLog(employeeId, runId, adjustments);
 
             await db.execute('COMMIT');
             console.log(`✅ Financial balances updated successfully for employee ${employeeId}`);

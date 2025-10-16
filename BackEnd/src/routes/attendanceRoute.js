@@ -167,23 +167,78 @@ const getWorkDurationSettings = async (clientId, db) => {
 
 const normalizeTimeFormat = (timeString) => {
   if (!timeString) return null;
-  
+
   // Remove any extra whitespace
   timeString = timeString.trim();
-  
+
   // If already has seconds (HH:MM:SS), extract just HH:MM
   if (timeString.includes(':') && timeString.split(':').length === 3) {
     const parts = timeString.split(':');
     return `${parts[0]}:${parts[1]}`;
   }
-  
+
   // If it's just HH:MM, return as is
   if (timeString.includes(':') && timeString.split(':').length === 2) {
     return timeString;
   }
-  
+
   // If no colons, assume it's invalid
   return null;
+};
+
+/**
+ * Calculate payable duration based on overlap between scheduled and actual hours
+ * Works for both weekdays and weekends (uses the stored scheduled times)
+ */
+const calculatePayableDuration = (checkInTime, checkOutTime, scheduledInTime, scheduledOutTime, breakDuration = 0) => {
+  // Normalize all times to HH:MM:SS format
+  const normalizeToFullTime = (t) => {
+    if (!t) return null;
+    const [h = '', m = '', s = '00'] = t.split(':');
+    const HH = h.padStart(2, '0');
+    const MM = m.padStart(2, '0');
+    const SS = s.padStart(2, '0');
+    return /^\d\d:\d\d:\d\d$/.test(`${HH}:${MM}:${SS}`) ? `${HH}:${MM}:${SS}` : null;
+  };
+
+  const checkIn = normalizeToFullTime(checkInTime);
+  const checkOut = normalizeToFullTime(checkOutTime);
+  const schedIn = normalizeToFullTime(scheduledInTime);
+  const schedOut = normalizeToFullTime(scheduledOutTime);
+
+  // If any required time is missing, return null
+  if (!checkIn || !checkOut || !schedIn || !schedOut) {
+    return null;
+  }
+
+  // Convert to Date objects for calculation
+  const actualIn = new Date(`2000-01-01T${checkIn}`);
+  const actualOut = new Date(`2000-01-01T${checkOut}`);
+  const scheduledIn = new Date(`2000-01-01T${schedIn}`);
+  const scheduledOut = new Date(`2000-01-01T${schedOut}`);
+
+  // Validate dates
+  if (isNaN(actualIn) || isNaN(actualOut) || isNaN(scheduledIn) || isNaN(scheduledOut)) {
+    return null;
+  }
+
+  // Calculate overlap between scheduled and actual times
+  const overlapStart = actualIn > scheduledIn ? actualIn : scheduledIn;
+  const overlapEnd = actualOut < scheduledOut ? actualOut : scheduledOut;
+
+  // If no overlap, payable is 0
+  if (overlapEnd <= overlapStart) {
+    return 0;
+  }
+
+  // Calculate overlap hours
+  const overlapMs = overlapEnd - overlapStart;
+  const overlapHours = overlapMs / 3600000; // ms to hours
+
+  // Subtract break duration
+  const payableDuration = Math.max(0, overlapHours - (breakDuration || 0));
+
+  return parseFloat(payableDuration.toFixed(3));
 };
 
 /**
@@ -441,6 +496,22 @@ const calculateWorkHours = async (
       // Calculate enhanced overtime hours with multiplier
       const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
 
+      // Calculate payable duration
+      const payableDuration = calculatePayableDuration(
+        req.body.check_in_time,
+        req.body.check_out_time,
+        schedule.start_time,
+        schedule.end_time,
+        req.body.break_duration || 0
+      );
+
+      // Get day of week for the attendance date
+      // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
+      // JavaScript getDay: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+      const attendanceDate = new Date(req.body.date);
+      const jsDayOfWeek = attendanceDate.getDay(); // JavaScript day (0-6)
+      const isWeekend = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1; // Convert to MySQL DAYOFWEEK (1-7)
+
       const attendanceData = {
         id: attendanceId,
         employee_id: req.body.employee_id,
@@ -456,7 +527,9 @@ const calculateWorkHours = async (
         notes: generateEnhancedNotes(req.body.notes, arrivalResult.workingDayInfo, overtimeInfo),
         created_by: req.user.userId,
         scheduled_in_time: schedule.start_time || null,
-        scheduled_out_time: schedule.end_time || null
+        scheduled_out_time: schedule.end_time || null,
+        payable_duration: payableDuration,
+        is_weekend: isWeekend
       };
 
       console.log("attendanceData", attendanceData);
@@ -464,8 +537,8 @@ const calculateWorkHours = async (
       const insertQuery = `
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time, total_hours,
-          overtime_hours, break_duration, arrival_status, work_duration, work_type, notes, created_by, scheduled_in_time, scheduled_out_time
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)
+          overtime_hours, break_duration, arrival_status, work_duration, work_type, notes, created_by, scheduled_in_time, scheduled_out_time, payable_duration, is_weekend
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       await db.execute(insertQuery, Object.values(attendanceData));
@@ -916,7 +989,16 @@ if (leaveRow) {
 // (optional) log
 console.log('final workDuration:', workDuration);
 
-    /* ───────── 4. build UPDATE SET list (only cols that changed) ───────── */
+    /* ───────── 4. calculate payable duration ───────── */
+    const payableDuration = calculatePayableDuration(
+      eff.check_in_time,
+      eff.check_out_time,
+      current.scheduled_in_time,
+      current.scheduled_out_time,
+      eff.break_duration
+    );
+
+    /* ───────── 5. build UPDATE SET list (only cols that changed) ───────── */
     const cols = [];
     const vals = [];
 
@@ -935,6 +1017,7 @@ console.log('final workDuration:', workDuration);
 
     maybePush('total_hours',    totalHours,         current.total_hours);
     maybePush('overtime_hours', overtimeHours,      current.overtime_hours);
+    maybePush('payable_duration', payableDuration,  current.payable_duration);
 
     ['work_type', 'notes'].forEach((k) =>
       maybePush(k, req.body[k], current[k])
