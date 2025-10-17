@@ -4,19 +4,16 @@ import settingsApi from '../../services/settingsApi';
 import PayrollSettings from './PayrollSettings';
 import {
   Settings,
-  Shield,
-  Bell,
   Clock,
   DollarSign,
-  Eye,
-  Database,
   Building,
   Globe,
   Save,
   RefreshCw,
   ChevronRight,
   Download,
-  Upload
+  Upload,
+  Calendar
 } from 'lucide-react';
 
 const SettingsWithBackend = () => {
@@ -149,13 +146,10 @@ useEffect(() => {
 
   const settingSections = [
     { id: 'general', label: 'General', icon: Settings },
-    { id: 'security', label: 'Security', icon: Shield },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'attendance', label: 'Attendance', icon: Clock },
+    { id: 'leaves', label: 'Leaves', icon: Calendar },
     { id: 'payroll', label: 'Payroll', icon: DollarSign },
-    { id: 'payroll-config', label: 'Payroll Configuration', icon: Building },
-    { id: 'privacy', label: 'Privacy', icon: Eye },
-    { id: 'integration', label: 'Integration', icon: Database }
+    { id: 'payroll-config', label: 'Payroll Configuration', icon: Building }
   ];
 
 const updateLocalSetting = (key: string, value: any) => {
@@ -373,63 +367,6 @@ const hhmmToMinutes = (t) => {
                   <option value="EUR">EUR - Euro</option>
                   <option value="GBP">GBP - British Pound</option>
                 </select>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'security':
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Security Settings</h3>
-            
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Password Expiry (days)
-                </label>
-                <input
-                  type="number"
-                  value={localSettings.password_expiry_days || 90}
-                  onChange={(e) => updateLocalSetting('password_expiry_days', parseInt(e.target.value))}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Session Timeout (minutes)
-                </label>
-                <input
-                  type="number"
-                  value={localSettings.session_timeout_minutes || 30}
-                  onChange={(e) => updateLocalSetting('session_timeout_minutes', parseInt(e.target.value))}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Max Login Attempts
-                </label>
-                <input
-                  type="number"
-                  value={localSettings.max_login_attempts || 5}
-                  onChange={(e) => updateLocalSetting('max_login_attempts', parseInt(e.target.value))}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.two_factor_auth_enabled || false}
-                  onChange={(e) => updateLocalSetting('two_factor_auth_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable Two-Factor Authentication
-                </label>
               </div>
             </div>
           </div>
@@ -771,58 +708,27 @@ const hhmmToMinutes = (t) => {
           </div>
         );
 
-      case 'notifications':
+      case 'leaves':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Notification Settings</h3>
-            
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.email_notifications_enabled || false}
-                  onChange={(e) => updateLocalSetting('email_notifications_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable Email Notifications
-                </label>
-              </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Leave Settings</h3>
 
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.push_notifications_enabled || false}
-                  onChange={(e) => updateLocalSetting('push_notifications_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable Push Notifications
+            <div className="grid grid-cols-1 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Number of Paid Leaves (per month)
                 </label>
-              </div>
-
-              <div className="flex items-center">
                 <input
-                  type="checkbox"
-                  checked={localSettings.sms_notifications_enabled || false}
-                  onChange={(e) => updateLocalSetting('sms_notifications_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  type="number"
+                  min="0"
+                  max="31"
+                  value={localSettings.paid_leaves_per_month || 2}
+                  onChange={(e) => updateLocalSetting('paid_leaves_per_month', parseInt(e.target.value))}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable SMS Notifications
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.weekly_reports_enabled || false}
-                  onChange={(e) => updateLocalSetting('weekly_reports_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable Weekly Reports
-                </label>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Total number of paid leave days allowed per employee per month
+                </p>
               </div>
             </div>
           </div>
@@ -974,101 +880,6 @@ const hhmmToMinutes = (t) => {
                     </>
                   )}
                 </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'privacy':
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Privacy Settings</h3>
-            
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Data Retention (years)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={localSettings.data_retention_years || 7}
-                  onChange={(e) => updateLocalSetting('data_retention_years', parseInt(e.target.value))}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.audit_logs_enabled || false}
-                  onChange={(e) => updateLocalSetting('audit_logs_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable Audit Logs
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.anonymize_data_enabled || false}
-                  onChange={(e) => updateLocalSetting('anonymize_data_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Anonymize Sensitive Data
-                </label>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'integration':
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Integration Settings</h3>
-            
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.email_integration_enabled || false}
-                  onChange={(e) => updateLocalSetting('email_integration_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable Email Integration
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={localSettings.calendar_sync_enabled || false}
-                  onChange={(e) => updateLocalSetting('calendar_sync_enabled', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                  Enable Calendar Sync
-                </label>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Backup Frequency
-                </label>
-                <select
-                  value={localSettings.backup_frequency || 'weekly'}
-                  onChange={(e) => updateLocalSetting('backup_frequency', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
               </div>
             </div>
           </div>

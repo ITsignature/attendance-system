@@ -703,6 +703,48 @@ const EmployeeDetails: React.FC = () => {
     }
   };
 
+  // Handle deleting a financial record
+  const handleDeleteFinancialRecord = async (record: FinancialRecord) => {
+    if (!confirm(`Are you sure you want to delete this ${record.type}?`)) {
+      return;
+    }
+
+    try {
+      console.log('🔄 Deleting financial record:', record.id);
+
+      // Determine the endpoint based on record type
+      let endpoint = '';
+      switch (record.type) {
+        case 'loan':
+          endpoint = `/api/employees/loans/${record.id}`;
+          break;
+        case 'advance':
+          endpoint = `/api/employees/advances/${record.id}`;
+          break;
+        case 'bonus':
+          endpoint = `/api/employees/bonuses/${record.id}`;
+          break;
+        default:
+          throw new Error('Invalid record type');
+      }
+
+      const response = await apiService.apiCall(endpoint, {
+        method: 'DELETE'
+      });
+
+      if (response.success) {
+        console.log('✅ Financial record deleted successfully');
+        // Refresh financial data
+        await loadFinancialData(employee!.id);
+      } else {
+        setError(response.message || 'Failed to delete financial record');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to delete financial record:', error);
+      setError(error.message || 'Failed to delete financial record');
+    }
+  };
+
   // Validate financial record data
   const validateFinancialRecord = (data: typeof newRecordData) => {
     const errors: string[] = [];
@@ -1777,7 +1819,12 @@ const EmployeeDetails: React.FC = () => {
                                 </>
                               )}
                               <DynamicProtectedComponent permission="payroll.edit">
-                                <Button size="xs" color="red" title="Delete Record">
+                                <Button
+                                  size="xs"
+                                  color="red"
+                                  title="Delete Record"
+                                  onClick={() => handleDeleteFinancialRecord(record)}
+                                >
                                   <FaTrash className="w-3 h-3" />
                                 </Button>
                               </DynamicProtectedComponent>

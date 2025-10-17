@@ -112,7 +112,7 @@ router.post('/loans', async (req, res) => {
     `, [
       loanId, employee_id, loan_type || 'personal', principal, rate,
       months, monthlyDeduction, 0, totalAmount,
-      start_date, endDate.toISOString().split('T')[0], 'active', notes
+      start_date, endDate.toISOString().split('T')[0], 'active', notes || null
     ]);
 
     console.log('✅ Loan created successfully:', loanId);
@@ -419,11 +419,11 @@ router.post('/advances', async (req, res) => {
         request_date, required_date, deduction_start_date, deduction_months,
         monthly_deduction, remaining_amount, status, justification,
         notes, created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, NOW())
     `, [
       advanceId, employee_id, advance_type, advanceAmount, description,
-      requestDate, required_date, deductionStartDate.toISOString().split('T')[0],
-      months, monthlyDeduction, advanceAmount, justification, notes, req.user.userId || null
+      requestDate, required_date || null, deductionStartDate.toISOString().split('T')[0],
+      months, monthlyDeduction, advanceAmount, justification || null, notes || null, req.user.userId || null
     ]);
 
     console.log('✅ Advance request created successfully:', advanceId);
@@ -436,7 +436,7 @@ router.post('/advances', async (req, res) => {
         amount: advanceAmount,
         monthly_deduction: monthlyDeduction,
         deduction_months: months,
-        status: 'pending'
+        status: 'approved'
       }
     });
 
@@ -494,41 +494,24 @@ router.post('/bonuses', async (req, res) => {
         id, employee_id, bonus_type, bonus_amount, description,
         bonus_period, calculation_basis, effective_date, status,
         payment_method, notes, created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, NOW())
     `, [
       bonusId, employee_id, bonus_type, bonusAmount, description,
-      bonus_period, calculation_basis, effectiveDate, payment_method,
-      notes, req.user.id
+      bonus_period || null, calculation_basis || null, effectiveDate, payment_method,
+      notes || null, req.user.id || null
     ]);
-
-    // Create approval workflow for bonus
-    const workflowResult = await approvalWorkflowService.initiate({
-      entity_type: 'bonus_payment',
-      entity_id: bonusId,
-      entity_data: {
-        employee_id,
-        bonus_type,
-        amount: bonusAmount,
-        description,
-        bonus_period,
-        payment_method
-      },
-      initiated_by: req.user.id,
-      client_id: clientId
-    });
 
     console.log('✅ Bonus record created successfully:', bonusId);
 
     res.status(201).json({
       success: true,
-      message: 'Bonus payment created and sent for approval',
+      message: 'Bonus payment created successfully',
       data: {
         bonus_id: bonusId,
         amount: bonusAmount,
         bonus_type,
         effective_date: effectiveDate,
-        workflow_id: workflowResult.workflowId,
-        status: 'pending_approval'
+        status: 'approved'
       }
     });
 
@@ -664,6 +647,148 @@ router.post('/financial-records/:record_id/approve', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to process approval',
+      error: error.message
+    });
+  }
+});
+
+// =============================================
+// DELETE ENDPOINTS
+// =============================================
+
+/**
+ * Delete a loan record
+ * DELETE /api/employees/loans/:loan_id
+ */
+router.delete('/loans/:loan_id', checkPermission('payroll.edit'), async (req, res) => {
+  try {
+    const { loan_id } = req.params;
+    const connection = getDB();
+
+    // Check if loan exists
+    const [loan] = await connection.execute(
+      'SELECT * FROM employee_loans WHERE id = ?',
+      [loan_id]
+    );
+
+    if (loan.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Loan not found'
+      });
+    }
+
+    // Delete the loan
+    await connection.execute(
+      'DELETE FROM employee_loans WHERE id = ?',
+      [loan_id]
+    );
+
+    console.log('✅ Loan deleted successfully:', loan_id);
+
+    res.json({
+      success: true,
+      message: 'Loan deleted successfully',
+      data: { loan_id }
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting loan:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete loan',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Delete an advance record
+ * DELETE /api/employees/advances/:advance_id
+ */
+router.delete('/advances/:advance_id', checkPermission('payroll.edit'), async (req, res) => {
+  try {
+    const { advance_id } = req.params;
+    const connection = getDB();
+
+    // Check if advance exists
+    const [advance] = await connection.execute(
+      'SELECT * FROM employee_advances WHERE id = ?',
+      [advance_id]
+    );
+
+    if (advance.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Advance not found'
+      });
+    }
+
+    // Delete the advance
+    await connection.execute(
+      'DELETE FROM employee_advances WHERE id = ?',
+      [advance_id]
+    );
+
+    console.log('✅ Advance deleted successfully:', advance_id);
+
+    res.json({
+      success: true,
+      message: 'Advance deleted successfully',
+      data: { advance_id }
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting advance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete advance',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Delete a bonus record
+ * DELETE /api/employees/bonuses/:bonus_id
+ */
+router.delete('/bonuses/:bonus_id', checkPermission('payroll.edit'), async (req, res) => {
+  try {
+    const { bonus_id } = req.params;
+    const connection = getDB();
+
+    // Check if bonus exists
+    const [bonus] = await connection.execute(
+      'SELECT * FROM employee_bonuses WHERE id = ?',
+      [bonus_id]
+    );
+
+    if (bonus.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bonus not found'
+      });
+    }
+
+    // Delete the bonus
+    await connection.execute(
+      'DELETE FROM employee_bonuses WHERE id = ?',
+      [bonus_id]
+    );
+
+    console.log('✅ Bonus deleted successfully:', bonus_id);
+
+    res.json({
+      success: true,
+      message: 'Bonus deleted successfully',
+      data: { bonus_id }
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting bonus:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete bonus',
       error: error.message
     });
   }

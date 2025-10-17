@@ -184,6 +184,15 @@ const seedDefaultSettings = async () => {
       description: 'Minimum hours worked to be considered short leave',
       is_public: true
     },
+
+    // Leave Settings
+    {
+      setting_key: 'paid_leaves_per_month',
+      setting_value: JSON.stringify(2),
+      setting_type: 'number',
+      description: 'Number of paid leave days allowed per employee per month',
+      is_public: true
+    },
       
 
       // Payroll Settings
@@ -271,12 +280,13 @@ const seedDefaultSettings = async () => {
     console.log('🏢 General Settings: 5 items (company info, timezone, currency, etc.)');
     console.log('🔒 Security Settings: 5 items (passwords, 2FA, session timeout, etc.)');
     console.log('🔔 Notification Settings: 4 items (email, push, SMS, reports)');
-    console.log('⏰ Attendance Settings: 5 items (work hours, start/end time, overtime)');
+    console.log('⏰ Attendance Settings: 6 items (work hours, start/end time, overtime)');
+    console.log('📅 Leave Settings: 1 item (paid leaves per month)');
     console.log('💰 Payroll Settings: 3 items (cycle, processing, tax calculation)');
     console.log('🔐 Privacy Settings: 3 items (data retention, audit logs, anonymization)');
     console.log('🔗 Integration Settings: 3 items (email, calendar, backup frequency)');
     console.log('');
-    console.log('🎉 Total: 28 system-wide default settings');
+    console.log('🎉 Total: 29 system-wide default settings');
     console.log('');
     console.log('Next Steps:');
     console.log('===========');

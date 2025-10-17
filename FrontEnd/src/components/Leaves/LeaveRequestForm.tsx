@@ -55,6 +55,7 @@ interface FormData {
   reason: string;
   admin_notes: string;
   supporting_documents: File[];
+  is_paid: boolean;
 }
 
 interface FormErrors {
@@ -82,7 +83,8 @@ const LeaveRequestForm: React.FC = () => {
     end_time: '',
     reason: '',
     admin_notes: '',
-    supporting_documents: []
+    supporting_documents: [],
+    is_paid: true
   });
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -93,6 +95,13 @@ const LeaveRequestForm: React.FC = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [success, setSuccess] = useState<string>('');
   const [calculatedDays, setCalculatedDays] = useState<number>(0);
+  const [paidLeaveBalance, setPaidLeaveBalance] = useState<{
+    limit: number;
+    taken: number;
+    remaining: number;
+    month: string;
+  } | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState<boolean>(false);
 
 
 
@@ -113,6 +122,65 @@ const LeaveRequestForm: React.FC = () => {
       setFormData(prev => ({ ...prev, end_date: formData.start_date }));
     }
   }, [formData.leave_duration, formData.start_date]);
+
+  // Fetch paid leave balance when employee or start date changes
+  useEffect(() => {
+    if (formData.employee_id && formData.start_date) {
+      fetchPaidLeaveBalance();
+    } else {
+      setPaidLeaveBalance(null);
+    }
+  }, [formData.employee_id, formData.start_date]);
+
+  const fetchPaidLeaveBalance = async (): Promise<void> => {
+    if (!formData.employee_id || !formData.start_date) return;
+
+    try {
+      setLoadingBalance(true);
+
+      // Get settings first to know the limit
+      const settingsResponse = await apiService.apiCall('/api/settings', { method: 'GET' });
+      const paidLeavesLimit = settingsResponse?.data?.settings?.paid_leaves_per_month?.value || 2;
+
+      // Get the month from start_date
+      const startDate = new Date(formData.start_date);
+      const firstDayOfMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1).toISOString().split('T')[0];
+      const lastDayOfMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).toISOString().split('T')[0];
+
+      // Fetch leave requests for this employee in this month
+      const leavesResponse = await leaveApiService.getLeaveRequests({
+        employee_id: formData.employee_id,
+        start_date: firstDayOfMonth,
+        end_date: lastDayOfMonth,
+        status: 'approved,pending'
+      });
+
+      // Calculate total paid leaves taken
+      let totalPaidLeavesTaken = 0;
+      if (leavesResponse.success && leavesResponse.data) {
+        const leaves = Array.isArray(leavesResponse.data) ? leavesResponse.data : leavesResponse.data.requests || [];
+        totalPaidLeavesTaken = leaves
+          .filter((leave: any) => leave.is_paid === true || leave.is_paid === 1)
+          .reduce((sum: number, leave: any) => sum + (parseFloat(leave.days_requested) || 0), 0);
+      }
+
+      const remaining = Math.max(0, paidLeavesLimit - totalPaidLeavesTaken);
+      const monthStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`;
+
+      setPaidLeaveBalance({
+        limit: paidLeavesLimit,
+        taken: totalPaidLeavesTaken,
+        remaining: remaining,
+        month: monthStr
+      });
+
+    } catch (error) {
+      console.error('Failed to fetch paid leave balance:', error);
+      setPaidLeaveBalance(null);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
 
   const loadInitialData = async (): Promise<void> => {
     try {
@@ -252,7 +320,8 @@ const LeaveRequestForm: React.FC = () => {
         reason: formData.reason.trim(),
         days_requested: calculatedDays,
         notes: formData.admin_notes.trim() || null,
-        supporting_documents: formData.supporting_documents?.length > 0 ? formData.supporting_documents : null
+        supporting_documents: formData.supporting_documents?.length > 0 ? formData.supporting_documents : null,
+        is_paid: formData.is_paid
       };
 
       console.log('submit data',submitData);
@@ -273,7 +342,8 @@ const LeaveRequestForm: React.FC = () => {
           end_time: '',
           reason: '',
           admin_notes: '',
-          supporting_documents: []
+          supporting_documents: [],
+          is_paid: true
         });
         setSelectedEmployee(null);
         setCalculatedDays(0);
@@ -600,6 +670,43 @@ const employeeOptions = employees
               placeholder="Internal notes for this leave request..."
               rows={3}
             />
+          </div>
+
+          {/* Is Paid Checkbox */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="is_paid"
+                checked={formData.is_paid}
+                onChange={(e) => handleInputChange('is_paid', e.target.checked)}
+                disabled={loadingBalance || (paidLeaveBalance && paidLeaveBalance.remaining <= 0)}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <Label htmlFor="is_paid" className={`${loadingBalance || (paidLeaveBalance && paidLeaveBalance.remaining <= 0) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                This is a paid leave
+              </Label>
+            </div>
+
+            {/* Balance Information */}
+            {loadingBalance && (
+              <p className="text-sm text-gray-500 ml-6">Loading balance...</p>
+            )}
+
+            {!loadingBalance && paidLeaveBalance && (
+              <div className="ml-6">
+                <p className="text-sm text-gray-600">
+                  Paid Leave Balance: <span className="font-semibold">{paidLeaveBalance.remaining}/{paidLeaveBalance.limit}</span> remaining
+                  (Month: {paidLeaveBalance.month})
+                </p>
+
+                {paidLeaveBalance.remaining <= 0 && (
+                  <p className="text-sm text-red-600 font-medium mt-1">
+                    Monthly paid leave limit exceeded. This leave will be marked as unpaid.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Submit Buttons */}

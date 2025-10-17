@@ -336,7 +336,8 @@ router.post('/request',
       reason,
       days_requested,
       supporting_documents = null,
-      notes = null
+      notes = null,
+      is_paid = true
     } = req.body;
 
     const adminUserId = req.user.userId;
@@ -438,6 +439,69 @@ router.post('/request',
         calculatedDays = 0.25; // Quarter day for short leave
       }
 
+      // Check paid leave balance and determine if this leave can be paid
+      let finalIsPaid = is_paid;
+      let paidLeaveInfo = null;
+
+      if (is_paid) {
+        // Get paid_leaves_per_month setting
+        const [paidLeavesSetting] = await db.execute(`
+          SELECT setting_value
+          FROM system_settings
+          WHERE setting_key = 'paid_leaves_per_month'
+          AND (client_id = ? OR client_id IS NULL)
+          ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END
+          LIMIT 1
+        `, [clientId]);
+
+        let paidLeavesLimit = 2; // Default value
+        if (paidLeavesSetting.length > 0) {
+          try {
+            paidLeavesLimit = JSON.parse(paidLeavesSetting[0].setting_value);
+          } catch (e) {
+            paidLeavesLimit = parseInt(paidLeavesSetting[0].setting_value) || 2;
+          }
+        }
+
+        // Calculate the month range for the leave request
+        const requestStartMonth = new Date(start_date);
+        const firstDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth(), 1);
+        const lastDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth() + 1, 0);
+
+        // Calculate total paid leaves already taken/approved in this month
+        const [existingPaidLeaves] = await db.execute(`
+          SELECT COALESCE(SUM(days_requested), 0) as total_paid_leaves
+          FROM leave_requests
+          WHERE employee_id = ?
+          AND is_paid = TRUE
+          AND status IN ('approved', 'pending')
+          AND (
+            (start_date >= ? AND start_date <= ?)
+            OR (end_date >= ? AND end_date <= ?)
+            OR (start_date <= ? AND end_date >= ?)
+          )
+        `, [employee_id, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth]);
+
+        const totalPaidLeavesTaken = parseFloat(existingPaidLeaves[0].total_paid_leaves) || 0;
+        const remainingPaidLeaves = paidLeavesLimit - totalPaidLeavesTaken;
+
+        paidLeaveInfo = {
+          paid_leaves_limit: paidLeavesLimit,
+          paid_leaves_taken: totalPaidLeavesTaken,
+          paid_leaves_remaining: remainingPaidLeaves,
+          days_requested: calculatedDays,
+          month: `${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`
+        };
+
+        // If remaining leaves are insufficient, automatically set as unpaid
+        if (calculatedDays > remainingPaidLeaves) {
+          finalIsPaid = false;
+          console.log(`⚠️ Paid leave limit exceeded. Setting leave as UNPAID. Limit: ${paidLeavesLimit}, Taken: ${totalPaidLeavesTaken}, Remaining: ${remainingPaidLeaves}, Requested: ${calculatedDays}`);
+        } else {
+          console.log(`✅ Paid leave check passed. Limit: ${paidLeavesLimit}, Taken: ${totalPaidLeavesTaken}, Remaining: ${remainingPaidLeaves}, Requesting: ${calculatedDays}`);
+        }
+      }
+
       // Create leave request
       const requestId = uuidv4();
       const combinedReason = notes ? `${reason}\n\nAdmin Notes: ${notes}` : reason;
@@ -446,29 +510,45 @@ router.post('/request',
         INSERT INTO leave_requests (
           id, employee_id, leave_type_id, start_date, end_date,
           leave_duration, start_time, end_time,
-          days_requested, reason, supporting_documents, status, 
+          days_requested, is_paid, reason, supporting_documents, status,
           applied_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
       `, [
         requestId, employee_id, leave_type_id, start_date, end_date,
         leave_duration, start_time, end_time,
-        calculatedDays, combinedReason, supporting_documents
+        calculatedDays, finalIsPaid, combinedReason, supporting_documents
       ]);
+
+      // Build response message
+      let responseMessage = `Leave request created successfully for ${employee[0].first_name} ${employee[0].last_name}`;
+      if (is_paid && !finalIsPaid) {
+        responseMessage += `. Note: Leave marked as UNPAID due to monthly paid leave limit exceeded`;
+      }
+
+      const responseData = {
+        id: requestId,
+        employee_name: `${employee[0].first_name} ${employee[0].last_name}`,
+        leave_type: leaveType[0].name,
+        leave_duration,
+        start_date,
+        end_date,
+        start_time,
+        end_time,
+        days_requested: calculatedDays,
+        is_paid: finalIsPaid,
+        was_auto_adjusted: is_paid && !finalIsPaid
+      };
+
+      // Add paid leave info if available
+      if (paidLeaveInfo) {
+        responseData.paid_leave_info = paidLeaveInfo;
+      }
 
       res.status(201).json({
         success: true,
-        message: `Leave request created successfully for ${employee[0].first_name} ${employee[0].last_name}`,
-        data: { 
-          id: requestId,
-          employee_name: `${employee[0].first_name} ${employee[0].last_name}`,
-          leave_type: leaveType[0].name,
-          leave_duration,
-          start_date,
-          end_date,
-          start_time,
-          end_time,
-          days_requested: calculatedDays
-        }
+        message: responseMessage,
+        warning: is_paid && !finalIsPaid ? 'This leave was automatically marked as unpaid because the employee has exceeded their monthly paid leave limit' : null,
+        data: responseData
       });
     } catch (error) {
       console.error('Error creating leave request:', error);

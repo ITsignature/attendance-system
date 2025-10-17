@@ -29,11 +29,14 @@ const validateSettingKey = (key) => {
     'sms_notifications_enabled', 'weekly_reports_enabled',
     
     // Attendance Settings
-    'working_hours_per_day', 'work_start_time', 'work_end_time', 
+    'working_hours_per_day', 'work_start_time', 'work_end_time',
     'late_threshold_minutes', 'overtime_rate_multiplier',
     'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours',
     'weekend_working_days', 'working_hours_config', 'day_specific_schedules',
-    
+
+    // Leave Settings
+    'paid_leaves_per_month',
+
     // Payroll Settings
     'payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'overtime_enabled',
     
@@ -58,7 +61,8 @@ const getSettingType = (key, value) => {
     'password_expiry_days', 'session_timeout_minutes', 'max_login_attempts',
     'working_hours_per_day', 'late_threshold_minutes', 'overtime_rate_multiplier',
     'data_retention_years', 'account_lockout_duration',
-    'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours' 
+    'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours',
+    'paid_leaves_per_month'
   ];
 
   const objectSettings = [
