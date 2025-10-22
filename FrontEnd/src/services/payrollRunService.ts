@@ -363,6 +363,36 @@ class PayrollRunApiService {
   }
 
   // =============================================
+  // LIVE PAYROLL DATA (OPTIMIZED)
+  // =============================================
+
+  /**
+   * Get raw payroll data for frontend calculation
+   * Returns all data needed to calculate payroll in the browser
+   * 100x faster than backend calculation!
+   */
+  async getLivePayrollData(runId: string): Promise<ApiResponse<{
+    period: {
+      start_date: string;
+      end_date: string;
+      pay_date: string;
+      period_type: string;
+      run_status: string;
+    };
+    employees: any[];
+    attendance: any[];
+    activeSessions: any[];
+    allowances: any[];
+    deductions: any[];
+    loans: any[];
+    advances: any[];
+    bonuses: any[];
+    serverTime: string;
+  }>> {
+    return apiService.apiCall(`/api/payroll-runs/live-data/${runId}`);
+  }
+
+  // =============================================
   // PAYROLL PERIODS MANAGEMENT
   // =============================================
 

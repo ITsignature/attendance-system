@@ -19,6 +19,7 @@ const Attendance = Loadable(lazy(() => import('../components/Attendance/Attendan
 //Payroll
 const PayrollRunDashboard = Loadable(lazy(() => import('../components/Payroll/PayrollRunDashboard')));
 const PayrollEmployeeRecords = Loadable(lazy(() => import('../components/Payroll/PayrollEmployeeRecords')));
+const LivePayrollDashboard = Loadable(lazy(() => import('../components/LivePayrol/LivePayrollDashboard')));
 
 const UnauthorizedPage = Loadable(lazy(() => import('../views/UnauthorizedPage')));
 
@@ -271,16 +272,25 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/payroll/runs/:runId/employees', 
-        exact: true, 
+      {
+        path: '/payroll/runs/:runId/employees',
+        exact: true,
         element: (
           <DynamicProtectedRoute permission="payroll.view">
             <PayrollEmployeeRecords />
           </DynamicProtectedRoute>
         )
       },
-      
+      {
+        path: '/payroll/runs/:runId/live',
+        exact: true,
+        element: (
+          <DynamicProtectedRoute permission="payroll.view">
+            <LivePayrollDashboard />
+          </DynamicProtectedRoute>
+        )
+      },
+
       // System & Utilities
       { 
         path: '/icons/solar', 

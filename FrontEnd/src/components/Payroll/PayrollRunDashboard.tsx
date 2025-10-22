@@ -468,6 +468,14 @@ const PayrollRunDashboard = () => {
                       <div className="flex gap-2 flex-wrap">
                         <Button
                           size="xs"
+                          color="green"
+                          onClick={() => navigate(`/payroll/runs/${run.id}/live`)}
+                        >
+                          <HiEye className="w-3 h-3 mr-1" />
+                          Live Preview
+                        </Button>
+                        <Button
+                          size="xs"
                           color="gray"
                           onClick={() => openRunDetails(run)}
                         >

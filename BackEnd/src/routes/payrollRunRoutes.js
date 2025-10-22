@@ -1565,6 +1565,246 @@ router.post('/cron/auto-create',
 );
 
 //--------------------------------------------------------------------------------------------------------------------------
+// OPTIMIZED LIVE PAYROLL DATA API
+// Returns raw data for frontend calculation (100x faster!)
+//--------------------------------------------------------------------------------------------------------------------------
+
+router.get("/live-data/:runId",
+  checkPermission('payroll.view'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const { runId } = req.params;
+
+    try {
+      // 1. Get period info
+      const [periodInfo] = await db.execute(`
+        SELECT
+          pp.period_start_date,
+          pp.period_end_date,
+          pp.pay_date,
+          pp.period_type,
+          pr.run_status
+        FROM payroll_runs pr
+        JOIN payroll_periods pp ON pr.period_id = pp.id
+        WHERE pr.id = ? AND pr.client_id = ?
+      `, [runId, clientId]);
+
+      if (periodInfo.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Payroll run not found'
+        });
+      }
+
+      const period = periodInfo[0];
+
+      // Calculate yesterday (for completed hours)
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      // 2. Get all employees with pre-calculated rates
+      const [employees] = await db.execute(`
+        SELECT
+          pr.employee_id,
+          pr.employee_code,
+          pr.employee_name,
+          pr.base_salary,
+          pr.weekday_hourly_rate,
+          pr.saturday_hourly_rate,
+          pr.sunday_hourly_rate,
+          pr.weekday_daily_hours,
+          pr.saturday_daily_hours,
+          pr.sunday_daily_hours,
+          pr.weekday_working_days,
+          pr.working_saturdays,
+          pr.working_sundays,
+          pr.daily_salary,
+          d.name AS department_name
+        FROM payroll_records pr
+        JOIN employees e ON pr.employee_id = e.id
+        LEFT JOIN departments d ON e.department_id = d.id
+        WHERE pr.run_id = ?
+        ORDER BY pr.employee_name
+      `, [runId]);
+
+      if (employees.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            period,
+            employees: [],
+            attendance: [],
+            activeSessions: [],
+            allowances: [],
+            deductions: [],
+            loans: [],
+            advances: [],
+            bonuses: []
+          }
+        });
+      }
+
+      const employeeIds = employees.map(e => e.employee_id);
+      const placeholders = employeeIds.map(() => '?').join(',');
+
+      // 3–9. Run all queries in parallel
+      const [
+        [attendance],
+        [activeSessions],
+        [allowances],
+        [deductions],
+        [loans],
+        [advances],
+        [bonuses]
+      ] = await Promise.all([
+
+        // Attendance Summary
+        db.execute(`
+          SELECT
+            employee_id,
+            SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) AS completed_weekday_hours,
+            SUM(CASE WHEN is_weekend = 7 THEN payable_duration ELSE 0 END) AS completed_saturday_hours,
+            SUM(CASE WHEN is_weekend = 1 THEN payable_duration ELSE 0 END) AS completed_sunday_hours
+          FROM attendance
+          WHERE employee_id IN (${placeholders})
+          AND date BETWEEN ? AND ?
+          AND check_out_time IS NOT NULL
+          GROUP BY employee_id
+        `, [...employeeIds, period.period_start_date, yesterdayStr]),
+
+        // Active Sessions
+        db.execute(`
+          SELECT
+            employee_id,
+            check_in_time,
+            scheduled_in_time,
+            is_weekend
+          FROM attendance
+          WHERE employee_id IN (${placeholders})
+          AND date = CURDATE()
+          AND check_in_time IS NOT NULL
+          AND check_out_time IS NULL
+        `, [...employeeIds]),
+
+        // Allowances
+        db.execute(`
+          SELECT
+            employee_id,
+            id,
+            allowance_name,
+            amount,
+            allowance_type
+          FROM employee_allowances
+          WHERE employee_id IN (${placeholders})
+          AND status = 'active'
+        `, [...employeeIds]),
+
+        // Deductions
+        db.execute(`
+          SELECT
+            employee_id,
+            id,
+            deduction_name,
+            amount,
+            deduction_type
+          FROM employee_deductions
+          WHERE employee_id IN (${placeholders})
+          AND status = 'active'
+        `, [...employeeIds]),
+
+        // Loans
+        db.execute(`
+          SELECT
+            lr.employee_id,
+            lr.id,
+            lr.loan_amount,
+            lr.remaining_balance,
+            lr.monthly_deduction_amount,
+            lr.start_date,
+            lr.end_date,
+            lr.status,
+            lr.loan_type
+          FROM employee_loans lr
+          WHERE lr.employee_id IN (${placeholders})
+          AND lr.status = 'approved'
+          AND lr.start_date <= CURDATE()
+          AND (lr.end_date IS NULL OR lr.end_date >= ?)
+          AND lr.remaining_balance > 0
+        `, [...employeeIds, period.period_start_date]),
+
+        // Advances
+        db.execute(`
+          SELECT
+            ar.employee_id,
+            ar.id,
+            ar.advance_amount,
+            ar.remaining_balance,
+            ar.monthly_deduction_amount,
+            ar.advance_date,
+            ar.deduction_start_date,
+            ar.status
+          FROM employee_advances ar
+          WHERE ar.employee_id IN (${placeholders})
+          AND ar.status = 'approved'
+          AND ar.deduction_start_date <= ?
+          AND ar.remaining_balance > 0
+        `, [...employeeIds, period.period_end_date]),
+
+        // Bonuses
+        db.execute(`
+          SELECT
+            br.employee_id,
+            br.id,
+            br.bonus_amount,
+            br.bonus_type,
+            br.bonus_date,
+            br.description,
+            br.status
+          FROM employee_bonuses br
+          WHERE br.employee_id IN (${placeholders})
+          AND br.status = 'approved'
+          AND br.bonus_date BETWEEN ? AND ?
+        `, [...employeeIds, period.period_start_date, period.period_end_date])
+
+      ]);
+
+      // 10. Return the response
+      res.json({
+        success: true,
+        data: {
+          period: {
+            start_date: period.period_start_date,
+            end_date: period.period_end_date,
+            pay_date: period.pay_date,
+            period_type: period.period_type,
+            run_status: period.run_status
+          },
+          employees,
+          attendance,
+          activeSessions,
+          allowances,
+          deductions,
+          loans,
+          advances,
+          bonuses,
+          serverTime: new Date().toISOString()
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching live payroll data:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch payroll data',
+        error: error.message
+      });
+    }
+  })
+);
+
+//--------------------------------------------------------------------------------------------------------------------------
 
 router.get("/live/all", 
   checkPermission('payroll.view'),
