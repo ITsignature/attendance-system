@@ -116,6 +116,13 @@ const LeaveRequestForm: React.FC = () => {
     calculateLeaveDays();
   }, [formData.start_date, formData.end_date, formData.leave_duration]);
 
+  // Auto-uncheck paid leave if requested days exceed balance
+  useEffect(() => {
+    if (formData.is_paid && paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining && calculatedDays > 0) {
+      setFormData(prev => ({ ...prev, is_paid: false }));
+    }
+  }, [calculatedDays, paidLeaveBalance]);
+
   // Adjust end date when duration changes
   useEffect(() => {
     if (formData.leave_duration !== 'full_day' && formData.start_date) {
@@ -292,6 +299,11 @@ const LeaveRequestForm: React.FC = () => {
 
     if (!formData.reason.trim() || formData.reason.trim().length < 10) {
       newErrors.reason = 'Reason must be at least 10 characters';
+    }
+
+    // Validate paid leave balance
+    if (formData.is_paid && paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining) {
+      newErrors.general = `Cannot request ${calculatedDays} day(s) of paid leave. Only ${paidLeaveBalance.remaining} day(s) remaining this month. Please uncheck "This is a paid leave" to submit as unpaid leave.`;
     }
 
     setErrors(newErrors);
@@ -680,10 +692,10 @@ const employeeOptions = employees
                 id="is_paid"
                 checked={formData.is_paid}
                 onChange={(e) => handleInputChange('is_paid', e.target.checked)}
-                disabled={loadingBalance || (paidLeaveBalance && paidLeaveBalance.remaining <= 0)}
+                disabled={loadingBalance || (paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining)}
                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
               />
-              <Label htmlFor="is_paid" className={`${loadingBalance || (paidLeaveBalance && paidLeaveBalance.remaining <= 0) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+              <Label htmlFor="is_paid" className={`${loadingBalance || (paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
                 This is a paid leave
               </Label>
             </div>
@@ -700,9 +712,9 @@ const employeeOptions = employees
                   (Month: {paidLeaveBalance.month})
                 </p>
 
-                {paidLeaveBalance.remaining <= 0 && (
+                {calculatedDays > 0 && calculatedDays > paidLeaveBalance.remaining && (
                   <p className="text-sm text-red-600 font-medium mt-1">
-                    Monthly paid leave limit exceeded. This leave will be marked as unpaid.
+                    ⚠️ Insufficient paid leave balance! Requesting {calculatedDays} day(s) but only {paidLeaveBalance.remaining} day(s) available. Please submit as unpaid leave.
                   </p>
                 )}
               </div>

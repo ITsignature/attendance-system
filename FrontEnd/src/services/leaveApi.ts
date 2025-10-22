@@ -193,7 +193,7 @@ class LeaveApiService {
   /**
    * Get all leave requests with optional filters
    */
-  async getAllLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+  async getLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
     try {
       const queryParams = new URLSearchParams();
       if (filters) {
@@ -211,6 +211,13 @@ class LeaveApiService {
       console.error('Failed to fetch leave requests:', error);
       throw error;
     }
+  }
+
+  /**
+   * Alias for getLeaveRequests for backward compatibility
+   */
+  async getAllLeaveRequests(filters?: LeaveRequestFilters): Promise<ApiResponse<LeaveRequest[]>> {
+    return this.getLeaveRequests(filters);
   }
 
   /**

@@ -493,10 +493,22 @@ router.post('/request',
           month: `${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`
         };
 
-        // If remaining leaves are insufficient, automatically set as unpaid
+        // If remaining leaves are insufficient, reject the paid leave request
         if (calculatedDays > remainingPaidLeaves) {
-          finalIsPaid = false;
-          console.log(`⚠️ Paid leave limit exceeded. Setting leave as UNPAID. Limit: ${paidLeavesLimit}, Taken: ${totalPaidLeavesTaken}, Remaining: ${remainingPaidLeaves}, Requested: ${calculatedDays}`);
+          return res.status(400).json({
+            success: false,
+            message: `Paid leave limit exceeded. Employee has ${remainingPaidLeaves} day(s) remaining but requested ${calculatedDays} day(s).`,
+            error: {
+              type: 'PAID_LEAVE_LIMIT_EXCEEDED',
+              paid_leave_info: {
+                limit: paidLeavesLimit,
+                taken: totalPaidLeavesTaken,
+                remaining: remainingPaidLeaves,
+                requested: calculatedDays,
+                month: `${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`
+              }
+            }
+          });
         } else {
           console.log(`✅ Paid leave check passed. Limit: ${paidLeavesLimit}, Taken: ${totalPaidLeavesTaken}, Remaining: ${remainingPaidLeaves}, Requesting: ${calculatedDays}`);
         }
@@ -520,10 +532,7 @@ router.post('/request',
       ]);
 
       // Build response message
-      let responseMessage = `Leave request created successfully for ${employee[0].first_name} ${employee[0].last_name}`;
-      if (is_paid && !finalIsPaid) {
-        responseMessage += `. Note: Leave marked as UNPAID due to monthly paid leave limit exceeded`;
-      }
+      const responseMessage = `Leave request created successfully for ${employee[0].first_name} ${employee[0].last_name}`;
 
       const responseData = {
         id: requestId,
@@ -535,8 +544,7 @@ router.post('/request',
         start_time,
         end_time,
         days_requested: calculatedDays,
-        is_paid: finalIsPaid,
-        was_auto_adjusted: is_paid && !finalIsPaid
+        is_paid: finalIsPaid
       };
 
       // Add paid leave info if available
@@ -547,7 +555,6 @@ router.post('/request',
       res.status(201).json({
         success: true,
         message: responseMessage,
-        warning: is_paid && !finalIsPaid ? 'This leave was automatically marked as unpaid because the employee has exceeded their monthly paid leave limit' : null,
         data: responseData
       });
     } catch (error) {
