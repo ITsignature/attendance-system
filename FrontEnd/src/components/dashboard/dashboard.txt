@@ -1,0 +1,38 @@
+  1. Remove the footer (lines 36-57 in DashboardView.tsx)
+
+  Remove the "Design and Developed by adminmart.com" footer entirely.
+
+  2. Fetch real data from backend
+
+  Create API calls to get:
+  - Total employee count
+  - Today's attendance count
+  - Employees on leave today
+  - Weekly attendance trends
+  - Recent attendance records
+
+  3. Fix the stat cards with proper data
+
+  - TotalEmployees: Show actual employee count from database
+  - TodayAttendance: Show count of employees who checked in today
+  - OnLeaveToday: Show count of employees on leave today
+
+  4. Use appropriate icons
+
+  - Total Employees: solar:users-group-rounded-bold or solar:user-circle-bold
+  - Today Attendance: solar:calendar-check-bold or solar:check-circle-bold
+  - On Leave: solar:calendar-remove-bold or solar:close-circle-bold
+
+  5. Rename ProductRevenue component
+
+  It should be called RecentAttendance or AttendanceTable since it's showing employee attendance, not product revenue.
+
+  6. Connect real attendance data
+
+  Replace the mock employee data with real data from your backend API.
+
+  Would you like me to implement these changes? I can:
+
+  Option A: Remove the footer and fix icons/naming (quick cleanup)
+  Option B: Implement full backend integration with API calls to fetch real data
+  Option C: Both A and B - complete overhaul with dynamic data
