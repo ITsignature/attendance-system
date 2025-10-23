@@ -266,6 +266,27 @@ class PayrollRunApiService {
   }
 
   /**
+   * Get live payroll data for frontend calculation (no database writes)
+   */
+  async getLivePayrollData(runId: string): Promise<ApiResponse<{
+    period: {
+      start_date: string;
+      end_date: string;
+      calculation_end_date: string;
+      pay_date: string;
+    };
+    run: {
+      id: string;
+      name: string;
+      number: string;
+      calculation_method: string;
+    };
+    employees: any[];
+  }>> {
+    return apiService.apiCall(`/api/payroll-runs/${runId}/live-data`);
+  }
+
+  /**
    * Get pending approvals for current user
    */
   async getPendingApprovals(): Promise<ApiResponse<Array<{
@@ -362,35 +383,6 @@ class PayrollRunApiService {
     return apiService.apiCall(`/api/payroll-runs/${runId}/summary`);
   }
 
-  // =============================================
-  // LIVE PAYROLL DATA (OPTIMIZED)
-  // =============================================
-
-  /**
-   * Get raw payroll data for frontend calculation
-   * Returns all data needed to calculate payroll in the browser
-   * 100x faster than backend calculation!
-   */
-  async getLivePayrollData(runId: string): Promise<ApiResponse<{
-    period: {
-      start_date: string;
-      end_date: string;
-      pay_date: string;
-      period_type: string;
-      run_status: string;
-    };
-    employees: any[];
-    attendance: any[];
-    activeSessions: any[];
-    allowances: any[];
-    deductions: any[];
-    loans: any[];
-    advances: any[];
-    bonuses: any[];
-    serverTime: string;
-  }>> {
-    return apiService.apiCall(`/api/payroll-runs/live-data/${runId}`);
-  }
 
   // =============================================
   // PAYROLL PERIODS MANAGEMENT

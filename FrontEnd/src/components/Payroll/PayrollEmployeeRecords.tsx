@@ -13,6 +13,9 @@ interface EmployeeRecord {
   designation_name: string;
   calculation_status: string;
   base_salary: number;
+  expected_base_salary: number;
+  actual_earned_base: number;
+  attendance_shortfall: number;
   total_earnings: number;
   total_deductions: number;
   total_taxes: number;
@@ -84,15 +87,18 @@ const PayrollEmployeeRecords: React.FC = () => {
       setSelectedRecord(record);
       setComponentType(type);
       setShowComponentsModal(true);
-      
+
       // Load component details for this record
       const response = await payrollRunApiService.getRecordComponents(record.id);
       if (response.success) {
         const filteredComponents = response.data.filter((comp: ComponentDetail) => {
           if (type === 'additions') {
-            return comp.component_type === 'earning';
+            // For additions, exclude base salary (it's shown separately)
+            return comp.component_type === 'earning' && comp.component_category !== 'basic';
           } else {
-            return comp.component_type === 'deduction' || comp.component_type === 'tax';
+            // For deductions, exclude attendance shortfall (it's shown separately)
+            return (comp.component_type === 'deduction' || comp.component_type === 'tax') &&
+                   comp.component_category !== 'attendance';
           }
         });
         setComponentDetails(filteredComponents);
@@ -210,14 +216,14 @@ const PayrollEmployeeRecords: React.FC = () => {
           <Table>
             <Table.Head>
               <Table.HeadCell>Employee</Table.HeadCell>
-              <Table.HeadCell>Department</Table.HeadCell>
               <Table.HeadCell>Base Salary</Table.HeadCell>
-              <Table.HeadCell>Additions</Table.HeadCell>
+              <Table.HeadCell>Expected Base (Until Now)</Table.HeadCell>
+              <Table.HeadCell>Actual Earned (Until Now)</Table.HeadCell>
+              <Table.HeadCell>Shortfall (Until Now)</Table.HeadCell>
+              <Table.HeadCell>Allowances</Table.HeadCell>
               <Table.HeadCell>Gross Salary</Table.HeadCell>
               <Table.HeadCell>Deductions</Table.HeadCell>
               <Table.HeadCell>Net Salary</Table.HeadCell>
-              <Table.HeadCell>Status</Table.HeadCell>
-              <Table.HeadCell>Calculated</Table.HeadCell>
             </Table.Head>
             <Table.Body>
               {employeeRecords.length > 0 ? (
@@ -234,14 +240,23 @@ const PayrollEmployeeRecords: React.FC = () => {
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <div>
-                        <div className="text-sm font-medium">{record.department_name}</div>
-                        <div className="text-xs text-gray-500">{record.designation_name}</div>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
                       <span className="text-sm font-medium">
                         {formatCurrency(record.base_salary)}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-sm font-medium text-blue-600">
+                        {formatCurrency(record.expected_base_salary || 0)}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-sm font-semibold text-green-600">
+                        {formatCurrency(record.actual_earned_base || 0)}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-sm font-medium text-orange-600">
+                        {formatCurrency(record.attendance_shortfall || 0)}
                       </span>
                     </Table.Cell>
                     <Table.Cell>
@@ -251,11 +266,11 @@ const PayrollEmployeeRecords: React.FC = () => {
                         onClick={() => handleShowComponents(record, 'additions')}
                       >
                         <HiEye className="w-3 h-3 mr-1" />
-                        {formatCurrency(record.total_earnings)}
+                        {formatCurrency(record.total_earnings || 0)}
                       </Button>
                     </Table.Cell>
                     <Table.Cell>
-                      <span className="text-sm font-semibold text-green-600">
+                      <span className="text-sm font-semibold text-blue-600">
                         {formatCurrency(record.gross_salary)}
                       </span>
                     </Table.Cell>
@@ -270,18 +285,8 @@ const PayrollEmployeeRecords: React.FC = () => {
                       </Button>
                     </Table.Cell>
                     <Table.Cell>
-                      <span className="text-sm font-semibold text-purple-600">
+                      <span className="text-sm font-bold text-purple-600">
                         {formatCurrency(record.net_salary)}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Badge color={getStatusColor(record.calculation_status)}>
-                        {record.calculation_status?.toUpperCase()}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="text-xs text-gray-500">
-                        {record.calculated_at ? formatDate(record.calculated_at) : 'Not calculated'}
                       </span>
                     </Table.Cell>
                   </Table.Row>

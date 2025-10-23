@@ -1,25 +1,28 @@
 // =============================================
-// LIVE PAYROLL DASHBOARD (Optimized)
+// LIVE PAYROLL DASHBOARD (Optimized Frontend Calculation)
 // =============================================
 // Calculates payroll in the browser - 100x faster!
 // Updates every 30 seconds with live session data
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Table, Card, Alert, Spinner, Button, Badge } from "flowbite-react";
 import { payrollRunApiService } from '../../services/payrollRunService';
-import { payrollCalculationEngine, PayrollResult } from '../../services/payrollCalculationEngine';
-import { HiRefresh, HiClock, HiUsers, HiCurrencyDollar } from 'react-icons/hi';
+import { livePayrollCalculationService, type CalculatedPayroll, type EmployeeData } from '../../services/livePayrollCalculationService';
+import { HiRefresh, HiClock, HiUsers, HiArrowLeft } from 'react-icons/hi';
 
 const LivePayrollDashboard: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [payrollResults, setPayrollResults] = useState<PayrollResult[]>([]);
+  const [calculatedResults, setCalculatedResults] = useState<CalculatedPayroll[]>([]);
   const [lastCalculated, setLastCalculated] = useState<Date>(new Date());
   const [rawData, setRawData] = useState<any>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 20;
 
   // =============================================
   // LOAD DATA & CALCULATE
@@ -35,26 +38,30 @@ const LivePayrollDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch raw data from backend (FAST - just data retrieval!)
+      console.log('📊 Fetching live payroll data...');
+      const startTime = performance.now();
+
+      // Fetch raw data from backend (ALL employees in one call)
       const response = await payrollRunApiService.getLivePayrollData(runId);
 
+      const fetchTime = performance.now() - startTime;
+      console.log(`✅ Data fetched in ${fetchTime.toFixed(0)}ms`);
+
       if (response.success && response.data) {
-        // Store raw data for recalculation
+        // Store raw data
         setRawData(response.data);
 
         // Calculate payroll in browser (INSTANT!)
-        const results = payrollCalculationEngine.calculateAll(
-          response.data.employees,
-          response.data.attendance,
-          response.data.activeSessions,
-          response.data.allowances,
-          response.data.deductions,
-          response.data.loans || [],
-          response.data.advances || [],
-          response.data.bonuses || []
+        const calcStartTime = performance.now();
+        const results = livePayrollCalculationService.calculateAllEmployees(
+          response.data.employees as EmployeeData[]
         );
+        const calcTime = performance.now() - calcStartTime;
 
-        setPayrollResults(results);
+        console.log(`⚡ Calculated ${results.length} employees in ${calcTime.toFixed(0)}ms`);
+        console.log(`📈 Total time: ${(fetchTime + calcTime).toFixed(0)}ms`);
+
+        setCalculatedResults(results);
         setLastCalculated(new Date());
       } else {
         setError(response.message || 'Failed to load payroll data');
@@ -68,25 +75,24 @@ const LivePayrollDashboard: React.FC = () => {
   }, [runId]);
 
   // =============================================
-  // RECALCULATE (using existing data)
+  // RECALCULATE (using existing data - NO API CALL)
   // =============================================
 
   const recalculate = useCallback(() => {
     if (!rawData) return;
 
+    console.log('⚡ Recalculating...');
+    const startTime = performance.now();
+
     // Recalculate using existing data (NO API CALL - INSTANT!)
-    const results = payrollCalculationEngine.calculateAll(
-      rawData.employees,
-      rawData.attendance,
-      rawData.activeSessions,
-      rawData.allowances,
-      rawData.deductions,
-      rawData.loans || [],
-      rawData.advances || [],
-      rawData.bonuses || []
+    const results = livePayrollCalculationService.calculateAllEmployees(
+      rawData.employees as EmployeeData[]
     );
 
-    setPayrollResults(results);
+    const calcTime = performance.now() - startTime;
+    console.log(`✅ Recalculated ${results.length} employees in ${calcTime.toFixed(0)}ms`);
+
+    setCalculatedResults(results);
     setLastCalculated(new Date());
   }, [rawData]);
 
@@ -104,6 +110,7 @@ const LivePayrollDashboard: React.FC = () => {
     if (!autoRefresh) return;
 
     const interval = setInterval(() => {
+      console.log('🔄 Auto-refresh triggered');
       recalculate();
     }, 30000); // 30 seconds
 
@@ -114,28 +121,31 @@ const LivePayrollDashboard: React.FC = () => {
   // CALCULATIONS & FORMATTING
   // =============================================
 
-  const formatCurrency = (amount: number) => {
-    return `Rs. ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-
-  const formatHours = (hours: number) => {
-    return `${hours.toFixed(2)}h`;
+  const formatCurrency = (amount: number | null | undefined) => {
+    const value = amount ?? 0;
+    return `Rs. ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const getTotalStats = () => {
     return {
-      totalEmployees: payrollResults.length,
-      totalGross: payrollResults.reduce((sum, r) => sum + r.gross_salary, 0),
-      totalDeductions: payrollResults.reduce((sum, r) => sum + r.total_deductions, 0),
-      totalNet: payrollResults.reduce((sum, r) => sum + r.net_salary, 0),
-      totalBonuses: payrollResults.reduce((sum, r) => sum + r.bonuses, 0),
-      totalLoans: payrollResults.reduce((sum, r) => sum + r.loan_deductions, 0),
-      totalAdvances: payrollResults.reduce((sum, r) => sum + r.advance_deductions, 0),
-      liveEmployees: payrollResults.filter(r => r.has_live_session).length
+      totalEmployees: calculatedResults.length,
+      totalGross: calculatedResults.reduce((sum, r) => sum + (r.gross_salary ?? 0), 0),
+      totalDeductions: calculatedResults.reduce((sum, r) => sum + (r.deductions_total ?? 0), 0),
+      totalNet: calculatedResults.reduce((sum, r) => sum + (r.net_salary ?? 0), 0),
+      totalAllowances: calculatedResults.reduce((sum, r) => sum + (r.allowances_total ?? 0), 0),
+      totalBonuses: calculatedResults.reduce((sum, r) => sum + (r.bonuses_total ?? 0), 0),
+      totalShortfall: calculatedResults.reduce((sum, r) => sum + (r.attendance_shortfall ?? 0), 0)
     };
   };
 
   const stats = getTotalStats();
+
+  // Pagination
+  const totalPages = Math.ceil(calculatedResults.length / itemsPerPage);
+  const paginatedResults = calculatedResults.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage
+  );
 
   // =============================================
   // RENDER
@@ -154,15 +164,25 @@ const LivePayrollDashboard: React.FC = () => {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Live Payroll Dashboard
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            <HiClock className="inline w-4 h-4 mr-1" />
-            Last calculated: {lastCalculated.toLocaleTimeString()}
-            {autoRefresh && <span className="ml-2 text-green-600">(Auto-refresh: ON)</span>}
-          </p>
+        <div className="flex items-center gap-4">
+          <Button
+            color="gray"
+            size="sm"
+            onClick={() => navigate('/payroll')}
+          >
+            <HiArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Live Payroll Preview
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              <HiClock className="inline w-4 h-4 mr-1" />
+              Last calculated: {lastCalculated.toLocaleTimeString()}
+              {autoRefresh && <span className="ml-2 text-green-600">(Auto-refresh: ON)</span>}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button
@@ -198,7 +218,7 @@ const LivePayrollDashboard: React.FC = () => {
       )}
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <div className="flex items-center">
             <HiUsers className="w-8 h-8 text-blue-500 mr-3" />
@@ -218,27 +238,35 @@ const LivePayrollDashboard: React.FC = () => {
         </Card>
         <Card>
           <div>
+            <p className="text-sm text-gray-500">Total Deductions</p>
+            <p className="text-xl font-bold text-red-600">
+              {formatCurrency(stats.totalDeductions)}
+            </p>
+          </div>
+        </Card>
+        <Card>
+          <div>
             <p className="text-sm text-gray-500">Total Net</p>
             <p className="text-xl font-bold text-purple-600">
               {formatCurrency(stats.totalNet)}
             </p>
           </div>
         </Card>
+      </div>
+
+      {/* Additional Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <div>
-            <p className="text-sm text-gray-500">Live Sessions</p>
-            <p className="text-xl font-bold text-orange-600">
-              {stats.liveEmployees} 🔴
+            <p className="text-sm text-gray-500">💰 Total Allowances</p>
+            <p className="text-lg font-bold text-green-600">
+              {formatCurrency(stats.totalAllowances)}
             </p>
           </div>
         </Card>
-      </div>
-
-      {/* Financial Records Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <div>
-            <p className="text-sm text-gray-500">💰 Total Bonuses</p>
+            <p className="text-sm text-gray-500">🎁 Total Bonuses</p>
             <p className="text-lg font-bold text-green-600">
               {formatCurrency(stats.totalBonuses)}
             </p>
@@ -246,25 +274,9 @@ const LivePayrollDashboard: React.FC = () => {
         </Card>
         <Card>
           <div>
-            <p className="text-sm text-gray-500">🏦 Loan Deductions</p>
+            <p className="text-sm text-gray-500">⚠️ Total Shortfall</p>
             <p className="text-lg font-bold text-orange-600">
-              {formatCurrency(stats.totalLoans)}
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div>
-            <p className="text-sm text-gray-500">💳 Advance Deductions</p>
-            <p className="text-lg font-bold text-orange-600">
-              {formatCurrency(stats.totalAdvances)}
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div>
-            <p className="text-sm text-gray-500">📉 Total Deductions</p>
-            <p className="text-lg font-bold text-red-600">
-              {formatCurrency(stats.totalDeductions)}
+              {formatCurrency(stats.totalShortfall)}
             </p>
           </div>
         </Card>
@@ -277,17 +289,17 @@ const LivePayrollDashboard: React.FC = () => {
             <Table.Head>
               <Table.HeadCell>Employee</Table.HeadCell>
               <Table.HeadCell>Base Salary</Table.HeadCell>
-              <Table.HeadCell>Bonuses</Table.HeadCell>
-              <Table.HeadCell>Attendance Ded.</Table.HeadCell>
-              <Table.HeadCell>Loans</Table.HeadCell>
-              <Table.HeadCell>Advances</Table.HeadCell>
+              <Table.HeadCell>Expected Base</Table.HeadCell>
+              <Table.HeadCell>Actual Earned</Table.HeadCell>
+              <Table.HeadCell>Shortfall</Table.HeadCell>
+              <Table.HeadCell>Allowances</Table.HeadCell>
               <Table.HeadCell>Gross Salary</Table.HeadCell>
+              <Table.HeadCell>Deductions</Table.HeadCell>
               <Table.HeadCell>Net Salary</Table.HeadCell>
-              <Table.HeadCell>Status</Table.HeadCell>
             </Table.Head>
             <Table.Body>
-              {payrollResults.length > 0 ? (
-                payrollResults.map(result => (
+              {paginatedResults.length > 0 ? (
+                paginatedResults.map(result => (
                   <Table.Row
                     key={result.employee_id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-600"
@@ -296,62 +308,49 @@ const LivePayrollDashboard: React.FC = () => {
                       <div>
                         <div className="font-medium">{result.employee_name}</div>
                         <div className="text-sm text-gray-500">
-                          {result.employee_code} • {result.department_name}
+                          {result.employee_code}
                         </div>
-                        {result.has_live_session && (
-                          <div className="text-xs text-green-600 mt-1">
-                            🔴 Live: {formatHours(result.live_session_hours)}
-                          </div>
-                        )}
                       </div>
                     </Table.Cell>
                     <Table.Cell>{formatCurrency(result.base_salary)}</Table.Cell>
-                    <Table.Cell>
-                      {result.bonuses > 0 ? (
-                        <span className="text-green-600 font-medium">
-                          +{formatCurrency(result.bonuses)}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
+                    <Table.Cell className="text-blue-600">
+                      {formatCurrency(result.expected_base_salary)}
+                    </Table.Cell>
+                    <Table.Cell className="text-green-600 font-medium">
+                      {formatCurrency(result.actual_earned_base)}
                     </Table.Cell>
                     <Table.Cell>
-                      <span className={result.attendance_deduction > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
-                        {result.attendance_deduction > 0 ? formatCurrency(result.attendance_deduction) : '-'}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {result.loan_deductions > 0 ? (
+                      {result.attendance_shortfall > 0 ? (
                         <span className="text-orange-600 font-medium">
-                          {formatCurrency(result.loan_deductions)}
+                          {formatCurrency(result.attendance_shortfall)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </Table.Cell>
                     <Table.Cell>
-                      {result.advance_deductions > 0 ? (
-                        <span className="text-orange-600 font-medium">
-                          {formatCurrency(result.advance_deductions)}
+                      {result.total_earnings > 0 ? (
+                        <span className="text-green-600">
+                          {formatCurrency(result.total_earnings)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </Table.Cell>
-                    <Table.Cell className="font-medium">
+                    <Table.Cell className="font-medium text-blue-600">
                       {formatCurrency(result.gross_salary)}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {result.deductions_total > 0 ? (
+                        <span className="text-red-600">
+                          {formatCurrency(result.deductions_total)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </Table.Cell>
                     <Table.Cell className="font-bold text-purple-600">
                       {formatCurrency(result.net_salary)}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {result.attendance_deduction === 0 ? (
-                        <Badge color="success">Perfect</Badge>
-                      ) : result.attendance_deduction < result.base_salary * 0.1 ? (
-                        <Badge color="warning">Minor Ded.</Badge>
-                      ) : (
-                        <Badge color="failure">High Ded.</Badge>
-                      )}
                     </Table.Cell>
                   </Table.Row>
                 ))
@@ -365,14 +364,43 @@ const LivePayrollDashboard: React.FC = () => {
             </Table.Body>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center mt-4">
+            <div className="text-sm text-gray-500">
+              Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, calculatedResults.length)} of {calculatedResults.length} employees
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                color="gray"
+                disabled={page === 1}
+                onClick={() => setPage(page - 1)}
+              >
+                Previous
+              </Button>
+              <span className="flex items-center px-3 text-sm">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                size="sm"
+                color="gray"
+                disabled={page === totalPages}
+                onClick={() => setPage(page + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Info Footer */}
       <div className="bg-blue-50 p-4 rounded-lg">
         <p className="text-sm text-blue-800">
           ⚡ <strong>Lightning Fast:</strong> All calculations are performed in your browser in real-time.
-          Live sessions are updated automatically every 30 seconds. This is a preview only - click
-          "Calculate Payroll" to save to database.
+          Auto-updates every 30 seconds. This is a preview only - click "Calculate" button in the main dashboard to save to database.
         </p>
       </div>
     </div>

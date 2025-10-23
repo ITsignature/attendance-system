@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
-const { getDB } = require('../config/database');
+const { getDB, executeQuery } = require('../config/database');
 const { generateTokens, verifyToken } = require('../config/jwt');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const { authenticate } = require('../middleware/authMiddleware');
@@ -30,9 +30,9 @@ router.post('/login', [
   const db = getDB();
 
   try {
-    // Get user with role and client info
-    const [users] = await db.execute(`
-      SELECT 
+    // Get user with role and client info (using executeQuery with retry logic)
+    const [users] = await executeQuery(`
+      SELECT
         au.*,
         r.name as role_name,
         r.access_level,

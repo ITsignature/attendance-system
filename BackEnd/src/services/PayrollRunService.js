@@ -869,36 +869,70 @@ class PayrollRunService {
             record.run_id
         );
 
-        // Calculate gross salary with all components
-        console.log(`\n💰 Calculating gross salary components...`);
-        const grossComponents = await this.calculateGrossComponents(record, employeeData);
-        let grossSalary = grossComponents.total; // Base + Allowances + Overtime
-
-        // Add financial bonuses to gross salary
-        if (financialAdjustments.bonuses > 0) {
-            grossSalary += financialAdjustments.bonuses;
-            console.log(`   ✅ Added financial bonuses: Rs.${financialAdjustments.bonuses.toFixed(2)} to gross salary`);
-        }
-
-        // Calculate attendance-based deductions using NEW OPTIMIZED METHOD
-        const attendanceDeductions = await this.calculateEarnedSalary(
+        // =============================================
+        // STEP 1: Calculate ACTUAL EARNED BASE SALARY (prorated based on attendance)
+        // =============================================
+        console.log(`\n💰 Step 1: Calculating actual earned base salary (attendance-based)...`);
+        const attendanceCalculation = await this.calculateEarnedSalary(
             record.employee_id,
             record.run_id,
             parseFloat(record.base_salary) || 0
         );
 
-        // Calculate regular deductions based on method
-        const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData);
-        console.log(`Regular deductions for ${record.employee_name}:`, deductionComponents);
+        const actualEarnedBaseSalary = attendanceCalculation.earned_salary || 0;
+        const attendanceDeduction = attendanceCalculation.total || 0;
 
-        // Combine all deductions: regular + attendance + financial
+        console.log(`   Base Salary (Full): Rs.${parseFloat(record.base_salary).toFixed(2)}`);
+        console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
+        console.log(`   Attendance Shortfall: Rs.${attendanceDeduction.toFixed(2)}`);
+
+        // =============================================
+        // STEP 2: Calculate EPF/ETF on ACTUAL EARNED BASE SALARY ONLY (not on allowances)
+        // =============================================
+        console.log(`\n💸 Step 2: Calculating statutory deductions (EPF/ETF) on actual earned base...`);
+        const deductionComponents = await this.calculateDeductions(actualEarnedBaseSalary, calculationMethod, employeeData);
+        console.log(`   EPF/ETF calculated on: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
+        console.log(`   Total EPF/ETF: Rs.${deductionComponents.total.toFixed(2)}`);
+
+        // =============================================
+        // STEP 3: Calculate allowances and bonuses (FULL amounts, not prorated)
+        // =============================================
+        console.log(`\n🎁 Step 3: Adding full allowances and bonuses (not prorated)...`);
+        const grossComponents = await this.calculateGrossComponents(record, employeeData);
+
+        // Extract allowances (everything except base salary)
+        const baseSalary = parseFloat(record.base_salary) || 0;
+        const allowancesAmount = grossComponents.additionsTotal > 0 ? grossComponents.additionsTotal : 0;
+
+        console.log(`   Full Allowances: Rs.${allowancesAmount.toFixed(2)}`);
+        console.log(`   Financial Bonuses: Rs.${financialAdjustments.bonuses.toFixed(2)}`);
+
+        // =============================================
+        // STEP 4: Calculate GROSS SALARY
+        // =============================================
+        const grossSalary = actualEarnedBaseSalary + allowancesAmount + financialAdjustments.bonuses;
+        console.log(`\n📊 Step 4: Gross Salary Calculation:`);
+        console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
+        console.log(`   + Full Allowances: Rs.${allowancesAmount.toFixed(2)}`);
+        console.log(`   + Bonuses: Rs.${financialAdjustments.bonuses.toFixed(2)}`);
+        console.log(`   = Gross Salary: Rs.${grossSalary.toFixed(2)}`);
+
+        // =============================================
+        // STEP 5: Combine all deductions (EPF/ETF + Loans + Advances + Attendance Shortfall)
+        // Note: Attendance shortfall is added for informational display purposes
+        // =============================================
+        console.log(`\n💳 Step 5: Combining all deductions...`);
         const combinedDeductions = {
             components: [
-                ...deductionComponents.components,
-                ...attendanceDeductions.components
+                ...deductionComponents.components
             ],
-            total: deductionComponents.total + attendanceDeductions.total + financialAdjustments.summary.totalDeductions
+            total: deductionComponents.total + financialAdjustments.summary.totalDeductions
         };
+
+        // Add EPF/ETF breakdown
+        if (deductionComponents.total > 0) {
+            console.log(`   EPF/ETF (on Actual Earned Base): Rs.${deductionComponents.total.toFixed(2)}`);
+        }
 
         // Add financial deduction components
         if (financialAdjustments.loanDeductions > 0) {
@@ -906,10 +940,11 @@ class PayrollRunService {
                 code: 'LOAN_DED',
                 name: 'Loan Deductions',
                 type: 'deduction',
-                category: 'loan', // Use existing enum value
+                category: 'loan',
                 amount: financialAdjustments.loanDeductions,
                 details: `${financialAdjustments.records.loans.length} loan(s)`
             });
+            console.log(`   Loan Deductions: Rs.${financialAdjustments.loanDeductions.toFixed(2)}`);
         }
 
         if (financialAdjustments.advanceDeductions > 0) {
@@ -917,20 +952,53 @@ class PayrollRunService {
                 code: 'ADVANCE_DED',
                 name: 'Advance Deductions',
                 type: 'deduction',
-                category: 'other', // Use existing enum value
+                category: 'other',
                 amount: financialAdjustments.advanceDeductions,
                 details: `${financialAdjustments.records.advances.length} advance(s)`
             });
+            console.log(`   Advance Deductions: Rs.${financialAdjustments.advanceDeductions.toFixed(2)}`);
         }
 
-        console.log(`Combined deductions for ${record.employee_name}:`, combinedDeductions);
-        const totalDeductions = combinedDeductions.total;
+        // Add attendance shortfall for informational display in UI
+        if (attendanceDeduction > 0) {
+            combinedDeductions.components.push({
+                code: 'ATTENDANCE_SHORTFALL',
+                name: 'Attendance Shortfall (Info)',
+                type: 'deduction',
+                category: 'attendance',
+                amount: attendanceDeduction,
+                details: `Difference between full base (Rs.${baseSalary.toFixed(2)}) and actual earned (Rs.${actualEarnedBaseSalary.toFixed(2)})`
+            });
+            console.log(`   Attendance Shortfall (Info): Rs.${attendanceDeduction.toFixed(2)}`);
+        }
 
+        const totalDeductions = combinedDeductions.total;
+        console.log(`   ─────────────────────────────────────────────────────`);
+        console.log(`   Total Deductions (EPF/ETF/Loans/Advances): Rs.${totalDeductions.toFixed(2)}`);
+        console.log(`   Note: Attendance shortfall shown for info only, not deducted from net salary`);
+
+        // =============================================
+        // STEP 6: Calculate NET SALARY
+        // =============================================
         // Tax calculation removed - calculate net salary without taxes
         const totalTaxes = 0;
         const taxComponents = { total: 0, components: [] };
 
         const netSalary = grossSalary - totalDeductions;
+
+        console.log(`\n✅ Step 6: Net Salary Calculation:`);
+        console.log(`   Gross Salary: Rs.${grossSalary.toFixed(2)}`);
+        console.log(`   - Total Deductions: Rs.${totalDeductions.toFixed(2)}`);
+        console.log(`   = NET SALARY: Rs.${netSalary.toFixed(2)}`);
+
+        // Calculate total earnings and deductions from all components for display
+        // total_earnings should be ONLY allowances + bonuses (NOT including base salary)
+        const totalEarningsFromComponents = allowancesAmount + financialAdjustments.bonuses;
+        const totalDeductionsFromComponents = deductionComponents.total + financialAdjustments.loanDeductions + financialAdjustments.advanceDeductions;
+
+        console.log(`\n💾 Database Update:`);
+        console.log(`   Total Earnings (Allowances + Bonuses): Rs.${totalEarningsFromComponents.toFixed(2)} (Allowances: ${allowancesAmount.toFixed(2)} + Bonuses: ${financialAdjustments.bonuses.toFixed(2)})`);
+        console.log(`   Total Deductions: Rs.${totalDeductionsFromComponents.toFixed(2)} (EPF/ETF: ${deductionComponents.total.toFixed(2)} + Loans: ${financialAdjustments.loanDeductions.toFixed(2)} + Advances: ${financialAdjustments.advanceDeductions.toFixed(2)})`);
 
         // Update record with calculated amounts
         await db.execute(`
@@ -945,8 +1013,8 @@ class PayrollRunService {
                 calculated_at = NOW()
             WHERE id = ?
         `, [
-            Math.round((grossComponents.additionsTotal + financialAdjustments.bonuses) * 100) / 100,
-            Math.round(totalDeductions * 100) / 100,
+            Math.round(totalEarningsFromComponents * 100) / 100,
+            Math.round(totalDeductionsFromComponents * 100) / 100,
             Math.round(totalTaxes * 100) / 100,
             Math.round(grossSalary * 100) / 100,
             Math.round(grossSalary * 100) / 100,
@@ -956,20 +1024,43 @@ class PayrollRunService {
 
         // Create detailed component records with financial components
         const updatedGrossComponents = {
-            components: [...grossComponents.components]
+            components: []
         };
 
-        // Add bonus components to gross
+        // 1. Add actual earned base salary as primary earning component
+        if (actualEarnedBaseSalary > 0) {
+            updatedGrossComponents.components.push({
+                code: 'BASE_SALARY',
+                name: 'Base Salary',
+                type: 'earning',
+                category: 'basic',
+                amount: actualEarnedBaseSalary,
+                details: `Attendance-based (Full: Rs.${baseSalary.toFixed(2)}, Earned: Rs.${actualEarnedBaseSalary.toFixed(2)})`
+            });
+        }
+
+        // 2. Add all allowances (from grossComponents, excluding any base salary component)
+        if (grossComponents.components && grossComponents.components.length > 0) {
+            const allowanceComponents = grossComponents.components.filter(c => c.category !== 'basic');
+            updatedGrossComponents.components.push(...allowanceComponents);
+            console.log(`Added ${allowanceComponents.length} allowance components`);
+        }
+
+        // 3. Add financial bonuses
         if (financialAdjustments.bonuses > 0) {
             updatedGrossComponents.components.push({
                 code: 'BONUS',
                 name: 'Financial Bonuses',
                 type: 'earning',
-                category: 'bonus', // Use existing enum value
+                category: 'bonus',
                 amount: financialAdjustments.bonuses,
                 details: `${financialAdjustments.records.bonuses.length} bonus(es)`
             });
         }
+
+        console.log(`\n📝 Components to save:`);
+        console.log(`   Gross/Earnings components: ${updatedGrossComponents.components.length}`);
+        console.log(`   Deduction components: ${combinedDeductions.components.length}`);
 
         try {
             await this.createPayrollComponents(record.id, {
@@ -1004,12 +1095,24 @@ class PayrollRunService {
         console.log(`\n${'='.repeat(70)}`);
         console.log(`📊 PAYROLL CALCULATION SUMMARY: ${record.employee_name}`);
         console.log(`${'='.repeat(70)}`);
-        console.log(`   Gross Salary: Rs.${grossSalary.toFixed(2)}`);
-        console.log(`   Total Deductions: Rs.${totalDeductions.toFixed(2)}`);
-        console.log(`      - Attendance Deduction: Rs.${attendanceDeductions.total.toFixed(2)}`);
-        console.log(`      - Other Deductions: Rs.${(totalDeductions - attendanceDeductions.total).toFixed(2)}`);
+        console.log(`   Base Salary (Full): Rs.${baseSalary.toFixed(2)}`);
+        console.log(`   Actual Earned Base (Attendance-based): Rs.${actualEarnedBaseSalary.toFixed(2)}`);
+        console.log(`   Attendance Shortfall: Rs.${attendanceDeduction.toFixed(2)}`);
+        console.log(`   ─────────────────────────────────────────────────────────────────────`);
+        console.log(`   Full Allowances: Rs.${allowancesAmount.toFixed(2)}`);
+        console.log(`   Bonuses: Rs.${financialAdjustments.bonuses.toFixed(2)}`);
+        console.log(`   ─────────────────────────────────────────────────────────────────────`);
+        console.log(`   GROSS SALARY: Rs.${grossSalary.toFixed(2)}`);
+        console.log(`   ─────────────────────────────────────────────────────────────────────`);
+        console.log(`   Deductions Breakdown:`);
+        console.log(`      - EPF/ETF (on Actual Earned Base): Rs.${deductionComponents.total.toFixed(2)}`);
+        console.log(`      - Loan Deductions: Rs.${financialAdjustments.loanDeductions.toFixed(2)}`);
+        console.log(`      - Advance Deductions: Rs.${financialAdjustments.advanceDeductions.toFixed(2)}`);
+        console.log(`      - Attendance Shortfall (Info): Rs.${attendanceDeduction.toFixed(2)}`);
+        console.log(`   Total Actual Deductions (EPF/Loans/Advances): Rs.${totalDeductions.toFixed(2)}`);
         console.log(`   ─────────────────────────────────────────────────────────────────────`);
         console.log(`   NET SALARY: Rs.${netSalary.toFixed(2)}`);
+        console.log(`   Note: Attendance shortfall is shown for information only`);
         console.log(`${'='.repeat(70)}\n`);
     }
 
@@ -1710,6 +1813,39 @@ class PayrollRunService {
         const expectedSundayHoursYesterday = sundaysUntilYesterday * sundayDailyHours;
 
         // Calculate ACTUAL worked hours from COMPLETED sessions (until yesterday)
+        // First, get detailed attendance records for logging
+        const [detailedAttendance] = await db.execute(`
+            SELECT
+                date,
+                is_weekend,
+                check_in_time,
+                check_out_time,
+                payable_duration,
+                CASE
+                    WHEN is_weekend BETWEEN 2 AND 6 THEN 'Weekday'
+                    WHEN is_weekend = 7 THEN 'Saturday'
+                    WHEN is_weekend = 1 THEN 'Sunday'
+                END as day_type
+            FROM attendance
+            WHERE employee_id = ?
+            AND date BETWEEN ? AND ?
+            AND check_out_time IS NOT NULL
+            ORDER BY date ASC
+        `, [employeeId, period.period_start_date, yesterday.toISOString().split('T')[0]]);
+
+        console.log(`\n   ⏰ Calculating Completed Hours (Until Yesterday):`);
+        console.log(`      Period: ${period.period_start_date} to ${yesterday.toISOString().split('T')[0]}`);
+        console.log(`      Total completed sessions found: ${detailedAttendance.length}`);
+
+        if (detailedAttendance.length > 0) {
+            console.log(`\n      📋 Breakdown by attendance record:`);
+            detailedAttendance.forEach((record, index) => {
+                const duration = parseFloat(record.payable_duration) || 0;
+                console.log(`         ${index + 1}. ${record.date} (${record.day_type}): ${duration.toFixed(2)}h`);
+            });
+        }
+
+        // Now calculate the aggregated totals
         const [completedHours] = await db.execute(`
             SELECT
                 SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) as weekday_hours,
@@ -1725,10 +1861,10 @@ class PayrollRunService {
         const completedSaturdayHours = parseFloat(completedHours[0].saturday_hours) || 0;
         const completedSundayHours = parseFloat(completedHours[0].sunday_hours) || 0;
 
-        console.log(`\n   ⏰ Completed Hours (Until Yesterday):`);
-        console.log(`      Weekday: ${completedWeekdayHours.toFixed(2)}h`);
-        console.log(`      Saturday: ${completedSaturdayHours.toFixed(2)}h`);
-        console.log(`      Sunday: ${completedSundayHours.toFixed(2)}h`);
+        console.log(`\n      📊 Aggregated Totals:`);
+        console.log(`         Weekday: ${completedWeekdayHours.toFixed(2)}h`);
+        console.log(`         Saturday: ${completedSaturdayHours.toFixed(2)}h`);
+        console.log(`         Sunday: ${completedSundayHours.toFixed(2)}h`);
 
         // Get TODAY's attendance record for real-time calculation
         const [todayAttendance] = await db.execute(`
@@ -3579,9 +3715,29 @@ class PayrollRunService {
      */
     async getPayrollRecords(runId, clientId) {
         const db = getDB();
-        
+
+        // First get the payroll period to calculate expected base salary
+        const [periodInfo] = await db.execute(`
+            SELECT pp.period_start_date, pp.period_end_date
+            FROM payroll_runs run
+            JOIN payroll_periods pp ON run.period_id = pp.id
+            WHERE run.id = ? AND run.client_id = ?
+        `, [runId, clientId]);
+
+        if (periodInfo.length === 0) {
+            throw new Error('Payroll run not found');
+        }
+
+        const periodStart = new Date(periodInfo[0].period_start_date);
+        const periodEnd = new Date(periodInfo[0].period_end_date);
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+
+        // Calculate until today or period end, whichever is earlier
+        const calculationEndDate = today < periodEnd ? today : periodEnd;
+
         const [records] = await db.execute(`
-            SELECT 
+            SELECT
                 pr.id, pr.employee_id, pr.employee_code, pr.employee_name,
                 pr.department_name, pr.designation_name, pr.calculation_status,
                 pr.worked_days, pr.worked_hours, pr.overtime_hours, pr.leave_days,
@@ -3589,19 +3745,48 @@ class PayrollRunService {
                 pr.gross_salary, pr.taxable_income, pr.net_salary,
                 pr.payment_status, pr.payment_method, pr.payment_date,
                 pr.calculated_at, pr.notes,
-                e.base_salary
+                e.base_salary,
+                ? as period_start_date,
+                ? as calculation_end_date
             FROM payroll_records pr
             JOIN payroll_runs run ON pr.run_id = run.id
             LEFT JOIN employees e ON pr.employee_id = e.id
             WHERE pr.run_id = ? AND run.client_id = ?
             ORDER BY pr.employee_code
-        `, [runId, clientId]);
+        `, [periodStart.toISOString().split('T')[0], calculationEndDate.toISOString().split('T')[0], runId, clientId]);
 
         if (records.length === 0) {
             throw new Error('No payroll records found for this run');
         }
 
-        return records;
+        // Now calculate expected base salary and actual earned for each employee
+        const enrichedRecords = await Promise.all(records.map(async (record) => {
+            try {
+                // Calculate expected base salary until now
+                const attendanceCalc = await this.calculateEarnedSalary(
+                    record.employee_id,
+                    runId,
+                    parseFloat(record.base_salary) || 0
+                );
+
+                return {
+                    ...record,
+                    expected_base_salary: attendanceCalc.expected_salary || 0,
+                    actual_earned_base: attendanceCalc.earned_salary || 0,
+                    attendance_shortfall: attendanceCalc.total || 0
+                };
+            } catch (error) {
+                console.error(`Error calculating attendance for employee ${record.employee_id}:`, error);
+                return {
+                    ...record,
+                    expected_base_salary: 0,
+                    actual_earned_base: 0,
+                    attendance_shortfall: 0
+                };
+            }
+        }));
+
+        return enrichedRecords;
     }
 
     /**
@@ -3647,6 +3832,124 @@ class PayrollRunService {
         }
 
         return components;
+    }
+
+    /**
+     * Get all raw data needed for frontend payroll calculation (live preview)
+     * This fetches ALL data in optimized queries without doing calculations
+     */
+    async getLivePayrollData(runId, clientId) {
+        const db = getDB();
+
+        console.log(`📊 Fetching live payroll data for run: ${runId}`);
+
+        // Get payroll run and period info
+        const [runInfo] = await db.execute(`
+            SELECT
+                pr.id as run_id,
+                pr.run_name,
+                pr.run_number,
+                pr.calculation_method,
+                pp.id as period_id,
+                pp.period_start_date,
+                pp.period_end_date,
+                pp.pay_date
+            FROM payroll_runs pr
+            JOIN payroll_periods pp ON pr.period_id = pp.id
+            WHERE pr.id = ? AND pr.client_id = ?
+        `, [runId, clientId]);
+
+        if (runInfo.length === 0) {
+            throw new Error('Payroll run not found');
+        }
+
+        const period = runInfo[0];
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        const calculationEndDate = today < new Date(period.period_end_date) ? today : new Date(period.period_end_date);
+
+        // Get all employees in this payroll run
+        const [employees] = await db.execute(`
+            SELECT
+                pr.id as record_id,
+                pr.employee_id,
+                pr.employee_code,
+                pr.employee_name,
+                pr.department_name,
+                pr.designation_name,
+                e.base_salary,
+                e.department_id
+            FROM payroll_records pr
+            JOIN employees e ON pr.employee_id = e.id
+            WHERE pr.run_id = ?
+            ORDER BY pr.employee_code
+        `, [runId]);
+
+        console.log(`👥 Found ${employees.length} employees`);
+
+        // For each employee, fetch their data in parallel
+        const employeeDataPromises = employees.map(async (emp) => {
+            // Get attendance data
+            const attendanceData = await this.calculateEarnedSalary(
+                emp.employee_id,
+                runId,
+                parseFloat(emp.base_salary) || 0
+            );
+
+            // Get employee payroll data (allowances, deductions)
+            const payrollData = await this.getEmployeePayrollData(emp.employee_id, clientId, runId);
+
+            // Get financial records
+            const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
+            const financialData = await FinancialRecordsIntegration.processFinancialRecords(
+                emp.employee_id,
+                {
+                    start: period.period_start_date,
+                    end: period.period_end_date
+                },
+                runId
+            );
+
+            return {
+                ...emp,
+                attendance: {
+                    expected_salary: attendanceData.expected_salary || 0,
+                    earned_salary: attendanceData.earned_salary || 0,
+                    shortfall: attendanceData.total || 0,
+                    components: attendanceData.components || []
+                },
+                allowances: payrollData.employeeAllowances || [],
+                deductions: payrollData.configuredComponents?.deductions || [],
+                financial: {
+                    loans: financialData.loanDeductions || 0,
+                    advances: financialData.advanceDeductions || 0,
+                    bonuses: financialData.bonuses || 0,
+                    loanRecords: financialData.records?.loans || [],
+                    advanceRecords: financialData.records?.advances || [],
+                    bonusRecords: financialData.records?.bonuses || []
+                }
+            };
+        });
+
+        const enrichedEmployees = await Promise.all(employeeDataPromises);
+
+        console.log(`✅ Live payroll data fetched successfully`);
+
+        return {
+            period: {
+                start_date: period.period_start_date,
+                end_date: period.period_end_date,
+                calculation_end_date: calculationEndDate.toISOString().split('T')[0],
+                pay_date: period.pay_date
+            },
+            run: {
+                id: period.run_id,
+                name: runInfo[0].run_name,
+                number: runInfo[0].run_number,
+                calculation_method: runInfo[0].calculation_method
+            },
+            employees: enrichedEmployees
+        };
     }
 
     // =============================================

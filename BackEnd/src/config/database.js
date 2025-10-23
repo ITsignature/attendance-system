@@ -11,7 +11,7 @@ const connectDB = async () => {
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
       waitForConnections: true,
-      connectionLimit: 10,
+      connectionLimit: 20, // Increased from 10
       maxIdle: 10,
       idleTimeout: 60000,
       queueLimit: 0,
@@ -20,7 +20,6 @@ const connectDB = async () => {
       timeout: 60000,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
-      reconnect: true,
       // MySQL specific options
       charset: 'utf8mb4',
       timezone: 'Z',
