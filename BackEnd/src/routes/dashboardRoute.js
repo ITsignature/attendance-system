@@ -59,15 +59,16 @@ router.get('/overview',
 
     // Get payroll stats for current month
     const [payrollStats] = await db.execute(`
-      SELECT 
-        COUNT(*) as total_records,
+      SELECT
+        COUNT(DISTINCT pr.id) as total_records,
         COUNT(CASE WHEN pr.payment_status = 'pending' THEN 1 END) as pending_payments,
         COUNT(CASE WHEN pr.payment_status = 'paid' THEN 1 END) as completed_payments,
         SUM(CASE WHEN pr.payment_status = 'paid' THEN pr.net_salary ELSE 0 END) as total_paid_amount
       FROM payroll_records pr
-      JOIN employees e ON pr.employee_id = e.id
-      WHERE e.client_id = ?
-      AND pr.pay_period_start >= DATE_FORMAT(NOW(), '%Y-%m-01')
+      JOIN payroll_runs run ON pr.run_id = run.id
+      JOIN payroll_periods pp ON run.period_id = pp.id
+      WHERE run.client_id = ?
+      AND pp.period_start_date >= DATE_FORMAT(NOW(), '%Y-%m-01')
     `, [clientId]);
 
     // Get departments count
@@ -101,7 +102,7 @@ router.get('/attendance-overview',
 
     // Get attendance data for current week
     const [weeklyAttendance] = await db.execute(`
-      SELECT 
+      SELECT
         DAYNAME(a.date) as day_name,
         DATE(a.date) as date,
         COUNT(*) as total_records,
@@ -110,7 +111,7 @@ router.get('/attendance-overview',
         COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent_count,
         COUNT(CASE WHEN a.status = 'on_leave' THEN 1 END) as on_leave_count,
         ROUND(
-          (COUNT(CASE WHEN a.status = 'present' THEN 1 END) * 100.0 / COUNT(*)), 2
+          ((COUNT(CASE WHEN a.status = 'present' THEN 1 END) + COUNT(CASE WHEN a.status = 'late' THEN 1 END)) * 100.0 / COUNT(*)), 2
         ) as attendance_percentage
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
@@ -238,7 +239,7 @@ router.get('/attendance-trends',
     const months = req.query.months || 6;
 
     const [trends] = await db.execute(`
-      SELECT 
+      SELECT
         DATE_FORMAT(a.date, '%Y-%m') as month,
         COUNT(*) as total_records,
         COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_days,
@@ -246,7 +247,7 @@ router.get('/attendance-trends',
         COUNT(CASE WHEN a.status = 'late' THEN 1 END) as late_days,
         ROUND(AVG(a.total_hours), 2) as avg_hours_per_day,
         ROUND(
-          (COUNT(CASE WHEN a.status = 'present' THEN 1 END) * 100.0 / COUNT(*)), 2
+          ((COUNT(CASE WHEN a.status = 'present' THEN 1 END) + COUNT(CASE WHEN a.status = 'late' THEN 1 END)) * 100.0 / COUNT(*)), 2
         ) as attendance_percentage
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
