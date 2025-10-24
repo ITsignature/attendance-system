@@ -107,11 +107,11 @@ router.get('/attendance-overview',
         DATE(a.date) as date,
         COUNT(*) as total_records,
         COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_count,
-        COUNT(CASE WHEN a.status = 'late' THEN 1 END) as late_count,
+        COUNT(CASE WHEN a.arrival_status = 'late' THEN 1 END) as late_count,
         COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent_count,
         COUNT(CASE WHEN a.status = 'on_leave' THEN 1 END) as on_leave_count,
         ROUND(
-          ((COUNT(CASE WHEN a.status = 'present' THEN 1 END) + COUNT(CASE WHEN a.status = 'late' THEN 1 END)) * 100.0 / COUNT(*)), 2
+          ((COUNT(CASE WHEN a.status = 'present' THEN 1 END) + COUNT(CASE WHEN a.arrival_status = 'late' THEN 1 END)) * 100.0 / COUNT(*)), 2
         ) as attendance_percentage
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id

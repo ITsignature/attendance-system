@@ -3745,12 +3745,11 @@ class PayrollRunService {
                 pr.gross_salary, pr.taxable_income, pr.net_salary,
                 pr.payment_status, pr.payment_method, pr.payment_date,
                 pr.calculated_at, pr.notes,
-                e.base_salary,
+                pr.base_salary,
                 ? as period_start_date,
                 ? as calculation_end_date
             FROM payroll_records pr
             JOIN payroll_runs run ON pr.run_id = run.id
-            LEFT JOIN employees e ON pr.employee_id = e.id
             WHERE pr.run_id = ? AND run.client_id = ?
             ORDER BY pr.employee_code
         `, [periodStart.toISOString().split('T')[0], calculationEndDate.toISOString().split('T')[0], runId, clientId]);
