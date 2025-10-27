@@ -5,8 +5,9 @@
  * Usage: node src/scripts/backfill_payable_duration.js
  */
 
-// Load environment variables
-require('dotenv').config();
+// Load environment variables from BackEnd directory
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const { connectDB, getDB } = require('../config/database');
 
@@ -87,6 +88,8 @@ async function backfillPayableDuration() {
         AND check_out_time IS NOT NULL
         AND scheduled_in_time IS NOT NULL
         AND scheduled_out_time IS NOT NULL
+        AND date >= '2025-09-01'
+        AND date <= '2025-10-27'
       ORDER BY date DESC
     `);
 

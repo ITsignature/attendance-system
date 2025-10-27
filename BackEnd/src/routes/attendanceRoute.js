@@ -1055,7 +1055,9 @@ console.log('final workDuration:', workDuration);
 // =============================================
 router.post('/bulk-update-status', [
   checkPermission('attendance.edit'),
-  body('date').isISO8601(),
+  body('date').optional().isISO8601().withMessage('Invalid date format'),
+  body('start_date').optional().isISO8601().withMessage('Invalid start_date format'),
+  body('end_date').optional().isISO8601().withMessage('Invalid end_date format'),
   body('employee_ids').isArray().withMessage('employee_ids must be an array'),
   body('employee_ids.*').isUUID(),
   body('update_arrival').optional().isBoolean(),
@@ -1071,20 +1073,60 @@ router.post('/bulk-update-status', [
   }
 
   const db = getDB();
-  const { date, employee_ids, update_arrival = true, update_duration = true } = req.body;
+  const { date, start_date, end_date, employee_ids, update_arrival = true, update_duration = true } = req.body;
+
+  // Validate date parameters
+  if (!date && (!start_date || !end_date)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Either provide "date" for single day OR "start_date" and "end_date" for date range'
+    });
+  }
+
+  // Generate date array
+  const dates = [];
+  if (date) {
+    // Single date mode
+    dates.push(date);
+  } else {
+    // Date range mode
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+
+    if (startDate > endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'start_date must be before or equal to end_date'
+      });
+    }
+
+    // Generate all dates in range
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      dates.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+  }
+
+  console.log(`📊 Bulk update for ${employee_ids.length} employees across ${dates.length} dates`);
+
   const results = [];
+  let totalProcessed = 0;
+  let totalUpdated = 0;
 
   try {
-    for (const employeeId of employee_ids) {
+    for (const currentDate of dates) {
+      for (const employeeId of employee_ids) {
+        totalProcessed++;
       try {
         // Get employee schedule and duration settings
-        const schedule = await getEmployeeSchedule(employeeId, req.user.clientId, db, date);
+        const schedule = await getEmployeeSchedule(employeeId, req.user.clientId, db, currentDate);
         const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
-        
+
         // Check if attendance record exists
         const [existing] = await db.execute(`
           SELECT * FROM attendance WHERE employee_id = ? AND date = ?
-        `, [employeeId, date]);
+        `, [employeeId, currentDate]);
 
         if (existing.length > 0) {
           const record = existing[0];
@@ -1171,14 +1213,17 @@ router.post('/bulk-update-status', [
             `, updateValues);
 
             results.push({
+              date: currentDate,
               employee_id: employeeId,
               employee_name: schedule.employee_name,
               arrival_updated: arrivalUpdated,
               duration_updated: durationUpdated,
               updated: true
             });
+            totalUpdated++;
           } else {
             results.push({
+              date: currentDate,
               employee_id: employeeId,
               employee_name: schedule.employee_name,
               updated: false,
@@ -1187,6 +1232,7 @@ router.post('/bulk-update-status', [
           }
         } else {
           results.push({
+            date: currentDate,
             employee_id: employeeId,
             employee_name: schedule.employee_name,
             updated: false,
@@ -1195,10 +1241,12 @@ router.post('/bulk-update-status', [
         }
       } catch (error) {
         results.push({
+          date: currentDate,
           employee_id: employeeId,
           updated: false,
           error: error.message
         });
+      }
       }
     }
 
@@ -1206,13 +1254,15 @@ router.post('/bulk-update-status', [
 
     res.status(200).json({
       success: true,
-      message: `Bulk status update completed. ${updatedCount} records updated.`,
+      message: `Bulk status update completed. ${updatedCount} records updated across ${dates.length} date(s).`,
       data: {
         results,
         summary: {
-          total_processed: employee_ids.length,
-          updated: updatedCount,
-          skipped: employee_ids.length - updatedCount
+          total_dates: dates.length,
+          total_employees: employee_ids.length,
+          total_processed: totalProcessed,
+          updated: totalUpdated,
+          skipped: totalProcessed - totalUpdated
         }
       }
     });
@@ -1222,6 +1272,156 @@ router.post('/bulk-update-status', [
     return res.status(500).json({
       success: false,
       message: 'Bulk update failed',
+      error: error.message
+    });
+  }
+}));
+
+// =============================================
+// BULK UPDATE SCHEDULED TIMES
+// =============================================
+router.post('/bulk-update-scheduled-times', [
+  checkPermission('attendance.edit'),
+  body('start_date').isISO8601().withMessage('Invalid start_date format'),
+  body('end_date').isISO8601().withMessage('Invalid end_date format'),
+  body('employee_ids').isArray().withMessage('employee_ids must be an array'),
+  body('employee_ids.*').isUUID()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+
+  const db = getDB();
+  const { start_date, end_date, employee_ids } = req.body;
+
+  // Validate date range
+  const startDate = new Date(start_date);
+  const endDate = new Date(end_date);
+
+  if (startDate > endDate) {
+    return res.status(400).json({
+      success: false,
+      message: 'start_date must be before or equal to end_date'
+    });
+  }
+
+  // Generate all dates in range
+  const dates = [];
+  const currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    dates.push(currentDate.toISOString().split('T')[0]);
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  console.log(`📅 Bulk scheduled times update for ${employee_ids.length} employees across ${dates.length} dates`);
+
+  const results = [];
+  let totalProcessed = 0;
+  let totalUpdated = 0;
+  let totalSkipped = 0;
+
+  try {
+    for (const dateStr of dates) {
+      for (const employeeId of employee_ids) {
+        totalProcessed++;
+
+        try {
+          // Get employee schedule for this specific date (handles weekend working days)
+          const schedule = await getEmployeeSchedule(employeeId, req.user.clientId, db, dateStr);
+
+          // Check if attendance record exists
+          const [existing] = await db.execute(`
+            SELECT id, scheduled_in_time, scheduled_out_time
+            FROM attendance
+            WHERE employee_id = ? AND date = ?
+          `, [employeeId, dateStr]);
+
+          if (existing.length > 0) {
+            const record = existing[0];
+            const newScheduledIn = schedule.start_time || null;
+            const newScheduledOut = schedule.end_time || null;
+
+            // Check if update is needed
+            if (record.scheduled_in_time !== newScheduledIn || record.scheduled_out_time !== newScheduledOut) {
+              await db.execute(`
+                UPDATE attendance
+                SET scheduled_in_time = ?,
+                    scheduled_out_time = ?,
+                    updated_by = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+              `, [newScheduledIn, newScheduledOut, req.user.userId, record.id]);
+
+              results.push({
+                date: dateStr,
+                employee_id: employeeId,
+                employee_name: schedule.employee_name,
+                old_scheduled_in: record.scheduled_in_time,
+                old_scheduled_out: record.scheduled_out_time,
+                new_scheduled_in: newScheduledIn,
+                new_scheduled_out: newScheduledOut,
+                updated: true
+              });
+              totalUpdated++;
+            } else {
+              results.push({
+                date: dateStr,
+                employee_id: employeeId,
+                employee_name: schedule.employee_name,
+                scheduled_in: newScheduledIn,
+                scheduled_out: newScheduledOut,
+                updated: false,
+                message: 'Scheduled times already correct'
+              });
+              totalSkipped++;
+            }
+          } else {
+            results.push({
+              date: dateStr,
+              employee_id: employeeId,
+              employee_name: schedule.employee_name,
+              updated: false,
+              message: 'No attendance record found for this date'
+            });
+            totalSkipped++;
+          }
+        } catch (error) {
+          results.push({
+            date: dateStr,
+            employee_id: employeeId,
+            updated: false,
+            error: error.message
+          });
+          totalSkipped++;
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk scheduled times update completed. ${totalUpdated} records updated across ${dates.length} date(s).`,
+      data: {
+        results,
+        summary: {
+          total_dates: dates.length,
+          total_employees: employee_ids.length,
+          total_processed: totalProcessed,
+          updated: totalUpdated,
+          skipped: totalSkipped
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in bulk scheduled times update:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Bulk scheduled times update failed',
       error: error.message
     });
   }

@@ -409,8 +409,7 @@ router.post('/advances', async (req, res) => {
     const months = parseInt(deduction_months);
     const monthlyDeduction = advanceAmount / months;
     const requestDate = new Date().toISOString().split('T')[0];
-    const deductionStartDate = new Date();
-    deductionStartDate.setMonth(deductionStartDate.getMonth() + 1); // Start next month
+    const deductionStartDate = new Date(); // Start immediately (today)
 
     // Insert into dedicated employee_advances table
     await connection.execute(`

@@ -876,7 +876,8 @@ class PayrollRunService {
         const attendanceCalculation = await this.calculateEarnedSalary(
             record.employee_id,
             record.run_id,
-            parseFloat(record.base_salary) || 0
+            parseFloat(record.base_salary) || 0,
+            false  // Do NOT include today's live session for final calculation
         );
 
         const actualEarnedBaseSalary = attendanceCalculation.earned_salary || 0;
@@ -1697,9 +1698,24 @@ class PayrollRunService {
      * Calculate earned salary based on worked hours (NEW OPTIMIZED APPROACH - FIXED)
      * Calculates expected salary until today vs actual earned salary
      * Deduction = Expected Earned (until today) - Actual Earned (until today)
+     *
+     * @param {string} employeeId - Employee ID
+     * @param {string} runId - Payroll run ID
+     * @param {number} baseSalary - Base salary
+     * @param {boolean} includeLiveSession - Whether to include today's ongoing session (default: false)
      */
-    async calculateEarnedSalary(employeeId, runId, baseSalary) {
+    async calculateEarnedSalary(employeeId, runId, baseSalary, includeLiveSession = false) {
         const db = getDB();
+
+        // Get employee name and code for logging
+        const [employeeInfo] = await db.execute(`
+            SELECT first_name, last_name, employee_code
+            FROM employees
+            WHERE id = ?
+        `, [employeeId]);
+
+        const employeeName = employeeInfo[0] ? `${employeeInfo[0].first_name} ${employeeInfo[0].last_name}` : 'Unknown';
+        const employeeCode = employeeInfo[0]?.employee_code || employeeId;
 
         // Get payroll period info and client info
         const [periodInfo] = await db.execute(`
@@ -1723,11 +1739,12 @@ class PayrollRunService {
         const calculationEndDate = today < periodEndDateFull ? today : periodEndDateFull;
         const isPartialPeriod = today < periodEndDateFull;
 
-        console.log(`\n💰 CALCULATING ATTENDANCE DEDUCTION (CORRECTED APPROACH)`);
-        console.log(`   Employee ID: ${employeeId}`);
+        console.log(`\n💰 CALCULATING ATTENDANCE DEDUCTION ${includeLiveSession ? '(LIVE PREVIEW - Real-time)' : '(FINAL CALCULATION - Completed sessions only)'}`);
+        console.log(`   👤 Employee: ${employeeName} (${employeeCode})`);
         console.log(`   📅 Full Period: ${period.period_start_date} to ${period.period_end_date}`);
         console.log(`   📅 Calculation Until: ${calculationEndDate.toISOString().split('T')[0]} ${isPartialPeriod ? '(PARTIAL - Until Today)' : '(FULL PERIOD)'}`);
         console.log(`   Base Salary (Full Month): Rs.${baseSalary.toFixed(2)}`);
+        console.log(`   Mode: ${includeLiveSession ? '⚡ REAL-TIME (includes ongoing session)' : '✅ FINAL (completed sessions only)'}`);
 
         // Get pre-calculated hourly rates and working days from payroll_records
         const [payrollRecord] = await db.execute(`
@@ -1761,20 +1778,27 @@ class PayrollRunService {
         const saturdayDailyHours = parseFloat(rates.saturday_daily_hours) || 0;
         const sundayDailyHours = parseFloat(rates.sunday_daily_hours) || 0;
 
-        console.log(`\n   💵 Pre-calculated Rates (from payroll_records):`);
+        console.log(`\n   💵 Pre-calculated Rates for ${employeeName} (${employeeCode}):`);
         console.log(`      Daily Salary: Rs.${dailySalary.toFixed(2)}`);
         console.log(`      Weekday Hourly Rate: Rs.${weekdayHourlyRate.toFixed(2)}`);
         console.log(`      Saturday Hourly Rate: Rs.${saturdayHourlyRate.toFixed(2)}`);
         console.log(`      Sunday Hourly Rate: Rs.${sundayHourlyRate.toFixed(2)}`);
-        console.log(`\n   📊 Full Period Working Days:`);
+        console.log(`\n   📊 Full Period Working Days for ${employeeName} (${employeeCode}):`);
         console.log(`      Weekdays: ${fullPeriodWeekdays}, Saturdays: ${fullPeriodSaturdays}, Sundays: ${fullPeriodSundays}`);
 
-        // Calculate working days UNTIL YESTERDAY (not including today)
+        // Calculate working days for expected hours
+        // For FINAL mode: Include today as a full working day
+        // For LIVE mode: Use yesterday, then add today's partial hours separately
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         yesterday.setHours(23, 59, 59, 999);
 
-        let workingDaysUntilYesterday;
+        const todayDate = new Date();
+        todayDate.setHours(23, 59, 59, 999);
+
+        const calculationDate = includeLiveSession ? yesterday : todayDate;
+
+        let workingDaysForExpected;
         if (isPartialPeriod) {
             // Get employee info for department
             const [empInfo] = await db.execute(`
@@ -1782,17 +1806,17 @@ class PayrollRunService {
             `, [employeeId]);
 
             const HolidayService = require('./HolidayService');
-            workingDaysUntilYesterday = await HolidayService.calculateWorkingDays(
+            workingDaysForExpected = await HolidayService.calculateWorkingDays(
                 clientId,
                 period.period_start_date,
-                yesterday.toISOString().split('T')[0],
+                calculationDate.toISOString().split('T')[0],
                 empInfo[0]?.department_id,
                 false,
                 employeeId
             );
         } else {
             // Full period - use pre-calculated values
-            workingDaysUntilYesterday = {
+            workingDaysForExpected = {
                 working_days: fullPeriodWeekdays + fullPeriodSaturdays + fullPeriodSundays,
                 weekend_working_days: fullPeriodSaturdays + fullPeriodSundays,
                 working_saturdays: fullPeriodSaturdays,
@@ -1800,19 +1824,22 @@ class PayrollRunService {
             };
         }
 
-        const weekdaysUntilYesterday = (workingDaysUntilYesterday.working_days - workingDaysUntilYesterday.weekend_working_days) || 0;
-        const saturdaysUntilYesterday = workingDaysUntilYesterday.working_saturdays || 0;
-        const sundaysUntilYesterday = workingDaysUntilYesterday.working_sundays || 0;
+        const weekdaysForExpected = (workingDaysForExpected.working_days - workingDaysForExpected.weekend_working_days) || 0;
+        const saturdaysForExpected = workingDaysForExpected.working_saturdays || 0;
+        const sundaysForExpected = workingDaysForExpected.working_sundays || 0;
 
-        console.log(`\n   📊 Working Days Until Yesterday:`);
-        console.log(`      Weekdays: ${weekdaysUntilYesterday}, Saturdays: ${saturdaysUntilYesterday}, Sundays: ${sundaysUntilYesterday}`);
+        console.log(`\n   📊 Working Days for Expected Calculation for ${employeeName} (${employeeCode}):`);
+        console.log(`      Up to: ${calculationDate.toISOString().split('T')[0]} ${includeLiveSession ? '(yesterday, today calculated separately)' : '(including today)'}`);
+        console.log(`      Weekdays: ${weekdaysForExpected}, Saturdays: ${saturdaysForExpected}, Sundays: ${sundaysForExpected}`);
 
-        // Calculate EXPECTED hours from completed days (until yesterday)
-        const expectedWeekdayHoursYesterday = weekdaysUntilYesterday * weekdayDailyHours;
-        const expectedSaturdayHoursYesterday = saturdaysUntilYesterday * saturdayDailyHours;
-        const expectedSundayHoursYesterday = sundaysUntilYesterday * sundayDailyHours;
+        // Calculate EXPECTED hours
+        const expectedWeekdayHoursBase = weekdaysForExpected * weekdayDailyHours;
+        const expectedSaturdayHoursBase = saturdaysForExpected * saturdayDailyHours;
+        const expectedSundayHoursBase = sundaysForExpected * sundayDailyHours;
 
-        // Calculate ACTUAL worked hours from COMPLETED sessions (until yesterday)
+        // Calculate ACTUAL worked hours from COMPLETED sessions (including today's completed sessions)
+        const todayDateStr = todayDate.toISOString().split('T')[0];
+
         // First, get detailed attendance records for logging
         const [detailedAttendance] = await db.execute(`
             SELECT
@@ -1831,14 +1858,14 @@ class PayrollRunService {
             AND date BETWEEN ? AND ?
             AND check_out_time IS NOT NULL
             ORDER BY date ASC
-        `, [employeeId, period.period_start_date, yesterday.toISOString().split('T')[0]]);
+        `, [employeeId, period.period_start_date, todayDateStr]);
 
-        console.log(`\n   ⏰ Calculating Completed Hours (Until Yesterday):`);
-        console.log(`      Period: ${period.period_start_date} to ${yesterday.toISOString().split('T')[0]}`);
+        console.log(`\n   ⏰ Calculating Completed Hours for ${employeeName} (${employeeCode}) - All completed sessions:`);
+        console.log(`      Period: ${period.period_start_date} to ${todayDateStr}`);
         console.log(`      Total completed sessions found: ${detailedAttendance.length}`);
 
         if (detailedAttendance.length > 0) {
-            console.log(`\n      📋 Breakdown by attendance record:`);
+            console.log(`\n      📋 Attendance Breakdown for ${employeeName} (${employeeCode}):`);
             detailedAttendance.forEach((record, index) => {
                 const duration = parseFloat(record.payable_duration) || 0;
                 console.log(`         ${index + 1}. ${record.date} (${record.day_type}): ${duration.toFixed(2)}h`);
@@ -1855,35 +1882,36 @@ class PayrollRunService {
             WHERE employee_id = ?
             AND date BETWEEN ? AND ?
             AND check_out_time IS NOT NULL
-        `, [employeeId, period.period_start_date, yesterday.toISOString().split('T')[0]]);
+        `, [employeeId, period.period_start_date, todayDateStr]);
 
         const completedWeekdayHours = parseFloat(completedHours[0].weekday_hours) || 0;
         const completedSaturdayHours = parseFloat(completedHours[0].saturday_hours) || 0;
         const completedSundayHours = parseFloat(completedHours[0].sunday_hours) || 0;
 
-        console.log(`\n      📊 Aggregated Totals:`);
+        console.log(`\n      📊 Aggregated Totals for ${employeeName} (${employeeCode}):`);
         console.log(`         Weekday: ${completedWeekdayHours.toFixed(2)}h`);
         console.log(`         Saturday: ${completedSaturdayHours.toFixed(2)}h`);
         console.log(`         Sunday: ${completedSundayHours.toFixed(2)}h`);
 
-        // Get TODAY's attendance record for real-time calculation
-        const [todayAttendance] = await db.execute(`
-            SELECT
-                scheduled_in_time,
-                check_in_time,
-                is_weekend
-            FROM attendance
-            WHERE employee_id = ?
-            AND date = CURDATE()
-            LIMIT 1
-        `, [employeeId]);
-
+        // Get TODAY's attendance record for real-time calculation (only if includeLiveSession is true)
         let todayExpectedHours = 0;
         let todayActualHours = 0;
         let todayDayType = null;
         let todayIsLive = false;
 
-        if (todayAttendance.length > 0) {
+        if (includeLiveSession) {
+            const [todayAttendance] = await db.execute(`
+                SELECT
+                    scheduled_in_time,
+                    check_in_time,
+                    is_weekend
+                FROM attendance
+                WHERE employee_id = ?
+                AND date = CURDATE()
+                LIMIT 1
+            `, [employeeId]);
+
+            if (todayAttendance.length > 0) {
             const scheduledStart = todayAttendance[0].scheduled_in_time;
             const checkIn = todayAttendance[0].check_in_time;
             const isWeekend = todayAttendance[0].is_weekend;
@@ -1919,55 +1947,66 @@ class PayrollRunService {
             }
 
             if (todayIsLive) {
-                console.log(`\n   🔴 LIVE SESSION TODAY (${todayDayType.toUpperCase()}):`);
+                console.log(`\n   🔴 LIVE SESSION TODAY for ${employeeName} (${employeeCode}) - ${todayDayType.toUpperCase()}:`);
                 console.log(`      Scheduled Start: ${scheduledStart}`);
                 console.log(`      Check-in Time: ${checkIn}`);
                 console.log(`      Current Time: ${now.toLocaleTimeString('en-US', {hour12: false})}`);
                 console.log(`      Expected Hours (scheduled → now): ${todayExpectedHours.toFixed(2)}h`);
                 console.log(`      Actual Hours (check-in → now): ${todayActualHours.toFixed(2)}h`);
             }
+            }
+        } else {
+            console.log(`\n   ⏰ Live session calculation SKIPPED (final calculation mode)`);
         }
 
-        // Calculate TOTAL expected hours (yesterday + today)
-        let totalExpectedWeekdayHours = expectedWeekdayHoursYesterday;
-        let totalExpectedSaturdayHours = expectedSaturdayHoursYesterday;
-        let totalExpectedSundayHours = expectedSundayHoursYesterday;
+        // Calculate TOTAL expected hours
+        // For FINAL calculation: Base hours already include today as full day
+        // For LIVE preview: Base hours don't include today, we add today's partial hours
+        let totalExpectedWeekdayHours = expectedWeekdayHoursBase;
+        let totalExpectedSaturdayHours = expectedSaturdayHoursBase;
+        let totalExpectedSundayHours = expectedSundayHoursBase;
 
-        if (todayDayType === 'weekday') {
+        // Add today's expected ongoing hours if we're in live preview mode
+        if (includeLiveSession && todayDayType === 'weekday') {
             totalExpectedWeekdayHours += todayExpectedHours;
-        } else if (todayDayType === 'saturday') {
+        } else if (includeLiveSession && todayDayType === 'saturday') {
             totalExpectedSaturdayHours += todayExpectedHours;
-        } else if (todayDayType === 'sunday') {
+        } else if (includeLiveSession && todayDayType === 'sunday') {
             totalExpectedSundayHours += todayExpectedHours;
         }
 
         const totalExpectedHours = totalExpectedWeekdayHours + totalExpectedSaturdayHours + totalExpectedSundayHours;
 
-        // Calculate TOTAL actual hours (completed + today's live session)
+        // Calculate TOTAL actual hours
+        // completedWeekdayHours already includes ALL completed sessions (including today's completed sessions)
+        // We only add today's live session hours if includeLiveSession is true
         let totalActualWeekdayHours = completedWeekdayHours;
         let totalActualSaturdayHours = completedSaturdayHours;
         let totalActualSundayHours = completedSundayHours;
 
-        if (todayDayType === 'weekday') {
+        // Only add today's ongoing session hours if we're including live session
+        if (includeLiveSession && todayDayType === 'weekday') {
             totalActualWeekdayHours += todayActualHours;
-        } else if (todayDayType === 'saturday') {
+        } else if (includeLiveSession && todayDayType === 'saturday') {
             totalActualSaturdayHours += todayActualHours;
-        } else if (todayDayType === 'sunday') {
+        } else if (includeLiveSession && todayDayType === 'sunday') {
             totalActualSundayHours += todayActualHours;
         }
 
         const totalActualHours = totalActualWeekdayHours + totalActualSaturdayHours + totalActualSundayHours;
 
-        console.log(`\n   ⏰ TOTAL EXPECTED Hours (until NOW):`);
-        console.log(`      Weekday: ${totalExpectedWeekdayHours.toFixed(2)}h`);
-        console.log(`      Saturday: ${totalExpectedSaturdayHours.toFixed(2)}h`);
-        console.log(`      Sunday: ${totalExpectedSundayHours.toFixed(2)}h`);
+        const modeLabel = includeLiveSession ? 'including live session' : 'completed sessions only';
+
+        console.log(`\n   ⏰ TOTAL EXPECTED Hours for ${employeeName} (${employeeCode}) - ${modeLabel}:`);
+        console.log(`      Weekday: ${totalExpectedWeekdayHours.toFixed(2)}h${includeLiveSession && todayDayType === 'weekday' && todayExpectedHours > 0 ? ` (includes ${todayExpectedHours.toFixed(2)}h expected today)` : ''}`);
+        console.log(`      Saturday: ${totalExpectedSaturdayHours.toFixed(2)}h${includeLiveSession && todayDayType === 'saturday' && todayExpectedHours > 0 ? ` (includes ${todayExpectedHours.toFixed(2)}h expected today)` : ''}`);
+        console.log(`      Sunday: ${totalExpectedSundayHours.toFixed(2)}h${includeLiveSession && todayDayType === 'sunday' && todayExpectedHours > 0 ? ` (includes ${todayExpectedHours.toFixed(2)}h expected today)` : ''}`);
         console.log(`      Total Expected: ${totalExpectedHours.toFixed(2)}h`);
 
-        console.log(`\n   ⏰ TOTAL ACTUAL Hours (including live session):`);
-        console.log(`      Weekday: ${totalActualWeekdayHours.toFixed(2)}h${todayDayType === 'weekday' && todayIsLive ? ` (includes ${todayActualHours.toFixed(2)}h live)` : ''}`);
-        console.log(`      Saturday: ${totalActualSaturdayHours.toFixed(2)}h${todayDayType === 'saturday' && todayIsLive ? ` (includes ${todayActualHours.toFixed(2)}h live)` : ''}`);
-        console.log(`      Sunday: ${totalActualSundayHours.toFixed(2)}h${todayDayType === 'sunday' && todayIsLive ? ` (includes ${todayActualHours.toFixed(2)}h live)` : ''}`);
+        console.log(`\n   ⏰ TOTAL ACTUAL Hours for ${employeeName} (${employeeCode}) - ${modeLabel}:`);
+        console.log(`      Weekday: ${totalActualWeekdayHours.toFixed(2)}h${includeLiveSession && todayDayType === 'weekday' && todayIsLive ? ` (includes ${todayActualHours.toFixed(2)}h live)` : ''}`);
+        console.log(`      Saturday: ${totalActualSaturdayHours.toFixed(2)}h${includeLiveSession && todayDayType === 'saturday' && todayIsLive ? ` (includes ${todayActualHours.toFixed(2)}h live)` : ''}`);
+        console.log(`      Sunday: ${totalActualSundayHours.toFixed(2)}h${includeLiveSession && todayDayType === 'sunday' && todayIsLive ? ` (includes ${todayActualHours.toFixed(2)}h live)` : ''}`);
         console.log(`      Total Actual: ${totalActualHours.toFixed(2)}h`);
 
         // Use the total hours for salary calculation
@@ -1984,7 +2023,7 @@ class PayrollRunService {
         const expectedSundayEarned = expectedSundayHours * sundayHourlyRate;
         const totalExpectedEarned = expectedWeekdayEarned + expectedSaturdayEarned + expectedSundayEarned;
 
-        console.log(`\n   💵 EXPECTED Earned Salary (until NOW):`);
+        console.log(`\n   💵 EXPECTED Earned Salary for ${employeeName} (${employeeCode}) - until NOW:`);
         console.log(`      Weekday: ${expectedWeekdayHours.toFixed(2)}h × Rs.${weekdayHourlyRate.toFixed(2)} = Rs.${expectedWeekdayEarned.toFixed(2)}`);
         console.log(`      Saturday: ${expectedSaturdayHours.toFixed(2)}h × Rs.${saturdayHourlyRate.toFixed(2)} = Rs.${expectedSaturdayEarned.toFixed(2)}`);
         console.log(`      Sunday: ${expectedSundayHours.toFixed(2)}h × Rs.${sundayHourlyRate.toFixed(2)} = Rs.${expectedSundayEarned.toFixed(2)}`);
@@ -1997,7 +2036,7 @@ class PayrollRunService {
         const actualSundayEarned = actualSundayHours * sundayHourlyRate;
         const totalActualEarned = actualWeekdayEarned + actualSaturdayEarned + actualSundayEarned;
 
-        console.log(`\n   💵 ACTUAL Earned Salary (including live session):`);
+        console.log(`\n   💵 ACTUAL Earned Salary for ${employeeName} (${employeeCode}) - including live session:`);
         console.log(`      Weekday: ${actualWeekdayHours.toFixed(2)}h × Rs.${weekdayHourlyRate.toFixed(2)} = Rs.${actualWeekdayEarned.toFixed(2)}`);
         console.log(`      Saturday: ${actualSaturdayHours.toFixed(2)}h × Rs.${saturdayHourlyRate.toFixed(2)} = Rs.${actualSaturdayEarned.toFixed(2)}`);
         console.log(`      Sunday: ${actualSundayHours.toFixed(2)}h × Rs.${sundayHourlyRate.toFixed(2)} = Rs.${actualSundayEarned.toFixed(2)}`);
@@ -2018,25 +2057,28 @@ class PayrollRunService {
             hour12: false
         });
 
-        console.log(`\n   📊 FINAL CALCULATION (REAL-TIME):`);
+        const calcMode = includeLiveSession ? 'REAL-TIME (Live Preview)' : 'FINAL CALCULATION';
+        console.log(`\n   📊 ${calcMode} for ${employeeName} (${employeeCode}):`);
         console.log(`      Calculated At: ${currentTimeStr}`);
-        console.log(`      Expected Earned (until NOW): Rs.${totalExpectedEarned.toFixed(2)}`);
-        console.log(`      Actual Earned (until NOW): Rs.${totalActualEarned.toFixed(2)}`);
+        console.log(`      Expected Earned: Rs.${totalExpectedEarned.toFixed(2)}`);
+        console.log(`      Actual Earned: Rs.${totalActualEarned.toFixed(2)}`);
         console.log(`      ─────────────────────────────────────────────────────`);
         console.log(`      Attendance Deduction: Rs.${deduction.toFixed(2)}`);
         console.log(`      (Formula: Expected - Actual, NOT Base Salary - Actual)`);
 
         if (deduction === 0) {
-            console.log(`      ✅ No deduction - Employee worked all expected hours!`);
+            console.log(`      ✅ No deduction - ${employeeName} worked all expected hours!`);
         } else {
             const deductionPercentage = totalExpectedEarned > 0 ? ((deduction / totalExpectedEarned) * 100).toFixed(2) : 0;
             const shortfallHours = totalExpectedHours - totalActualHours;
-            console.log(`      📉 Shortfall: ${shortfallHours.toFixed(2)} hours (${deductionPercentage}% of expected)`);
+            console.log(`      📉 Shortfall for ${employeeName}: ${shortfallHours.toFixed(2)} hours (${deductionPercentage}% of expected)`);
         }
 
-        if (todayIsLive) {
-            console.log(`\n   ⚠️  NOTE: Employee is currently checked in. Running this calculation`);
-            console.log(`      again later will produce a different result as time progresses.`);
+        if (includeLiveSession && todayIsLive) {
+            console.log(`\n   ⚠️  NOTE: ${employeeName} is currently checked in. This is a LIVE PREVIEW.`);
+            console.log(`      Running this calculation again later will produce a different result as time progresses.`);
+        } else if (!includeLiveSession) {
+            console.log(`\n   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).`);
         }
 
         return {
@@ -3840,115 +3882,149 @@ class PayrollRunService {
     async getLivePayrollData(runId, clientId) {
         const db = getDB();
 
+        // Start logging for live preview
+        payrollLogger.startLogging(runId, 'live-preview');
+
         console.log(`📊 Fetching live payroll data for run: ${runId}`);
+        console.log(`👤 Client ID: ${clientId}`);
 
-        // Get payroll run and period info
-        const [runInfo] = await db.execute(`
-            SELECT
-                pr.id as run_id,
-                pr.run_name,
-                pr.run_number,
-                pr.calculation_method,
-                pp.id as period_id,
-                pp.period_start_date,
-                pp.period_end_date,
-                pp.pay_date
-            FROM payroll_runs pr
-            JOIN payroll_periods pp ON pr.period_id = pp.id
-            WHERE pr.id = ? AND pr.client_id = ?
-        `, [runId, clientId]);
+        try {
+            // Get payroll run and period info
+            const [runInfo] = await db.execute(`
+                SELECT
+                    pr.id as run_id,
+                    pr.run_name,
+                    pr.run_number,
+                    pr.calculation_method,
+                    pp.id as period_id,
+                    pp.period_start_date,
+                    pp.period_end_date,
+                    pp.pay_date
+                FROM payroll_runs pr
+                JOIN payroll_periods pp ON pr.period_id = pp.id
+                WHERE pr.id = ? AND pr.client_id = ?
+            `, [runId, clientId]);
 
-        if (runInfo.length === 0) {
-            throw new Error('Payroll run not found');
-        }
+            if (runInfo.length === 0) {
+                throw new Error('Payroll run not found');
+            }
 
-        const period = runInfo[0];
-        const today = new Date();
-        today.setHours(23, 59, 59, 999);
-        const calculationEndDate = today < new Date(period.period_end_date) ? today : new Date(period.period_end_date);
+            const period = runInfo[0];
+            console.log(`✅ Payroll run verified: ${period.run_name} (${period.run_number})`);
+            console.log(`📅 Period: ${period.period_start_date} to ${period.period_end_date}`);
 
-        // Get all employees in this payroll run
-        const [employees] = await db.execute(`
-            SELECT
-                pr.id as record_id,
-                pr.employee_id,
-                pr.employee_code,
-                pr.employee_name,
-                pr.department_name,
-                pr.designation_name,
-                e.base_salary,
-                e.department_id
-            FROM payroll_records pr
-            JOIN employees e ON pr.employee_id = e.id
-            WHERE pr.run_id = ?
-            ORDER BY pr.employee_code
-        `, [runId]);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            const calculationEndDate = today < new Date(period.period_end_date) ? today : new Date(period.period_end_date);
+            console.log(`📊 Calculation end date: ${calculationEndDate.toISOString().split('T')[0]}`);
 
-        console.log(`👥 Found ${employees.length} employees`);
+            // Get all employees in this payroll run
+            const [employees] = await db.execute(`
+                SELECT
+                    pr.id as record_id,
+                    pr.employee_id,
+                    pr.employee_code,
+                    pr.employee_name,
+                    pr.department_name,
+                    pr.designation_name,
+                    e.base_salary,
+                    e.department_id
+                FROM payroll_records pr
+                JOIN employees e ON pr.employee_id = e.id
+                WHERE pr.run_id = ?
+                ORDER BY pr.employee_code
+            `, [runId]);
 
-        // For each employee, fetch their data in parallel
-        const employeeDataPromises = employees.map(async (emp) => {
-            // Get attendance data
-            const attendanceData = await this.calculateEarnedSalary(
-                emp.employee_id,
-                runId,
-                parseFloat(emp.base_salary) || 0
-            );
+            console.log(`👥 Found ${employees.length} employees to process`);
+            console.log('='.repeat(80));
 
-            // Get employee payroll data (allowances, deductions)
-            const payrollData = await this.getEmployeePayrollData(emp.employee_id, clientId, runId);
+            // For each employee, fetch their data in parallel
+            const employeeDataPromises = employees.map(async (emp, index) => {
+                console.log(`\n🔍 [${index + 1}/${employees.length}] Processing: ${emp.employee_name} (${emp.employee_code})`);
+                console.log(`   Base Salary: Rs. ${(parseFloat(emp.base_salary) || 0).toLocaleString()}`);
 
-            // Get financial records
-            const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
-            const financialData = await FinancialRecordsIntegration.processFinancialRecords(
-                emp.employee_id,
-                {
-                    start: period.period_start_date,
-                    end: period.period_end_date
+                // Get attendance data
+                const attendanceData = await this.calculateEarnedSalary(
+                    emp.employee_id,
+                    runId,
+                    parseFloat(emp.base_salary) || 0,
+                    true  // Include today's live session for real-time preview
+                );
+                console.log(`   ✅ Attendance calculated - Expected: Rs. ${(attendanceData.expected_salary || 0).toFixed(2)}, Earned: Rs. ${(attendanceData.earned_salary || 0).toFixed(2)}`);
+
+                // Get employee payroll data (allowances, deductions)
+                const payrollData = await this.getEmployeePayrollData(emp.employee_id, clientId, runId);
+                console.log(`   ✅ Payroll components loaded - Allowances: ${payrollData.employeeAllowances?.length || 0}, Deductions: ${payrollData.configuredComponents?.deductions?.length || 0}`);
+
+                // Get financial records
+                const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
+                const financialData = await FinancialRecordsIntegration.processFinancialRecords(
+                    emp.employee_id,
+                    {
+                        start: period.period_start_date,
+                        end: period.period_end_date
+                    },
+                    runId
+                );
+                console.log(`   ✅ Financial records processed - Loans: Rs. ${(financialData.loanDeductions || 0).toFixed(2)}, Advances: Rs. ${(financialData.advanceDeductions || 0).toFixed(2)}, Bonuses: Rs. ${(financialData.bonuses || 0).toFixed(2)}`);
+
+                return {
+                    ...emp,
+                    attendance: {
+                        expected_salary: attendanceData.expected_salary || 0,
+                        earned_salary: attendanceData.earned_salary || 0,
+                        shortfall: attendanceData.total || 0,
+                        components: attendanceData.components || []
+                    },
+                    allowances: payrollData.employeeAllowances || [],
+                    deductions: payrollData.configuredComponents?.deductions || [],
+                    financial: {
+                        loans: financialData.loanDeductions || 0,
+                        advances: financialData.advanceDeductions || 0,
+                        bonuses: financialData.bonuses || 0,
+                        loanRecords: financialData.records?.loans || [],
+                        advanceRecords: financialData.records?.advances || [],
+                        bonusRecords: financialData.records?.bonuses || []
+                    }
+                };
+            });
+
+            const enrichedEmployees = await Promise.all(employeeDataPromises);
+
+            console.log('\n' + '='.repeat(80));
+            console.log(`🎉 Live payroll data fetched successfully!`);
+            console.log(`📊 Summary: ${enrichedEmployees.length} employees processed`);
+
+            const result = {
+                period: {
+                    start_date: period.period_start_date,
+                    end_date: period.period_end_date,
+                    calculation_end_date: calculationEndDate.toISOString().split('T')[0],
+                    pay_date: period.pay_date
                 },
-                runId
-            );
-
-            return {
-                ...emp,
-                attendance: {
-                    expected_salary: attendanceData.expected_salary || 0,
-                    earned_salary: attendanceData.earned_salary || 0,
-                    shortfall: attendanceData.total || 0,
-                    components: attendanceData.components || []
+                run: {
+                    id: period.run_id,
+                    name: runInfo[0].run_name,
+                    number: runInfo[0].run_number,
+                    calculation_method: runInfo[0].calculation_method
                 },
-                allowances: payrollData.employeeAllowances || [],
-                deductions: payrollData.configuredComponents?.deductions || [],
-                financial: {
-                    loans: financialData.loanDeductions || 0,
-                    advances: financialData.advanceDeductions || 0,
-                    bonuses: financialData.bonuses || 0,
-                    loanRecords: financialData.records?.loans || [],
-                    advanceRecords: financialData.records?.advances || [],
-                    bonusRecords: financialData.records?.bonuses || []
-                }
+                employees: enrichedEmployees
             };
-        });
 
-        const enrichedEmployees = await Promise.all(employeeDataPromises);
+            // Stop logging and save to file
+            const logFilePath = await payrollLogger.stopLogging();
+            console.log(`📁 Logs saved to: ${logFilePath}`);
 
-        console.log(`✅ Live payroll data fetched successfully`);
+            return result;
 
-        return {
-            period: {
-                start_date: period.period_start_date,
-                end_date: period.period_end_date,
-                calculation_end_date: calculationEndDate.toISOString().split('T')[0],
-                pay_date: period.pay_date
-            },
-            run: {
-                id: period.run_id,
-                name: runInfo[0].run_name,
-                number: runInfo[0].run_number,
-                calculation_method: runInfo[0].calculation_method
-            },
-            employees: enrichedEmployees
-        };
+        } catch (error) {
+            console.error(`❌ Live payroll data fetch failed:`, error);
+
+            // Stop logging even on error and save error logs
+            await payrollLogger.stopLogging();
+
+            throw error;
+        }
     }
 
     // =============================================

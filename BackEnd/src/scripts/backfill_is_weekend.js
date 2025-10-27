@@ -5,8 +5,9 @@
  * Usage: node src/scripts/backfill_is_weekend.js
  */
 
-// Load environment variables
-require('dotenv').config();
+// Load environment variables from BackEnd directory
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const { connectDB, getDB } = require('../config/database');
 
@@ -20,6 +21,8 @@ async function backfillIsWeekend() {
     const [records] = await db.execute(`
       SELECT id, date
       FROM attendance
+      WHERE date >= '2025-09-01'
+        AND date <= '2025-10-27'
       ORDER BY date DESC
     `);
 

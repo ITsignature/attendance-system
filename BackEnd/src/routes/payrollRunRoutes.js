@@ -1089,9 +1089,10 @@ router.get('/:id/live-data',
                 data: liveData
             });
         } catch (error) {
+            console.error('Error in getLivePayrollData route:', error);
             res.status(404).json({
                 success: false,
-                message: error.message
+                message: error?.message || 'Failed to fetch live payroll data'
             });
         }
     })
