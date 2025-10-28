@@ -132,7 +132,6 @@ useEffect(() => {
   localSettings?.work_end_time
 ]);
 
-
     if (loading || localSettings === null) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
@@ -182,7 +181,6 @@ const updateLocalSetting = (key: string, value: any) => {
   });
   setHasChanges(true);
 };
-
 
 const handleSave = async () => {
   setSaving(true);
@@ -292,15 +290,12 @@ const handleSave = async () => {
     }
   };
 
-
   /* helper: "08:30" → minutes since midnight */
 const hhmmToMinutes = (t) => {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 };
 
-
-  
   // Render different setting sections
   const renderSettingSection = () => {
     switch (activeSection) {
@@ -433,7 +428,6 @@ const hhmmToMinutes = (t) => {
                   How many minutes late before marked as "late"
                 </p>
               </div>
-
 
               {/* NEW ATTENDANCE SETTINGS */}
               <div className="border-t pt-6 mt-6">
