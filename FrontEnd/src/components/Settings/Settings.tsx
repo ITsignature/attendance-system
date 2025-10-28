@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import settingsApi from '../../services/settingsApi';
 import PayrollSettings from './PayrollSettings';
+
 import {
   Settings,
   Clock,
