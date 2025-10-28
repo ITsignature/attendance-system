@@ -188,7 +188,7 @@ app.get('/health', (req, res) => {
 // =============================================
 
 // Authentication routes (no /api prefix for auth)
-app.use('/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 
 // Protected API routes
 app.use('/api/employees', employeeRoutes);
