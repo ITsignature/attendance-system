@@ -150,7 +150,8 @@ router.post('/login', [
     const { accessToken, refreshToken, jti } = generateTokens(tokenPayload);
 
     // Store session in database
-    const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    // Session expiry matches refresh token expiry (7 days) to prevent premature session expiration
+    const sessionExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days (matches refresh token)
     await db.execute(`
       INSERT INTO user_sessions (admin_user_id, client_id, token_jti, ip_address, user_agent, expires_at,created_at)
       VALUES (?, ?, ?, ?, ?, ?,NOW())
@@ -401,19 +402,20 @@ router.post('/refresh', asyncHandler(async (req, res) => {
     const { accessToken, refreshToken: newRefreshToken, jti } = generateTokens(tokenPayload);
 
     // Update session with new JTI with retry logic
+    // Extend session expiry to 7 days (matches refresh token expiry)
     retries = 3;
     while (retries > 0) {
       try {
         await db.execute(`
-          UPDATE user_sessions 
-          SET token_jti = ?, expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR)
+          UPDATE user_sessions
+          SET token_jti = ?, expires_at = DATE_ADD(NOW(), INTERVAL 7 DAY)
           WHERE token_jti = ?
         `, [jti, decoded.jti]);
         break;
       } catch (dbError) {
         console.error(`Database error on session update (attempt ${4 - retries}):`, dbError.code);
         retries--;
-        
+
         if (retries === 0) throw dbError;
         await new Promise(resolve => setTimeout(resolve, (4 - retries) * 1000));
       }
