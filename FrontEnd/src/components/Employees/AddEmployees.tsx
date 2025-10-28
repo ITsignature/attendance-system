@@ -599,7 +599,8 @@ const AddEmployees: React.FC = () => {
         formData.append('notes', `${documentType.replace('_', ' ')} document for employee`);
         console.log('formdata',formData);
         
-        const response = await fetch(`http://localhost:5000/api/employees/${employeeId}/documents`, {
+        const baseURL = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
+        const response = await fetch(`${baseURL}/api/employees/${employeeId}/documents`, {
           method: 'POST',
           // headers: {
           //   'Authorization': `Bearer ${localStorage.getItem('token')}`
