@@ -1,4 +1,4 @@
-name: Deploy to Production Server
+name: Deploy Attendance System to VPS
 
 on:
   push:
@@ -10,38 +10,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: 🚀 Deploy Attendance System to VPS
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        known_hosts: ${{ secrets.SERVER_KNOWN_HOSTS }}
+        script: |
+          echo "🚀 Starting deployment on server..."
 
-      - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}   # <-- use SSH key here
-          port: ${{ secrets.SERVER_PORT || 22 }}
-          script: |
-            echo "🚀 Starting deployment..."
+          cd /www/wwwroot/attendance-system
 
-            cd /www/wwwroot/attendance-system
-            echo "📥 Pulling latest changes from main branch..."
-            git pull origin main
+          echo "🧹 Cleaning workspace..."
+          git reset --hard HEAD
+          git clean -fd
 
-            echo "📦 Installing backend dependencies..."
-            cd BackEnd
-            npm install --legacy-peer-deps
+          echo "📥 Pulling latest changes..."
+          git pull origin main --rebase
 
-            echo "📦 Installing frontend dependencies..."
-            cd ../FrontEnd
-            npm install --legacy-peer-deps
+          echo "📦 Installing backend dependencies..."
+          cd BackEnd
+          npm ci
 
-            echo "🔨 Building frontend..."
-            npm run build
+          echo "🔄 Restarting backend service..."
+          pm2 restart backend || pm2 start server.js --name backend
 
-            echo "🔄 Restarting backend..."
-            pm2 restart backend || pm2 start ../BackEnd/server.js --name backend
+          echo "📦 Installing frontend dependencies..."
+          cd ../FrontEnd
+          npm ci
 
-            echo "🔄 Reloading nginx..."
-            nginx -t && nginx -s reload
+          echo "🔨 Building frontend..."
+          npm run build
 
-            echo "✅ Deployment completed successfully!"
+          echo "🔁 Reloading Nginx..."
+          sudo systemctl reload nginx
+
+          echo "✅ Deployment completed successfully!"
