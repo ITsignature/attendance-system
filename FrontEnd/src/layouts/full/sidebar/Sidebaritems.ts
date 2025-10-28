@@ -59,13 +59,13 @@ const SidebarContent = [
         href: '/payroll',
         permission: 'payroll.view',
       },
-      {
-        id: uniqueId(),
-        title: 'live Payroll',
-        icon: IconCurrencyDollar,
-        href: '/live-payroll',
-        permission: 'payroll.view',
-      },
+      // {
+      //   id: uniqueId(),
+      //   title: 'live Payroll',
+      //   icon: IconCurrencyDollar,
+      //   href: '/live-payroll',
+      //   permission: 'payroll.view',
+      // },
      
       // {
       //   id: uniqueId(),
