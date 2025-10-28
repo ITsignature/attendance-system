@@ -414,6 +414,7 @@ router.put('/:id',
       return true;
     }),
     body('follows_company_schedule').optional().isBoolean().withMessage('follows_company_schedule must be true or false'),
+    body('attendance_affects_salary').optional().isBoolean().withMessage('attendance_affects_salary must be true or false'),
 
     // Weekend Working Configuration Validation
     body('weekend_working_config')
@@ -549,14 +550,17 @@ router.put('/:id',
       'address', 'city', 'state', 'zip_code', 'nationality', 'marital_status',
       
       // Professional Information
-      'employee_code', 'department_id', 'designation_id', 'manager_id', 
+      'employee_code', 'department_id', 'designation_id', 'manager_id',
       'hire_date', 'employment_status', 'employee_type', 'base_salary',
-      
+
       // Emergency Contact
       'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
-      
+
       // Work Schedule - NEW FIELDS
       'in_time', 'out_time', 'follows_company_schedule',
+
+      // Salary Calculation Settings
+      'attendance_affects_salary',
 
       // Weekend Working Configuration
       'weekend_working_config'
@@ -781,6 +785,12 @@ router.post('/',
       .isBoolean()
       .withMessage('Valid boolean value is required'),
 
+    // Salary Calculation Settings
+    body('attendance_affects_salary')
+      .optional({ checkFalsy: true })
+      .isBoolean()
+      .withMessage('attendance_affects_salary must be a boolean value'),
+
     // Weekend Working Configuration Validation
     body('weekend_working_config')
       .optional({ nullable: true })
@@ -856,12 +866,15 @@ router.post('/',
         
         // Emergency Contact
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-        
+
         // Work Schedule Information - NEW
         in_time, out_time, follows_company_schedule = true,
 
         // Weekend Working Configuration
-        weekend_working_config
+        weekend_working_config,
+
+        // Salary Calculation Settings
+        attendance_affects_salary = true
       } = req.body;
 
       // Validation for time fields
@@ -988,16 +1001,16 @@ router.post('/',
           id, client_id, employee_code, first_name, last_name, email, phone,
           date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
           hire_date, department_id, designation_id, manager_id, employee_type,
-          employment_status, base_salary,
+          employment_status, base_salary, attendance_affects_salary,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
           in_time, out_time, follows_company_schedule, weekend_working_config,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
         nationality || null, marital_status || null, hire_date, department_id, designation_id,
-        manager_id || null, employee_type, employment_status, base_salary || null,
+        manager_id || null, employee_type, employment_status, base_salary || null, attendance_affects_salary,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
         finalInTime, finalOutTime, follows_company_schedule,
         weekend_working_config ? JSON.stringify(weekend_working_config) : null
