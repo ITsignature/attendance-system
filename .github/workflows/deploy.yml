@@ -3,7 +3,7 @@ name: Deploy to Production Server
 on:
   push:
     branches:
-      - main  # Trigger on push to main branch
+      - main
 
 jobs:
   deploy:
@@ -18,41 +18,29 @@ jobs:
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          # OR use key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
+          key: ${{ secrets.SERVER_SSH_KEY }}   # <-- use SSH key here
+          port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
             echo "🚀 Starting deployment..."
 
-            # Navigate to project directory
             cd /www/wwwroot/attendance-system
-
-            # Pull latest changes
             echo "📥 Pulling latest changes from main branch..."
             git pull origin main
 
-            # Install backend dependencies
             echo "📦 Installing backend dependencies..."
-            cd /www/wwwroot/attendance-system/BackEnd
+            cd BackEnd
             npm install --legacy-peer-deps
 
-            # Install frontend dependencies
             echo "📦 Installing frontend dependencies..."
-            cd /www/wwwroot/attendance-system/FrontEnd
+            cd ../FrontEnd
             npm install --legacy-peer-deps
 
-            # Build frontend
             echo "🔨 Building frontend..."
             npm run build
 
-            # Restart backend with PM2
             echo "🔄 Restarting backend..."
-            pm2 restart backend || pm2 start /www/wwwroot/attendance-system/BackEnd/server.js --name backend
+            pm2 restart backend || pm2 start ../BackEnd/server.js --name backend
 
-            # Restart frontend with PM2 (if using dev server)
-            # pm2 restart frontend || pm2 start npm --name frontend -- run dev -- --port 5001 --host 0.0.0.0
-
-            # Reload nginx
             echo "🔄 Reloading nginx..."
             nginx -t && nginx -s reload
 
