@@ -3877,16 +3877,16 @@ class PayrollRunService {
 
     /**
      * Get all raw data needed for frontend payroll calculation (live preview)
-     * This fetches ALL data in optimized queries without doing calculations
+     * OPTIMIZED: Fetches ALL data in bulk queries for maximum performance
      */
     async getLivePayrollData(runId, clientId) {
         const db = getDB();
+        const startTime = Date.now();
 
         // Start logging for live preview
         payrollLogger.startLogging(runId, 'live-preview');
 
-        console.log(`📊 Fetching live payroll data for run: ${runId}`);
-        console.log(`👤 Client ID: ${clientId}`);
+        console.log(`📊 [OPTIMIZED] Fetching live payroll data for run: ${runId}`);
 
         try {
             // Get payroll run and period info
@@ -3910,13 +3910,9 @@ class PayrollRunService {
             }
 
             const period = runInfo[0];
-            console.log(`✅ Payroll run verified: ${period.run_name} (${period.run_number})`);
-            console.log(`📅 Period: ${period.period_start_date} to ${period.period_end_date}`);
-
             const today = new Date();
             today.setHours(23, 59, 59, 999);
             const calculationEndDate = today < new Date(period.period_end_date) ? today : new Date(period.period_end_date);
-            console.log(`📊 Calculation end date: ${calculationEndDate.toISOString().split('T')[0]}`);
 
             // Get all employees in this payroll run
             const [employees] = await db.execute(`
@@ -3935,38 +3931,176 @@ class PayrollRunService {
                 ORDER BY pr.employee_code
             `, [runId]);
 
-            console.log(`👥 Found ${employees.length} employees to process`);
-            console.log('='.repeat(80));
+            console.log(`👥 Processing ${employees.length} employees...`);
 
-            // For each employee, fetch their data in parallel
-            const employeeDataPromises = employees.map(async (emp, index) => {
-                console.log(`\n🔍 [${index + 1}/${employees.length}] Processing: ${emp.employee_name} (${emp.employee_code})`);
-                console.log(`   Base Salary: Rs. ${(parseFloat(emp.base_salary) || 0).toLocaleString()}`);
+            const employeeIds = employees.map(e => e.employee_id);
 
-                // Get attendance data
+            // ========================================
+            // BULK FETCH #1: All Allowances
+            // ========================================
+            const [allAllowances] = await db.execute(`
+                SELECT
+                    ea.employee_id,
+                    ea.id,
+                    ea.allowance_type,
+                    ea.allowance_name,
+                    ea.amount,
+                    ea.is_percentage,
+                    ea.is_taxable
+                FROM employee_allowances ea
+                WHERE ea.employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND ea.client_id = ?
+                  AND ea.is_active = 1
+                  AND (ea.effective_to IS NULL OR ea.effective_to >= CURDATE())
+                  AND ea.effective_from <= CURDATE()
+            `, [...employeeIds, clientId]);
+
+            // ========================================
+            // BULK FETCH #2: All Deductions (Payroll Components)
+            // ========================================
+            const [payrollComponents] = await db.execute(`
+                SELECT
+                    pc.id,
+                    pc.component_name,
+                    pc.component_type,
+                    pc.category,
+                    pc.calculation_type,
+                    pc.calculation_value
+                FROM payroll_components pc
+                WHERE pc.client_id = ? AND pc.is_active = 1 AND pc.component_type = 'deduction'
+            `, [clientId]);
+
+            // ========================================
+            // BULK FETCH #3: All Financial Records
+            // ========================================
+            const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
+
+            // Fetch loans
+            const [allLoans] = await db.execute(`
+                SELECT
+                    employee_id,
+                    id,
+                    loan_type,
+                    loan_amount,
+                    monthly_deduction,
+                    remaining_amount,
+                    start_date,
+                    end_date,
+                    notes
+                FROM employee_loans
+                WHERE employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND status = 'active'
+                  AND start_date <= ?
+            `, [...employeeIds, period.period_end_date]);
+
+            // Fetch advances
+            const [allAdvances] = await db.execute(`
+                SELECT
+                    employee_id,
+                    id,
+                    advance_type,
+                    advance_amount,
+                    description,
+                    monthly_deduction,
+                    remaining_amount,
+                    deduction_start_date,
+                    justification
+                FROM employee_advances
+                WHERE employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND status IN ('approved', 'paid')
+                  AND deduction_start_date <= ?
+                  AND remaining_amount > 0
+            `, [...employeeIds, period.period_end_date]);
+
+            // Fetch bonuses
+            const [allBonuses] = await db.execute(`
+                SELECT
+                    employee_id,
+                    id,
+                    bonus_type,
+                    bonus_amount,
+                    description,
+                    effective_date,
+                    bonus_period
+                FROM employee_bonuses
+                WHERE employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND status = 'approved'
+                  AND effective_date BETWEEN ? AND ?
+                  AND payment_method = 'next_payroll'
+            `, [...employeeIds, period.period_start_date, period.period_end_date]);
+
+            // Group data by employee_id for fast lookup
+            const allowancesByEmployee = {};
+            const loansByEmployee = {};
+            const advancesByEmployee = {};
+            const bonusesByEmployee = {};
+
+            allAllowances.forEach(a => {
+                if (!allowancesByEmployee[a.employee_id]) allowancesByEmployee[a.employee_id] = [];
+                allowancesByEmployee[a.employee_id].push(a);
+            });
+
+            allLoans.forEach(l => {
+                if (!loansByEmployee[l.employee_id]) loansByEmployee[l.employee_id] = [];
+                // Only include if should deduct in this period
+                const shouldDeduct = FinancialRecordsIntegration.shouldDeductInPeriod(
+                    l.start_date,
+                    { start: period.period_start_date, end: period.period_end_date }
+                );
+                if (shouldDeduct && l.remaining_amount > 0) {
+                    const deductionAmount = Math.min(l.monthly_deduction, l.remaining_amount);
+                    loansByEmployee[l.employee_id].push({ ...l, deduction_amount: deductionAmount });
+                }
+            });
+
+            allAdvances.forEach(a => {
+                if (!advancesByEmployee[a.employee_id]) advancesByEmployee[a.employee_id] = [];
+                const shouldDeduct = FinancialRecordsIntegration.shouldDeductInPeriod(
+                    a.deduction_start_date,
+                    { start: period.period_start_date, end: period.period_end_date }
+                );
+                if (shouldDeduct && a.remaining_amount > 0) {
+                    const deductionAmount = Math.min(a.monthly_deduction, a.remaining_amount);
+                    advancesByEmployee[a.employee_id].push({ ...a, deduction_amount: deductionAmount });
+                }
+            });
+
+            allBonuses.forEach(b => {
+                if (!bonusesByEmployee[b.employee_id]) bonusesByEmployee[b.employee_id] = [];
+                bonusesByEmployee[b.employee_id].push({ ...b, addition_amount: b.bonus_amount });
+            });
+
+            // ========================================
+            // Process each employee with pre-fetched data
+            // ========================================
+            const employeeDataPromises = employees.map(async (emp) => {
+                // Get attendance data (this still needs individual calculation)
                 const attendanceData = await this.calculateEarnedSalary(
                     emp.employee_id,
                     runId,
                     parseFloat(emp.base_salary) || 0,
                     true  // Include today's live session for real-time preview
                 );
-                console.log(`   ✅ Attendance calculated - Expected: Rs. ${(attendanceData.expected_salary || 0).toFixed(2)}, Earned: Rs. ${(attendanceData.earned_salary || 0).toFixed(2)}`);
 
-                // Get employee payroll data (allowances, deductions)
-                const payrollData = await this.getEmployeePayrollData(emp.employee_id, clientId, runId);
-                console.log(`   ✅ Payroll components loaded - Allowances: ${payrollData.employeeAllowances?.length || 0}, Deductions: ${payrollData.configuredComponents?.deductions?.length || 0}`);
+                // Use pre-fetched data
+                const employeeAllowances = allowancesByEmployee[emp.employee_id] || [];
+                const employeeLoans = loansByEmployee[emp.employee_id] || [];
+                const employeeAdvances = advancesByEmployee[emp.employee_id] || [];
+                const employeeBonuses = bonusesByEmployee[emp.employee_id] || [];
 
-                // Get financial records
-                const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
-                const financialData = await FinancialRecordsIntegration.processFinancialRecords(
-                    emp.employee_id,
-                    {
-                        start: period.period_start_date,
-                        end: period.period_end_date
-                    },
-                    runId
-                );
-                console.log(`   ✅ Financial records processed - Loans: Rs. ${(financialData.loanDeductions || 0).toFixed(2)}, Advances: Rs. ${(financialData.advanceDeductions || 0).toFixed(2)}, Bonuses: Rs. ${(financialData.bonuses || 0).toFixed(2)}`);
+                // Add description field to loans if missing (use notes field)
+                employeeLoans.forEach(loan => {
+                    if (!loan.description && loan.notes) {
+                        loan.description = loan.notes;
+                    } else if (!loan.description) {
+                        loan.description = `${loan.loan_type || 'Loan'}`;
+                    }
+                });
+
+                // Calculate financial totals
+                const loanDeductions = employeeLoans.reduce((sum, l) => sum + (l.deduction_amount || 0), 0);
+                const advanceDeductions = employeeAdvances.reduce((sum, a) => sum + (a.deduction_amount || 0), 0);
+                const bonusTotal = employeeBonuses.reduce((sum, b) => sum + (b.bonus_amount || 0), 0);
 
                 return {
                     ...emp,
@@ -3976,24 +4110,23 @@ class PayrollRunService {
                         shortfall: attendanceData.total || 0,
                         components: attendanceData.components || []
                     },
-                    allowances: payrollData.employeeAllowances || [],
-                    deductions: payrollData.configuredComponents?.deductions || [],
+                    allowances: employeeAllowances,
+                    deductions: payrollComponents,
                     financial: {
-                        loans: financialData.loanDeductions || 0,
-                        advances: financialData.advanceDeductions || 0,
-                        bonuses: financialData.bonuses || 0,
-                        loanRecords: financialData.records?.loans || [],
-                        advanceRecords: financialData.records?.advances || [],
-                        bonusRecords: financialData.records?.bonuses || []
+                        loans: loanDeductions,
+                        advances: advanceDeductions,
+                        bonuses: bonusTotal,
+                        loanRecords: employeeLoans,
+                        advanceRecords: employeeAdvances,
+                        bonusRecords: employeeBonuses
                     }
                 };
             });
 
             const enrichedEmployees = await Promise.all(employeeDataPromises);
 
-            console.log('\n' + '='.repeat(80));
-            console.log(`🎉 Live payroll data fetched successfully!`);
-            console.log(`📊 Summary: ${enrichedEmployees.length} employees processed`);
+            const totalTime = Date.now() - startTime;
+            console.log(`\n⚡ PERFORMANCE: Loaded ${enrichedEmployees.length} employees in ${totalTime}ms (${(totalTime / enrichedEmployees.length).toFixed(0)}ms per employee)`);
 
             const result = {
                 period: {
