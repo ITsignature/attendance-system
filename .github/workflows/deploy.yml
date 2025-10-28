@@ -10,40 +10,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: 🚀 Deploy Attendance System to VPS
-      uses: appleboy/ssh-action@v0.1.6
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        known_hosts: ${{ secrets.SERVER_KNOWN_HOSTS }}
-        script: |
-          echo "🚀 Starting deployment on server..."
+      - name: 🚀 Deploy Attendance System to VPS
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            echo "🚀 Starting deployment on server..."
 
-          cd /www/wwwroot/attendance-system
+            cd /www/wwwroot/attendance-system
 
-          echo "🧹 Cleaning workspace..."
-          git reset --hard HEAD
-          git clean -fd
+            echo "🧹 Cleaning workspace..."
+            git reset --hard HEAD
+            git clean -fd
 
-          echo "📥 Pulling latest changes..."
-          git pull origin main --rebase
+            echo "📥 Pulling latest changes..."
+            git pull origin main --rebase
 
-          echo "📦 Installing backend dependencies..."
-          cd BackEnd
-          npm ci
+            echo "📦 Installing backend dependencies..."
+            cd BackEnd
+            npm ci
 
-          echo "🔄 Restarting backend service..."
-          pm2 restart backend || pm2 start server.js --name backend
+            echo "🔄 Restarting backend service..."
+            pm2 restart backend || pm2 start server.js --name backend
 
-          echo "📦 Installing frontend dependencies..."
-          cd ../FrontEnd
-          npm ci
+            echo "📦 Installing frontend dependencies..."
+            cd ../FrontEnd
+            npm ci
 
-          echo "🔨 Building frontend..."
-          npm run build
+            echo "🔨 Building frontend..."
+            npm run build
 
-          echo "🔁 Reloading Nginx..."
-          sudo systemctl reload nginx
+            echo "🔁 Reloading Nginx..."
+            sudo systemctl reload nginx
 
-          echo "✅ Deployment completed successfully!"
+            echo "✅ Deployment completed successfully!"
