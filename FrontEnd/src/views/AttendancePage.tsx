@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { TextInput, Button, Table, Badge, Modal, Label } from "flowbite-react";
 import { format } from "date-fns";
-import { useNavigate } from "react-router-dom";
 
 // Mock Data
 const initialData = [
@@ -36,8 +35,6 @@ const AttendancePage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingField, setEditingField] = useState<"checkIn" | "checkOut" | null>(null);
   const [currentEdit, setCurrentEdit] = useState<{ id: number; value: string }>({ id: 0, value: "" });
-
-  const navigate = useNavigate();
 
   const filteredData = attendanceData.filter(
     (emp) =>

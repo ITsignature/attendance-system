@@ -1,10 +1,5 @@
 import {
-  IconAperture,
-  IconCopy,
   IconLayoutDashboard,
-  IconLogin,
-  IconMoodHappy,
-  IconTypography,
   IconUserPlus,
   IconUsers,
   IconClock,
@@ -12,8 +7,6 @@ import {
   IconCurrencyDollar,
   IconBuilding,
   IconSettings,
-  IconLogout,
-  IconSun,
 } from '@tabler/icons-react';
 
 import { uniqueId } from 'lodash';
@@ -45,13 +38,13 @@ const SidebarContent = [
         href: '/employees',
         permission: 'employees.view',
       },
-      {
-        id: uniqueId(),
-        title: 'Add Employee',
-        icon: IconUserPlus,
-        href: '/add-employee',
-        permission: 'employees.create',
-      },
+      // {
+      //   id: uniqueId(),
+      //   title: 'Add Employee',
+      //   icon: IconUserPlus,
+      //   href: '/add-employee',
+      //   permission: 'employees.create',
+      // },
       {
         id: uniqueId(),
         title: 'Attendance',
@@ -59,20 +52,28 @@ const SidebarContent = [
         href: '/attendance',
         permission: 'attendance.view',
       },
-      {
+        {
         id: uniqueId(),
-        title: 'Departments',
-        icon: IconBuilding,
-        href: '/Departments',
-        permission: 'employees.view',
+        title: 'Payroll',
+        icon: IconCurrencyDollar,
+        href: '/payroll',
+        permission: 'payroll.view',
       },
       {
         id: uniqueId(),
-        title: 'Dept. Employees',
-        icon: IconUsers,
-        href: '/departments-employees',
-        permission: 'employees.view',
+        title: 'live Payroll',
+        icon: IconCurrencyDollar,
+        href: '/live-payroll',
+        permission: 'payroll.view',
       },
+     
+      // {
+      //   id: uniqueId(),
+      //   title: 'Dept. Employees',
+      //   icon: IconUsers,
+      //   href: '/departments-employees',
+      //   permission: 'employees.view',
+      // },
       {
         id: uniqueId(),
         title: 'Leaves',
@@ -80,27 +81,29 @@ const SidebarContent = [
         href: '/leaves',
         permission: 'leaves.view',
       },
-      {
+      // {
+      //   id: uniqueId(),
+      //   title: 'Leave Requests',
+      //   icon: IconCalendar,
+      //   href: '/leave-requests',
+      //   permission: 'leaves.approve',
+      // },
+   
+       {
         id: uniqueId(),
-        title: 'Leave Requests',
-        icon: IconCalendar,
-        href: '/leave-requests',
-        permission: 'leaves.approve',
+        title: 'Departments',
+        icon: IconBuilding,
+        href: '/Departments',
+        permission: 'employees.view',
       },
-      {
+         {
         id: uniqueId(),
         title: 'Holidays',
         icon: IconCalendar,
         href: '/holidays',
         permission: 'leaves.view',
       },
-      {
-        id: uniqueId(),
-        title: 'Payroll',
-        icon: IconCurrencyDollar,
-        href: '/payroll',
-        permission: 'payroll.view',
-      },
+    
     ],
   },
   {

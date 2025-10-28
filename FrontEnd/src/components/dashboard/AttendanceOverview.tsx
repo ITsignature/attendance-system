@@ -1,25 +1,113 @@
-
-//import React, { useState } from "react";
 import { ApexOptions } from "apexcharts";
-import Chart from "react-apexcharts"
+import Chart from "react-apexcharts";
+import { useEffect, useState } from "react";
+import { dashboardService } from "../../services/dashboardService";
+
+interface WeeklyAttendanceData {
+  day_name: string;
+  date: string;
+  total_records: number;
+  present_count: number;
+  late_count: number;
+  absent_count: number;
+  on_leave_count: number;
+  attendance_percentage: number;
+}
 
 const AttendanceOverview = () => {
+  const [weeklyData, setWeeklyData] = useState<WeeklyAttendanceData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchWeeklyAttendance();
+  }, []);
+
+  const fetchWeeklyAttendance = async () => {
+    try {
+      setLoading(true);
+      const response = await dashboardService.getAttendanceOverview();
+      if (response.success) {
+        setWeeklyData(response.data.weeklyAttendance || []);
+      }
+    } catch (error) {
+      console.error('Error fetching weekly attendance:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Prepare data for chart - calculate percentages
+  const calculatePercentages = () => {
+    if (weeklyData.length === 0) {
+      return {
+        categories: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        onTimeData: [0, 0, 0, 0, 0, 0, 0],
+        lateData: [0, 0, 0, 0, 0, 0],
+        onLeaveData: [0, 0, 0, 0, 0, 0, 0],
+      };
+    }
+
+    const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const dataMap = new Map(weeklyData.map(d => [d.day_name, d]));
+
+    const onTimeData: number[] = [];
+    const lateData: number[] = [];
+    const onLeaveData: number[] = [];
+
+    dayOrder.forEach(day => {
+      const dayData = dataMap.get(day);
+      if (dayData && dayData.total_records > 0) {
+        const onTimePercent = Math.round((dayData.present_count / dayData.total_records) * 100);
+        const latePercent = Math.round((dayData.late_count / dayData.total_records) * 100);
+        const leavePercent = Math.round((dayData.on_leave_count / dayData.total_records) * 100);
+
+        onTimeData.push(onTimePercent);
+        lateData.push(latePercent);
+        onLeaveData.push(leavePercent);
+      } else {
+        onTimeData.push(0);
+        lateData.push(0);
+        onLeaveData.push(0);
+      }
+    });
+
+    return {
+      categories: dayOrder,
+      onTimeData,
+      lateData,
+      onLeaveData,
+    };
+  };
+
+  const { categories, onTimeData, lateData, onLeaveData } = calculatePercentages();
+
   const attendanceData = {
     series: [
       {
         name: "On Time",
-        data: [85, 78, 92, 88, 75, 0, 0], 
+        data: onTimeData,
       },
       {
         name: "Late",
-        data: [10, 15, 5, 8, 20, 0, 0], 
+        data: lateData,
       },
       {
         name: "On Leave",
-        data: [5, 7, 3, 4, 5, 0, 0], 
+        data: onLeaveData,
       },
     ],
   };
+
+  // Calculate averages
+  const avgOnTime = onTimeData.length > 0
+    ? Math.round(onTimeData.reduce((a, b) => a + b, 0) / onTimeData.filter(d => d > 0).length) || 0
+    : 0;
+  const avgLate = lateData.length > 0
+    ? Math.round(lateData.reduce((a, b) => a + b, 0) / lateData.filter(d => d > 0).length) || 0
+    : 0;
+  const avgLeave = onLeaveData.length > 0
+    ? Math.round(onLeaveData.reduce((a, b) => a + b, 0) / onLeaveData.filter(d => d > 0).length) || 0
+    : 0;
 
   const optionsBarChart: ApexOptions = {
     chart: {
@@ -74,7 +162,7 @@ const AttendanceOverview = () => {
       },
     },
     xaxis: {
-      categories: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+      categories: categories,
       axisBorder: {
         show: false,
       },
@@ -148,47 +236,39 @@ const AttendanceOverview = () => {
         </div>
       </div>
 
-      {/* Legend with color indicators */}
-      {/* <div className="flex flex-wrap gap-4 mb-4 text-sm"> */}
-        {/* <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-500 rounded"></div>
-          <span>OTimen </span>
-        </div> */}
-        {/* <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-yellow-400 rounded"></div>
-          <span>Late</span>
-        </div> */}
-        {/* <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-500 rounded"></div>
-          <span>On Leave</span>
-        </div> */}
-      {/* </div> */}
+      {loading ? (
+        <div className="flex items-center justify-center h-[350px]">
+          <div className="animate-pulse text-gray-400">Loading attendance data...</div>
+        </div>
+      ) : (
+        <>
+          <div className="-ms-4 -me-3 mt-2">
+            <Chart
+              options={optionsBarChart}
+              series={attendanceData.series}
+              type="bar"
+              height="350px"
+              width="100%"
+            />
+          </div>
 
-      <div className="-ms-4 -me-3 mt-2">
-        <Chart
-          options={optionsBarChart}
-          series={attendanceData.series}
-          type="bar"
-          height="350px"
-          width="100%"
-        />
-      </div>
-
-      {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-green-500">84%</div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Average On Time</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-yellow-500">12%</div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Average Late</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-red-500">4%</div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Average On Leave</div>
-        </div>
-      </div>
+          {/* Summary stats */}
+          <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-500">{avgOnTime}%</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Average On Time</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-500">{avgLate}%</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Average Late</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-500">{avgLeave}%</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Average On Leave</div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

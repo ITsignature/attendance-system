@@ -3,7 +3,8 @@
 import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
 import Loadable from 'src/layouts/full/shared/loadable/Loadable';
-import { DynamicProtectedRoute, UnauthorizedPage } from '../components/RBACSystem/rbacExamples';
+import { useDynamicRBAC ,DynamicProtectedRoute } from '../components/RBACSystem/rbacSystem';
+import LeaveRequestForm from '../components/Leaves/LeaveRequestForm';
 
 /* *Layouts** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
@@ -16,7 +17,11 @@ const Dashboard = Loadable(lazy(() => import('../components/dashboard/DashboardV
 const Attendance = Loadable(lazy(() => import('../components/Attendance/AttendanceView')));
 
 //Payroll
-const Payroll = Loadable(lazy(() => import('../components/Payroll/PayrollView')));
+const PayrollRunDashboard = Loadable(lazy(() => import('../components/Payroll/PayrollRunDashboard')));
+const PayrollEmployeeRecords = Loadable(lazy(() => import('../components/Payroll/PayrollEmployeeRecords')));
+const LivePayrollDashboard = Loadable(lazy(() => import('../components/LivePayrol/LivePayrollDashboard')));
+
+const UnauthorizedPage = Loadable(lazy(() => import('../views/UnauthorizedPage')));
 
 //Employees
 const AllEmployees = Loadable(lazy(() => import('../components/Employees/AllEmployees')));
@@ -25,8 +30,8 @@ const EmployeeDetails = Loadable(lazy(() => import('../components/Employees/Empl
 const EditEmployeeDetails = Loadable(lazy(() => import('../components/Employees/EditEmployeeDetails')));
 
 //Departments
-const ViewDepartments = Loadable(lazy(() => import('../components/Departments/DepartmentsPage')));
-const EmployeesByDesignation = Loadable(lazy(() => import('../components/Departments/EmployeesByDesignation')));
+const ViewDepartments = Loadable(lazy(() => import('../components/Departments/EmployeesByDesignation')));
+const DepartmentManagement = Loadable(lazy(() => import('../components/Departments/DepartmentsPage')));
 
 //Leaves
 const LeavePage = Loadable(lazy(() => import('../components/Leaves/leavesPage')));
@@ -46,17 +51,77 @@ const Error = Loadable(lazy(() => import('../views/auth/error/Error')));
 const RoleManagement = Loadable(lazy(() => import('../components/RBACSystem/roleManagement')));
 const AdminUserManagement = Loadable(lazy(() => import('../components/RBACSystem/adminUserManagement')));
 const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLogin')));
-const RbacExamples = Loadable(lazy(() => import('../components/RBACSystem/rbacExamples')));
+const ManualAttendance =Loadable(lazy(() => import('../components/Attendance/ManualAttendance')));
+const LivePayroll = Loadable(lazy(() => import('../components/LivePayrol/PayrollEmployeeRecords')));
 
+// ==============================================
+// SINGLE AUTHENTICATION WRAPPER FOR ENTIRE APP
+// ==============================================
+const AuthenticatedApp = ({ children }: { children: React.ReactNode }) => {
+  const { currentUser, isLoading } = useDynamicRBAC();
+  
+  // Check if we have tokens while loading
+  // 🔍 DEBUG: Log state changes
+  console.log('🔍 AuthenticatedApp render:', { 
+    currentUser: currentUser?.name || null, 
+    isLoading 
+  });
+  const hasTokens = localStorage.getItem('accessToken') && localStorage.getItem('user');
+  
+  // Show loading if:
+  // 1. Still loading AND no user set AND we have tokens (restoration in progress)
+  if (isLoading && !currentUser && hasTokens) {    
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-gray-600">Restoring session...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show loading if still initializing
+  if (isLoading) {
+    console.log('⏳ Showing loading screen...');
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-gray-600">Loading admin portal...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Not logged in - redirect to admin login
+  if (!currentUser) {
+    console.log('❌ No user found, redirecting to login...');
+    return <Navigate to="/admin/login" replace />;
+  }
+  
+  // Logged in as admin - show the app
+  console.log('✅ User authenticated, showing app for:', currentUser.name);
+  return <>{children}</>;
+};  
+
+// ==============================================
+// UPDATED ROUTER CONFIGURATION
+// ==============================================
 const Router = [
   {
     path: '/',
-    element: <FullLayout />,
+    element: (
+      <AuthenticatedApp>
+        <FullLayout />
+      </AuthenticatedApp>
+    ),
+    
     children: [
       { 
         path: '/', 
         exact: true, 
-        element: <Navigate to="/admin/login" replace /> 
+        element: <Navigate to="/dashboard" replace /> 
       },
       
       // Dashboard - Basic access required
@@ -119,11 +184,11 @@ const Router = [
         )
       },
       { 
-        path: '/departments-employees', 
+        path: '/departments-manage', 
         exact: true, 
         element: (
           <DynamicProtectedRoute permission="employees.view">
-            <EmployeesByDesignation />
+            <DepartmentManagement />
           </DynamicProtectedRoute>
         )
       },
@@ -135,6 +200,16 @@ const Router = [
         element: (
           <DynamicProtectedRoute permission="attendance.view">
             <Attendance />
+          </DynamicProtectedRoute>
+        )
+      },
+
+        { 
+        path: '/manual-attendance', 
+        exact: true, 
+        element: (
+          <DynamicProtectedRoute permission="attendance.view">
+            <ManualAttendance />
           </DynamicProtectedRoute>
         )
       },
@@ -167,18 +242,55 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      
+      { 
+  path: '/leave-request/new', 
+  exact: true, 
+  element: (
+    <DynamicProtectedRoute permission="leaves.approve">
+      <LeaveRequestForm />
+    </DynamicProtectedRoute>
+  )
+},
+
       // Payroll Management
+
+      { 
+        path: '/live-payroll', 
+        exact: true, 
+        element: (
+          <DynamicProtectedRoute permission="payroll.view">
+            <LivePayroll />
+          </DynamicProtectedRoute>
+        )
+      },
       { 
         path: '/payroll', 
         exact: true, 
         element: (
           <DynamicProtectedRoute permission="payroll.view">
-            <Payroll />
+            <PayrollRunDashboard />
           </DynamicProtectedRoute>
         )
       },
-      
+      {
+        path: '/payroll/runs/:runId/employees',
+        exact: true,
+        element: (
+          <DynamicProtectedRoute permission="payroll.view">
+            <PayrollEmployeeRecords />
+          </DynamicProtectedRoute>
+        )
+      },
+      {
+        path: '/payroll/runs/:runId/live',
+        exact: true,
+        element: (
+          <DynamicProtectedRoute permission="payroll.view">
+            <LivePayrollDashboard />
+          </DynamicProtectedRoute>
+        )
+      },
+
       // System & Utilities
       { 
         path: '/icons/solar', 
@@ -218,17 +330,17 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/rbacexamples', 
-        exact: true, 
-        element: (
-          <DynamicProtectedRoute permission="dashboard.view">
-            <RbacExamples />
-          </DynamicProtectedRoute>
-        )
-      },
+      // { 
+      //   path: '/rbacexamples', 
+      //   exact: true, 
+      //   element: (
+      //     <DynamicProtectedRoute permission="dashboard.view">
+      //       <RbacExamples />
+      //     </DynamicProtectedRoute>
+      //   )
+      // },
       
-      // Unauthorized page
+      // Unauthorized page (for permission-denied within app)
       { 
         path: '/unauthorized', 
         exact: true, 
@@ -241,6 +353,8 @@ const Router = [
       },
     ],
   },
+  
+  // PUBLIC AUTHENTICATION ROUTES
   {
     path: '/auth',
     element: <BlankLayout />,
@@ -251,14 +365,17 @@ const Router = [
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],
   },
+  
+  // ADMIN LOGIN (Main login for your system)
   {
     path: '/admin',
     element: <BlankLayout />,
     children: [
       { path: 'login', element: <AdminLogin /> },
+      { path: '*', element: <Navigate to="/admin/login" /> },
     ],
   },
 ];
 
-const router = createBrowserRouter(Router, { basename: '/MatDash' });
+const router = createBrowserRouter(Router);
 export default router;

@@ -1,4 +1,5 @@
 
+import { ReactElement } from 'react';
 import { Badge, Breadcrumb } from "flowbite-react";
 import { Icon } from "@iconify/react";
 import CardBox from "src/components/shared/CardBox";
@@ -7,7 +8,7 @@ interface BreadCrumbType {
   subtitle?: string;
   items?: any[];
   title: string;
-  children?: JSX.Element;
+  children?: ReactElement;
 }
 
 const BreadcrumbComp = ({ items, title }: BreadCrumbType) => {

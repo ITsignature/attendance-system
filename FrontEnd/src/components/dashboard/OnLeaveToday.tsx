@@ -1,83 +1,65 @@
-
-import Chart from "react-apexcharts";
 import { Icon } from "@iconify/react";
 import { Badge } from "flowbite-react";
+import { useEffect, useState } from "react";
+import { dashboardService } from "../../services/dashboardService";
 
 const OnLeaveToday = () => {
+  const [onLeaveCount, setOnLeaveCount] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  // const ChartData: any = {
-  //   series: [
-  //     {
-  //       name: "monthly earnings",
-  //       color: "var(--color-error)",
-  //       data: [30, 25, 35, 20, 30, 40],
-  //     },
-  //   ],
-  //   chart: {
-  //     id: "total-income",
-  //     type: "area",
-  //     height: 60,
-  //     sparkline: {
-  //       enabled: true,
-  //     },
-  //     group: "sparklines",
-  //     fontFamily: "inherit",
-  //     foreColor: "#adb0bb",
-  //   },
-  //   stroke: {
-  //     curve: "smooth",
-  //     width: 2,
-  //   },
-  //   fill: {
-  //     type: "gradient",
-  //     gradient: {
-  //       shadeIntensity: 0,
-  //       inverseColors: false,
-  //       opacityFrom: 0,
-  //       opacityTo: 0,
-  //       stops: [20, 180],
-  //     },
-  //   },
-  //   markers: {
-  //     size: 0,
-  //   },
-  //   tooltip: {
-  //     theme: "dark",
-  //     fixed: {
-  //       enabled: true,
-  //       position: "right",
-  //     },
-  //     x: {
-  //       show: false,
-  //     },
-  //   },
-  // };
+  useEffect(() => {
+    fetchLeaveData();
+  }, []);
+
+  const fetchLeaveData = async () => {
+    try {
+      setLoading(true);
+      const response = await dashboardService.getOverview();
+      if (response.success) {
+        setOnLeaveCount(response.data.attendance.on_leave_today || 0);
+        setPendingRequests(response.data.leaves.pending_requests || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching leave data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
-      <div className="bg-white rounded-xl shadow-md p-8">
-        <div className="flex items-center gap-4 mb-8">
-          <div className="bg-lighterror text-error p-3 rounded-md">
-            <Icon icon="solar:box-linear" height={24} />
+      <div className="bg-white dark:bg-darkgray rounded-xl shadow-md dark:shadow-dark-md p-6 h-full">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="bg-lightinfo text-info p-3 rounded-md">
+            <Icon icon="solar:calendar-mark-linear" height={24} />
           </div>
-          <p className="text-lg font-semibold text-dark">On Leave Today</p>
+          <p className="text-base font-semibold text-dark dark:text-white">On Leave Today</p>
         </div>
-        <div className="flex">
+        <div className="flex flex-col">
           <div className="flex-1">
-            <p className="text-xl text-dark font-medium mb-2">470</p>
-            <Badge className={`bg-lightsuccess text-success`}>
-              +18%
-            </Badge>
-            <p className="text-success text-xs"></p>
+            {loading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-20 mb-2"></div>
+              </div>
+            ) : (
+              <>
+                <p className="text-3xl text-dark dark:text-white font-semibold mb-2">
+                  {onLeaveCount}
+                </p>
+                {pendingRequests > 0 && (
+                  <Badge className="bg-lightwarning text-warning inline-flex">
+                    {pendingRequests} Pending
+                  </Badge>
+                )}
+                {pendingRequests === 0 && onLeaveCount === 0 && (
+                  <Badge className="bg-lightsuccess text-success inline-flex">
+                    All Available
+                  </Badge>
+                )}
+              </>
+            )}
           </div>
-          {/* <div className="rounded-bars flex-1 md:ps-7">
-            <Chart
-              options={ChartData}
-              series={ChartData.series}
-              type="area"
-              height="60px"
-              width="100%"
-            />
-          </div> */}
         </div>
       </div>
     </>
