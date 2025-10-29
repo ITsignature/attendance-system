@@ -36,6 +36,7 @@ interface Employee {
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
   employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
   base_salary?: number;
+  attendance_affects_salary?: boolean;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
@@ -1181,6 +1182,38 @@ const EmployeeDetails: React.FC = () => {
                       </div>
                       <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
                         {employee.base_salary ? `LKR ${employee.base_salary.toLocaleString()}` : 'Not specified'}
+                      </p>
+                    </div>
+
+                    {/* Attendance Affects Salary Field */}
+                    <div className={`p-6 rounded-lg border-2 shadow-md ${
+                      (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                        : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <HiClock className={`w-5 h-5 ${
+                          (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1) ? 'text-green-600' : 'text-blue-600'
+                        }`} />
+                        <p className={`text-sm font-bold ${
+                          (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
+                            ? 'text-green-800 dark:text-green-200'
+                            : 'text-blue-800 dark:text-blue-200'
+                        }`}>Salary Calculation</p>
+                      </div>
+                      <p className={`text-lg font-semibold ${
+                        (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
+                          ? 'text-green-900 dark:text-green-100'
+                          : 'text-blue-900 dark:text-blue-100'
+                      }`}>
+                        {(employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
+                          ? 'Attendance-Based Salary'
+                          : 'Fixed Salary (Attendance Not Considered)'}
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {(employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
+                          ? 'Salary calculated based on attendance records'
+                          : 'Full salary paid regardless of attendance'}
                       </p>
                     </div>
                   </div>

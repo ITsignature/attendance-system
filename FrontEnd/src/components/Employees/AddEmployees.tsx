@@ -53,6 +53,7 @@ interface EmployeeFormData {
   employment_status: 'active' | 'inactive';
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant';
   salary: number | '';
+  attendance_affects_salary: boolean;
 
   // Work Schedule Information
   in_time: string;
@@ -178,6 +179,7 @@ const AddEmployees: React.FC = () => {
     employment_status: 'active',
     employee_type: 'permanent',
     salary: '',
+    attendance_affects_salary: true,
 
     // Work Schedule Information
     in_time: '',
@@ -530,7 +532,8 @@ const AddEmployees: React.FC = () => {
         employment_status: formData.employment_status,
         employee_type: formData.employee_type,
         salary: formData.salary ? Number(formData.salary) : undefined,
-        
+        attendance_affects_salary: formData.attendance_affects_salary,
+
         // Emergency Contact
         emergency_contact_name: formData.emergency_contact_name,
         emergency_contact_phone: formData.emergency_contact_phone,
@@ -1153,6 +1156,54 @@ const debugAuth = () => {
                     />
                     {validationErrors.salary && (
                       <p className="text-red-600 text-sm mt-1">{validationErrors.salary}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Attendance Affects Salary Section */}
+                <div className="col-span-full">
+                  <div className="border-t pt-6 mt-6">
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                      Salary Calculation Settings
+                    </h4>
+
+                    {/* Attendance Affects Salary Checkbox */}
+                    <div className="mb-4">
+                      <div className="flex items-center">
+                        <input
+                          id="attendance_affects_salary"
+                          type="checkbox"
+                          checked={formData.attendance_affects_salary}
+                          onChange={(e) => handleInputChange('attendance_affects_salary', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                        />
+                        <label htmlFor="attendance_affects_salary" className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                          Calculate Salary Based on Attendance
+                        </label>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {formData.attendance_affects_salary
+                          ? "Employee's salary will be calculated based on attendance records (pro-rated for absences)."
+                          : "Employee will receive full base salary regardless of attendance (suitable for executives, contractors with fixed monthly rates, etc.)."
+                        }
+                      </p>
+                    </div>
+
+                    {!formData.attendance_affects_salary && (
+                      <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md">
+                        <div className="flex">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm text-blue-700 dark:text-blue-200">
+                              This employee will receive their full base salary every month regardless of attendance. Attendance tracking will still be active for reporting purposes.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

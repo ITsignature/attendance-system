@@ -63,6 +63,7 @@ interface Employee {
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
   employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
   base_salary?: number;
+  attendance_affects_salary?: boolean;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   emergency_contact_relation: string;
@@ -1048,6 +1049,42 @@ const EditEmployeeDetails: React.FC = () => {
                 min="0"
                 step="0.01"
               />
+            </div>
+
+            {/* Salary Calculation Settings */}
+            <div className="md:col-span-2 border-t pt-4 mt-4">
+              <h4 className="text-lg font-medium mb-3">Salary Calculation Settings</h4>
+              <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <Checkbox
+                  id="attendance_affects_salary"
+                  checked={formData.attendance_affects_salary === true || formData.attendance_affects_salary === 1}
+                  onChange={(e) => handleChange('attendance_affects_salary', e.target.checked)}
+                />
+                <div>
+                  <Label htmlFor="attendance_affects_salary" className="font-medium">
+                    Calculate Salary Based on Attendance
+                  </Label>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {(formData.attendance_affects_salary === true || formData.attendance_affects_salary === 1)
+                      ? "Employee's salary is calculated based on attendance records (pro-rated for absences)."
+                      : "Employee receives full base salary regardless of attendance (suitable for executives, contractors with fixed monthly rates, etc.)."
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {(formData.attendance_affects_salary === false || formData.attendance_affects_salary === 0) && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      This employee will receive their full base salary every month regardless of attendance. Attendance tracking will still be active for reporting purposes.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Work Schedule Section */}

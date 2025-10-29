@@ -404,9 +404,10 @@ class PayrollRunService {
         }
 
         const [employees] = await db.execute(`
-            SELECT 
+            SELECT
                 e.id, e.employee_code, e.first_name, e.last_name, e.base_salary,
                 e.department_id, e.designation_id, e.employee_type,
+                e.attendance_affects_salary,
                 d.name as department_name,
                 des.title as designation_name
             FROM employees e
@@ -516,16 +517,16 @@ class PayrollRunService {
             INSERT INTO payroll_records (
                 id, run_id, employee_id, employee_code, employee_name,
                 department_name, designation_name, calculation_status,
-                base_salary,
+                base_salary, attendance_affects_salary,
                 weekday_working_days, working_saturdays, working_sundays,
                 weekday_daily_hours, saturday_daily_hours, sunday_daily_hours,
                 daily_salary, weekday_hourly_rate, saturday_hourly_rate, sunday_hourly_rate
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             recordId, runId, employee.id, employee.employee_code,
             `${employee.first_name} ${employee.last_name}`,
             employee.department_name, employee.designation_name,
-            baseSalary,
+            baseSalary, employee.attendance_affects_salary ? 1 : 0,
             weekdayWorkingDays, workingSaturdays, workingSundays,
             weekdayDailyHours, saturdayDailyHours, sundayDailyHours,
             dailySalary, weekdayHourlyRate, saturdayHourlyRate, sundayHourlyRate
@@ -570,6 +571,17 @@ class PayrollRunService {
             end: periodInfo[0]?.period_end_date
         };
 
+        // =============================================
+        // CHECK ATTENDANCE_AFFECTS_SALARY FROM PAYROLL_RECORDS
+        // =============================================
+        const attendanceAffectsSalary = record.attendance_affects_salary !== 0 && record.attendance_affects_salary !== false;
+
+        if (!attendanceAffectsSalary) {
+            console.log(`\n⚙️  ATTENDANCE DOES NOT AFFECT SALARY for ${record.employee_name}`);
+            console.log(`   This employee will receive full base salary regardless of attendance.`);
+            console.log(`   (Setting stored in payroll_records from employee snapshot at run creation)`);
+        }
+
         // Get employee allowances and deductions
         const employeeData = await this.getEmployeePayrollData(record.employee_id, record.client_id, record.run_id);
 
@@ -588,22 +600,37 @@ class PayrollRunService {
         );
 
         // =============================================
-        // STEP 1: Calculate ACTUAL EARNED BASE SALARY (prorated based on attendance)
+        // STEP 1: Calculate ACTUAL EARNED BASE SALARY (prorated based on attendance OR full salary)
         // =============================================
-        console.log(`\n💰 Step 1: Calculating actual earned base salary (attendance-based)...`);
-        const attendanceCalculation = await this.calculateEarnedSalary(
-            record.employee_id,
-            record.run_id,
-            parseFloat(record.base_salary) || 0,
-            false  // Do NOT include today's live session for final calculation
-        );
+        let actualEarnedBaseSalary;
+        let attendanceDeduction;
 
-        const actualEarnedBaseSalary = attendanceCalculation.earned_salary || 0;
-        const attendanceDeduction = attendanceCalculation.total || 0;
+        if (!attendanceAffectsSalary) {
+            // Employee gets full salary regardless of attendance
+            console.log(`\n💰 Step 1: Using full base salary (attendance not considered)...`);
+            actualEarnedBaseSalary = parseFloat(record.base_salary) || 0;
+            attendanceDeduction = 0;
 
-        console.log(`   Base Salary (Full): Rs.${parseFloat(record.base_salary).toFixed(2)}`);
-        console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
-        console.log(`   Attendance Shortfall: Rs.${attendanceDeduction.toFixed(2)}`);
+            console.log(`   Base Salary (Full): Rs.${actualEarnedBaseSalary.toFixed(2)}`);
+            console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)} (Full salary)`);
+            console.log(`   Attendance Shortfall: Rs.0.00 (Not applicable)`);
+        } else {
+            // Normal attendance-based calculation
+            console.log(`\n💰 Step 1: Calculating actual earned base salary (attendance-based)...`);
+            const attendanceCalculation = await this.calculateEarnedSalary(
+                record.employee_id,
+                record.run_id,
+                parseFloat(record.base_salary) || 0,
+                false  // Do NOT include today's live session for final calculation
+            );
+
+            actualEarnedBaseSalary = attendanceCalculation.earned_salary || 0;
+            attendanceDeduction = attendanceCalculation.total || 0;
+
+            console.log(`   Base Salary (Full): Rs.${parseFloat(record.base_salary).toFixed(2)}`);
+            console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
+            console.log(`   Attendance Shortfall: Rs.${attendanceDeduction.toFixed(2)}`);
+        }
 
         // =============================================
         // STEP 2: Calculate EPF/ETF on ACTUAL EARNED BASE SALARY ONLY (not on allowances)
@@ -3506,7 +3533,7 @@ class PayrollRunService {
                 pr.gross_salary, pr.taxable_income, pr.net_salary,
                 pr.payment_status, pr.payment_method, pr.payment_date,
                 pr.calculated_at, pr.notes,
-                pr.base_salary,
+                pr.base_salary, pr.attendance_affects_salary,
                 ? as period_start_date,
                 ? as calculation_end_date
             FROM payroll_records pr
@@ -3522,12 +3549,26 @@ class PayrollRunService {
         // Now calculate expected base salary and actual earned for each employee
         const enrichedRecords = await Promise.all(records.map(async (record) => {
             try {
-                // Calculate expected base salary until now
-                const attendanceCalc = await this.calculateEarnedSalary(
-                    record.employee_id,
-                    runId,
-                    parseFloat(record.base_salary) || 0
-                );
+                // Check if attendance affects salary for this employee
+                const attendanceAffectsSalary = record.attendance_affects_salary ? true : false;
+                let attendanceCalc;
+
+                if (!attendanceAffectsSalary) {
+                    // Employee gets full salary regardless of attendance
+                    const baseSalary = parseFloat(record.base_salary) || 0;
+                    attendanceCalc = {
+                        expected_salary: baseSalary,
+                        earned_salary: baseSalary,
+                        total: 0
+                    };
+                } else {
+                    // Calculate expected base salary until now
+                    attendanceCalc = await this.calculateEarnedSalary(
+                        record.employee_id,
+                        runId,
+                        parseFloat(record.base_salary) || 0
+                    );
+                }
 
                 return {
                     ...record,
@@ -3642,6 +3683,7 @@ class PayrollRunService {
                     pr.employee_name,
                     pr.department_name,
                     pr.designation_name,
+                    pr.attendance_affects_salary,
                     e.base_salary,
                     e.department_id
                 FROM payroll_records pr
@@ -3793,13 +3835,27 @@ class PayrollRunService {
             // Process each employee with pre-fetched data
             // ========================================
             const employeeDataPromises = employees.map(async (emp) => {
-                // Get attendance data (this still needs individual calculation)
-                const attendanceData = await this.calculateEarnedSalary(
-                    emp.employee_id,
-                    runId,
-                    parseFloat(emp.base_salary) || 0,
-                    true  // Include today's live session for real-time preview
-                );
+                // Check if attendance affects salary for this employee
+                const attendanceAffectsSalary = emp.attendance_affects_salary ? true : false;
+                let attendanceData;
+
+                if (!attendanceAffectsSalary) {
+                    // Employee gets full salary regardless of attendance
+                    const baseSalary = parseFloat(emp.base_salary) || 0;
+                    attendanceData = {
+                        expected_salary: baseSalary,
+                        earned_salary: baseSalary,
+                        total: 0
+                    };
+                } else {
+                    // Get attendance data (this still needs individual calculation)
+                    attendanceData = await this.calculateEarnedSalary(
+                        emp.employee_id,
+                        runId,
+                        parseFloat(emp.base_salary) || 0,
+                        true  // Include today's live session for real-time preview
+                    );
+                }
 
                 // Use pre-fetched data
                 const employeeAllowances = allowancesByEmployee[emp.employee_id] || [];
