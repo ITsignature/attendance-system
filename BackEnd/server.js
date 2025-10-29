@@ -199,6 +199,7 @@ app.use('/api/payroll-runs', payrollRunRoutes);
 app.use('/api/employees', financialRecordsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rbac', rbacRoutes);
+
 app.use('/api/clients', clientRoutes);
 app.use('/api/departments', departments);
 app.use('/api/designations', designations);
