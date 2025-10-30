@@ -1043,11 +1043,14 @@ const EditEmployeeDetails: React.FC = () => {
               <Label htmlFor="base_salary" value="Base Salary" />
               <TextInput
                 id="base_salary"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={formData.base_salary?.toString() || ''}
-                onChange={(e) => handleChange('base_salary', parseFloat(e.target.value) || 0)}
-                min="0"
-                step="0.01"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  handleChange('base_salary', value ? parseFloat(value) : 0);
+                }}
               />
             </div>
 
