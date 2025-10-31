@@ -1398,14 +1398,32 @@ class PayrollRunService {
         // Use today's date if we're still in the period, otherwise use period end date
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const periodEndDateFull = new Date(period.period_end_date);
+
+        // Parse period end date in local time to match today's local time
+        const periodEndParts = period.period_end_date.split('-');
+        const periodEndDateFull = new Date(periodEndParts[0], periodEndParts[1] - 1, periodEndParts[2], 0, 0, 0, 0);
+
         const calculationEndDate = today < periodEndDateFull ? today : periodEndDateFull;
         const isPartialPeriod = today < periodEndDateFull;
+
+        // Helper functions for date handling (defined early for debug logging)
+        const getLocalDateString = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        console.log(`   🔍 DEBUG - Date Calculation:`);
+        console.log(`      Today: ${getLocalDateString(today)} (${today.toISOString()})`);
+        console.log(`      Period End Date Full: ${getLocalDateString(periodEndDateFull)} (${periodEndDateFull.toISOString()})`);
+        console.log(`      Comparison (today < periodEndDateFull): ${today < periodEndDateFull}`);
+        console.log(`      Calculation End Date: ${getLocalDateString(calculationEndDate)} (${calculationEndDate.toISOString()})`);
 
         console.log(`\n💰 CALCULATING ATTENDANCE DEDUCTION ${includeLiveSession ? '(LIVE PREVIEW - Real-time)' : '(FINAL CALCULATION - Completed sessions only)'}`);
         console.log(`   👤 Employee: ${employeeName} (${employeeCode})`);
         console.log(`   📅 Full Period: ${period.period_start_date} to ${period.period_end_date}`);
-        console.log(`   📅 Calculation Until: ${calculationEndDate.toISOString().split('T')[0]} ${isPartialPeriod ? '(PARTIAL - Until Today)' : '(FULL PERIOD)'}`);
+        console.log(`   📅 Calculation Until: ${getLocalDateString(calculationEndDate)} ${isPartialPeriod ? '(PARTIAL - Until Today)' : '(FULL PERIOD)'}`);
         console.log(`   Base Salary (Full Month): Rs.${baseSalary.toFixed(2)}`);
         console.log(`   Mode: ${includeLiveSession ? '⚡ REAL-TIME (includes ongoing session)' : '✅ FINAL (completed sessions only)'}`);
 
@@ -1492,7 +1510,7 @@ class PayrollRunService {
         const sundaysForExpected = workingDaysForExpected.working_sundays || 0;
 
         console.log(`\n   📊 Working Days for Expected Calculation for ${employeeName} (${employeeCode}):`);
-        console.log(`      Up to: ${calculationDate.toISOString().split('T')[0]} ${includeLiveSession ? '(yesterday, today calculated separately)' : '(including today)'}`);
+        console.log(`      Up to: ${getLocalDateString(calculationDate)} ${includeLiveSession ? '(yesterday, today calculated separately)' : '(including today)'}`);
         console.log(`      Weekdays: ${weekdaysForExpected}, Saturdays: ${saturdaysForExpected}, Sundays: ${sundaysForExpected}`);
 
         // Calculate EXPECTED hours
@@ -1502,7 +1520,13 @@ class PayrollRunService {
 
         // Calculate ACTUAL worked hours from COMPLETED sessions
         // Use calculationEndDate instead of today's date to properly handle past months
-        const attendanceEndDateStr = calculationEndDate.toISOString().split('T')[0];
+        // Helper function to parse date strings in local time
+        const parseLocalDate = (dateStr) => {
+            const parts = dateStr.split('-');
+            return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+        };
+
+        const attendanceEndDateStr = getLocalDateString(calculationEndDate);
 
         // First, get detailed attendance records for logging
         const [detailedAttendance] = await db.execute(`
@@ -1557,6 +1581,10 @@ class PayrollRunService {
         console.log(`         Saturday: ${attendanceSaturdayHours.toFixed(2)}h`);
         console.log(`         Sunday: ${attendanceSundayHours.toFixed(2)}h`);
 
+        // For leave calculations, use today's date (or period end date) instead of attendance end date
+        // This ensures that leaves approved for today are included in the calculation
+        const leaveEndDateStr = getLocalDateString(calculationEndDate);
+
         // Fetch approved leave requests that overlap with the payroll period
         const [leaveRequests] = await db.execute(`
             SELECT
@@ -1579,7 +1607,10 @@ class PayrollRunService {
                 (end_date BETWEEN ? AND ?) OR
                 (start_date <= ? AND end_date >= ?)
             )
-        `, [employeeId, period.period_start_date, attendanceEndDateStr, period.period_start_date, attendanceEndDateStr, period.period_start_date, attendanceEndDateStr]);
+        `, [employeeId, period.period_start_date, leaveEndDateStr, period.period_start_date, leaveEndDateStr, period.period_start_date, leaveEndDateStr]);
+
+        console.log(`          ${employeeName} - Leave period: ${period.period_start_date} to ${leaveEndDateStr}, Attendance period: ${period.period_start_date} to ${attendanceEndDateStr},
+            leave requeest length: ${leaveRequests.length}, period end date full: ${periodEndDateFull}`);
 
         // Calculate leave hours that fall within the payroll period
         let leaveWeekdayHours = 0;
@@ -1594,17 +1625,17 @@ class PayrollRunService {
             const sundayDailyHours = parseFloat(rates.sunday_daily_hours) || 0;
 
             for (const leave of leaveRequests) {
-                const leaveStart = new Date(leave.start_date);
-                const leaveEnd = new Date(leave.end_date);
-                const periodStart = new Date(period.period_start_date);
-                const periodEnd = new Date(attendanceEndDateStr);
+                const leaveStart = parseLocalDate(leave.start_date);
+                const leaveEnd = parseLocalDate(leave.end_date);
+                const periodStart = parseLocalDate(period.period_start_date);
+                const periodEnd = parseLocalDate(leaveEndDateStr);
 
                 // Calculate the overlap between leave and payroll period
                 const overlapStart = leaveStart > periodStart ? leaveStart : periodStart;
                 const overlapEnd = leaveEnd < periodEnd ? leaveEnd : periodEnd;
 
                 console.log(`         Leave: ${leave.start_date} to ${leave.end_date} (${leave.leave_duration || 'full_day'})`);
-                console.log(`         Overlap: ${overlapStart.toISOString().split('T')[0]} to ${overlapEnd.toISOString().split('T')[0]}`);
+                console.log(`         Overlap: ${getLocalDateString(overlapStart)} to ${getLocalDateString(overlapEnd)}`);
 
                 // Iterate through each day in the overlap period
                 let currentDate = new Date(overlapStart);

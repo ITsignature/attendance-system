@@ -9,6 +9,260 @@ const AttendanceStatusService = require('../services/AttendanceStatusService');
 
 const router = express.Router();
 
+// =============================================
+// PUBLIC ENDPOINTS (No Authentication Required)
+// =============================================
+
+// FINGERPRINT ATTENDANCE ENDPOINT - Must be BEFORE authentication middleware
+/**
+ * This endpoint receives fingerprint check-in/check-out from fp.php
+ * No authentication required as it's called from the fingerprint device
+ *
+ * Request body:
+ * - fingerprint_id: Integer (matches employees.fingerprint_id)
+ * - client_id: UUID (optional, if multiple clients use same fingerprint device)
+ */
+router.post('/fingerprint', [
+  body('fingerprint_id').isInt().withMessage('fingerprint_id must be an integer'),
+  body('client_id').optional().isUUID().withMessage('client_id must be a valid UUID')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array(),
+      status: 'error'
+    });
+  }
+
+  const db = getDB();
+  const { fingerprint_id, client_id } = req.body;
+  const today = new Date().toISOString().split('T')[0];
+  const currentTime = new Date().toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+
+  try {
+    // Map fingerprint ID to employee in new system
+    let query = `
+      SELECT
+        e.id as employee_id,
+        e.client_id,
+        e.in_time,
+        e.out_time,
+        e.fingerprint_id,
+        CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+        e.employee_code
+      FROM employees e
+      WHERE e.fingerprint_id = ?
+      AND e.employment_status = 'active'
+    `;
+
+    const queryParams = [fingerprint_id];
+
+    // If client_id provided, filter by it
+    if (client_id) {
+      query += ' AND e.client_id = ?';
+      queryParams.push(client_id);
+    }
+
+    query += ' LIMIT 1';
+
+    const [employee] = await db.execute(query, queryParams);
+
+    if (employee.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found or inactive. Fingerprint ID: ' + fingerprint_id,
+        status: 'error'
+      });
+    }
+
+    const emp = employee[0];
+    const employeeId = emp.employee_id;
+    const clientId = emp.client_id;
+
+    console.log(`\n🔐 FINGERPRINT ATTENDANCE - ${emp.employee_name} (${emp.employee_code})`);
+    console.log(`   Fingerprint ID: ${fingerprint_id}`);
+    console.log(`   Date: ${today}`);
+    console.log(`   Time: ${currentTime}`);
+
+    // Check if attendance already exists for today
+    const [existing] = await db.execute(`
+      SELECT id, check_in_time, check_out_time
+      FROM attendance
+      WHERE employee_id = ? AND date = ?
+    `, [employeeId, today]);
+
+    if (existing.length === 0) {
+      // ===== CHECK-IN =====
+      console.log(`   Action: CHECK-IN`);
+
+      const schedule = await getEmployeeSchedule(employeeId, clientId, db, today);
+      const attendanceId = uuidv4();
+
+      // Get day of week
+      const attendanceDate = new Date(today);
+      const jsDayOfWeek = attendanceDate.getDay();
+      const isWeekend = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1;
+
+      await db.execute(`
+        INSERT INTO attendance (
+          id, employee_id, date, check_in_time, check_out_time,
+          total_hours, overtime_hours, break_duration,
+          arrival_status, work_duration, work_type,
+          scheduled_in_time, scheduled_out_time, is_weekend
+        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, NULL, NULL, 'office', ?, ?, ?)
+      `, [
+        attendanceId,
+        employeeId,
+        today,
+        currentTime,
+        schedule.start_time,
+        schedule.end_time,
+        isWeekend
+      ]);
+
+      console.log(`   ✅ Check-in successful at ${currentTime}`);
+
+      return res.status(201).json({
+        success: true,
+        message: `Welcome ${emp.employee_name}!`,
+        status: 'success',
+        action: 'check_in',
+        data: {
+          employee_name: emp.employee_name,
+          employee_code: emp.employee_code,
+          check_in_time: currentTime,
+          scheduled_in_time: schedule.start_time,
+          date: today
+        }
+      });
+
+    } else {
+      // ===== CHECK-OUT =====
+      const record = existing[0];
+
+      if (record.check_out_time) {
+        console.log(`   ⚠️  Already checked out at ${record.check_out_time}`);
+        return res.status(400).json({
+          success: false,
+          message: 'You have already checked out today',
+          status: 'info',
+          data: {
+            employee_name: emp.employee_name,
+            check_in_time: record.check_in_time,
+            check_out_time: record.check_out_time
+          }
+        });
+      }
+
+      console.log(`   Action: CHECK-OUT`);
+
+      // Get schedule and settings
+      const schedule = await getEmployeeSchedule(employeeId, clientId, db, today);
+      const durationSettings = await getWorkDurationSettings(clientId, db);
+
+      // Calculate work hours
+      const { totalHours, overtimeHours } = await calculateWorkHours(
+        record.check_in_time,
+        currentTime,
+        0, // no break for fingerprint attendance
+        clientId,
+        db,
+        schedule
+      );
+
+      // Calculate payable duration
+      const payableDuration = calculatePayableDuration(
+        record.check_in_time,
+        currentTime,
+        schedule.start_time,
+        schedule.end_time,
+        0
+      );
+
+      // Get department for status determination
+      const [employeeInfo] = await db.execute(`
+        SELECT department_id FROM employees WHERE id = ?
+      `, [employeeId]);
+      const departmentId = employeeInfo[0]?.department_id || null;
+
+      // Determine statuses
+      const statusService = new AttendanceStatusService(clientId);
+      const arrivalResult = await statusService.determineArrivalStatus(
+        record.check_in_time,
+        schedule,
+        today,
+        departmentId,
+        null
+      );
+      const durationResult = await statusService.determineWorkDuration(
+        totalHours,
+        durationSettings,
+        today,
+        departmentId,
+        null
+      );
+      const overtimeInfo = await statusService.getOvertimeMultiplier(today, departmentId);
+      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
+
+      // Update attendance record
+      await db.execute(`
+        UPDATE attendance
+        SET
+          check_out_time = ?,
+          total_hours = ?,
+          overtime_hours = ?,
+          payable_duration = ?,
+          arrival_status = ?,
+          work_duration = ?
+        WHERE id = ?
+      `, [
+        currentTime,
+        totalHours,
+        enhancedOvertimeHours,
+        payableDuration,
+        arrivalResult.status,
+        durationResult.status,
+        record.id
+      ]);
+
+      console.log(`   ✅ Check-out successful at ${currentTime}`);
+      console.log(`   Total Hours: ${totalHours}h, Overtime: ${enhancedOvertimeHours}h`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Goodbye ${emp.employee_name}!`,
+        status: 'success',
+        action: 'check_out',
+        data: {
+          employee_name: emp.employee_name,
+          employee_code: emp.employee_code,
+          check_in_time: record.check_in_time,
+          check_out_time: currentTime,
+          total_hours: totalHours,
+          overtime_hours: enhancedOvertimeHours,
+          arrival_status: arrivalResult.status,
+          work_duration: durationResult.status,
+          date: today
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Fingerprint attendance error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to process attendance',
+      status: 'error',
+      error: error.message
+    });
+  }
+}));
+
+// =============================================
+// APPLY AUTHENTICATION TO ALL ROUTES BELOW
+// =============================================
 router.use(authenticate);
 router.use(ensureClientAccess);
 
@@ -1457,7 +1711,7 @@ router.delete('/:id', [
 // =============================================
 // GET EMPLOYEE SCHEDULE INFO
 // =============================================
-router.get('/employee-schedule/:employeeId', 
+router.get('/employee-schedule/:employeeId',
   checkPermission('attendance.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
@@ -1466,7 +1720,7 @@ router.get('/employee-schedule/:employeeId',
     try {
       const schedule = await getEmployeeSchedule(employeeId, req.user.clientId, db);
       const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
-      
+
       res.status(200).json({
         success: true,
         data: {
