@@ -1548,14 +1548,135 @@ class PayrollRunService {
             AND check_out_time IS NOT NULL
         `, [employeeId, period.period_start_date, attendanceEndDateStr]);
 
-        const completedWeekdayHours = parseFloat(completedHours[0].weekday_hours) || 0;
-        const completedSaturdayHours = parseFloat(completedHours[0].saturday_hours) || 0;
-        const completedSundayHours = parseFloat(completedHours[0].sunday_hours) || 0;
+        const attendanceWeekdayHours = parseFloat(completedHours[0].weekday_hours) || 0;
+        const attendanceSaturdayHours = parseFloat(completedHours[0].saturday_hours) || 0;
+        const attendanceSundayHours = parseFloat(completedHours[0].sunday_hours) || 0;
 
-        console.log(`\n      📊 Aggregated Totals for ${employeeName} (${employeeCode}):`);
-        console.log(`         Weekday: ${completedWeekdayHours.toFixed(2)}h`);
-        console.log(`         Saturday: ${completedSaturdayHours.toFixed(2)}h`);
-        console.log(`         Sunday: ${completedSundayHours.toFixed(2)}h`);
+        console.log(`\n      📊 Attendance Hours for ${employeeName} (${employeeCode}):`);
+        console.log(`         Weekday: ${attendanceWeekdayHours.toFixed(2)}h`);
+        console.log(`         Saturday: ${attendanceSaturdayHours.toFixed(2)}h`);
+        console.log(`         Sunday: ${attendanceSundayHours.toFixed(2)}h`);
+
+        // Fetch approved leave requests that overlap with the payroll period
+        const [leaveRequests] = await db.execute(`
+            SELECT
+                id,
+                start_date,
+                end_date,
+                leave_duration,
+                start_time,
+                end_time,
+                is_paid,
+                payable_leave_hours_weekday,
+                payable_leave_hours_saturday,
+                payable_leave_hours_sunday
+            FROM leave_requests
+            WHERE employee_id = ?
+            AND status = 'approved'
+            AND is_paid = TRUE
+            AND (
+                (start_date BETWEEN ? AND ?) OR
+                (end_date BETWEEN ? AND ?) OR
+                (start_date <= ? AND end_date >= ?)
+            )
+        `, [employeeId, period.period_start_date, attendanceEndDateStr, period.period_start_date, attendanceEndDateStr, period.period_start_date, attendanceEndDateStr]);
+
+        // Calculate leave hours that fall within the payroll period
+        let leaveWeekdayHours = 0;
+        let leaveSaturdayHours = 0;
+        let leaveSundayHours = 0;
+
+        if (leaveRequests.length > 0) {
+            console.log(`\n      📅 Processing ${leaveRequests.length} approved paid leave request(s) for ${employeeName} (${employeeCode}):`);
+
+            const weekdayDailyHours = parseFloat(rates.weekday_daily_hours) || 8;
+            const saturdayDailyHours = parseFloat(rates.saturday_daily_hours) || 0;
+            const sundayDailyHours = parseFloat(rates.sunday_daily_hours) || 0;
+
+            for (const leave of leaveRequests) {
+                const leaveStart = new Date(leave.start_date);
+                const leaveEnd = new Date(leave.end_date);
+                const periodStart = new Date(period.period_start_date);
+                const periodEnd = new Date(attendanceEndDateStr);
+
+                // Calculate the overlap between leave and payroll period
+                const overlapStart = leaveStart > periodStart ? leaveStart : periodStart;
+                const overlapEnd = leaveEnd < periodEnd ? leaveEnd : periodEnd;
+
+                console.log(`         Leave: ${leave.start_date} to ${leave.end_date} (${leave.leave_duration || 'full_day'})`);
+                console.log(`         Overlap: ${overlapStart.toISOString().split('T')[0]} to ${overlapEnd.toISOString().split('T')[0]}`);
+
+                // Iterate through each day in the overlap period
+                let currentDate = new Date(overlapStart);
+                let tempWeekdayHours = 0;
+                let tempSaturdayHours = 0;
+                let tempSundayHours = 0;
+
+                while (currentDate <= overlapEnd) {
+                    const dayOfWeek = currentDate.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+                    let dailyHours = 0;
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        // Weekday (Monday-Friday)
+                        dailyHours = weekdayDailyHours;
+                    } else if (dayOfWeek === 6) {
+                        // Saturday
+                        dailyHours = saturdayDailyHours;
+                    } else {
+                        // Sunday
+                        dailyHours = sundayDailyHours;
+                    }
+
+                    // Apply leave duration multiplier
+                    if (leave.leave_duration === 'half_day') {
+                        dailyHours = dailyHours * 0.5;
+                    } else if (leave.leave_duration === 'short_leave' && leave.start_time && leave.end_time) {
+                        // Calculate actual hours for short leave
+                        const startTime = new Date(`2000-01-01 ${leave.start_time}`);
+                        const endTime = new Date(`2000-01-01 ${leave.end_time}`);
+                        if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
+                            const diffMs = endTime.getTime() - startTime.getTime();
+                            dailyHours = Math.max(0, Math.min(24, diffMs / (1000 * 60 * 60)));
+                        } else {
+                            dailyHours = 0;
+                        }
+                    }
+
+                    // Add to appropriate day type total
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        tempWeekdayHours += dailyHours;
+                    } else if (dayOfWeek === 6) {
+                        tempSaturdayHours += dailyHours;
+                    } else {
+                        tempSundayHours += dailyHours;
+                    }
+
+                    // Move to next day
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                console.log(`         Hours in period: Weekday=${tempWeekdayHours.toFixed(2)}h, Saturday=${tempSaturdayHours.toFixed(2)}h, Sunday=${tempSundayHours.toFixed(2)}h`);
+
+                leaveWeekdayHours += tempWeekdayHours;
+                leaveSaturdayHours += tempSaturdayHours;
+                leaveSundayHours += tempSundayHours;
+            }
+        }
+
+        console.log(`\n      📅 Total Leave Hours for ${employeeName} (${employeeCode}):`);
+        console.log(`         Weekday: ${leaveWeekdayHours.toFixed(2)}h`);
+        console.log(`         Saturday: ${leaveSaturdayHours.toFixed(2)}h`);
+        console.log(`         Sunday: ${leaveSundayHours.toFixed(2)}h`);
+
+        // Calculate total completed hours (attendance + leave)
+        const completedWeekdayHours = attendanceWeekdayHours + leaveWeekdayHours;
+        const completedSaturdayHours = attendanceSaturdayHours + leaveSaturdayHours;
+        const completedSundayHours = attendanceSundayHours + leaveSundayHours;
+
+        console.log(`\n      📊 Total Actual Earned Hours for ${employeeName} (${employeeCode}):`);
+        console.log(`         Weekday: ${completedWeekdayHours.toFixed(2)}h (Attendance: ${attendanceWeekdayHours.toFixed(2)}h + Leave: ${leaveWeekdayHours.toFixed(2)}h)`);
+        console.log(`         Saturday: ${completedSaturdayHours.toFixed(2)}h (Attendance: ${attendanceSaturdayHours.toFixed(2)}h + Leave: ${leaveSaturdayHours.toFixed(2)}h)`);
+        console.log(`         Sunday: ${completedSundayHours.toFixed(2)}h (Attendance: ${attendanceSundayHours.toFixed(2)}h + Leave: ${leaveSundayHours.toFixed(2)}h)`);
 
         // Get TODAY's attendance record for real-time calculation (only if includeLiveSession is true)
         let todayExpectedHours = 0;
