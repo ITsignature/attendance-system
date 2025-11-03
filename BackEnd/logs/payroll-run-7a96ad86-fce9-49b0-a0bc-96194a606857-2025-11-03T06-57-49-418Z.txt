@@ -1,0 +1,77 @@
+[2025-11-03T06:57:49.418Z] [INFO] 🚀 Payroll calculation logging started for run: 7a96ad86-fce9-49b0-a0bc-96194a606857
+[2025-11-03T06:57:49.418Z] [INFO] 📁 Log file: D:\attendance-system\BackEnd\logs\payroll-run-7a96ad86-fce9-49b0-a0bc-96194a606857-2025-11-03T06-57-49-418Z.txt
+[2025-11-03T06:57:49.418Z] [INFO] ⏰ Started at: 2025-11-03T06:57:49.418Z
+[2025-11-03T06:57:49.418Z] [INFO] ================================================================================
+[2025-11-03T06:57:49.418Z] [LOG] 📊 [OPTIMIZED] Fetching live payroll data for run: 7a96ad86-fce9-49b0-a0bc-96194a606857
+[2025-11-03T06:57:49.454Z] [LOG] 
+      📅 Unpaid Leave Deduction for Maryam null (EMP000035): Rs.0.00
+[2025-11-03T06:57:49.523Z] [LOG] 
+      ⏰ Time Variance Deduction for Viruna Damsiha Cooray null (EMP000038): Rs.807.68
+[2025-11-03T06:57:49.524Z] [LOG] 
+      ❌ Absent Days Deduction for Viruna Damsiha Cooray null (EMP000038): Rs.13461.32
+[2025-11-03T06:57:49.524Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (807.68) + Absent Days (13461.32) = 14269.00
+[2025-11-03T06:57:49.533Z] [LOG] 
+      ⏰ Time Variance Deduction for Waruni null (EMP000024): Rs.300.90
+[2025-11-03T06:57:49.534Z] [LOG] 
+      ❌ Absent Days Deduction for Waruni null (EMP000024): Rs.9615.20
+[2025-11-03T06:57:49.534Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (300.90) + Absent Days (9615.20) = 9916.10
+[2025-11-03T06:57:49.616Z] [LOG] 
+      📅 Unpaid Leave Deduction for customer null (EMP000036): Rs.0.00
+[2025-11-03T06:57:49.792Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Shandeep null (EMP000034) - including live session:
+[2025-11-03T06:57:49.793Z] [LOG]       Weekday: 187.00h
+[2025-11-03T06:57:49.793Z] [LOG]       Saturday: 18.00h
+[2025-11-03T06:57:49.794Z] [LOG]       Sunday: 0.00h
+[2025-11-03T06:57:49.794Z] [LOG]       Total Expected: 205.00h
+[2025-11-03T06:57:49.795Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Shandeep null (EMP000034) - including live session:
+[2025-11-03T06:57:49.796Z] [LOG]       Weekday: 96.77h
+[2025-11-03T06:57:49.796Z] [LOG]       Saturday: 13.50h
+[2025-11-03T06:57:49.797Z] [LOG]       Sunday: 0.00h
+[2025-11-03T06:57:49.797Z] [LOG]       Total Actual: 110.27h
+[2025-11-03T06:57:49.798Z] [LOG] 
+   💵 EXPECTED Earned Salary for Shandeep null (EMP000034) - until NOW:
+[2025-11-03T06:57:49.799Z] [LOG]       Weekday: 187.00h × Rs.361.99 = Rs.67692.13
+[2025-11-03T06:57:49.799Z] [LOG]       Saturday: 18.00h × Rs.683.76 = Rs.12307.68
+[2025-11-03T06:57:49.800Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-11-03T06:57:49.801Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-11-03T06:57:49.802Z] [LOG]       Total Expected Earned: Rs.79999.81
+[2025-11-03T06:57:49.803Z] [LOG] 
+   💵 ACTUAL Earned Salary for Shandeep null (EMP000034) - including live session:
+[2025-11-03T06:57:49.804Z] [LOG]       Weekday: 96.77h × Rs.361.99 = Rs.35029.77
+[2025-11-03T06:57:49.805Z] [LOG]       Saturday: 13.50h × Rs.683.76 = Rs.9230.76
+[2025-11-03T06:57:49.806Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-11-03T06:57:49.807Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-11-03T06:57:49.808Z] [LOG]       Total Actual Earned: Rs.44260.53
+[2025-11-03T06:57:49.809Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Shandeep null (EMP000034):
+[2025-11-03T06:57:49.810Z] [LOG]       Calculated At: Nov 3, 2025, 12:27:49
+[2025-11-03T06:57:49.810Z] [LOG]       Expected Earned: Rs.79999.81
+[2025-11-03T06:57:49.811Z] [LOG]       Actual Earned: Rs.44260.53
+[2025-11-03T06:57:49.811Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-11-03T06:57:49.812Z] [LOG]       Attendance Deduction: Rs.35739.28
+[2025-11-03T06:57:49.812Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-11-03T06:57:49.813Z] [LOG]       📉 Shortfall for Shandeep null: 94.73 hours (44.67% of expected)
+[2025-11-03T06:57:49.815Z] [LOG] 
+      ⏰ Time Variance Deduction for customer null (EMP000036): Rs.0.00
+[2025-11-03T06:57:49.816Z] [LOG] 
+      ❌ Absent Days Deduction for customer null (EMP000036): Rs.0.00
+[2025-11-03T06:57:49.819Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (0.00) = 0.00
+[2025-11-03T06:57:49.905Z] [LOG] 
+      ⏰ Time Variance Deduction for Maryam null (EMP000035): Rs.1522.21
+[2025-11-03T06:57:49.906Z] [LOG] 
+      ❌ Absent Days Deduction for Maryam null (EMP000035): Rs.10769.46
+[2025-11-03T06:57:49.906Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (1522.21) + Absent Days (10769.46) = 12291.67
+[2025-11-03T06:57:50.069Z] [LOG] 
+      📅 Unpaid Leave Deduction for Shandeep null (EMP000034): Rs.0.00
+[2025-11-03T06:57:50.125Z] [LOG] 👥 Processing 34 employees...
+[2025-11-03T06:57:50.559Z] [LOG] 
+      ⏰ Time Variance Deduction for Shandeep null (EMP000034): Rs.8047.04
+[2025-11-03T06:57:50.559Z] [LOG] 
+      ❌ Absent Days Deduction for Shandeep null (EMP000034): Rs.27692.24
+[2025-11-03T06:57:50.560Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (8047.04) + Absent Days (27692.24) = 35739.28
+[2025-11-03T06:57:50.560Z] [LOG] 
+⚡ PERFORMANCE: Loaded 34 employees in 9722ms (286ms per employee)
+[2025-11-03T06:57:50.560Z] [INFO] ================================================================================
+[2025-11-03T06:57:50.560Z] [INFO] ⏰ Completed at: 2025-11-03T06:57:50.560Z
+[2025-11-03T06:57:50.560Z] [INFO] 📊 Total log entries: 57
