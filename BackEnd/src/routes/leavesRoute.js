@@ -226,7 +226,7 @@ router.get('/requests',
 
     // Get leave requests with duration and time information
     const [requests] = await db.execute(`
-      SELECT 
+      SELECT
         lr.id,
         lr.employee_id,
         CONCAT_WS(' ', e.first_name, e.last_name) AS employee_name,
@@ -240,6 +240,7 @@ router.get('/requests',
         lr.start_time,
         lr.end_time,
         lr.days_requested,
+        lr.is_paid,
         lr.reason,
         lr.status,
         lr.applied_at,
@@ -311,7 +312,7 @@ router.post('/request',
     body('start_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
     body('end_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
     body('reason').trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be between 10-500 characters'),
-    body('days_requested').isFloat({ min: 0.25, max: 365 }).withMessage('Days requested must be between 0.25 and 365'),
+    body('days_requested').optional({ checkFalsy: true }).isFloat({ min: 0.25, max: 365 }).withMessage('Days requested must be between 0.25 and 365'),
     body('notes').optional().trim().isLength({ max: 500 }).withMessage('Notes too long')
   ],
   asyncHandler(async (req, res) => {
@@ -416,27 +417,61 @@ router.post('/request',
       `, [employee_id, start_date, end_date]);
 
       if (overlapping.length > 0) {
-        // For half-day, check if the overlapping request is also half-day on a different period
-        if (leave_duration === 'half_day' && overlapping[0].leave_duration === 'half_day' 
-            && overlapping[0].start_date === start_date) {
+        const existingLeave = overlapping[0];
+
+        // Check if both are partial leaves (half-day or short) on the SAME DATE
+        const bothPartialOnSameDate =
+          start_date === end_date &&
+          start_date === existingLeave.start_date &&
+          (leave_duration === 'half_day' || leave_duration === 'short_leave') &&
+          (existingLeave.leave_duration === 'half_day' || existingLeave.leave_duration === 'short_leave');
+
+        if (bothPartialOnSameDate) {
+          // Allow multiple half-day/short leaves on same day (e.g., morning half + afternoon half)
+          console.log(`✅ Allowing partial leave overlap on ${start_date}: ${leave_duration} + ${existingLeave.leave_duration}`);
+        } else {
+          // Reject all other overlaps
           return res.status(400).json({
             success: false,
-            message: `Employee already has a half-day leave on ${start_date}`
-          });
-        } else if (overlapping.length > 0 && leave_duration !== 'half_day') {
-          return res.status(400).json({
-            success: false,
-            message: `Employee has overlapping leave request from ${overlapping[0].start_date} to ${overlapping[0].end_date}`
+            message: `Cannot create ${leave_duration} leave. Employee already has ${existingLeave.leave_duration || 'full_day'} leave from ${existingLeave.start_date} to ${existingLeave.end_date}`
           });
         }
       }
 
       // Calculate actual days based on duration
-      let calculatedDays = days_requested;
+      let calculatedDays = days_requested || 0;
+
       if (leave_duration === 'half_day') {
         calculatedDays = 0.5;
       } else if (leave_duration === 'short_leave') {
         calculatedDays = 0.25; // Quarter day for short leave
+      } else if (leave_duration === 'full_day') {
+        // For full_day, calculate from date range and exclude holidays
+        const startDate = new Date(start_date);
+        const endDate = new Date(end_date);
+        const diffTime = endDate.getTime() - startDate.getTime();
+        const totalCalendarDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+
+        // Fetch holidays in the date range to exclude them
+        const [holidays] = await db.execute(`
+          SELECT date
+          FROM holidays
+          WHERE client_id = ?
+          AND date BETWEEN ? AND ?
+          AND (applies_to_all = TRUE OR department_ids IS NULL)
+        `, [clientId, start_date, end_date]);
+
+        const holidayCount = holidays.length;
+        calculatedDays = totalCalendarDays - holidayCount;
+
+        if (holidayCount > 0) {
+          console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date}`);
+          console.log(`   Total calendar days: ${totalCalendarDays}`);
+          console.log(`   Holidays excluded: ${holidayCount}`);
+          console.log(`   Final days: ${calculatedDays}`);
+        } else {
+          console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date} = ${calculatedDays} days`);
+        }
       }
 
       // Check paid leave balance and determine if this leave can be paid
@@ -514,6 +549,33 @@ router.post('/request',
         }
       }
 
+      // Calculate day-of-week breakdown
+      // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
+      // JavaScript getDay: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+      const dayOfWeekCounts = {
+        "1": 0, // Sunday
+        "2": 0, // Monday
+        "3": 0, // Tuesday
+        "4": 0, // Wednesday
+        "5": 0, // Thursday
+        "6": 0, // Friday
+        "7": 0  // Saturday
+      };
+
+      let currentDate = new Date(start_date);
+      const leaveEndDate = new Date(end_date);
+
+      while (currentDate <= leaveEndDate) {
+        const jsDayOfWeek = currentDate.getDay(); // JavaScript day (0-6)
+        const mysqlDayOfWeek = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1; // Convert to MySQL DAYOFWEEK (1-7)
+        dayOfWeekCounts[mysqlDayOfWeek.toString()]++;
+
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      console.log(`📅 Day-of-week breakdown for leave (${start_date} to ${end_date}):`, dayOfWeekCounts);
+
       // Create leave request
       const requestId = uuidv4();
       const combinedReason = notes ? `${reason}\n\nAdmin Notes: ${notes}` : reason;
@@ -523,12 +585,13 @@ router.post('/request',
           id, employee_id, leave_type_id, start_date, end_date,
           leave_duration, start_time, end_time,
           days_requested, is_paid, reason, supporting_documents, status,
-          applied_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+          dayofweek, applied_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
       `, [
         requestId, employee_id, leave_type_id, start_date, end_date,
         leave_duration, start_time, end_time,
-        calculatedDays, finalIsPaid, combinedReason, supporting_documents
+        calculatedDays, finalIsPaid, combinedReason, supporting_documents,
+        JSON.stringify(dayOfWeekCounts)
       ]);
 
       // Build response message
@@ -590,9 +653,11 @@ router.put('/requests/:id/approve',
     const reviewerId = req.user.userId;
 
     try {
-      // Get request details
+      // Get request details with leave_duration and times
       const [request] = await db.execute(`
-        SELECT lr.*, e.client_id
+        SELECT lr.*, e.client_id,
+               COALESCE(lr.leave_duration, 'full_day') as leave_duration,
+               lr.start_time, lr.end_time
         FROM leave_requests lr
         JOIN employees e ON lr.employee_id = e.id
         WHERE lr.id = ? AND lr.status = 'pending'
@@ -613,19 +678,191 @@ router.put('/requests/:id/approve',
         });
       }
 
-      // Update request status
+      const isPaidLeave = request[0].is_paid || false;
+      let payableWeekdayHours = 0;
+      let payableSaturdayHours = 0;
+      let payableSundayHours = 0;
+
+      // Calculate payable hours if this is a paid leave
+      if (isPaidLeave) {
+        console.log(`\n📋 Calculating payable hours for paid leave (Request ID: ${requestId})`);
+
+        // Get employee's daily hours for different day types
+        const [employeeInfo] = await db.execute(`
+          SELECT in_time, out_time, weekend_working_config
+          FROM employees
+          WHERE id = ?
+        `, [request[0].employee_id]);
+
+        if (employeeInfo.length === 0) {
+          throw new Error('Employee not found');
+        }
+
+        const emp = employeeInfo[0];
+
+        // Calculate default weekday hours
+        let weekdayHours = 8; // Default
+        if (emp.in_time && emp.out_time) {
+          const inTime = new Date(`2000-01-01 ${emp.in_time}`);
+          const outTime = new Date(`2000-01-01 ${emp.out_time}`);
+          if (!isNaN(inTime.getTime()) && !isNaN(outTime.getTime())) {
+            const diffMs = outTime.getTime() - inTime.getTime();
+            weekdayHours = Math.max(1, Math.min(16, diffMs / (1000 * 60 * 60)));
+          }
+        }
+
+        // Get weekend hours from config
+        let saturdayHours = 0;
+        let sundayHours = 0;
+
+        if (emp.weekend_working_config) {
+          try {
+            const weekendConfig = JSON.parse(emp.weekend_working_config);
+
+            if (weekendConfig.saturday?.working) {
+              const satInTime = new Date(`2000-01-01 ${weekendConfig.saturday.in_time}`);
+              const satOutTime = new Date(`2000-01-01 ${weekendConfig.saturday.out_time}`);
+              if (!isNaN(satInTime.getTime()) && !isNaN(satOutTime.getTime())) {
+                const diffMs = satOutTime.getTime() - satInTime.getTime();
+                saturdayHours = Math.max(0, Math.min(16, diffMs / (1000 * 60 * 60)));
+              }
+            }
+
+            if (weekendConfig.sunday?.working) {
+              const sunInTime = new Date(`2000-01-01 ${weekendConfig.sunday.in_time}`);
+              const sunOutTime = new Date(`2000-01-01 ${weekendConfig.sunday.out_time}`);
+              if (!isNaN(sunInTime.getTime()) && !isNaN(sunOutTime.getTime())) {
+                const diffMs = sunOutTime.getTime() - sunInTime.getTime();
+                sundayHours = Math.max(0, Math.min(16, diffMs / (1000 * 60 * 60)));
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to parse weekend_working_config:', e);
+          }
+        }
+
+        console.log(`   Employee hours: Weekday=${weekdayHours.toFixed(2)}h, Saturday=${saturdayHours.toFixed(2)}h, Sunday=${sundayHours.toFixed(2)}h`);
+
+        // Parse dayofweek JSON
+        let dayOfWeekCounts = request[0].dayofweek;
+        if (typeof dayOfWeekCounts === 'string') {
+          try {
+            dayOfWeekCounts = JSON.parse(dayOfWeekCounts);
+          } catch (e) {
+            console.error('Failed to parse dayofweek JSON:', e);
+            dayOfWeekCounts = {};
+          }
+        }
+
+        console.log(`   Day-of-week breakdown:`, dayOfWeekCounts);
+
+        // Calculate payable hours using the dayofweek breakdown
+        // MySQL: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
+        const sundayCount = parseInt(dayOfWeekCounts["1"]) || 0;
+        const mondayCount = parseInt(dayOfWeekCounts["2"]) || 0;
+        const tuesdayCount = parseInt(dayOfWeekCounts["3"]) || 0;
+        const wednesdayCount = parseInt(dayOfWeekCounts["4"]) || 0;
+        const thursdayCount = parseInt(dayOfWeekCounts["5"]) || 0;
+        const fridayCount = parseInt(dayOfWeekCounts["6"]) || 0;
+        const saturdayCount = parseInt(dayOfWeekCounts["7"]) || 0;
+
+        const weekdayCount = mondayCount + tuesdayCount + wednesdayCount + thursdayCount + fridayCount;
+
+        // Calculate hours for each day type separately
+        payableWeekdayHours = weekdayCount * weekdayHours;
+        payableSaturdayHours = saturdayCount * saturdayHours;
+        payableSundayHours = sundayCount * sundayHours;
+
+        // Adjust for half-day and short leave
+        const leaveDuration = request[0].leave_duration || 'full_day';
+
+        if (leaveDuration === 'half_day') {
+          payableWeekdayHours = payableWeekdayHours * 0.5;
+          payableSaturdayHours = payableSaturdayHours * 0.5;
+          payableSundayHours = payableSundayHours * 0.5;
+          console.log(`   🕐 Half-day leave: Multiplying all by 0.5`);
+        } else if (leaveDuration === 'short_leave') {
+          // For short leave, calculate actual hours from start_time to end_time
+          const startTime = request[0].start_time;
+          const endTime = request[0].end_time;
+
+          if (startTime && endTime) {
+            const startDate = new Date(`2000-01-01 ${startTime}`);
+            const endDate = new Date(`2000-01-01 ${endTime}`);
+
+            if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+              const diffMs = endDate.getTime() - startDate.getTime();
+              const actualHours = Math.max(0, Math.min(24, diffMs / (1000 * 60 * 60))); // Between 0-24 hours
+
+              // Determine which day type this short leave falls on
+              const leaveDate = new Date(request[0].start_date);
+              const dayOfWeek = leaveDate.getDay(); // 0=Sunday, 6=Saturday
+
+              if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                // Weekday
+                payableWeekdayHours = actualHours;
+                payableSaturdayHours = 0;
+                payableSundayHours = 0;
+              } else if (dayOfWeek === 6) {
+                // Saturday
+                payableWeekdayHours = 0;
+                payableSaturdayHours = actualHours;
+                payableSundayHours = 0;
+              } else {
+                // Sunday
+                payableWeekdayHours = 0;
+                payableSaturdayHours = 0;
+                payableSundayHours = actualHours;
+              }
+
+              console.log(`   🕐 Short leave: ${startTime} to ${endTime} = ${actualHours.toFixed(2)}h`);
+            } else {
+              console.warn(`   ⚠️  Invalid time format for short leave, defaulting to 0h`);
+              payableWeekdayHours = 0;
+              payableSaturdayHours = 0;
+              payableSundayHours = 0;
+            }
+          } else {
+            console.warn(`   ⚠️  No start/end time provided for short leave, defaulting to 0h`);
+            payableWeekdayHours = 0;
+            payableSaturdayHours = 0;
+            payableSundayHours = 0;
+          }
+        }
+
+        const totalHours = payableWeekdayHours + payableSaturdayHours + payableSundayHours;
+
+        console.log(`   Calculation breakdown:`);
+        console.log(`      Weekdays: ${weekdayCount} days × ${weekdayHours.toFixed(2)}h = ${payableWeekdayHours.toFixed(2)}h`);
+        console.log(`      Saturdays: ${saturdayCount} days × ${saturdayHours.toFixed(2)}h = ${payableSaturdayHours.toFixed(2)}h`);
+        console.log(`      Sundays: ${sundayCount} days × ${sundayHours.toFixed(2)}h = ${payableSundayHours.toFixed(2)}h`);
+        console.log(`   ✅ Total payable leave hours: ${totalHours.toFixed(2)}h`);
+      }
+
+      // Update request status and payable hours (split by day type)
       await db.execute(`
-  UPDATE leave_requests 
-  SET status = 'approved', 
-      reviewed_by = ?, 
-      reviewed_at = NOW(), 
-      reviewer_comments = ?
+  UPDATE leave_requests
+  SET status = 'approved',
+      reviewed_by = ?,
+      reviewed_at = NOW(),
+      reviewer_comments = ?,
+      payable_leave_hours_weekday = ?,
+      payable_leave_hours_saturday = ?,
+      payable_leave_hours_sunday = ?
   WHERE id = ?
-`, [reviewerId, comments || null, requestId]);
+`, [reviewerId, comments || null, payableWeekdayHours, payableSaturdayHours, payableSundayHours, requestId]);
+
+      const totalPayableHours = payableWeekdayHours + payableSaturdayHours + payableSundayHours;
 
       res.json({
         success: true,
-        message: 'Leave request approved successfully'
+        message: 'Leave request approved successfully',
+        payable_hours: isPaidLeave ? {
+          weekday: payableWeekdayHours,
+          saturday: payableSaturdayHours,
+          sunday: payableSundayHours,
+          total: totalPayableHours
+        } : null
       });
     } catch (error) {
       console.error('Error approving leave request:', error);

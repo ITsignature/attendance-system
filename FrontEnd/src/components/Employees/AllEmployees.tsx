@@ -13,14 +13,15 @@ import {
   Table,
   Checkbox
 } from 'flowbite-react';
-import { 
-  HiOutlinePlus, 
+import {
+  HiOutlinePlus,
   HiOutlineFilter,
   HiOutlineDownload,
   HiOutlineRefresh,
   HiOutlineSearch,
   HiOutlineX,
-  HiOutlineUsers
+  HiOutlineUsers,
+  HiOutlineTrash
 } from 'react-icons/hi';
 import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 import apiService from '../../services/api';

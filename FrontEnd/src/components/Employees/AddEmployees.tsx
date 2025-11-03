@@ -531,7 +531,7 @@ const AddEmployees: React.FC = () => {
         hire_date: formData.hire_date,
         employment_status: formData.employment_status,
         employee_type: formData.employee_type,
-        salary: formData.salary ? Number(formData.salary) : undefined,
+        base_salary: formData.salary ? Number(formData.salary) : undefined,
         attendance_affects_salary: formData.attendance_affects_salary,
 
         // Emergency Contact
@@ -1148,9 +1148,14 @@ const debugAuth = () => {
                     <RequiredLabel htmlFor="salary" value="Base Salary" />
                     <RequiredTextInput
                       id="salary"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={formData.salary}
-                      onChange={(e) => handleInputChange('salary', e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        handleInputChange('salary', value);
+                      }}
                       placeholder="Enter base salary"
                       color={validationErrors.salary ? 'failure' : undefined}
                     />

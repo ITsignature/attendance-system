@@ -19,6 +19,7 @@ import {
 } from 'react-icons/fa';
 import leaveApiService from '../../services/leaveApi';
 import apiService from '../../services/api';
+import holidayService, { Holiday } from '../../services/holidayService';
 import ReactSelect from 'react-select';
 
 
@@ -102,6 +103,7 @@ const LeaveRequestForm: React.FC = () => {
     month: string;
   } | null>(null);
   const [loadingBalance, setLoadingBalance] = useState<boolean>(false);
+  const [holidaysInRange, setHolidaysInRange] = useState<Holiday[]>([]);
 
 
 
@@ -114,7 +116,7 @@ const LeaveRequestForm: React.FC = () => {
   // Calculate days when dates or duration change
   useEffect(() => {
     calculateLeaveDays();
-  }, [formData.start_date, formData.end_date, formData.leave_duration]);
+  }, [formData.start_date, formData.end_date, formData.leave_duration, holidaysInRange]);
 
   // Auto-uncheck paid leave if requested days exceed balance
   useEffect(() => {
@@ -138,6 +140,15 @@ const LeaveRequestForm: React.FC = () => {
       setPaidLeaveBalance(null);
     }
   }, [formData.employee_id, formData.start_date]);
+
+  // Check for holidays in the selected date range
+  useEffect(() => {
+    if (formData.start_date && formData.end_date) {
+      checkHolidaysInRange();
+    } else {
+      setHolidaysInRange([]);
+    }
+  }, [formData.start_date, formData.end_date]);
 
   const fetchPaidLeaveBalance = async (): Promise<void> => {
     if (!formData.employee_id || !formData.start_date) return;
@@ -189,6 +200,43 @@ const LeaveRequestForm: React.FC = () => {
     }
   };
 
+  const checkHolidaysInRange = async (): Promise<void> => {
+    if (!formData.start_date || !formData.end_date) return;
+
+    try {
+      const start = new Date(formData.start_date);
+      const end = new Date(formData.end_date);
+      const holidays: Holiday[] = [];
+
+      // Get years that the date range spans
+      const startYear = start.getFullYear();
+      const endYear = end.getFullYear();
+
+      // Fetch holidays for the relevant years
+      const yearsToCheck = startYear === endYear ? [startYear] : [startYear, endYear];
+      const allHolidays: Holiday[] = [];
+
+      for (const year of yearsToCheck) {
+        const yearHolidays = await holidayService.getHolidaysForYear(year);
+        allHolidays.push(...yearHolidays);
+      }
+
+      // Check each day in the range for holidays
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        const holiday = allHolidays.find(h => h.date === dateStr);
+        if (holiday) {
+          holidays.push(holiday);
+        }
+      }
+
+      setHolidaysInRange(holidays);
+    } catch (error) {
+      console.error('Failed to check holidays:', error);
+      setHolidaysInRange([]);
+    }
+  };
+
   const loadInitialData = async (): Promise<void> => {
     try {
       setLoading(true);
@@ -225,19 +273,20 @@ const LeaveRequestForm: React.FC = () => {
     } else if (formData.leave_duration === 'short_leave') {
       setCalculatedDays(0.25);
     } else {
-      // Calculate business days for full day leaves
+      // Calculate ALL calendar days for full day leaves (including weekends)
+      // The backend will determine actual payable hours based on employee's working schedule
       const start = new Date(formData.start_date);
       const end = new Date(formData.end_date);
-      let days = 0;
-      
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const dayOfWeek = d.getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-          days++;
-        }
-      }
-      
-      setCalculatedDays(days);
+
+      // Calculate total calendar days
+      const diffTime = end.getTime() - start.getTime();
+      let totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+
+      // Subtract holidays from the count (holidays are non-working days, no leave needed)
+      const holidayDays = holidaysInRange.length;
+      const workingDays = totalDays - holidayDays;
+
+      setCalculatedDays(Math.max(0, workingDays));
     }
   };
 
@@ -299,6 +348,21 @@ const LeaveRequestForm: React.FC = () => {
 
     if (!formData.reason.trim() || formData.reason.trim().length < 10) {
       newErrors.reason = 'Reason must be at least 10 characters';
+    }
+
+    // Validate no single-day leave on holidays
+    if (holidaysInRange.length > 0) {
+      // For half-day or short leave (always single day), block if it's a holiday
+      if (formData.leave_duration === 'half_day' || formData.leave_duration === 'short_leave') {
+        const holidayNames = holidaysInRange.map(h => h.name).join(', ');
+        newErrors.general = `Cannot request ${formData.leave_duration === 'half_day' ? 'half-day' : 'short'} leave on a holiday: ${holidayNames}. Please select a different date.`;
+      }
+      // For full-day leave, only block if it's a single day (start === end) on a holiday
+      else if (formData.leave_duration === 'full_day' && formData.start_date === formData.end_date) {
+        const holidayNames = holidaysInRange.map(h => h.name).join(', ');
+        newErrors.general = `Cannot request leave for a single day that is a holiday: ${holidayNames}. Please select a different date or extend the date range.`;
+      }
+      // If it's a date range (start !== end), allow it even with holidays
     }
 
     // Validate paid leave balance
@@ -635,22 +699,101 @@ const employeeOptions = employees
           )}
 
           {/* Calculated Days Display */}
-          {calculatedDays > 0 && (
+          {(calculatedDays > 0 || (formData.start_date && formData.end_date && formData.leave_duration === 'full_day')) && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-center space-x-2">
                 <FaInfoCircle className="text-yellow-600" />
-                <p className="text-yellow-800">
-                  <strong>Leave Duration: {calculatedDays} day{calculatedDays !== 1 ? 's' : ''}</strong>
-                  {formData.start_date && formData.end_date && (
-                    <span className="ml-2">
-                      ({formatDate(formData.start_date)}
-                      {formData.end_date !== formData.start_date && ` to ${formatDate(formData.end_date)}`})
-                    </span>
+                <div className="text-yellow-800">
+                  <p>
+                    <strong>Leave Duration: {calculatedDays} day{calculatedDays !== 1 ? 's' : ''}</strong>
+                    {formData.start_date && formData.end_date && (
+                      <span className="ml-2">
+                        ({formatDate(formData.start_date)}
+                        {formData.end_date !== formData.start_date && ` to ${formatDate(formData.end_date)}`})
+                      </span>
+                    )}
+                  </p>
+                  {holidaysInRange.length > 0 && formData.leave_duration === 'full_day' && (
+                    <p className="text-sm mt-1">
+                      Total calendar days: {(() => {
+                        const start = new Date(formData.start_date);
+                        const end = new Date(formData.end_date);
+                        const diffTime = end.getTime() - start.getTime();
+                        return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                      })()} (excluding {holidaysInRange.length} holiday{holidaysInRange.length !== 1 ? 's' : ''})
+                    </p>
                   )}
-                </p>
+                </div>
               </div>
             </div>
           )}
+
+          {/* Holiday Information */}
+          {holidaysInRange.length > 0 && (() => {
+            // Determine if this should block the request
+            const shouldBlock =
+              formData.leave_duration === 'half_day' ||
+              formData.leave_duration === 'short_leave' ||
+              (formData.leave_duration === 'full_day' && formData.start_date === formData.end_date);
+
+            if (shouldBlock) {
+              // Red warning - blocking submission
+              return (
+                <div className="bg-red-50 border border-red-300 rounded-lg p-4">
+                  <div className="flex items-start space-x-2">
+                    <FaInfoCircle className="text-red-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-red-800 font-semibold">
+                        ⚠️ Cannot Request Leave on Holiday
+                      </p>
+                      <p className="text-red-700 text-sm mt-1">
+                        The selected date is a holiday:
+                      </p>
+                      <ul className="list-disc list-inside mt-2 text-red-700 text-sm">
+                        {holidaysInRange.map((holiday, index) => (
+                          <li key={index}>
+                            <strong>{holiday.name}</strong> - {formatDate(holiday.date)}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-red-700 text-sm mt-2 font-medium">
+                        {formData.leave_duration === 'full_day'
+                          ? '❌ Cannot take leave for a single day that is a holiday. Please select a different date or extend to a date range.'
+                          : '❌ Cannot take half-day or short leave on a holiday. Please select a different date.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            } else {
+              // Blue info - just informational
+              return (
+                <div className="bg-blue-50 border border-blue-300 rounded-lg p-4">
+                  <div className="flex items-start space-x-2">
+                    <FaInfoCircle className="text-blue-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-blue-800 font-semibold">
+                        ℹ️ Holiday Notice
+                      </p>
+                      <p className="text-blue-700 text-sm mt-1">
+                        The following {holidaysInRange.length} holiday{holidaysInRange.length !== 1 ? 's' : ''} fall within your selected dates and will be automatically excluded from leave days:
+                      </p>
+                      <ul className="list-disc list-inside mt-2 text-blue-700 text-sm">
+                        {holidaysInRange.map((holiday, index) => (
+                          <li key={index}>
+                            <strong>{holiday.name}</strong> - {formatDate(holiday.date)}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-blue-700 text-sm mt-2 font-medium">
+                        ✓ These days are already non-working days and won't count against your leave balance.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+          })()}
 
           {/* Reason */}
           <div>
@@ -734,7 +877,13 @@ const employeeOptions = employees
             <Button
               type="submit"
               color="blue"
-              disabled={submitLoading}
+              disabled={
+                submitLoading ||
+                (holidaysInRange.length > 0 &&
+                  (formData.leave_duration === 'half_day' ||
+                    formData.leave_duration === 'short_leave' ||
+                    (formData.leave_duration === 'full_day' && formData.start_date === formData.end_date)))
+              }
             >
               {submitLoading ? (
                 <>

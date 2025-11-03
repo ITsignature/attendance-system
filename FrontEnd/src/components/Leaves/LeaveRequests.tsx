@@ -407,6 +407,7 @@ const handleConfirmAction = async () => {
               <Table.HeadCell>Days</Table.HeadCell>
               <Table.HeadCell>Status</Table.HeadCell>
               <Table.HeadCell>Applied Date</Table.HeadCell>
+              <Table.HeadCell>Payment</Table.HeadCell>
               <Table.HeadCell>Actions</Table.HeadCell>
             </Table.Head>
             <Table.Body className="divide-y">
@@ -450,15 +451,18 @@ const handleConfirmAction = async () => {
                       </span>
                     </Table.Cell>
                     <Table.Cell>
+                      {request.is_paid ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                          💰 Paid
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                          Unpaid
+                        </span>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
                       <div className="flex items-center gap-1">
-                        <Button
-                          size="xs"
-                          color="blue"
-                          onClick={() => console.log('View details:', request.id)}
-                        >
-                          <FaEye className="w-3 h-3" />
-                        </Button>
-                        
                         {canApproveOrReject(status) && (
                           <>
                             <Button
