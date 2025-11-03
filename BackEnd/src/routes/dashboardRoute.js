@@ -94,32 +94,51 @@ router.get('/overview',
 // =============================================
 // GET ATTENDANCE OVERVIEW FOR CURRENT WEEK
 // =============================================
-router.get('/attendance-overview', 
+router.get('/attendance-overview',
   checkPermission('attendance.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const clientId = req.user.clientId;
 
     // Get attendance data for current week
+    // This query creates all date-employee combinations for the week,
+    // then counts based on whether attendance exists or not
     const [weeklyAttendance] = await db.execute(`
+      WITH RECURSIVE date_range AS (
+        -- Generate dates for current week (Monday to Sunday)
+        SELECT DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) as date
+        UNION ALL
+        SELECT DATE_ADD(date, INTERVAL 1 DAY)
+        FROM date_range
+        WHERE date < DATE_ADD(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 DAY)
+      ),
+      employee_dates AS (
+        -- Cross join all active employees with all dates in the week
+        SELECT
+          e.id as employee_id,
+          d.date
+        FROM employees e
+        CROSS JOIN date_range d
+        WHERE e.client_id = ?
+          AND e.employment_status = 'active'
+      )
       SELECT
-        DAYNAME(a.date) as day_name,
-        DATE(a.date) as date,
-        COUNT(*) as total_records,
-        COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_count,
+        DAYNAME(ed.date) as day_name,
+        DATE(ed.date) as date,
+        COUNT(ed.employee_id) as total_employees,
+        COUNT(CASE WHEN a.arrival_status = 'on_time' THEN 1 END) as on_time_count,
         COUNT(CASE WHEN a.arrival_status = 'late' THEN 1 END) as late_count,
-        COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent_count,
-        COUNT(CASE WHEN a.status = 'on_leave' THEN 1 END) as on_leave_count,
+        COUNT(CASE WHEN a.id IS NULL THEN 1 END) as on_leave_count,
+        COUNT(CASE WHEN a.arrival_status = 'absent' THEN 1 END) as absent_count,
+        COUNT(CASE WHEN a.arrival_status = 'voluntary_work' THEN 1 END) as voluntary_work_count,
+        COUNT(CASE WHEN a.arrival_status = 'scheduled_off' THEN 1 END) as scheduled_off_count,
         ROUND(
-          ((COUNT(CASE WHEN a.status = 'present' THEN 1 END) + COUNT(CASE WHEN a.arrival_status = 'late' THEN 1 END)) * 100.0 / COUNT(*)), 2
+          ((COUNT(CASE WHEN a.arrival_status = 'on_time' THEN 1 END) + COUNT(CASE WHEN a.arrival_status = 'late' THEN 1 END)) * 100.0 / COUNT(ed.employee_id)), 2
         ) as attendance_percentage
-      FROM attendance a
-      JOIN employees e ON a.employee_id = e.id
-      WHERE e.client_id = ?
-      AND a.date >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-      AND a.date <= DATE_ADD(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 DAY)
-      GROUP BY a.date, DAYNAME(a.date)
-      ORDER BY a.date
+      FROM employee_dates ed
+      LEFT JOIN attendance a ON ed.employee_id = a.employee_id AND ed.date = a.date
+      GROUP BY ed.date, DAYNAME(ed.date)
+      ORDER BY ed.date
     `, [clientId]);
 
     res.status(200).json({
