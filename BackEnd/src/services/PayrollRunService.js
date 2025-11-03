@@ -1743,7 +1743,11 @@ class PayrollRunService {
         let todayDayType = null;
         let todayIsLive = false;
 
-        if (includeLiveSession) {
+        // Only include today's live session if today is within the payroll period
+        const todayStr = today.toISOString().split('T')[0];
+        const isWithinPeriod = todayStr >= period.period_start_date && todayStr <= period.period_end_date;
+
+        if (includeLiveSession && isWithinPeriod) {
             const [todayAttendance] = await db.execute(`
                 SELECT
                     scheduled_in_time,
@@ -1799,8 +1803,10 @@ class PayrollRunService {
                 console.log(`      Actual Hours (check-in → now): ${todayActualHours.toFixed(2)}h`);
             }
             }
-        } else {
+        } else if (!includeLiveSession) {
             console.log(`\n   ⏰ Live session calculation SKIPPED (final calculation mode)`);
+        } else if (!isWithinPeriod) {
+            console.log(`\n   ⏰ Live session calculation SKIPPED (today ${todayStr} is outside payroll period ${period.period_start_date} to ${period.period_end_date})`);
         }
 
         // Calculate TOTAL expected hours
