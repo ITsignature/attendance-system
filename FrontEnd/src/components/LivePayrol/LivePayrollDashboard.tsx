@@ -104,8 +104,11 @@ const LivePayrollDashboard: React.FC = () => {
 
     const calcTime = performance.now() - startTime;
     console.log(`✅ Recalculated ${results.length} employees in ${calcTime.toFixed(0)}ms`);
+    
+    console.log("new updates",results)
 
     setCalculatedResults(results);
+
     setLastCalculated(new Date());
   }, [rawData]);
 
