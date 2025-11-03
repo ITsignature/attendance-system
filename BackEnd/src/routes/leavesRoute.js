@@ -446,13 +446,32 @@ router.post('/request',
       } else if (leave_duration === 'short_leave') {
         calculatedDays = 0.25; // Quarter day for short leave
       } else if (leave_duration === 'full_day') {
-        // For full_day, always calculate from date range (ignore days_requested)
+        // For full_day, calculate from date range and exclude holidays
         const startDate = new Date(start_date);
         const endDate = new Date(end_date);
         const diffTime = endDate.getTime() - startDate.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
-        calculatedDays = diffDays;
-        console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date} = ${calculatedDays} days`);
+        const totalCalendarDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+
+        // Fetch holidays in the date range to exclude them
+        const [holidays] = await db.execute(`
+          SELECT date
+          FROM holidays
+          WHERE client_id = ?
+          AND date BETWEEN ? AND ?
+          AND (applies_to_all = TRUE OR department_ids IS NULL)
+        `, [clientId, start_date, end_date]);
+
+        const holidayCount = holidays.length;
+        calculatedDays = totalCalendarDays - holidayCount;
+
+        if (holidayCount > 0) {
+          console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date}`);
+          console.log(`   Total calendar days: ${totalCalendarDays}`);
+          console.log(`   Holidays excluded: ${holidayCount}`);
+          console.log(`   Final days: ${calculatedDays}`);
+        } else {
+          console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date} = ${calculatedDays} days`);
+        }
       }
 
       // Check paid leave balance and determine if this leave can be paid

@@ -1180,17 +1180,17 @@ class PayrollRunService {
                         const dayConfig = weekendConfig[dayType]; // saturday or sunday
 
                         if (dayConfig && dayConfig.working === true) {
-                            // Employee works on this weekend day, calculate hours from in_time and out_time
-                            if (emp.in_time && emp.out_time) {
-                                const empInTime = new Date(`2000-01-01 ${emp.in_time}`);
-                                const empOutTime = new Date(`2000-01-01 ${emp.out_time}`);
+                            // Employee works on this weekend day, calculate hours from weekend-specific in_time and out_time
+                            if (dayConfig.in_time && dayConfig.out_time) {
+                                const empInTime = new Date(`2000-01-01 ${dayConfig.in_time}`);
+                                const empOutTime = new Date(`2000-01-01 ${dayConfig.out_time}`);
 
                                 if (!isNaN(empInTime.getTime()) && !isNaN(empOutTime.getTime())) {
                                     const diffMs = empOutTime.getTime() - empInTime.getTime();
                                     const hours = diffMs / (1000 * 60 * 60);
                                     const dailyHours = Math.max(1, Math.min(16, Math.round(hours * 100) / 100));
 
-                                    console.log(`Employee ${employeeId} ${dayType} hours (working=${dayConfig.working}): ${emp.in_time} - ${emp.out_time} = ${dailyHours} hours`);
+                                    console.log(`Employee ${employeeId} ${dayType} hours (working=${dayConfig.working}): ${dayConfig.in_time} - ${dayConfig.out_time} = ${dailyHours} hours`);
                                     return dailyHours;
                                 }
                             }
@@ -1470,11 +1470,11 @@ class PayrollRunService {
         // Calculate working days for expected hours
         // For FINAL mode: Include today as a full working day
         // For LIVE mode: Use yesterday, then add today's partial hours separately
-        const yesterday = new Date();
+        const yesterday = new Date(today);  // Use the test-overridden 'today' variable
         yesterday.setDate(yesterday.getDate() - 1);
         yesterday.setHours(23, 59, 59, 999);
 
-        const todayDate = new Date();
+        const todayDate = new Date(today);  // Use the test-overridden 'today' variable
         todayDate.setHours(23, 59, 59, 999);
 
         const calculationDate = includeLiveSession ? yesterday : todayDate;
@@ -1624,6 +1624,20 @@ class PayrollRunService {
             const saturdayDailyHours = parseFloat(rates.saturday_daily_hours) || 0;
             const sundayDailyHours = parseFloat(rates.sunday_daily_hours) || 0;
 
+            // Fetch holidays that overlap with the payroll period to exclude them from leave hours
+            const [holidays] = await db.execute(`
+                SELECT date
+                FROM holidays
+                WHERE client_id = ?
+                AND date BETWEEN ? AND ?
+                AND (applies_to_all = TRUE OR department_ids IS NULL)
+            `, [clientId, period.period_start_date, attendanceEndDateStr]);
+
+            const holidayDates = new Set(holidays.map(h => h.date));
+            if (holidayDates.size > 0) {
+                console.log(`      🎉 Found ${holidayDates.size} holiday(s) in period - will be excluded from leave hours`);
+            }
+
             for (const leave of leaveRequests) {
                 const leaveStart = parseLocalDate(leave.start_date);
                 const leaveEnd = parseLocalDate(leave.end_date);
@@ -1642,9 +1656,19 @@ class PayrollRunService {
                 let tempWeekdayHours = 0;
                 let tempSaturdayHours = 0;
                 let tempSundayHours = 0;
+                let holidaysExcluded = 0;
 
                 while (currentDate <= overlapEnd) {
+                    const currentDateStr = getLocalDateString(currentDate);
                     const dayOfWeek = currentDate.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+                    // Check if this day is a holiday - if so, skip it (no leave hours needed)
+                    if (holidayDates.has(currentDateStr)) {
+                        console.log(`         🎉 ${currentDateStr} is a holiday - excluded from leave hours`);
+                        holidaysExcluded++;
+                        currentDate.setDate(currentDate.getDate() + 1);
+                        continue;
+                    }
 
                     let dailyHours = 0;
                     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
@@ -1684,6 +1708,10 @@ class PayrollRunService {
 
                     // Move to next day
                     currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                if (holidaysExcluded > 0) {
+                    console.log(`         ✓ Excluded ${holidaysExcluded} holiday(s) from leave hours`);
                 }
 
                 console.log(`         Hours in period: Weekday=${tempWeekdayHours.toFixed(2)}h, Saturday=${tempSaturdayHours.toFixed(2)}h, Sunday=${tempSundayHours.toFixed(2)}h`);
@@ -1897,6 +1925,173 @@ class PayrollRunService {
             console.log(`\n   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).`);
         }
 
+        // Calculate earnings breakdown by source (attendance vs paid leaves)
+        const attendanceWeekdayEarned = attendanceWeekdayHours * weekdayHourlyRate;
+        const attendanceSaturdayEarned = attendanceSaturdayHours * saturdayHourlyRate;
+        const attendanceSundayEarned = attendanceSundayHours * sundayHourlyRate;
+        const totalAttendanceEarned = attendanceWeekdayEarned + attendanceSaturdayEarned + attendanceSundayEarned;
+
+        const leaveWeekdayEarned = leaveWeekdayHours * weekdayHourlyRate;
+        const leaveSaturdayEarned = leaveSaturdayHours * saturdayHourlyRate;
+        const leaveSundayEarned = leaveSundayHours * sundayHourlyRate;
+        const totalLeaveEarned = leaveWeekdayEarned + leaveSaturdayEarned + leaveSundayEarned;
+
+        // Add today's live session earnings to attendance if applicable
+        let liveSessionEarned = 0;
+        if (includeLiveSession && todayIsLive) {
+            if (todayDayType === 'weekday') {
+                liveSessionEarned = todayActualHours * weekdayHourlyRate;
+            } else if (todayDayType === 'saturday') {
+                liveSessionEarned = todayActualHours * saturdayHourlyRate;
+            } else if (todayDayType === 'sunday') {
+                liveSessionEarned = todayActualHours * sundayHourlyRate;
+            }
+        }
+
+        // ============================================
+        // CALCULATE SHORTFALL BREAKDOWN
+        // ============================================
+
+        // 1. Get unpaid leaves deduction
+        const [unpaidLeaves] = await db.execute(`
+            SELECT
+                start_date,
+                end_date,
+                leave_duration,
+                start_time,
+                end_time
+            FROM leave_requests
+            WHERE employee_id = ?
+            AND status = 'approved'
+            AND is_paid = FALSE
+            AND (
+                (start_date BETWEEN ? AND ?) OR
+                (end_date BETWEEN ? AND ?) OR
+                (start_date <= ? AND end_date >= ?)
+            )
+        `, [employeeId, period.period_start_date, leaveEndDateStr, period.period_start_date, leaveEndDateStr, period.period_start_date, leaveEndDateStr]);
+
+        let unpaidLeaveWeekdayHours = 0;
+        let unpaidLeaveSaturdayHours = 0;
+        let unpaidLeaveSundayHours = 0;
+
+        if (unpaidLeaves.length > 0) {
+            console.log(`\n      📅 Processing ${unpaidLeaves.length} unpaid leave request(s) for ${employeeName} (${employeeCode}):`);
+
+            for (const leave of unpaidLeaves) {
+                const leaveStart = parseLocalDate(leave.start_date);
+                const leaveEnd = parseLocalDate(leave.end_date);
+                const periodStart = parseLocalDate(period.period_start_date);
+                const periodEnd = parseLocalDate(leaveEndDateStr);
+
+                const overlapStart = leaveStart > periodStart ? leaveStart : periodStart;
+                const overlapEnd = leaveEnd < periodEnd ? leaveEnd : periodEnd;
+
+                let currentDate = new Date(overlapStart);
+
+                while (currentDate <= overlapEnd) {
+                    const dayOfWeek = currentDate.getDay();
+                    let dailyHours = 0;
+
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        dailyHours = weekdayDailyHours;
+                    } else if (dayOfWeek === 6) {
+                        dailyHours = saturdayDailyHours;
+                    } else {
+                        dailyHours = sundayDailyHours;
+                    }
+
+                    if (leave.leave_duration === 'half_day') {
+                        dailyHours = dailyHours * 0.5;
+                    } else if (leave.leave_duration === 'short_leave' && leave.start_time && leave.end_time) {
+                        const startTime = new Date(`2000-01-01 ${leave.start_time}`);
+                        const endTime = new Date(`2000-01-01 ${leave.end_time}`);
+                        if (!isNaN(startTime.getTime()) && !isNaN(endTime.getTime())) {
+                            const diffMs = endTime.getTime() - startTime.getTime();
+                            dailyHours = Math.max(0, Math.min(24, diffMs / (1000 * 60 * 60)));
+                        } else {
+                            dailyHours = 0;
+                        }
+                    }
+
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        unpaidLeaveWeekdayHours += dailyHours;
+                    } else if (dayOfWeek === 6) {
+                        unpaidLeaveSaturdayHours += dailyHours;
+                    } else {
+                        unpaidLeaveSundayHours += dailyHours;
+                    }
+
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            }
+        }
+
+        const unpaidLeaveDeduction = (unpaidLeaveWeekdayHours * weekdayHourlyRate) +
+                                     (unpaidLeaveSaturdayHours * saturdayHourlyRate) +
+                                     (unpaidLeaveSundayHours * sundayHourlyRate);
+
+        console.log(`\n      📅 Unpaid Leave Deduction for ${employeeName} (${employeeCode}): Rs.${unpaidLeaveDeduction.toFixed(2)}`);
+
+        // 2. Calculate time variance (late arrivals + early departures)
+        // This is the shortfall from attended days where hours < expected
+        const [attendanceWithSchedule] = await db.execute(`
+            SELECT
+                date,
+                scheduled_in_time,
+                scheduled_out_time,
+                check_in_time,
+                check_out_time,
+                payable_duration,
+                is_weekend
+            FROM attendance
+            WHERE employee_id = ?
+            AND date BETWEEN ? AND ?
+            AND check_out_time IS NOT NULL
+        `, [employeeId, period.period_start_date, attendanceEndDateStr]);
+
+        let timeVarianceWeekdayHours = 0;
+        let timeVarianceSaturdayHours = 0;
+        let timeVarianceSundayHours = 0;
+
+        for (const record of attendanceWithSchedule) {
+            const dayOfWeek = new Date(record.date).getDay();
+            let expectedDailyHours = 0;
+
+            if (record.is_weekend >= 2 && record.is_weekend <= 6) {
+                expectedDailyHours = weekdayDailyHours;
+            } else if (record.is_weekend === 7) {
+                expectedDailyHours = saturdayDailyHours;
+            } else if (record.is_weekend === 1) {
+                expectedDailyHours = sundayDailyHours;
+            }
+
+            const actualHours = parseFloat(record.payable_duration) || 0;
+            const shortfall = Math.max(0, expectedDailyHours - actualHours);
+
+            if (record.is_weekend >= 2 && record.is_weekend <= 6) {
+                timeVarianceWeekdayHours += shortfall;
+            } else if (record.is_weekend === 7) {
+                timeVarianceSaturdayHours += shortfall;
+            } else if (record.is_weekend === 1) {
+                timeVarianceSundayHours += shortfall;
+            }
+        }
+
+        const timeVarianceDeduction = (timeVarianceWeekdayHours * weekdayHourlyRate) +
+                                      (timeVarianceSaturdayHours * saturdayHourlyRate) +
+                                      (timeVarianceSundayHours * sundayHourlyRate);
+
+        console.log(`\n      ⏰ Time Variance Deduction for ${employeeName} (${employeeCode}): Rs.${timeVarianceDeduction.toFixed(2)}`);
+
+        // 3. Calculate absent days deduction
+        // This is what's left: total shortfall - unpaid leaves - time variance
+        const absentDaysDeduction = Math.max(0, deduction - unpaidLeaveDeduction - timeVarianceDeduction);
+
+        console.log(`\n      ❌ Absent Days Deduction for ${employeeName} (${employeeCode}): Rs.${absentDaysDeduction.toFixed(2)}`);
+        console.log(`      Total Shortfall Breakdown: Unpaid Leaves (${unpaidLeaveDeduction.toFixed(2)}) + Time Variance (${timeVarianceDeduction.toFixed(2)}) + Absent Days (${absentDaysDeduction.toFixed(2)}) = ${deduction.toFixed(2)}`);
+
+
         return {
             total: deduction,
             components: [{
@@ -1932,6 +2127,43 @@ class PayrollRunService {
                     rate: sundayHourlyRate,
                     earned: actualSundayEarned,
                     expected_earned: expectedSundayEarned
+                }
+            },
+            earnings_by_source: {
+                attendance: {
+                    hours: attendanceWeekdayHours + attendanceSaturdayHours + attendanceSundayHours,
+                    earned: totalAttendanceEarned,
+                    breakdown: {
+                        weekday: { hours: attendanceWeekdayHours, earned: attendanceWeekdayEarned },
+                        saturday: { hours: attendanceSaturdayHours, earned: attendanceSaturdayEarned },
+                        sunday: { hours: attendanceSundayHours, earned: attendanceSundayEarned }
+                    }
+                },
+                paid_leaves: {
+                    hours: leaveWeekdayHours + leaveSaturdayHours + leaveSundayHours,
+                    earned: totalLeaveEarned,
+                    breakdown: {
+                        weekday: { hours: leaveWeekdayHours, earned: leaveWeekdayEarned },
+                        saturday: { hours: leaveSaturdayHours, earned: leaveSaturdayEarned },
+                        sunday: { hours: leaveSundayHours, earned: leaveSundayEarned }
+                    }
+                },
+                live_session: {
+                    hours: todayIsLive ? todayActualHours : 0,
+                    earned: liveSessionEarned
+                }
+            },
+            shortfall_by_cause: {
+                unpaid_time_off: {
+                    hours: unpaidLeaveWeekdayHours + unpaidLeaveSaturdayHours + unpaidLeaveSundayHours,
+                    deduction: unpaidLeaveDeduction
+                },
+                time_variance: {
+                    hours: timeVarianceWeekdayHours + timeVarianceSaturdayHours + timeVarianceSundayHours,
+                    deduction: timeVarianceDeduction
+                },
+                absent_days: {
+                    deduction: absentDaysDeduction
                 }
             }
         };
@@ -3629,7 +3861,9 @@ class PayrollRunService {
                     attendanceCalc = {
                         expected_salary: baseSalary,
                         earned_salary: baseSalary,
-                        total: 0
+                        total: 0,
+                        earnings_by_source: null,
+                        shortfall_by_cause: null
                     };
                 } else {
                     // Calculate expected base salary until now
@@ -3644,7 +3878,9 @@ class PayrollRunService {
                     ...record,
                     expected_base_salary: attendanceCalc.expected_salary || 0,
                     actual_earned_base: attendanceCalc.earned_salary || 0,
-                    attendance_shortfall: attendanceCalc.total || 0
+                    attendance_shortfall: attendanceCalc.total || 0,
+                    earnings_by_source: attendanceCalc.earnings_by_source || null,
+                    shortfall_by_cause: attendanceCalc.shortfall_by_cause || null
                 };
             } catch (error) {
                 console.error(`Error calculating attendance for employee ${record.employee_id}:`, error);
@@ -3652,7 +3888,9 @@ class PayrollRunService {
                     ...record,
                     expected_base_salary: 0,
                     actual_earned_base: 0,
-                    attendance_shortfall: 0
+                    attendance_shortfall: 0,
+                    earnings_by_source: null,
+                    shortfall_by_cause: null
                 };
             }
         }));
@@ -3953,7 +4191,9 @@ class PayrollRunService {
                         expected_salary: attendanceData.expected_salary || 0,
                         earned_salary: attendanceData.earned_salary || 0,
                         shortfall: attendanceData.total || 0,
-                        components: attendanceData.components || []
+                        components: attendanceData.components || [],
+                        earnings_by_source: attendanceData.earnings_by_source || null,
+                        shortfall_by_cause: attendanceData.shortfall_by_cause || null
                     },
                     allowances: employeeAllowances,
                     deductions: payrollComponents,

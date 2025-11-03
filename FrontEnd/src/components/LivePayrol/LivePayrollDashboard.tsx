@@ -332,13 +332,69 @@ const LivePayrollDashboard: React.FC = () => {
                         {formatCurrency(result.expected_base_salary)}
                       </Table.Cell>
                       <Table.Cell className="text-green-600 font-medium">
-                        {formatCurrency(result.actual_earned_base)}
+                        <div className="relative group inline-block">
+                          <span className="cursor-help">
+                            {formatCurrency(result.actual_earned_base)}
+                          </span>
+                          {result.earnings_by_source && (
+                            <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
+                              <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Earnings Breakdown</div>
+                              <div className="space-y-1.5">
+                                {result.earnings_by_source.attendance.earned > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Work Hours:</span>
+                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.attendance.earned)}</span>
+                                  </div>
+                                )}
+                                {result.earnings_by_source.paid_leaves.earned > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Paid Time Off:</span>
+                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.paid_leaves.earned)}</span>
+                                  </div>
+                                )}
+                                {result.earnings_by_source.live_session.earned > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Active Session:</span>
+                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.live_session.earned)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </Table.Cell>
                       <Table.Cell>
                         {result.attendance_shortfall > 0 ? (
-                          <span className="text-orange-600 font-medium">
-                            {formatCurrency(result.attendance_shortfall)}
-                          </span>
+                          <div className="relative group inline-block">
+                            <span className="text-orange-600 font-medium cursor-help">
+                              {formatCurrency(result.attendance_shortfall)}
+                            </span>
+                            {result.shortfall_by_cause && (
+                              <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
+                                <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Shortfall Breakdown</div>
+                                <div className="space-y-1.5">
+                                  {result.shortfall_by_cause.unpaid_time_off.deduction > 0 && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Unpaid Time Off:</span>
+                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.unpaid_time_off.deduction)}</span>
+                                    </div>
+                                  )}
+                                  {result.shortfall_by_cause.time_variance.deduction > 0 && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Time Variance:</span>
+                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.time_variance.deduction)}</span>
+                                    </div>
+                                  )}
+                                  {result.shortfall_by_cause.absent_days.deduction > 0 && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Absent Days:</span>
+                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.absent_days.deduction)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}

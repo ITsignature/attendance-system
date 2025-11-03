@@ -4,6 +4,35 @@ import { Table, Button, Badge, Modal, Card, Alert, Spinner } from "flowbite-reac
 import { HiArrowLeft, HiEye, HiDocumentReport } from 'react-icons/hi';
 import { payrollRunApiService } from '../../services/payrollRunService';
 
+interface EarningsBySource {
+  attendance: {
+    hours: number;
+    earned: number;
+  };
+  paid_leaves: {
+    hours: number;
+    earned: number;
+  };
+  live_session: {
+    hours: number;
+    earned: number;
+  };
+}
+
+interface ShortfallByCause {
+  unpaid_time_off: {
+    hours: number;
+    deduction: number;
+  };
+  time_variance: {
+    hours: number;
+    deduction: number;
+  };
+  absent_days: {
+    deduction: number;
+  };
+}
+
 interface EmployeeRecord {
   id: string;
   employee_id: string;
@@ -24,6 +53,8 @@ interface EmployeeRecord {
   payment_status: string;
   calculated_at: string;
   notes: string;
+  earnings_by_source: EarningsBySource | null;
+  shortfall_by_cause: ShortfallByCause | null;
 }
 
 interface ComponentDetail {
@@ -250,14 +281,68 @@ const PayrollEmployeeRecords: React.FC = () => {
                       </span>
                     </Table.Cell>
                     <Table.Cell>
-                      <span className="text-sm font-semibold text-green-600">
-                        {formatCurrency(record.actual_earned_base || 0)}
-                      </span>
+                      <div className="relative group inline-block">
+                        <span className="text-sm font-semibold text-green-600 cursor-help">
+                          {formatCurrency(record.actual_earned_base || 0)}
+                        </span>
+                        {record.earnings_by_source && (
+                          <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
+                            <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Earnings Breakdown</div>
+                            <div className="space-y-1.5">
+                              {record.earnings_by_source.attendance.earned > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Work Hours:</span>
+                                  <span className="font-medium text-gray-900">{formatCurrency(record.earnings_by_source.attendance.earned)}</span>
+                                </div>
+                              )}
+                              {record.earnings_by_source.paid_leaves.earned > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Paid Time Off:</span>
+                                  <span className="font-medium text-gray-900">{formatCurrency(record.earnings_by_source.paid_leaves.earned)}</span>
+                                </div>
+                              )}
+                              {record.earnings_by_source.live_session.earned > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Active Session:</span>
+                                  <span className="font-medium text-gray-900">{formatCurrency(record.earnings_by_source.live_session.earned)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <span className="text-sm font-medium text-orange-600">
-                        {formatCurrency(record.attendance_shortfall || 0)}
-                      </span>
+                      <div className="relative group inline-block">
+                        <span className="text-sm font-medium text-orange-600 cursor-help">
+                          {formatCurrency(record.attendance_shortfall || 0)}
+                        </span>
+                        {record.shortfall_by_cause && record.attendance_shortfall > 0 && (
+                          <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
+                            <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Shortfall Breakdown</div>
+                            <div className="space-y-1.5">
+                              {record.shortfall_by_cause.unpaid_time_off.deduction > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Unpaid Time Off:</span>
+                                  <span className="font-medium text-gray-900">{formatCurrency(record.shortfall_by_cause.unpaid_time_off.deduction)}</span>
+                                </div>
+                              )}
+                              {record.shortfall_by_cause.time_variance.deduction > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Time Variance:</span>
+                                  <span className="font-medium text-gray-900">{formatCurrency(record.shortfall_by_cause.time_variance.deduction)}</span>
+                                </div>
+                              )}
+                              {record.shortfall_by_cause.absent_days.deduction > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Absent Days:</span>
+                                  <span className="font-medium text-gray-900">{formatCurrency(record.shortfall_by_cause.absent_days.deduction)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </Table.Cell>
                     <Table.Cell>
                       <Button

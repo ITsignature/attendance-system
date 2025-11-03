@@ -4,6 +4,35 @@
  * to enable fast, real-time salary calculations without database operations
  */
 
+interface EarningsBySource {
+  attendance: {
+    hours: number;
+    earned: number;
+  };
+  paid_leaves: {
+    hours: number;
+    earned: number;
+  };
+  live_session: {
+    hours: number;
+    earned: number;
+  };
+}
+
+interface ShortfallByCause {
+  unpaid_time_off: {
+    hours: number;
+    deduction: number;
+  };
+  time_variance: {
+    hours: number;
+    deduction: number;
+  };
+  absent_days: {
+    deduction: number;
+  };
+}
+
 interface EmployeeData {
   record_id: string;
   employee_id: string;
@@ -18,6 +47,8 @@ interface EmployeeData {
     earned_salary: number;
     shortfall: number;
     components: any[];
+    earnings_by_source?: EarningsBySource | null;
+    shortfall_by_cause?: ShortfallByCause | null;
   };
   allowances: Array<{
     id: string;
@@ -85,6 +116,8 @@ interface CalculatedPayroll {
   deductions_breakdown: DeductionBreakdown[];
   financial_deductions_breakdown: FinancialBreakdown[];
   net_salary: number;
+  earnings_by_source?: EarningsBySource | null;
+  shortfall_by_cause?: ShortfallByCause | null;
 }
 
 class LivePayrollCalculationService {
@@ -258,7 +291,9 @@ class LivePayrollCalculationService {
       deductions_total: Math.round(deductions_total * 100) / 100,
       deductions_breakdown: statutoryDeductions.breakdown,
       financial_deductions_breakdown: financial_deductions_breakdown,
-      net_salary: Math.round(net_salary * 100) / 100
+      net_salary: Math.round(net_salary * 100) / 100,
+      earnings_by_source: employee.attendance.earnings_by_source || null,
+      shortfall_by_cause: employee.attendance.shortfall_by_cause || null
     };
   }
 
