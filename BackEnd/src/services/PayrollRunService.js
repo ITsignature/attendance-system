@@ -1016,7 +1016,9 @@ class PayrollRunService {
 
         // Aggregate data from pre-calculated attendance records
         for (const record of attendanceRecords) {
-            const payableDuration = parseFloat(record.payable_duration) || 0;
+            // payable_duration is now stored in MINUTES, convert to hours
+            const payableDurationMinutes = parseFloat(record.payable_duration) || 0;
+            const payableDuration = payableDurationMinutes / 60; // Convert minutes to hours
             const overtimeHours = parseFloat(record.overtime_hours) || 0;
 
             // Sum up worked hours and overtime
@@ -1555,17 +1557,19 @@ class PayrollRunService {
         if (detailedAttendance.length > 0) {
             console.log(`\n      📋 Attendance Breakdown for ${employeeName} (${employeeCode}):`);
             detailedAttendance.forEach((record, index) => {
-                const duration = parseFloat(record.payable_duration) || 0;
-                console.log(`         ${index + 1}. ${record.date} (${record.day_type}): ${duration.toFixed(2)}h`);
+                // payable_duration is stored in MINUTES
+                const durationMinutes = parseFloat(record.payable_duration) || 0;
+                console.log(`         ${index + 1}. ${record.date} (${record.day_type}): ${durationMinutes} mins`);
             });
         }
 
         // Now calculate the aggregated totals
+        // NOTE: payable_duration is stored in MINUTES, so we divide by 60 to get hours
         const [completedHours] = await db.execute(`
             SELECT
-                SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) as weekday_hours,
-                SUM(CASE WHEN is_weekend = 7 THEN payable_duration ELSE 0 END) as saturday_hours,
-                SUM(CASE WHEN is_weekend = 1 THEN payable_duration ELSE 0 END) as sunday_hours
+                SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) / 60 as weekday_hours,
+                SUM(CASE WHEN is_weekend = 7 THEN payable_duration ELSE 0 END) / 60 as saturday_hours,
+                SUM(CASE WHEN is_weekend = 1 THEN payable_duration ELSE 0 END) / 60 as sunday_hours
             FROM attendance
             WHERE employee_id = ?
             AND date BETWEEN ? AND ?
@@ -2072,7 +2076,9 @@ class PayrollRunService {
                 expectedDailyHours = sundayDailyHours;
             }
 
-            const actualHours = parseFloat(record.payable_duration) || 0;
+            // payable_duration is stored in MINUTES, convert to hours
+            const actualMinutes = parseFloat(record.payable_duration) || 0;
+            const actualHours = actualMinutes / 60;
             const shortfall = Math.max(0, expectedDailyHours - actualHours);
 
             if (record.is_weekend >= 2 && record.is_weekend <= 6) {

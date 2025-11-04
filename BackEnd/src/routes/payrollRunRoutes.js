@@ -1635,8 +1635,9 @@ router.get("/live/all",
       const weekendConfig = JSON.parse(emp.weekend_working_config);
 
       // Attendance stats
+      // NOTE: payable_duration is stored in MINUTES, divide by 60 to get hours
       const [attendanceRows] = await db.execute(
-        `SELECT is_weekend, SUM(payable_duration) AS total_payable, COUNT(*) AS days
+        `SELECT is_weekend, SUM(payable_duration) / 60 AS total_payable, COUNT(*) AS days
          FROM attendance
          WHERE employee_id = ? AND MONTH(date) = ? AND YEAR(date) = ?
          GROUP BY is_weekend`,

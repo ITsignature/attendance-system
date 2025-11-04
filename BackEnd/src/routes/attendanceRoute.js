@@ -485,14 +485,15 @@ const calculatePayableDuration = (checkInTime, checkOutTime, scheduledInTime, sc
     return 0;
   }
 
-  // Calculate overlap hours
+  // Calculate overlap in MINUTES (not hours for better precision)
   const overlapMs = overlapEnd - overlapStart;
-  const overlapHours = overlapMs / 3600000; // ms to hours
+  const overlapMinutes = Math.round(overlapMs / 60000); // ms to minutes (rounded to nearest minute)
 
-  // Subtract break duration
-  const payableDuration = Math.max(0, overlapHours - (breakDuration || 0));
+  // Subtract break duration (convert break from hours to minutes)
+  const breakMinutes = Math.round((breakDuration || 0) * 60);
+  const payableDurationMinutes = Math.max(0, overlapMinutes - breakMinutes);
 
-  return parseFloat(payableDuration.toFixed(3));
+  return payableDurationMinutes; // Return as INTEGER minutes
 };
 
 /**
@@ -1121,6 +1122,250 @@ LIMIT ? OFFSET ?
 //     });
 //   }
 // }));
+
+// =============================================
+// BULK PATCH ATTENDANCE RECORDS (MULTIPLE EMPLOYEES, DATE RANGE)
+// =============================================
+router.patch('/bulk', [
+  checkPermission('attendance.edit'),
+  body('start_date').isISO8601().withMessage('Invalid start_date format'),
+  body('end_date').isISO8601().withMessage('Invalid end_date format'),
+  body('employee_ids').isArray().withMessage('employee_ids must be an array'),
+  body('employee_ids.*').isUUID(),
+
+  // Optional fields to update (same as single PATCH)
+  body('check_in_time')
+    .optional({ checkFalsy: true })
+    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/),
+  body('check_out_time')
+    .optional({ checkFalsy: true })
+    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/),
+  body('arrival_status')
+    .optional({ checkFalsy: true })
+    .isIn(['on_time', 'late', 'absent']),
+  body('work_duration')
+    .optional({ checkFalsy: true })
+    .isIn(['full_day', 'half_day', 'short_leave', 'on_leave']),
+  body('break_duration').optional().isFloat({ min: 0, max: 24 }),
+  body('work_type').optional().isIn(['office', 'remote', 'hybrid']),
+  body('notes').optional().isLength({ max: 500 })
+], asyncHandler(async (req, res) => {
+  /* ───────── 1. basic validation ───────── */
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+
+  const db = getDB();
+  const { start_date, end_date, employee_ids } = req.body;
+
+  // Validate date range
+  const startDate = new Date(start_date);
+  const endDate = new Date(end_date);
+
+  if (startDate > endDate) {
+    return res.status(400).json({
+      success: false,
+      message: 'start_date must be before or equal to end_date'
+    });
+  }
+
+  // Generate all dates in range
+  const dates = [];
+  const currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    dates.push(currentDate.toISOString().split('T')[0]);
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  console.log(`📊 Bulk PATCH for ${employee_ids.length} employees across ${dates.length} dates`);
+
+  const results = [];
+  let totalProcessed = 0;
+  let totalUpdated = 0;
+  let totalSkipped = 0;
+
+  try {
+    for (const dateStr of dates) {
+      for (const employeeId of employee_ids) {
+        totalProcessed++;
+
+        try {
+          /* ───────── 2. fetch current attendance record ───────── */
+          const [attendanceRows] = await db.execute(
+            `SELECT a.*, e.client_id
+               FROM attendance a
+               JOIN employees e ON a.employee_id = e.id
+              WHERE a.employee_id = ? AND a.date = ? AND e.client_id = ?`,
+            [employeeId, dateStr, req.user.clientId]
+          );
+
+          console.log(`🔍 Looking for attendance: employee=${employeeId}, date=${dateStr}, client=${req.user.clientId}, found=${attendanceRows.length}`);
+
+          if (attendanceRows.length === 0) {
+            results.push({
+              date: dateStr,
+              employee_id: employeeId,
+              updated: false,
+              message: 'No attendance record found for this date'
+            });
+            totalSkipped++;
+            continue;
+          }
+
+          const current = attendanceRows[0];
+
+          /* ───────── 3. get schedule & settings ───────── */
+          const schedule = await getEmployeeSchedule(employeeId, req.user.clientId, db, dateStr);
+          const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
+
+          /* ───────── 4. figure out effective values after merge ───────── */
+          const eff = {
+            check_in_time: req.body.check_in_time ?? current.check_in_time,
+            check_out_time: req.body.check_out_time ?? current.check_out_time,
+            break_duration: req.body.break_duration ?? current.break_duration,
+          };
+
+          // Recalculate hours/overtime
+          const { totalHours, overtimeHours } = await calculateWorkHours(
+            eff.check_in_time,
+            eff.check_out_time,
+            eff.break_duration,
+            req.user.clientId,
+            db,
+            schedule
+          );
+
+          /* ───────── 5. determine arrival status ───────── */
+          const arrivalStatus = req.body.arrival_status !== undefined && req.body.arrival_status !== ''
+            ? req.body.arrival_status
+            : determineArrivalStatus(eff.check_in_time, schedule, undefined);
+
+          /* ───────── 6. determine work duration (check for approved leave) ───────── */
+          const [leaveRows] = await db.execute(
+            `SELECT leave_duration
+               FROM leave_requests
+              WHERE employee_id = ?
+                AND DATE(?) BETWEEN DATE(start_date) AND DATE(end_date)
+                AND status = 'approved'
+              LIMIT 1`,
+            [employeeId, dateStr]
+          );
+
+          const leaveRow = leaveRows[0] || null;
+          let workDuration;
+
+          if (leaveRow) {
+            workDuration = leaveRow.leave_duration;
+          } else {
+            workDuration =
+              (req.body.work_duration !== undefined && req.body.work_duration !== '')
+                ? req.body.work_duration
+                : determineWorkDuration(totalHours, durationSettings, undefined);
+          }
+
+          /* ───────── 7. calculate payable duration ───────── */
+          const payableDuration = calculatePayableDuration(
+            eff.check_in_time,
+            eff.check_out_time,
+            current.scheduled_in_time,
+            current.scheduled_out_time,
+            eff.break_duration
+          );
+
+          /* ───────── 8. build UPDATE SET list (only changed columns) ───────── */
+          const cols = [];
+          const vals = [];
+
+          const maybePush = (col, newVal, oldVal) => {
+            if (newVal !== undefined && newVal !== oldVal) {
+              cols.push(`${col} = ?`);
+              vals.push(newVal);
+            }
+          };
+
+          maybePush('check_in_time', eff.check_in_time, current.check_in_time);
+          maybePush('check_out_time', eff.check_out_time, current.check_out_time);
+          maybePush('break_duration', eff.break_duration, current.break_duration);
+          maybePush('arrival_status', arrivalStatus, current.arrival_status);
+          maybePush('work_duration', workDuration, current.work_duration);
+          maybePush('total_hours', totalHours, current.total_hours);
+          maybePush('overtime_hours', overtimeHours, current.overtime_hours);
+          maybePush('payable_duration', payableDuration, current.payable_duration);
+
+          ['work_type', 'notes'].forEach((k) =>
+            maybePush(k, req.body[k], current[k])
+          );
+
+          if (cols.length === 0) {
+            results.push({
+              date: dateStr,
+              employee_id: employeeId,
+              updated: false,
+              message: 'No fields to update'
+            });
+            totalSkipped++;
+            continue;
+          }
+
+          cols.push('updated_by = ?', 'updated_at = NOW()');
+          vals.push(req.user.userId, current.id);
+
+          /* ───────── 9. execute update ───────── */
+          await db.execute(
+            `UPDATE attendance SET ${cols.join(', ')} WHERE id = ?`,
+            vals
+          );
+
+          results.push({
+            date: dateStr,
+            employee_id: employeeId,
+            employee_name: schedule.employee_name,
+            updated: true,
+            fields_updated: cols.length - 2 // exclude updated_by and updated_at
+          });
+          totalUpdated++;
+
+        } catch (error) {
+          results.push({
+            date: dateStr,
+            employee_id: employeeId,
+            updated: false,
+            error: error.message
+          });
+          totalSkipped++;
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk update completed. ${totalUpdated} records updated across ${dates.length} date(s).`,
+      data: {
+        results,
+        summary: {
+          total_dates: dates.length,
+          total_employees: employee_ids.length,
+          total_processed: totalProcessed,
+          updated: totalUpdated,
+          skipped: totalSkipped
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in bulk PATCH:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Bulk update failed',
+      error: error.message
+    });
+  }
+}));
 
 // PATCH /api/attendance/:id  – recalc arrival_status & hours when times change
 router.patch(
