@@ -4058,7 +4058,7 @@ class PayrollRunService {
             // ========================================
             const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
 
-            // Fetch loans
+            // Fetch loans - match based on start_date falling in the period
             const [allLoans] = await db.execute(`
                 SELECT
                     employee_id,
@@ -4073,10 +4073,10 @@ class PayrollRunService {
                 FROM employee_loans
                 WHERE employee_id IN (${employeeIds.map(() => '?').join(',')})
                   AND status = 'active'
-                  AND start_date <= ?
-            `, [...employeeIds, period.period_end_date]);
+                  AND start_date BETWEEN ? AND ?
+            `, [...employeeIds, period.period_start_date, period.period_end_date]);
 
-            // Fetch advances
+            // Fetch advances - match based on required_date falling in the period
             const [allAdvances] = await db.execute(`
                 SELECT
                     employee_id,
@@ -4087,13 +4087,14 @@ class PayrollRunService {
                     monthly_deduction,
                     remaining_amount,
                     deduction_start_date,
+                    required_date,
                     justification
                 FROM employee_advances
                 WHERE employee_id IN (${employeeIds.map(() => '?').join(',')})
                   AND status IN ('approved', 'paid')
-                  AND deduction_start_date <= ?
+                  AND required_date BETWEEN ? AND ?
                   AND remaining_amount > 0
-            `, [...employeeIds, period.period_end_date]);
+            `, [...employeeIds, period.period_start_date, period.period_end_date]);
 
             // Fetch bonuses
             const [allBonuses] = await db.execute(`
