@@ -1602,7 +1602,47 @@ router.post('/cron/auto-create',
 );
 
 
-router.get("/live/all", 
+/**
+ * GET /api/payroll-runs/:runId/employee/:employeeId/daily-details
+ * Get daily work details (working mins and salary) for an employee in a payroll run
+ */
+router.get('/:runId/employee/:employeeId/daily-details',
+    checkPermission('payroll.view'),
+    [
+        param('runId').isUUID().withMessage('Valid run ID is required'),
+        param('employeeId').isUUID().withMessage('Valid employee ID is required')
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { runId, employeeId } = req.params;
+        const clientId = req.user.clientId;
+
+        try {
+            const dailyDetails = await PayrollRunService.getEmployeeDailyWorkDetails(runId, employeeId, clientId);
+
+            res.json({
+                success: true,
+                data: dailyDetails
+            });
+        } catch (error) {
+            console.error('Error fetching employee daily details:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to fetch employee daily work details'
+            });
+        }
+    })
+);
+
+router.get("/live/all",
   checkPermission('payroll.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
@@ -1635,8 +1675,9 @@ router.get("/live/all",
       const weekendConfig = JSON.parse(emp.weekend_working_config);
 
       // Attendance stats
+      // NOTE: payable_duration is stored in MINUTES, divide by 60 to get hours
       const [attendanceRows] = await db.execute(
-        `SELECT is_weekend, SUM(payable_duration) AS total_payable, COUNT(*) AS days
+        `SELECT is_weekend, SUM(payable_duration) / 60 AS total_payable, COUNT(*) AS days
          FROM attendance
          WHERE employee_id = ? AND MONTH(date) = ? AND YEAR(date) = ?
          GROUP BY is_weekend`,

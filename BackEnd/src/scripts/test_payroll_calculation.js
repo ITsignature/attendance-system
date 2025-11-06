@@ -150,11 +150,12 @@ async function testPayrollCalculation() {
         console.log('\n📋 TEST 5: Testing worked hours calculation by day type...');
 
         const testEmployeeId = payrollRecords[0].employee_id;
+        // NOTE: payable_duration is stored in MINUTES, divide by 60 to get hours
         const [workedHours] = await db.execute(`
             SELECT
-                SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) as weekday_hours,
-                SUM(CASE WHEN is_weekend = 7 THEN payable_duration ELSE 0 END) as saturday_hours,
-                SUM(CASE WHEN is_weekend = 1 THEN payable_duration ELSE 0 END) as sunday_hours,
+                SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) / 60 as weekday_hours,
+                SUM(CASE WHEN is_weekend = 7 THEN payable_duration ELSE 0 END) / 60 as saturday_hours,
+                SUM(CASE WHEN is_weekend = 1 THEN payable_duration ELSE 0 END) / 60 as sunday_hours,
                 COUNT(*) as total_records
             FROM attendance
             WHERE employee_id = ?

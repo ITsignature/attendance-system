@@ -1495,9 +1495,10 @@ router.get("/live", async (req, res) => {
 
   try {
     // 🔸 1. Total attendance stats
+    // NOTE: payable_duration is stored in MINUTES, divide by 60 to get hours
     const [attendanceRows] = await connection.execute(
       `
-      SELECT is_weekend, SUM(payable_duration) as total_payable, COUNT(*) as days
+      SELECT is_weekend, SUM(payable_duration) / 60 as total_payable, COUNT(*) as days
       FROM attendance
       WHERE employee_id = ? AND MONTH(date) = ? AND YEAR(date) = ?
       GROUP BY is_weekend
