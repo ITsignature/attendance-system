@@ -29,12 +29,44 @@ const LivePayrollDashboard: React.FC = () => {
     type: 'allowances' | 'deductions' | null;
   }>({ show: false, employee: null, type: null });
 
+  const [dailyDetailsModal, setDailyDetailsModal] = useState<{
+    show: boolean;
+    loading: boolean;
+    employeeId: string | null;
+    employeeName: string | null;
+    data: any | null;
+  }>({ show: false, loading: false, employeeId: null, employeeName: null, data: null });
+
   const openModal = (employee: CalculatedPayroll, type: 'allowances' | 'deductions') => {
     setModalData({ show: true, employee, type });
   };
 
   const closeModal = () => {
     setModalData({ show: false, employee: null, type: null });
+  };
+
+  const openDailyDetailsModal = async (employeeId: string, employeeName: string) => {
+    setDailyDetailsModal({ show: true, loading: true, employeeId, employeeName, data: null });
+
+    try {
+      if (!runId) return;
+      const response = await payrollRunApiService.getEmployeeDailyDetails(runId, employeeId);
+
+      if (response.success && response.data) {
+        setDailyDetailsModal(prev => ({ ...prev, loading: false, data: response.data }));
+      } else {
+        setDailyDetailsModal(prev => ({ ...prev, loading: false }));
+        setError(response.message || 'Failed to load daily details');
+      }
+    } catch (err: any) {
+      console.error('Error loading daily details:', err);
+      setDailyDetailsModal(prev => ({ ...prev, loading: false }));
+      setError(err.message || 'Failed to load daily details');
+    }
+  };
+
+  const closeDailyDetailsModal = () => {
+    setDailyDetailsModal({ show: false, loading: false, employeeId: null, employeeName: null, data: null });
   };
 
   // =============================================
@@ -320,7 +352,8 @@ const LivePayrollDashboard: React.FC = () => {
                   return (
                     <Table.Row
                       key={result.employee_id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-600"
+                      className="hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+                      onClick={() => openDailyDetailsModal(result.employee_id, result.employee_name)}
                     >
                       <Table.Cell>
                         <div>
@@ -628,6 +661,149 @@ const LivePayrollDashboard: React.FC = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button color="gray" onClick={closeModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Daily Work Details Modal */}
+      <Modal show={dailyDetailsModal.show} onClose={closeDailyDetailsModal} size="4xl">
+        <Modal.Header>
+          Daily Work Details
+          {dailyDetailsModal.employeeName && (
+            <div className="text-sm font-normal text-gray-500 mt-1">
+              {dailyDetailsModal.employeeName}
+            </div>
+          )}
+        </Modal.Header>
+        <Modal.Body>
+          {dailyDetailsModal.loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Spinner size="xl" />
+              <span className="ml-3 text-lg">Loading daily details...</span>
+            </div>
+          ) : dailyDetailsModal.data ? (
+            <div className="space-y-6">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-blue-50 rounded-lg">
+                <div>
+                  <p className="text-sm text-gray-600">Total Working Days</p>
+                  <p className="text-xl font-bold text-blue-700">
+                    {dailyDetailsModal.data.summary.total_working_days}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Minutes</p>
+                  <p className="text-xl font-bold text-blue-700">
+                    {dailyDetailsModal.data.summary.total_working_minutes.toLocaleString()} mins
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Hours</p>
+                  <p className="text-xl font-bold text-blue-700">
+                    {dailyDetailsModal.data.summary.total_working_hours.toFixed(2)} hrs
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Salary Earned</p>
+                  <p className="text-xl font-bold text-green-700">
+                    {formatCurrency(dailyDetailsModal.data.summary.total_salary_earned)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Daily Records Table */}
+              <div className="overflow-x-auto max-h-96">
+                <Table>
+                  <Table.Head>
+                    <Table.HeadCell>Date</Table.HeadCell>
+                    <Table.HeadCell>Day Type</Table.HeadCell>
+                    <Table.HeadCell>Check In</Table.HeadCell>
+                    <Table.HeadCell>Check Out</Table.HeadCell>
+                    <Table.HeadCell>Working Minutes</Table.HeadCell>
+                    <Table.HeadCell>Daily Salary</Table.HeadCell>
+                    <Table.HeadCell>Status</Table.HeadCell>
+                  </Table.Head>
+                  <Table.Body>
+                    {dailyDetailsModal.data.daily_records.length > 0 ? (
+                      dailyDetailsModal.data.daily_records.map((record: any, index: number) => (
+                        <Table.Row key={index} className="hover:bg-gray-50">
+                          <Table.Cell className="font-medium">
+                            {new Date(record.date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge
+                              color={
+                                record.day_type === 'Sunday' ? 'failure' :
+                                record.day_type === 'Saturday' ? 'warning' : 'info'
+                              }
+                            >
+                              {record.day_type}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell className="text-sm">
+                            {record.check_in || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-sm">
+                            {record.check_out || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-blue-600 font-medium">
+                            {record.working_minutes.toLocaleString()} mins
+                            <div className="text-xs text-gray-500">
+                              ({record.working_hours} hrs)
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell className="text-green-600 font-bold">
+                            {formatCurrency(record.daily_salary)}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge
+                              color={
+                                record.status === 'present' ? 'success' :
+                                record.status === 'late' ? 'warning' :
+                                record.status === 'absent' ? 'failure' : 'info'
+                              }
+                            >
+                              {record.status}
+                            </Badge>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))
+                    ) : (
+                      <Table.Row>
+                        <Table.Cell colSpan={7} className="text-center py-8 text-gray-500">
+                          No attendance records found for this period.
+                        </Table.Cell>
+                      </Table.Row>
+                    )}
+                  </Table.Body>
+                </Table>
+              </div>
+
+              {/* Period Info */}
+              <div className="text-sm text-gray-600 border-t pt-4">
+                <p>
+                  <strong>Payroll Period:</strong>{' '}
+                  {new Date(dailyDetailsModal.data.period.start_date).toLocaleDateString()} -{' '}
+                  {new Date(dailyDetailsModal.data.period.end_date).toLocaleDateString()}
+                </p>
+                <p className="mt-1">
+                  <strong>Base Salary:</strong> {formatCurrency(dailyDetailsModal.data.employee.base_salary)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No data available
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={closeDailyDetailsModal}>
             Close
           </Button>
         </Modal.Footer>
