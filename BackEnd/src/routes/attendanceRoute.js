@@ -105,18 +105,24 @@ router.post('/fingerprint', [
       const jsDayOfWeek = attendanceDate.getDay();
       const isWeekend = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1;
 
+      // Determine arrival status at check-in time
+      const arrivalStatus = determineArrivalStatus(currentTime, schedule, null);
+
+      console.log(`   Arrival Status: ${arrivalStatus}`);
+
       await db.execute(`
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time,
           total_hours, overtime_hours, break_duration,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend
-        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, NULL, NULL, 'office', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, ?, NULL, 'office', ?, ?, ?)
       `, [
         attendanceId,
         employeeId,
         today,
         currentTime,
+        arrivalStatus,
         schedule.start_time,
         schedule.end_time,
         isWeekend
@@ -134,6 +140,7 @@ router.post('/fingerprint', [
           employee_code: emp.employee_code,
           check_in_time: currentTime,
           scheduled_in_time: schedule.start_time,
+          arrival_status: arrivalStatus,
           date: today
         }
       });
@@ -443,6 +450,7 @@ const normalizeTimeFormat = (timeString) => {
 /**
  * Calculate payable duration based on overlap between scheduled and actual hours
  * Works for both weekdays and weekends (uses the stored scheduled times)
+ * Returns SECONDS for precision without excessive storage
  */
 const calculatePayableDuration = (checkInTime, checkOutTime, scheduledInTime, scheduledOutTime, breakDuration = 0) => {
   // Normalize all times to HH:MM:SS format
@@ -485,15 +493,15 @@ const calculatePayableDuration = (checkInTime, checkOutTime, scheduledInTime, sc
     return 0;
   }
 
-  // Calculate overlap in MINUTES (not hours for better precision)
+  // Calculate overlap in SECONDS (good precision, reasonable storage)
   const overlapMs = overlapEnd - overlapStart;
-  const overlapMinutes = Math.round(overlapMs / 60000); // ms to minutes (rounded to nearest minute)
+  const overlapSeconds = Math.round(overlapMs / 1000); // Convert ms to seconds
 
-  // Subtract break duration (convert break from hours to minutes)
-  const breakMinutes = Math.round((breakDuration || 0) * 60);
-  const payableDurationMinutes = Math.max(0, overlapMinutes - breakMinutes);
+  // Subtract break duration (convert break from hours to seconds)
+  const breakSeconds = Math.round((breakDuration || 0) * 60 * 60); // hours to seconds
+  const payableDurationSeconds = Math.max(0, overlapSeconds - breakSeconds);
 
-  return payableDurationMinutes; // Return as INTEGER minutes
+  return payableDurationSeconds; // Return as INTEGER seconds
 };
 
 /**
@@ -1930,7 +1938,7 @@ router.post('/bulk-update-scheduled-times', [
 // DELETE ATTENDANCE RECORD
 // =============================================
 router.delete('/:id', [
-  checkPermission('attendance.delete'),
+  checkPermission('attendance.edit'),
   checkResourceOwnership('attendance')
 ], asyncHandler(async (req, res) => {
   const db = getDB();

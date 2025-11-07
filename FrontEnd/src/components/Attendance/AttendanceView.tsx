@@ -558,7 +558,7 @@ const filteredRecords = attendanceRecords.filter(record =>
                         >
                           <HiPencil className="h-4 w-4" />
                         </Button>
-                          {/* <Button
+                          <Button
                               size="sm"
                               color="failure"
                               onClick={() => {
@@ -567,7 +567,7 @@ const filteredRecords = attendanceRecords.filter(record =>
                               }}
                             >
                             <HiTrash className="h-4 w-4" />
-                          </Button> */}
+                          </Button>
                         </div>
                       </Table.Cell>
                     </Table.Row>

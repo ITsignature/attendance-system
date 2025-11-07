@@ -287,6 +287,41 @@ class PayrollRunApiService {
   }
 
   /**
+   * Get employee daily work details (working minutes and salary per day)
+   */
+  async getEmployeeDailyDetails(runId: string, employeeId: string): Promise<ApiResponse<{
+    employee: {
+      id: string;
+      code: string;
+      name: string;
+      base_salary: number;
+    };
+    period: {
+      start_date: string;
+      end_date: string;
+    };
+    daily_records: Array<{
+      date: string;
+      day_type: string;
+      check_in: string;
+      check_out: string;
+      working_minutes: number;
+      working_hours: number;
+      hourly_rate: number;
+      daily_salary: number;
+      status: string;
+    }>;
+    summary: {
+      total_working_days: number;
+      total_working_minutes: number;
+      total_working_hours: number;
+      total_salary_earned: number;
+    };
+  }>> {
+    return apiService.apiCall(`/api/payroll-runs/${runId}/employee/${employeeId}/daily-details`);
+  }
+
+  /**
    * Get pending approvals for current user
    */
   async getPendingApprovals(): Promise<ApiResponse<Array<{
