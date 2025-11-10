@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Modal,
-  Table, 
-  Button, 
-  TextInput, 
-  Select, 
-  Badge, 
+  Table,
+  Button,
+  TextInput,
+  Select,
+  Badge,
   Card,
   Pagination,
   Spinner
 } from 'flowbite-react';
-import { 
-  HiPlus, 
-  HiPencil, 
-  HiTrash, 
+import {
+  HiPlus,
+  HiPencil,
+  HiTrash,
   HiRefresh,
   HiClock,
   HiCalendar
@@ -23,6 +23,7 @@ import AttendanceForm from './AttendanceForm';
 import { set } from 'lodash';
 import ResolveWorkDurationModal from './ResolveWorkDurationModal'
 import {Link} from 'react-router-dom';
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
 // Types
 interface AttendanceRecord {
@@ -353,13 +354,11 @@ const filteredRecords = attendanceRecords.filter(record =>
           </p>
         </div>
         <div className="flex gap-2">
-          <Button color="purple" as={Link} to="/manual-attendance">
-        Manual Attendance Sheet
-      </Button>
-        {/* <Button onClick={() => setShowForm(true)}>
-          <HiPlus className="mr-2 h-4 w-4" />
-          Add Attendance
-        </Button> */}
+          <DynamicProtectedComponent permission="attendance.create">
+            <Button color="purple" as={Link} to="/manual-attendance">
+              Manual Attendance Sheet
+            </Button>
+          </DynamicProtectedComponent>
         </div>
       </div>
 
@@ -548,17 +547,20 @@ const filteredRecords = attendanceRecords.filter(record =>
                       
                       <Table.Cell>
                         <div className="flex space-x-2">
-                          <Button
-                          size="sm"
-                          color="warning"
-                          onClick={() => {
-                            setEditingRecord(record);   // opens edit modal via <AttendanceForm>
-                            setShowForm(true);
-                          }}
-                        >
-                          <HiPencil className="h-4 w-4" />
-                        </Button>
-                          <Button
+                          <DynamicProtectedComponent permission="attendance.edit">
+                            <Button
+                              size="sm"
+                              color="warning"
+                              onClick={() => {
+                                setEditingRecord(record);   // opens edit modal via <AttendanceForm>
+                                setShowForm(true);
+                              }}
+                            >
+                              <HiPencil className="h-4 w-4" />
+                            </Button>
+                          </DynamicProtectedComponent>
+                          <DynamicProtectedComponent permission="attendance.delete">
+                            <Button
                               size="sm"
                               color="failure"
                               onClick={() => {
@@ -566,8 +568,9 @@ const filteredRecords = attendanceRecords.filter(record =>
                                 setShowDelete(true);        // opens confirmation modal
                               }}
                             >
-                            <HiTrash className="h-4 w-4" />
-                          </Button>
+                              <HiTrash className="h-4 w-4" />
+                            </Button>
+                          </DynamicProtectedComponent>
                         </div>
                       </Table.Cell>
                     </Table.Row>

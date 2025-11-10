@@ -94,7 +94,7 @@ const SidebarContent = [
         title: 'Departments',
         icon: IconBuilding,
         href: '/Departments',
-        permission: 'employees.view',
+        permission: 'departments.view',
       },
          {
         id: uniqueId(),

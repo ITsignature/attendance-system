@@ -117,6 +117,28 @@ export const MODULES = {
       { id: 'holidays.delete', name: 'Delete Holidays', description: 'Remove holidays from the calendar' }
     ]
   },
+  departments: {
+    id: 'departments',
+    name: 'Department Management',
+    description: 'Manage organizational departments',
+    permissions: [
+      { id: 'departments.view', name: 'View Departments', description: 'View departments list and details' },
+      { id: 'departments.create', name: 'Create Departments', description: 'Create new departments' },
+      { id: 'departments.edit', name: 'Edit Departments', description: 'Modify existing departments' },
+      { id: 'departments.delete', name: 'Delete Departments', description: 'Remove departments from system' }
+    ]
+  },
+  designations: {
+    id: 'designations',
+    name: 'Designation Management',
+    description: 'Manage job designations and titles',
+    permissions: [
+      { id: 'designations.view', name: 'View Designations', description: 'View designations list and details' },
+      { id: 'designations.create', name: 'Create Designations', description: 'Create new designations' },
+      { id: 'designations.edit', name: 'Edit Designations', description: 'Modify existing designations' },
+      { id: 'designations.delete', name: 'Delete Designations', description: 'Remove designations from system' }
+    ]
+  },
   rbac: {
     id: 'rbac',
     name: 'Role & Permission Management',

@@ -473,14 +473,6 @@ const AllEmployees: React.FC = () => {
                 </span>
               </div>
               <div className="flex gap-2">
-                <Button
-                  size="xs"
-                  color="gray"
-                  onClick={() => setShowExportModal(true)}
-                >
-                  <HiOutlineDownload className="mr-1 h-3 w-3" />
-                  Export Selected
-                </Button>
                 <DynamicProtectedComponent permission="employees.delete">
                   <Button
                     size="xs"

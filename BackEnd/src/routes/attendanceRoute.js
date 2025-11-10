@@ -666,7 +666,7 @@ const calculateWorkHours = async (
 // CREATE ATTENDANCE RECORD WITH DUAL AUTO STATUS
 // =============================================
   router.post('/', [
-    checkPermission('attendance.edit'),
+    checkPermission('attendance.create'),
     body('employee_id').isUUID(),
     body('date').isISO8601(),
     body('check_in_time').optional( { values: 'falsy' } ).matches(timeRegex),
@@ -1376,8 +1376,7 @@ router.patch('/bulk', [
 }));
 
 // PATCH /api/attendance/:id  – recalc arrival_status & hours when times change
-router.patch(
-  '/:id',
+router.patch('/:id',
   [
     checkPermission('attendance.edit'),
     checkResourceOwnership('attendance'),
@@ -1938,7 +1937,7 @@ router.post('/bulk-update-scheduled-times', [
 // DELETE ATTENDANCE RECORD
 // =============================================
 router.delete('/:id', [
-  checkPermission('attendance.edit'),
+  checkPermission('attendance.delete'),
   checkResourceOwnership('attendance')
 ], asyncHandler(async (req, res) => {
   const db = getDB();

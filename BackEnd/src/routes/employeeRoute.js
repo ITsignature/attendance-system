@@ -3,7 +3,7 @@ const { body, validationResult, query } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../config/database');
 const { authenticate } = require('../middleware/authMiddleware');
-const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
+const { checkPermission, checkAnyPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const multer = require('multer');
 const path = require('path');
@@ -63,8 +63,9 @@ const upload = multer({
 // =============================================
 // GET ALL EMPLOYEES
 // =============================================
-router.get('/', 
-  checkPermission('employees.view'),
+// Allow access with employees.view OR attendance.create OR attendance.edit
+router.get('/',
+  checkAnyPermission(['employees.view', 'attendance.create', 'attendance.edit']),
   asyncHandler(async (req, res) => {
     const db = getDB();
     

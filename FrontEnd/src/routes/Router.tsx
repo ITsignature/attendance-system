@@ -174,20 +174,20 @@ const Router = [
       },
       
       // Department Management
-      { 
-        path: '/Departments', 
-        exact: true, 
+      {
+        path: '/Departments',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="employees.view">
+          <DynamicProtectedRoute permission="departments.view">
             <ViewDepartments />
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/departments-manage', 
-        exact: true, 
+      {
+        path: '/departments-manage',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="employees.view">
+          <DynamicProtectedRoute permission="departments.view">
             <DepartmentManagement />
           </DynamicProtectedRoute>
         )
