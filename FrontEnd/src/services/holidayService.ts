@@ -1,22 +1,34 @@
-import axios from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE_URL = `${import.meta.env?.VITE_API_URL || 'http://localhost:5000'}/api`;
 
 // Create axios instance with auth
-const api = axios.create({
+const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  }
 });
 
 // Add auth token to requests
 api.interceptors.request.use(
-  (config) => {
+  (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('accessToken');
+    console.log('🔍 Holiday Service Interceptor - Token:', token ? `${token.substring(0, 20)}...` : 'NULL');
+    console.log('🔍 Holiday Service Interceptor - Headers before:', config.headers);
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ Holiday Service Interceptor - Added Authorization header');
+    } else {
+      console.warn('⚠️ Holiday Service Interceptor - No token found in localStorage');
     }
+
+    console.log('🔍 Holiday Service Interceptor - Headers after:', config.headers);
     return config;
   },
   (error) => {
+    console.error('❌ Holiday Service Interceptor - Error:', error);
     return Promise.reject(error);
   }
 );

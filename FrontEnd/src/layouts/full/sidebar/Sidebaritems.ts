@@ -101,7 +101,7 @@ const SidebarContent = [
         title: 'Holidays',
         icon: IconCalendar,
         href: '/holidays',
-        permission: 'leaves.view',
+        permission: 'holidays.view',
       },
     
     ],

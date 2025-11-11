@@ -11,8 +11,10 @@ import {
 } from "flowbite-react";
 import { HiOutlinePlus, HiOutlineDownload, HiOutlineTrash } from "react-icons/hi";
 import holidayService, { Holiday } from "../../services/holidayService";
+import { useDynamicRBAC } from "../RBACSystem/rbacSystem";
 
 const HolidayPage = () => {
+  const { hasPermission } = useDynamicRBAC();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,11 +22,11 @@ const HolidayPage = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [modalOpen, setModalOpen] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<Holiday | null>(null);
-  const [newHoliday, setNewHoliday] = useState({ 
-    date: "", 
-    name: "", 
+  const [newHoliday, setNewHoliday] = useState({
+    date: "",
+    name: "",
     description: "",
-    is_optional: false 
+    is_optional: false
   });
 
   // Load holidays when year changes
@@ -186,24 +188,28 @@ const HolidayPage = () => {
           </Select>
         </div>
         <div className="flex gap-2">
-          <Button
-            color="blue"
-            className="flex items-center gap-2"
-            onClick={handleImportSriLankanHolidays}
-            disabled={loading}
-          >
-            <HiOutlineDownload className="text-lg" />
-            Import SL Holidays
-          </Button>
-          <Button
-            color="purple"
-            className="flex items-center gap-2"
-            onClick={() => setModalOpen(true)}
-            disabled={loading}
-          >
-            <HiOutlinePlus className="text-lg" />
-            Add Holiday
-          </Button>
+          {hasPermission('holidays.create') && (
+            <Button
+              color="blue"
+              className="flex items-center gap-2"
+              onClick={handleImportSriLankanHolidays}
+              disabled={loading}
+            >
+              <HiOutlineDownload className="text-lg" />
+              Import SL Holidays
+            </Button>
+          )}
+          {hasPermission('holidays.create') && (
+            <Button
+              color="purple"
+              className="flex items-center gap-2"
+              onClick={() => setModalOpen(true)}
+              disabled={loading}
+            >
+              <HiOutlinePlus className="text-lg" />
+              Add Holiday
+            </Button>
+          )}
         </div>
       </div>
 
@@ -252,22 +258,26 @@ const HolidayPage = () => {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex gap-2">
-                        <Button
-                          size="xs"
-                          color="blue"
-                          onClick={() => handleEditHoliday(holiday)}
-                          disabled={loading}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="xs"
-                          color="red"
-                          onClick={() => handleDeleteHoliday(holiday)}
-                          disabled={loading}
-                        >
-                          <HiOutlineTrash />
-                        </Button>
+                        {hasPermission('holidays.edit') && (
+                          <Button
+                            size="xs"
+                            color="blue"
+                            onClick={() => handleEditHoliday(holiday)}
+                            disabled={loading}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                        {hasPermission('holidays.delete') && (
+                          <Button
+                            size="xs"
+                            color="red"
+                            onClick={() => handleDeleteHoliday(holiday)}
+                            disabled={loading}
+                          >
+                            <HiOutlineTrash />
+                          </Button>
+                        )}
                       </div>
                     </Table.Cell>
                   </Table.Row>

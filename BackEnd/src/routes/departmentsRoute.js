@@ -127,9 +127,9 @@ router.post(
       return res.status(400).json({ success: false, message: "Department name is required." });
     }
 
-    // Check for duplicate department name within the same client
+    // Check for duplicate department name within the same client (only active departments)
     const [existing] = await db.execute(
-      `SELECT id FROM departments WHERE client_id = ? AND name = ? LIMIT 1`,
+      `SELECT id FROM departments WHERE client_id = ? AND name = ? AND is_active = TRUE LIMIT 1`,
       [clientId, name]
     );
 
@@ -177,10 +177,10 @@ router.put(
       });
     }
 
-    // Check for duplicate name (excluding current department)
+    // Check for duplicate name (excluding current department, only active departments)
     if (name) {
       const [duplicate] = await db.execute(
-        `SELECT id FROM departments WHERE client_id = ? AND name = ? AND id != ? LIMIT 1`,
+        `SELECT id FROM departments WHERE client_id = ? AND name = ? AND id != ? AND is_active = TRUE LIMIT 1`,
         [clientId, name, departmentId]
       );
 

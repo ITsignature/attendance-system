@@ -233,11 +233,11 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/holidays', 
-        exact: true, 
+      {
+        path: '/holidays',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="leaves.view">
+          <DynamicProtectedRoute permission="holidays.view">
             <HolidayPage />
           </DynamicProtectedRoute>
         )
