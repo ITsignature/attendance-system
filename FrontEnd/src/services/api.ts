@@ -244,8 +244,10 @@ class ApiService {
   }
 
   if (!res.ok) {
-    // if (res.status === 401) this.removeToken(); // hard fail path
-    this.removeToken();   
+    // Only remove token on 401 Unauthorized errors
+    if (res.status === 401) {
+      this.removeToken();
+    }
     throw new Error(data?.message || `HTTP ${res.status}`);
   }
 

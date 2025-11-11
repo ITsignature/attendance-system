@@ -224,11 +224,11 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/leave-requests', 
-        exact: true, 
+      {
+        path: '/leave-requests',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="leaves.approve">
+          <DynamicProtectedRoute permission="leaves.viewRequests">
             <LeaveRequestsManagement />
           </DynamicProtectedRoute>
         )
@@ -242,11 +242,11 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-  path: '/leave-request/new', 
-  exact: true, 
+      {
+  path: '/leave-request/new',
+  exact: true,
   element: (
-    <DynamicProtectedRoute permission="leaves.approve">
+    <DynamicProtectedRoute permission="leaves.create">
       <LeaveRequestForm />
     </DynamicProtectedRoute>
   )

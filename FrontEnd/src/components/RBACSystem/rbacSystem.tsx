@@ -273,8 +273,8 @@ const initializeAuth = async () => {
             // Load RBAC data AFTER user is confirmed
             console.log('🚀 Initializing RBAC data for user:', user.name);
             await loadRoles();
-            await loadClients();
-            await loadAdminUsers();
+            // Note: loadClients and loadAdminUsers are not implemented yet
+            // They can be loaded on-demand when needed by specific features
             console.log('✅ RBAC data loaded successfully');
             
           } catch (error) {
@@ -395,11 +395,11 @@ const initializeAuth = async () => {
         localStorage.setItem('user', JSON.stringify(user));
         localStorage.setItem('accessToken', response.data.accessToken);
         localStorage.setItem('refreshToken', response.data.refreshToken);
-        
+
         // Set current user state
         setCurrentUser(user);
         setError(null);
-        
+
         console.log('✅ Login successful, user set:', user);
         
         return true;

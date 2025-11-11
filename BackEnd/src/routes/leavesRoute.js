@@ -166,7 +166,7 @@ router.get('/my-requests',
 // GET /api/leaves/requests - Get all leave requests (for managers/HR)
 // FIXED: Moved const db = getDB() to correct position and fixed syntax
 router.get('/requests',
-  checkPermission('leaves.approve'),
+  checkPermission('leaves.viewRequests'),
   validateDateRange,
   asyncHandler(async (req, res) => {
     const db = getDB();
@@ -302,7 +302,7 @@ router.get('/requests',
 // POST /api/leaves/request - Submit new leave request
 // POST /api/leaves/request - Admin creates leave request for any employee
 router.post('/request',
-  checkPermission('leaves.approve'),
+  checkPermission('leaves.create'),
   [
     body('employee_id').isUUID().withMessage('Valid employee ID is required'),
     body('leave_type_id').isUUID().withMessage('Valid leave type ID is required'),

@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { TextInput, Button, Select, Badge, Modal, Table, Alert, Card } from "flowbite-react";
 import { payrollRunApiService, PayrollRun, PayrollRunFilters } from '../../services/payrollRunService';
 import { HiPlus, HiPlay, HiEye, HiCheck, HiX, HiCreditCard, HiDocumentReport, HiUsers } from 'react-icons/hi';
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
 const PayrollRunDashboard = () => {
   // =============================================
   // STATE MANAGEMENT
   // =============================================
-  
+
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,6 @@ const PayrollRunDashboard = () => {
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
   const [runSummary, setRunSummary] = useState<any>(null);
   const [availablePeriods, setAvailablePeriods] = useState<any[]>([]);
-
 
   // Filter States
   const [filters, setFilters] = useState<PayrollRunFilters>({
@@ -110,7 +110,6 @@ const PayrollRunDashboard = () => {
     }
   };
 
-
   // =============================================
   // PAYROLL RUN OPERATIONS
   // =============================================
@@ -181,7 +180,6 @@ const PayrollRunDashboard = () => {
     }
   };
 
-
   const handleProcessRun = async () => {
     if (!selectedRun) return;
     
@@ -241,7 +239,6 @@ const PayrollRunDashboard = () => {
     navigate(`/payroll/runs/${runId}/employees`);
   };
 
-
   const handleProcess = async (run: PayrollRun) => {
     setSelectedRun(run);
     setProcessForm({
@@ -300,17 +297,34 @@ const PayrollRunDashboard = () => {
 
   const getActionButtons = (run: PayrollRun) => {
     const actions = payrollRunApiService.getAvailableActions(run);
-    
-    return actions.map(action => (
-      <Button
-        key={action.action}
-        size="xs"
-        color={action.color}
-        onClick={() => handleAction(run, action.action)}
-      >
-        {getActionIcon(action.action)} {action.label}
-      </Button>
-    ));
+
+    return actions.map(action => {
+      // Determine required permission for each action
+      let permission = 'payroll.view'; // default
+      switch (action.action) {
+        case 'calculate':
+          permission = 'payroll.calculate';
+          break;
+        case 'cancel':
+          permission = 'payroll.cancel';
+          break;
+        case 'process':
+          permission = 'payroll.calculate'; // Process requires calculate permission
+          break;
+      }
+
+      return (
+        <DynamicProtectedComponent key={action.action} permission={permission}>
+          <Button
+            size="xs"
+            color={action.color}
+            onClick={() => handleAction(run, action.action)}
+          >
+            {getActionIcon(action.action)} {action.label}
+          </Button>
+        </DynamicProtectedComponent>
+      );
+    });
   };
 
   const getActionIcon = (action: string) => {
@@ -353,10 +367,12 @@ const PayrollRunDashboard = () => {
             Payroll Management
           </h1>
         </div>
-        <Button color="blue" onClick={() => setShowCreateModal(true)}>
-          <HiPlus className="w-4 h-4 mr-2" />
-          Create Payroll Run
-        </Button>
+        <DynamicProtectedComponent permission="payroll.create">
+          <Button color="blue" onClick={() => setShowCreateModal(true)}>
+            <HiPlus className="w-4 h-4 mr-2" />
+            Create Payroll Run
+          </Button>
+        </DynamicProtectedComponent>
       </div>
 
       {/* Alerts */}
@@ -466,30 +482,36 @@ const PayrollRunDashboard = () => {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex gap-2 flex-wrap">
-                        <Button
-                          size="xs"
-                          color="green"
-                          onClick={() => navigate(`/payroll/runs/${run.id}/live`)}
-                        >
-                          <HiEye className="w-3 h-3 mr-1" />
-                          Live Preview
-                        </Button>
-                        <Button
-                          size="xs"
-                          color="gray"
-                          onClick={() => openRunDetails(run)}
-                        >
-                          <HiEye className="w-3 h-3 mr-1" />
-                          Summary
-                        </Button>
-                        <Button
-                          size="xs"
-                          color="blue"
-                          onClick={() => navigateToEmployeeRecords(run.id)}
-                        >
-                          <HiUsers className="w-3 h-3 mr-1" />
-                          Employees
-                        </Button>
+                        <DynamicProtectedComponent permission="payroll.view">
+                          <Button
+                            size="xs"
+                            color="green"
+                            onClick={() => navigate(`/payroll/runs/${run.id}/live`)}
+                          >
+                            <HiEye className="w-3 h-3 mr-1" />
+                            Live Preview
+                          </Button>
+                        </DynamicProtectedComponent>
+                        <DynamicProtectedComponent permission="payroll.view">
+                          <Button
+                            size="xs"
+                            color="gray"
+                            onClick={() => openRunDetails(run)}
+                          >
+                            <HiEye className="w-3 h-3 mr-1" />
+                            Summary
+                          </Button>
+                        </DynamicProtectedComponent>
+                        <DynamicProtectedComponent permission="payroll.view">
+                          <Button
+                            size="xs"
+                            color="blue"
+                            onClick={() => navigateToEmployeeRecords(run.id)}
+                          >
+                            <HiUsers className="w-3 h-3 mr-1" />
+                            Employees
+                          </Button>
+                        </DynamicProtectedComponent>
                         {getActionButtons(run)}
                       </div>
                     </Table.Cell>

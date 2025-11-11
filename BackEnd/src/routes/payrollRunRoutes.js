@@ -1103,7 +1103,7 @@ router.get('/:id/live-data',
  * Create new payroll run
  */
 router.post('/',
-    checkPermission('payroll.edit'),
+    checkPermission('payroll.create'),
     validateCreateRun,
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -1144,7 +1144,7 @@ router.post('/',
  * Calculate payroll for entire run
  */
 router.post('/:id/calculate',
-    checkPermission('payroll.process'),
+    checkPermission('payroll.calculate'),
     param('id').isUUID(),
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -1182,7 +1182,7 @@ router.post('/:id/calculate',
  * Process payments for calculated payroll run
  */
 router.post('/:id/process',
-    checkPermission('payroll.process'),
+    checkPermission('payroll.calculate'),
     [
         param('id').isUUID(),
         ...validateProcessPayment
@@ -1223,7 +1223,7 @@ router.post('/:id/process',
  * Cancel payroll run (if not yet processed)
  */
 router.post('/:id/cancel',
-    checkPermission('payroll.edit'),
+    checkPermission('payroll.cancel'),
     param('id').isUUID(),
     [
         body('cancellation_reason').optional().isLength({ max: 500 }).withMessage('Cancellation reason cannot exceed 500 characters')
