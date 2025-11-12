@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Modal, TextInput, Label, Textarea, Badge, Checkbox, Alert } from 'flowbite-react';
 import { HiPlus, HiPencil, HiTrash, HiUsers, HiShieldCheck } from 'react-icons/hi';
-import { useDynamicRBAC, MODULES, Role } from './rbacSystem';
+import { useDynamicRBAC, MODULES, Role, DynamicProtectedComponent } from './rbacSystem';
 import { apiService } from '../../services/api';
 
 const RoleManagementPage: React.FC = () => {
@@ -387,17 +387,19 @@ const RoleManagementPage: React.FC = () => {
                 </Badge>
               </div>
               
-              {!role.is_system_role && hasPermission('rbac.edit') && (
+              {!role.is_system_role && (
                 <div className="flex space-x-2">
-                  <Button
-                    size="sm"
-                    color="gray"
-                    onClick={() => handleEditRole(role)}
-                    disabled={isSubmitting}
-                  >
-                    <HiPencil className="h-4 w-4" />
-                  </Button>
-                  {hasPermission('rbac.delete') && (
+                  <DynamicProtectedComponent permission="rbac.edit">
+                    <Button
+                      size="sm"
+                      color="gray"
+                      onClick={() => handleEditRole(role)}
+                      disabled={isSubmitting}
+                    >
+                      <HiPencil className="h-4 w-4" />
+                    </Button>
+                  </DynamicProtectedComponent>
+                  <DynamicProtectedComponent permission="rbac.delete">
                     <Button
                       size="sm"
                       color="failure"
@@ -406,7 +408,7 @@ const RoleManagementPage: React.FC = () => {
                     >
                       <HiTrash className="h-4 w-4" />
                     </Button>
-                  )}
+                  </DynamicProtectedComponent>
                 </div>
               )}
             </div>

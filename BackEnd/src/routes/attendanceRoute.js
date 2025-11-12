@@ -553,7 +553,7 @@ const determineArrivalStatus = (checkInTime, schedule, requestedArrivalStatus = 
   // Determine arrival status
   if (timeDiffMinutes <= 0) {
     console.log('  ✅ Result: on_time (early or exact)');
-    return 'on_time'; // On time or early
+    return 'on_time'; // On time or early   
   } else if (timeDiffMinutes <= schedule.late_threshold_minutes) {
     console.log('  ✅ Result: on_time (within threshold)');
     return 'on_time'; // Within acceptable threshold
