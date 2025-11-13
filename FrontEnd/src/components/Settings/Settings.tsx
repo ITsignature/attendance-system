@@ -27,7 +27,7 @@ const SettingsWithBackend = () => {
     resetAllSettings 
   } = useSettings();
 
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState('attendance');
   // FIX: Initialize with null instead of empty object
   const [localSettings, setLocalSettings] = useState<Record<string, any> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -145,7 +145,7 @@ useEffect(() => {
   }
 
   const settingSections = [
-    { id: 'general', label: 'General', icon: Settings },
+    // { id: 'general', label: 'General', icon: Settings },
     { id: 'attendance', label: 'Attendance', icon: Clock },
     { id: 'leaves', label: 'Leaves', icon: Calendar },
     { id: 'payroll', label: 'Payroll', icon: DollarSign },
@@ -300,73 +300,73 @@ const hhmmToMinutes = (t) => {
   // Render different setting sections
   const renderSettingSection = () => {
     switch (activeSection) {
-      case 'general':
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">General Settings</h3>
-            
-            <div className="grid grid-cols-1 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Company Name
-                </label>
-                <input
-                  type="text"
-                  value={localSettings.company_name || ''}
-                  onChange={(e) => updateLocalSetting('company_name', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Timezone
-                </label>
-                <select
-                  value={localSettings.timezone || 'UTC+00:00'}
-                  onChange={(e) => updateLocalSetting('timezone', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="UTC+00:00">UTC+00:00</option>
-                  <option value="UTC+05:30">UTC+05:30 (Sri Lanka)</option>
-                  <option value="UTC-05:00">UTC-05:00 (EST)</option>
-                  <option value="UTC-08:00">UTC-08:00 (PST)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Date Format
-                </label>
-                <select
-                  value={localSettings.date_format || 'YYYY-MM-DD'}
-                  onChange={(e) => updateLocalSetting('date_format', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                  <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                  <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Currency
-                </label>
-                <select
-                  value={localSettings.currency || 'USD'}
-                  onChange={(e) => updateLocalSetting('currency', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="LKR">LKR - Sri Lankan Rupee</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="GBP">GBP - British Pound</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        );
+      // case 'general':
+      //   return (
+      //     <div className="space-y-6">
+      //       <h3 className="text-lg font-medium text-gray-900 dark:text-white">General Settings</h3>
+      //
+      //       <div className="grid grid-cols-1 gap-6">
+      //         <div>
+      //           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      //             Company Name
+      //           </label>
+      //           <input
+      //             type="text"
+      //             value={localSettings.company_name || ''}
+      //             onChange={(e) => updateLocalSetting('company_name', e.target.value)}
+      //             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+      //           />
+      //         </div>
+      //
+      //         <div>
+      //           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      //             Timezone
+      //           </label>
+      //           <select
+      //             value={localSettings.timezone || 'UTC+00:00'}
+      //             onChange={(e) => updateLocalSetting('timezone', e.target.value)}
+      //             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+      //           >
+      //             <option value="UTC+00:00">UTC+00:00</option>
+      //             <option value="UTC+05:30">UTC+05:30 (Sri Lanka)</option>
+      //             <option value="UTC-05:00">UTC-05:00 (EST)</option>
+      //             <option value="UTC-08:00">UTC-08:00 (PST)</option>
+      //           </select>
+      //         </div>
+      //
+      //         <div>
+      //           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      //             Date Format
+      //           </label>
+      //           <select
+      //             value={localSettings.date_format || 'YYYY-MM-DD'}
+      //             onChange={(e) => updateLocalSetting('date_format', e.target.value)}
+      //             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+      //           >
+      //             <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+      //             <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+      //             <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+      //           </select>
+      //         </div>
+      //
+      //         <div>
+      //           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      //             Currency
+      //           </label>
+      //           <select
+      //             value={localSettings.currency || 'USD'}
+      //             onChange={(e) => updateLocalSetting('currency', e.target.value)}
+      //             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+      //           >
+      //             <option value="USD">USD - US Dollar</option>
+      //             <option value="LKR">LKR - Sri Lankan Rupee</option>
+      //             <option value="EUR">EUR - Euro</option>
+      //             <option value="GBP">GBP - British Pound</option>
+      //           </select>
+      //         </div>
+      //       </div>
+      //     </div>
+      //   );
 
       case 'attendance':
         return (

@@ -589,16 +589,16 @@ const determineWorkDuration = (
   return null;
 };
 
-/**
- * Calculate work hours and overtime based on system settings
- */
-/**
- *  Calculate worked / overtime hours.
- *  - Accepts HH:MM or HH:MM:SS strings
- *  - Uses the employee’s own schedule if available, otherwise the company default
- *  - Break duration is **hours** (decimal, e.g. 1.5 = 90 min)
- *  - Everything returned as *numbers*, rounded to 2 dp.
- */
+  /**
+   * Calculate work hours and overtime based on system settings
+   */
+  /**
+   *  Calculate worked / overtime hours.
+   *  - Accepts HH:MM or HH:MM:SS strings
+   *  - Uses the employee’s own schedule if available, otherwise the company default
+   *  - Break duration is **hours** (decimal, e.g. 1.5 = 90 min)
+   *  - Everything returned as *numbers*, rounded to 2 dp.
+   */
 const calculateWorkHours = async (
   checkInTime,
   checkOutTime,

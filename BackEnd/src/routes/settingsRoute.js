@@ -19,7 +19,7 @@ const validateSettingKey = (key) => {
   const allowedKeys = [
     // General Settings
     'company_name', 'timezone', 'date_format', 'currency', 'language',
-    
+
     // Security Settings
     'password_expiry_days', 'session_timeout_minutes', 'two_factor_auth_enabled', 
     'max_login_attempts', 'account_lockout_duration',
@@ -138,6 +138,7 @@ router.get('/',
     `, [req.user.clientId]);
 
     // console.log('📊 Settings response:', settings);
+    // I got the setting keys and values relavent to that client. now i have to 
     // Convert JSON values and format response
     const formattedSettings = settings.reduce((acc, setting) => {
       let value = setting.setting_value;
