@@ -146,7 +146,7 @@ router.post('/fingerprint', [
       });
 
     } else {
-      // ===== CHECK-OUT =====
+      // ===== CHECK-OUT OR DUPLICATE CHECK-IN =====
       const record = existing[0];
 
       if (record.check_out_time) {
@@ -163,10 +163,45 @@ router.post('/fingerprint', [
         });
       }
 
-      console.log(`   Action: CHECK-OUT`);
-
-      // Get schedule and settings
+      // Get employee's schedule (handles weekdays & weekends automatically)
       const schedule = await getEmployeeSchedule(employeeId, clientId, db, today);
+
+      // Calculate employee's scheduled work duration in hours
+      const schedIn = new Date(`2000-01-01T${schedule.start_time}:00`);
+      const schedOut = new Date(`2000-01-01T${schedule.end_time}:00`);
+      const scheduledHours = (schedOut - schedIn) / (1000 * 60 * 60);
+
+      // Minimum work time = half of scheduled hours (e.g., 9h schedule → 4.5h minimum)
+      const minimumWorkHours = scheduledHours / 2;
+
+      // Calculate actual time worked since check-in
+      const checkInDate = new Date(`2000-01-01T${record.check_in_time}:00`);
+      const currentDate = new Date(`2000-01-01T${currentTime}:00`);
+      const hoursWorked = (currentDate - checkInDate) / (1000 * 60 * 60);
+
+      // Check if enough time passed for valid checkout
+      if (hoursWorked < minimumWorkHours) {
+        console.log(`   ⚠️  Duplicate scan ignored - Too early for checkout`);
+        console.log(`   Hours worked: ${hoursWorked.toFixed(2)}h < Minimum required: ${minimumWorkHours.toFixed(2)}h`);
+        return res.status(200).json({
+          success: false,
+          message: 'Already marked attendance for today',
+          status: 'info',
+          data: {
+            employee_name: emp.employee_name,
+            employee_code: emp.employee_code,
+            check_in_time: record.check_in_time,
+            current_time: currentTime,
+            hours_since_checkin: parseFloat(hoursWorked.toFixed(2)),
+            minimum_hours_required: parseFloat(minimumWorkHours.toFixed(2)),
+            scheduled_hours: parseFloat(scheduledHours.toFixed(2))
+          }
+        });
+      }
+
+      console.log(`   Action: CHECK-OUT (Valid - ${hoursWorked.toFixed(2)}h worked)`);
+
+      // Get duration settings
       const durationSettings = await getWorkDurationSettings(clientId, db);
 
       // Calculate work hours
