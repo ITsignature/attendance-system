@@ -6,8 +6,26 @@ const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const AttendanceStatusService = require('../services/AttendanceStatusService');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
+
+// File logger for debugging fingerprint endpoint
+const logToFile = (message) => {
+  const logDir = path.join(__dirname, '..', 'logs');
+  const logFile = path.join(logDir, 'fingerprint-debug.log');
+
+  // Create logs directory if it doesn't exist
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+
+  fs.appendFileSync(logFile, logMessage);
+};
 
 // =============================================
 // PUBLIC ENDPOINTS (No Authentication Required)
@@ -149,8 +167,23 @@ router.post('/fingerprint', [
       // ===== CHECK-OUT OR DUPLICATE CHECK-IN =====
       const record = existing[0];
 
+      const debugHeader = `\n========== CHECKOUT VALIDATION DEBUG ==========`;
+      console.log(debugHeader);
+      logToFile(debugHeader);
+
+      const recordLog = `   Existing record found: ${JSON.stringify(record, null, 2)}`;
+      console.log(recordLog);
+      logToFile(recordLog);
+
       if (record.check_out_time) {
-        console.log(`   ⚠️  Already checked out at ${record.check_out_time}`);
+        const alreadyCheckedOut = `   ⚠️  Already checked out at ${record.check_out_time}`;
+        console.log(alreadyCheckedOut);
+        logToFile(alreadyCheckedOut);
+
+        const debugFooter = `========== END CHECKOUT VALIDATION ==========\n`;
+        console.log(debugFooter);
+        logToFile(debugFooter);
+
         return res.status(400).json({
           success: false,
           message: 'You have already checked out today',
@@ -163,26 +196,119 @@ router.post('/fingerprint', [
         });
       }
 
+      const proceedingLog = `   No checkout time found - proceeding with validation`;
+      console.log(proceedingLog);
+      logToFile(proceedingLog);
+
       // Get employee's schedule (handles weekdays & weekends automatically)
       const schedule = await getEmployeeSchedule(employeeId, clientId, db, today);
+      const scheduleLog = `   Schedule retrieved: ${JSON.stringify(schedule, null, 2)}`;
+      console.log(scheduleLog);
+      logToFile(scheduleLog);
+
+      // Helper function to normalize time to HH:MM:SS format
+      const normalizeTime = (timeStr) => {
+        if (!timeStr) return null;
+        const parts = timeStr.split(':');
+        const hh = parts[0]?.padStart(2, '0') || '00';
+        const mm = parts[1]?.padStart(2, '0') || '00';
+        const ss = parts[2]?.padStart(2, '0') || '00';
+        return `${hh}:${mm}:${ss}`;
+      };
 
       // Calculate employee's scheduled work duration in hours
-      const schedIn = new Date(`2000-01-01T${schedule.start_time}:00`);
-      const schedOut = new Date(`2000-01-01T${schedule.end_time}:00`);
+      const normalizedSchedStart = normalizeTime(schedule.start_time);
+      const normalizedSchedEnd = normalizeTime(schedule.end_time);
+
+      const log1 = `   Normalized schedule start: ${normalizedSchedStart}`;
+      console.log(log1);
+      logToFile(log1);
+
+      const log2 = `   Normalized schedule end: ${normalizedSchedEnd}`;
+      console.log(log2);
+      logToFile(log2);
+
+      const schedIn = new Date(`2000-01-01T${normalizedSchedStart}`);
+      const schedOut = new Date(`2000-01-01T${normalizedSchedEnd}`);
       const scheduledHours = (schedOut - schedIn) / (1000 * 60 * 60);
+
+      const log3 = `   Scheduled hours: ${scheduledHours}h`;
+      console.log(log3);
+      logToFile(log3);
 
       // Minimum work time = half of scheduled hours (e.g., 9h schedule → 4.5h minimum)
       const minimumWorkHours = scheduledHours / 2;
+      const log4 = `   Minimum work hours required: ${minimumWorkHours}h`;
+      console.log(log4);
+      logToFile(log4);
 
       // Calculate actual time worked since check-in
-      const checkInDate = new Date(`2000-01-01T${record.check_in_time}:00`);
-      const currentDate = new Date(`2000-01-01T${currentTime}:00`);
+      const normalizedCheckIn = normalizeTime(record.check_in_time);
+      const normalizedCurrentTime = normalizeTime(currentTime);
+
+      const log5 = `   Normalized check-in time: ${normalizedCheckIn}`;
+      console.log(log5);
+      logToFile(log5);
+
+      const log6 = `   Normalized current time: ${normalizedCurrentTime}`;
+      console.log(log6);
+      logToFile(log6);
+
+      const checkInDate = new Date(`2000-01-01T${normalizedCheckIn}`);
+      const currentDate = new Date(`2000-01-01T${normalizedCurrentTime}`);
+
+      const log7 = `   Check-in Date object: ${checkInDate}`;
+      console.log(log7);
+      logToFile(log7);
+
+      const log8 = `   Current Date object: ${currentDate}`;
+      console.log(log8);
+      logToFile(log8);
+
       const hoursWorked = (currentDate - checkInDate) / (1000 * 60 * 60);
+      const log9 = `   Hours worked: ${hoursWorked}h`;
+      console.log(log9);
+      logToFile(log9);
+
+      // Validate date calculations
+      if (isNaN(hoursWorked) || isNaN(minimumWorkHours)) {
+        const errorLog1 = `   ❌ Invalid time calculation detected`;
+        const errorLog2 = `   Check-in: ${record.check_in_time}, Current: ${currentTime}`;
+        const errorLog3 = `========== END CHECKOUT VALIDATION ==========\n`;
+
+        console.log(errorLog1);
+        logToFile(errorLog1);
+        console.log(errorLog2);
+        logToFile(errorLog2);
+        console.log(errorLog3);
+        logToFile(errorLog3);
+
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid time format detected',
+          status: 'error'
+        });
+      }
+
+      const comparisonLog = `\n   COMPARISON: ${hoursWorked}h < ${minimumWorkHours}h = ${hoursWorked < minimumWorkHours}`;
+      console.log(comparisonLog);
+      logToFile(comparisonLog);
 
       // Check if enough time passed for valid checkout
       if (hoursWorked < minimumWorkHours) {
-        console.log(`   ⚠️  Duplicate scan ignored - Too early for checkout`);
-        console.log(`   Hours worked: ${hoursWorked.toFixed(2)}h < Minimum required: ${minimumWorkHours.toFixed(2)}h`);
+        const earlyLog1 = `   ⚠️  Duplicate scan ignored - Too early for checkout`;
+        const earlyLog2 = `   Hours worked: ${hoursWorked.toFixed(2)}h < Minimum required: ${minimumWorkHours.toFixed(2)}h`;
+        const earlyLog3 = `   RETURNING EARLY - NO DATABASE UPDATE`;
+        const earlyLog4 = `========== END CHECKOUT VALIDATION ==========\n`;
+
+        console.log(earlyLog1);
+        logToFile(earlyLog1);
+        console.log(earlyLog2);
+        logToFile(earlyLog2);
+        console.log(earlyLog3);
+        logToFile(earlyLog3);
+        console.log(earlyLog4);
+        logToFile(earlyLog4);
         return res.status(200).json({
           success: false,
           message: 'Already marked attendance for today',
@@ -199,7 +325,16 @@ router.post('/fingerprint', [
         });
       }
 
-      console.log(`   Action: CHECK-OUT (Valid - ${hoursWorked.toFixed(2)}h worked)`);
+      const passLog1 = `\n   ✅ VALIDATION PASSED - Proceeding with checkout`;
+      const passLog2 = `   Action: CHECK-OUT (Valid - ${hoursWorked.toFixed(2)}h worked)`;
+      const passLog3 = `========== END CHECKOUT VALIDATION ==========\n`;
+
+      console.log(passLog1);
+      logToFile(passLog1);
+      console.log(passLog2);
+      logToFile(passLog2);
+      console.log(passLog3);
+      logToFile(passLog3);
 
       // Get duration settings
       const durationSettings = await getWorkDurationSettings(clientId, db);
