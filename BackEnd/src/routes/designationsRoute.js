@@ -9,8 +9,8 @@ router.use(authenticate);
 router.use(ensureClientAccess);
 
 // GET all designations
-router.get('/', 
-  checkPermission('employees.view'),
+router.get('/',
+  checkPermission('designations.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const { department_id } = req.query;
@@ -52,7 +52,7 @@ router.get('/',
 // CREATE designation
 router.post(
   '/',
-  checkPermission('employees.create'),
+  checkPermission('designations.create'),
   asyncHandler(async (req, res) => {
     const { title, department_id, responsibilities = null } = req.body;
     const db = getDB();
@@ -118,10 +118,113 @@ router.post(
 
 
 
+// PUT /designations/:id – Update a designation
+router.put(
+  '/:id',
+  checkPermission('designations.edit'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const designationId = req.params.id;
+    const clientId = req.user.clientId;
+    const { title, department_id, responsibilities, min_salary, max_salary } = req.body;
+
+    // Verify designation exists and belongs to this client
+    const [existing] = await db.execute(
+      `SELECT id, department_id FROM designations WHERE id = ? AND client_id = ? AND is_active = TRUE LIMIT 1`,
+      [designationId, clientId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Designation not found.',
+      });
+    }
+
+    // If department_id is being changed, verify new department exists
+    if (department_id && department_id !== existing[0].department_id) {
+      const [deptCheck] = await db.execute(
+        'SELECT id FROM departments WHERE id = ? AND client_id = ? AND is_active = TRUE',
+        [department_id, clientId]
+      );
+
+      if (deptCheck.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Department not found.',
+        });
+      }
+    }
+
+    // Check for duplicate title in the same department (excluding current designation)
+    if (title) {
+      const targetDeptId = department_id || existing[0].department_id;
+      const [duplicate] = await db.execute(
+        `SELECT id FROM designations
+         WHERE client_id = ? AND department_id = ? AND title = ? AND id != ? AND is_active = TRUE
+         LIMIT 1`,
+        [clientId, targetDeptId, title, designationId]
+      );
+
+      if (duplicate.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'A designation with this title already exists in this department.',
+        });
+      }
+    }
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+
+    if (title !== undefined) {
+      updates.push('title = ?');
+      values.push(title);
+    }
+    if (department_id !== undefined) {
+      updates.push('department_id = ?');
+      values.push(department_id);
+    }
+    if (responsibilities !== undefined) {
+      updates.push('responsibilities = ?');
+      values.push(responsibilities);
+    }
+    if (min_salary !== undefined) {
+      updates.push('min_salary = ?');
+      values.push(min_salary);
+    }
+    if (max_salary !== undefined) {
+      updates.push('max_salary = ?');
+      values.push(max_salary);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update.',
+      });
+    }
+
+    updates.push('updated_at = NOW()');
+    values.push(designationId, clientId);
+
+    await db.execute(
+      `UPDATE designations SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`,
+      values
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Designation updated successfully.',
+    });
+  })
+);
+
 // routes/designations.js
 router.delete(
   '/:id',
-  checkPermission('employees.delete'),
+  checkPermission('designations.delete'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const designationId = req.params.id;

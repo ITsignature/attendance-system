@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Modal,
-  Table, 
-  Button, 
-  TextInput, 
-  Select, 
-  Badge, 
+  Table,
+  Button,
+  TextInput,
+  Select,
+  Badge,
   Card,
   Pagination,
   Spinner
 } from 'flowbite-react';
-import { 
-  HiPlus, 
-  HiPencil, 
-  HiTrash, 
+import {
+  HiPlus,
+  HiPencil,
+  HiTrash,
   HiRefresh,
   HiClock,
   HiCalendar
@@ -23,6 +23,7 @@ import AttendanceForm from './AttendanceForm';
 import { set } from 'lodash';
 import ResolveWorkDurationModal from './ResolveWorkDurationModal'
 import {Link} from 'react-router-dom';
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
 // Types
 interface AttendanceRecord {
@@ -61,8 +62,6 @@ interface AttendanceFilters {
   employeeName: '';
 }
 
-
-
 const AttendanceView: React.FC = () => {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +84,6 @@ const AttendanceView: React.FC = () => {
     employeeName: '', 
   });
 
-
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -93,13 +91,11 @@ const AttendanceView: React.FC = () => {
     recordsPerPage: 50
   });
 
-
   const [showResolve, setShowResolve] = useState(false);
   const [resolveRecord, setResolveRecord] = useState<AttendanceRecord | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<AttendanceRecord | null>(null);
   
-
   // open handler
   const openResolve = (rec: AttendanceRecord) => {
     setResolveRecord(rec);
@@ -143,7 +139,6 @@ const AttendanceView: React.FC = () => {
   //   }
   // };
 
-
   const loadAttendanceRecords = async () => {
   try {
     setLoading(true);
@@ -172,7 +167,6 @@ const AttendanceView: React.FC = () => {
   }
 };
 
-
   const loadEmployees = async () => {
     try {
       const response = await apiService.apiCall('/api/employees');
@@ -186,9 +180,7 @@ const AttendanceView: React.FC = () => {
     }
   };
 
-
 // load non attendant employee
-
 
   // const handleFilterChange = (key: string, value: string) => {
   //   setFilters(prev => ({
@@ -265,7 +257,6 @@ const getWorkDurationBadge = (duration?: string | null) => {
   return <Badge color={color}>{label}</Badge>;
 };
 
-
   const formatTime = (time?: string) => {
     if (!time) return 'Not recorded';
     return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
@@ -283,7 +274,6 @@ const getWorkDurationBadge = (duration?: string | null) => {
       year: 'numeric'
     });
   };
-
 
   /**
  * 2.25  → "2 h 15 m"
@@ -338,8 +328,6 @@ const filteredRecords = attendanceRecords.filter(record =>
   record.employee_name.toLowerCase().includes(filters.employeeName?.toLowerCase() || '')
 );
 
-
-
   return (
     <div className="p-6">
       {/* Header */}
@@ -353,13 +341,11 @@ const filteredRecords = attendanceRecords.filter(record =>
           </p>
         </div>
         <div className="flex gap-2">
-          <Button color="purple" as={Link} to="/manual-attendance">
-        Manual Attendance Sheet
-      </Button>
-        {/* <Button onClick={() => setShowForm(true)}>
-          <HiPlus className="mr-2 h-4 w-4" />
-          Add Attendance
-        </Button> */}
+          <DynamicProtectedComponent permission="attendance.create">
+            <Button color="purple" as={Link} to="/manual-attendance">
+              Manual Attendance Sheet
+            </Button>
+          </DynamicProtectedComponent>
         </div>
       </div>
 
@@ -517,7 +503,6 @@ const filteredRecords = attendanceRecords.filter(record =>
                       })()}
                         {getArrivalStatusBadge(record.arrival_status)}
                   
-                  
                       </Table.Cell>
                       
                       <Table.Cell>
@@ -548,17 +533,20 @@ const filteredRecords = attendanceRecords.filter(record =>
                       
                       <Table.Cell>
                         <div className="flex space-x-2">
-                          <Button
-                          size="sm"
-                          color="warning"
-                          onClick={() => {
-                            setEditingRecord(record);   // opens edit modal via <AttendanceForm>
-                            setShowForm(true);
-                          }}
-                        >
-                          <HiPencil className="h-4 w-4" />
-                        </Button>
-                          <Button
+                          <DynamicProtectedComponent permission="attendance.edit">
+                            <Button
+                              size="sm"
+                              color="warning"
+                              onClick={() => {
+                                setEditingRecord(record);   // opens edit modal via <AttendanceForm>
+                                setShowForm(true);
+                              }}
+                            >
+                              <HiPencil className="h-4 w-4" />
+                            </Button>
+                          </DynamicProtectedComponent>
+                          <DynamicProtectedComponent permission="attendance.delete">
+                            <Button
                               size="sm"
                               color="failure"
                               onClick={() => {
@@ -566,8 +554,9 @@ const filteredRecords = attendanceRecords.filter(record =>
                                 setShowDelete(true);        // opens confirmation modal
                               }}
                             >
-                            <HiTrash className="h-4 w-4" />
-                          </Button>
+                              <HiTrash className="h-4 w-4" />
+                            </Button>
+                          </DynamicProtectedComponent>
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -593,7 +582,6 @@ const filteredRecords = attendanceRecords.filter(record =>
           </>
         )}
       </Card>
-
 
       // place the modal once at the end of the page JSX:
 <ResolveWorkDurationModal
@@ -644,8 +632,6 @@ const filteredRecords = attendanceRecords.filter(record =>
   </Modal.Body>
 </Modal>
 
-
-
       {/* Attendance Form Modal */}
       {showForm && (
         <AttendanceForm
@@ -665,8 +651,6 @@ const filteredRecords = attendanceRecords.filter(record =>
       )}
     </div>
 
-    
-    
   );
   
 };

@@ -9,8 +9,8 @@ router.use(authenticate);
 router.use(ensureClientAccess);
 
 // GET all departments
-router.get('/', 
-  checkPermission('employees.view'),
+router.get('/',
+  checkPermission('departments.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     
@@ -38,97 +38,86 @@ router.get('/',
   })
 );
 
-
-
-
-
-
-
 // GET all departments **and** their employees
-  router.get(
-    '/with-employees',
-    checkPermission('employees.view'),
-    asyncHandler(async (req, res) => {
-      const db = getDB();
-      const clientId = req.user.clientId;
+router.get('/with-employees',
+  checkPermission('departments.view'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const clientId = req.user.clientId;
 
-      // 1️⃣  Departments (same query you already have)
-      const [departments] = await db.execute(
-        `
-          SELECT
-            d.id,
-            d.name,
-            d.description,
-            d.manager_id,
-            (
-              SELECT CONCAT(first_name, ' ', last_name)
-              FROM employees
-              WHERE id = d.manager_id
-            ) AS manager_name,
-            (
-              SELECT COUNT(*)
-              FROM employees
-              WHERE department_id = d.id
-                AND employment_status != 'terminated'
-            ) AS employee_count,
-            d.created_at,
-            d.updated_at
-          FROM departments d
-          WHERE d.client_id = ?
-            AND d.is_active = TRUE
-          ORDER BY d.name ASC
-        `,
-        [clientId]
-      );
-
-      // 2️⃣  Employees (joined so we can expose department name, too)
-      const [employees] = await db.execute(
-        `
+    // 1️⃣  Departments (same query you already have)
+    const [departments] = await db.execute(
+      `
         SELECT
-        e.id,
-        e.employee_code,
-        e.first_name,
-        e.last_name,
-        e.designation_id,
-        des.title AS designation_name,
-        e.employment_status,
-        e.profile_image,
-        e.department_id,
-        d.name              AS department_name
-      FROM employees e
-      /* department join */
-      JOIN departments d
-        ON d.id = e.department_id
-      /* designation join */
-      JOIN designations des
-        ON des.id = e.designation_id
-      WHERE e.client_id = ?
-        AND d.is_active = TRUE
-        AND e.employment_status <> 'terminated'
-      ORDER BY e.first_name, e.last_name
-        `,
-        [clientId]
-      );
+          d.id,
+          d.name,
+          d.description,
+          d.manager_id,
+          (
+            SELECT CONCAT(first_name, ' ', last_name)
+            FROM employees
+            WHERE id = d.manager_id
+          ) AS manager_name,
+          (
+            SELECT COUNT(*)
+            FROM employees
+            WHERE department_id = d.id
+              AND employment_status != 'terminated'
+          ) AS employee_count,
+          d.created_at,
+          d.updated_at
+        FROM departments d
+        WHERE d.client_id = ?
+          AND d.is_active = TRUE
+        ORDER BY d.name ASC
+      `,
+      [clientId]
+    );
 
-      // 3️⃣  Respond
-      res.status(200).json({
-        success: true,
-        data: {
-          departments, // array of departments
-          employees,   // flat array of employees with department_name included
-        },
-      });
-    })
-  );
+    // 2️⃣  Employees (joined so we can expose department name, too)
+    const [employees] = await db.execute(
+      `
+      SELECT
+      e.id,
+      e.employee_code,
+      e.first_name,
+      e.last_name,
+      e.designation_id,
+      des.title AS designation_name,
+      e.employment_status,
+      e.profile_image,
+      e.department_id,
+      d.name              AS department_name
+    FROM employees e
+    /* department join */
+    JOIN departments d
+      ON d.id = e.department_id
+    /* designation join */
+    JOIN designations des
+      ON des.id = e.designation_id
+    WHERE e.client_id = ?
+      AND d.is_active = TRUE
+      AND e.employment_status <> 'terminated'
+    ORDER BY e.first_name, e.last_name
+      `,
+      [clientId]
+    );
 
-
-
-
+    // 3️⃣  Respond
+    res.status(200).json({
+      success: true,
+      data: {
+        departments, // array of departments
+        employees,   // flat array of employees with department_name included
+      },
+    });
+  })
+);
 
 // POST /departments – Add a new department
 router.post(
   '/',
-  checkPermission('employees.create'), 
+  checkPermission('departments.create'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const clientId = req.user.clientId;
@@ -138,9 +127,9 @@ router.post(
       return res.status(400).json({ success: false, message: "Department name is required." });
     }
 
-    // Check for duplicate department name within the same client
+    // Check for duplicate department name within the same client (only active departments)
     const [existing] = await db.execute(
-      `SELECT id FROM departments WHERE client_id = ? AND name = ? LIMIT 1`,
+      `SELECT id FROM departments WHERE client_id = ? AND name = ? AND is_active = TRUE LIMIT 1`,
       [clientId, name]
     );
 
@@ -165,10 +154,90 @@ router.post(
   })
 );
 
+// PUT /departments/:id – Update a department
+router.put(
+  '/:id',
+  checkPermission('departments.edit'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const departmentId = req.params.id;
+    const clientId = req.user.clientId;
+    const { name, description, manager_id, budget } = req.body;
+
+    // Verify department exists and belongs to this client
+    const [existing] = await db.execute(
+      `SELECT id FROM departments WHERE id = ? AND client_id = ? AND is_active = TRUE LIMIT 1`,
+      [departmentId, clientId]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Department not found.',
+      });
+    }
+
+    // Check for duplicate name (excluding current department, only active departments)
+    if (name) {
+      const [duplicate] = await db.execute(
+        `SELECT id FROM departments WHERE client_id = ? AND name = ? AND id != ? AND is_active = TRUE LIMIT 1`,
+        [clientId, name, departmentId]
+      );
+
+      if (duplicate.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Department with the same name already exists.',
+        });
+      }
+    }
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+
+    if (name !== undefined) {
+      updates.push('name = ?');
+      values.push(name);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      values.push(description);
+    }
+    if (manager_id !== undefined) {
+      updates.push('manager_id = ?');
+      values.push(manager_id);
+    }
+    if (budget !== undefined) {
+      updates.push('budget = ?');
+      values.push(budget);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update.',
+      });
+    }
+
+    updates.push('updated_at = NOW()');
+    values.push(departmentId, clientId);
+
+    await db.execute(
+      `UPDATE departments SET ${updates.join(', ')} WHERE id = ? AND client_id = ?`,
+      values
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Department updated successfully.',
+    });
+  })
+);
 
 router.get(
   '/with-designations',
-  checkPermission('employees.view'),
+  checkPermission('departments.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const clientId = req.user.clientId;
@@ -186,6 +255,12 @@ router.get(
           FROM employees
           WHERE id = d.manager_id
         ) AS manager_name,
+        (
+          SELECT COUNT(*)
+          FROM employees
+          WHERE department_id = d.id
+            AND employment_status != 'terminated'
+        ) AS employee_count,
         d.created_at,
         d.updated_at
       FROM departments d
@@ -214,7 +289,6 @@ const [designations] = await db.execute(
   [req.user.clientId]
 );
 
-
     res.status(200).json({
       success: true,
       data: {
@@ -225,13 +299,10 @@ const [designations] = await db.execute(
   })
 );
 
-
-
-
 // routes/departments.js
 router.delete(
   '/:id',
-  checkPermission('employees.delete'),
+  checkPermission('departments.delete'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const departmentId = req.params.id;
@@ -275,7 +346,5 @@ router.delete(
     });
   })
 );
-
-
 
 module.exports = router;

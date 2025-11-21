@@ -94,14 +94,14 @@ const SidebarContent = [
         title: 'Departments',
         icon: IconBuilding,
         href: '/Departments',
-        permission: 'employees.view',
+        permission: 'departments.view',
       },
          {
         id: uniqueId(),
         title: 'Holidays',
         icon: IconCalendar,
         href: '/holidays',
-        permission: 'leaves.view',
+        permission: 'holidays.view',
       },
     
     ],

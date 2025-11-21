@@ -2,6 +2,26 @@
 header('Content-Type: application/json');
 date_default_timezone_set('Asia/Colombo');
 $time = time();
+
+// Forward to new smart attendance system
+$employee_id = $_GET['finger_print_id'];
+$newSystemURL = "https://attendance.itsignaturepvtltd.com/api/api/attendance/fingerprint";
+$postData = json_encode([
+    'fingerprint_id' => $employee_id // Optional
+]);
+$ch = curl_init($newSystemURL);
+curl_setopt($ch, CURLOPT_POST, 1);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+$response = curl_exec($ch);
+curl_close($ch);
+//$data = json_decode($response, true);
+//file_put_contents('response.json', json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+
+
 include('database.php'); 
     $today = date('Y-m-d');
     $dayName = date('l', strtotime($today));
@@ -127,5 +147,8 @@ include('database.php');
         echo json_encode(array('status' => 'error', 'message' => 'Today is Sunday'));
         exit;
     }
+
+
+
 
 ?>

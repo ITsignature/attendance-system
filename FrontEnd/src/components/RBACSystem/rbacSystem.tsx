@@ -117,6 +117,28 @@ export const MODULES = {
       { id: 'holidays.delete', name: 'Delete Holidays', description: 'Remove holidays from the calendar' }
     ]
   },
+  departments: {
+    id: 'departments',
+    name: 'Department Management',
+    description: 'Manage organizational departments',
+    permissions: [
+      { id: 'departments.view', name: 'View Departments', description: 'View departments list and details' },
+      { id: 'departments.create', name: 'Create Departments', description: 'Create new departments' },
+      { id: 'departments.edit', name: 'Edit Departments', description: 'Modify existing departments' },
+      { id: 'departments.delete', name: 'Delete Departments', description: 'Remove departments from system' }
+    ]
+  },
+  designations: {
+    id: 'designations',
+    name: 'Designation Management',
+    description: 'Manage job designations and titles',
+    permissions: [
+      { id: 'designations.view', name: 'View Designations', description: 'View designations list and details' },
+      { id: 'designations.create', name: 'Create Designations', description: 'Create new designations' },
+      { id: 'designations.edit', name: 'Edit Designations', description: 'Modify existing designations' },
+      { id: 'designations.delete', name: 'Delete Designations', description: 'Remove designations from system' }
+    ]
+  },
   rbac: {
     id: 'rbac',
     name: 'Role & Permission Management',
@@ -251,8 +273,8 @@ const initializeAuth = async () => {
             // Load RBAC data AFTER user is confirmed
             console.log('🚀 Initializing RBAC data for user:', user.name);
             await loadRoles();
-            await loadClients();
-            await loadAdminUsers();
+            // Note: loadClients and loadAdminUsers are not implemented yet
+            // They can be loaded on-demand when needed by specific features
             console.log('✅ RBAC data loaded successfully');
             
           } catch (error) {
@@ -373,11 +395,11 @@ const initializeAuth = async () => {
         localStorage.setItem('user', JSON.stringify(user));
         localStorage.setItem('accessToken', response.data.accessToken);
         localStorage.setItem('refreshToken', response.data.refreshToken);
-        
+
         // Set current user state
         setCurrentUser(user);
         setError(null);
-        
+
         console.log('✅ Login successful, user set:', user);
         
         return true;

@@ -4,6 +4,7 @@ import { FaArrowLeft, FaCheck, FaTimes, FaEye, FaFilter, FaPlus } from "react-ic
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLeaveManagement } from "../../hooks/useLeaves";
 import { LeaveRequest } from "../../services/leaveApi";
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
 // =============================================
 // INTERFACES (SIMPLIFIED)
@@ -356,14 +357,16 @@ const handleConfirmAction = async () => {
 
         <div className="flex items-center gap-3">
           {/* CREATE NEW REQUEST BUTTON - PRIMARY ADMIN ACTION */}
-          <Button
-            color="purple"
-            className="flex items-center gap-2"
-            onClick={handleCreateRequest}
-          >
-            <FaPlus className="w-4 h-4" />
-            Create New Request
-          </Button>
+          <DynamicProtectedComponent permission="leaves.create">
+            <Button
+              color="purple"
+              className="flex items-center gap-2"
+              onClick={handleCreateRequest}
+            >
+              <FaPlus className="w-4 h-4" />
+              Create New Request
+            </Button>
+          </DynamicProtectedComponent>
 
           <Button
             color="gray"
@@ -465,22 +468,26 @@ const handleConfirmAction = async () => {
                       <div className="flex items-center gap-1">
                         {canApproveOrReject(status) && (
                           <>
-                            <Button
-                              size="xs"
-                              color="success"
-                              onClick={() => handleApprove(request)}
-                              disabled={submitting}
-                            >
-                              <FaCheck className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="xs"
-                              color="failure"
-                              onClick={() => handleReject(request)}
-                              disabled={submitting}
-                            >
-                              <FaTimes className="w-3 h-3" />
-                            </Button>
+                            <DynamicProtectedComponent permission="leaves.approve">
+                              <Button
+                                size="xs"
+                                color="success"
+                                onClick={() => handleApprove(request)}
+                                disabled={submitting}
+                              >
+                                <FaCheck className="w-3 h-3" />
+                              </Button>
+                            </DynamicProtectedComponent>
+                            <DynamicProtectedComponent permission="leaves.reject">
+                              <Button
+                                size="xs"
+                                color="failure"
+                                onClick={() => handleReject(request)}
+                                disabled={submitting}
+                              >
+                                <FaTimes className="w-3 h-3" />
+                              </Button>
+                            </DynamicProtectedComponent>
                           </>
                         )}
                       </div>

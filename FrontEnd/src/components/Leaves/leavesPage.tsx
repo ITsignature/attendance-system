@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Button, Alert, Spinner, Card } from "flowbite-react";
 import { useNavigate } from "react-router-dom";
 import { useLeaveDashboard } from "../../hooks/useLeaves";
+import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
 // =============================================
 // INTERFACES (SIMPLIFIED)
@@ -168,19 +169,21 @@ const LeavePage: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Leave Overview
           </h1>
-          
-          <Button
-            color="blue"
-            className="flex items-center gap-2"
-            onClick={handleManageRequests}
-          >
-            📋 Manage All Requests
-            {getPendingRequestsCount() > 0 && (
-              <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-1 text-xs font-bold min-w-[20px] h-5 flex items-center justify-center">
-                {getPendingRequestsCount()}
-              </span>
-            )}
-          </Button>
+
+          <DynamicProtectedComponent permission="leaves.viewRequests">
+            <Button
+              color="blue"
+              className="flex items-center gap-2"
+              onClick={handleManageRequests}
+            >
+              📋 Manage All Requests
+              {getPendingRequestsCount() > 0 && (
+                <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-1 text-xs font-bold min-w-[20px] h-5 flex items-center justify-center">
+                  {getPendingRequestsCount()}
+                </span>
+              )}
+            </Button>
+          </DynamicProtectedComponent>
         </div>
 
         {/* Right: Date Picker & Refresh */}

@@ -174,20 +174,20 @@ const Router = [
       },
       
       // Department Management
-      { 
-        path: '/Departments', 
-        exact: true, 
+      {
+        path: '/Departments',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="employees.view">
+          <DynamicProtectedRoute permission="departments.view">
             <ViewDepartments />
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/departments-manage', 
-        exact: true, 
+      {
+        path: '/departments-manage',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="employees.view">
+          <DynamicProtectedRoute permission="departments.view">
             <DepartmentManagement />
           </DynamicProtectedRoute>
         )
@@ -224,29 +224,29 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/leave-requests', 
-        exact: true, 
+      {
+        path: '/leave-requests',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="leaves.approve">
+          <DynamicProtectedRoute permission="leaves.viewRequests">
             <LeaveRequestsManagement />
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/holidays', 
-        exact: true, 
+      {
+        path: '/holidays',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="leaves.view">
+          <DynamicProtectedRoute permission="holidays.view">
             <HolidayPage />
           </DynamicProtectedRoute>
         )
       },
-      { 
-  path: '/leave-request/new', 
-  exact: true, 
+      {
+  path: '/leave-request/new',
+  exact: true,
   element: (
-    <DynamicProtectedRoute permission="leaves.approve">
+    <DynamicProtectedRoute permission="leaves.create">
       <LeaveRequestForm />
     </DynamicProtectedRoute>
   )
