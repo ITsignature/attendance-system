@@ -294,12 +294,22 @@ router.post('/fingerprint', [
       console.log(comparisonLog);
       logToFile(comparisonLog);
 
+      // Check if current time is past scheduled end time
+      const isPastScheduledEndTime = currentDate >= schedOut;
+      const endTimeLog = `   Current time (${normalizedCurrentTime}) >= Scheduled end (${normalizedSchedEnd}) = ${isPastScheduledEndTime}`;
+      console.log(endTimeLog);
+      logToFile(endTimeLog);
+
       // Check if enough time passed for valid checkout
-      if (hoursWorked < minimumWorkHours) {
+      // Allow checkout if EITHER:
+      // 1. Worked minimum hours OR
+      // 2. Current time is past scheduled end time
+      if (hoursWorked < minimumWorkHours && !isPastScheduledEndTime) {
         const earlyLog1 = `   ⚠️  Duplicate scan ignored - Too early for checkout`;
         const earlyLog2 = `   Hours worked: ${hoursWorked.toFixed(2)}h < Minimum required: ${minimumWorkHours.toFixed(2)}h`;
-        const earlyLog3 = `   RETURNING EARLY - NO DATABASE UPDATE`;
-        const earlyLog4 = `========== END CHECKOUT VALIDATION ==========\n`;
+        const earlyLog3 = `   Current time is before scheduled end time`;
+        const earlyLog4 = `   RETURNING EARLY - NO DATABASE UPDATE`;
+        const earlyLog5 = `========== END CHECKOUT VALIDATION ==========\n`;
 
         console.log(earlyLog1);
         logToFile(earlyLog1);
@@ -309,6 +319,8 @@ router.post('/fingerprint', [
         logToFile(earlyLog3);
         console.log(earlyLog4);
         logToFile(earlyLog4);
+        console.log(earlyLog5);
+        logToFile(earlyLog5);
         return res.status(200).json({
           success: false,
           message: 'Already marked attendance for today',
@@ -320,7 +332,8 @@ router.post('/fingerprint', [
             current_time: currentTime,
             hours_since_checkin: parseFloat(hoursWorked.toFixed(2)),
             minimum_hours_required: parseFloat(minimumWorkHours.toFixed(2)),
-            scheduled_hours: parseFloat(scheduledHours.toFixed(2))
+            scheduled_hours: parseFloat(scheduledHours.toFixed(2)),
+            scheduled_end_time: normalizedSchedEnd
           }
         });
       }

@@ -862,7 +862,6 @@ class PayrollRunService {
         console.log(`${'='.repeat(70)}\n`);
     }
 
-
     /**
      * Calculate attendance summary statistics
      * Aggregates worked hours, overtime, attendance counts, and late minutes
@@ -1958,7 +1957,6 @@ class PayrollRunService {
 
         console.log(`\n      ❌ Absent Days Deduction for ${employeeName} (${employeeCode}): Rs.${absentDaysDeduction.toFixed(2)}`);
         console.log(`      Total Shortfall Breakdown: Unpaid Leaves (${unpaidLeaveDeduction.toFixed(2)}) + Time Variance (${timeVarianceDeduction.toFixed(2)}) + Absent Days (${absentDaysDeduction.toFixed(2)}) = ${deduction.toFixed(2)}`);
-
 
         return {
             total: deduction,
@@ -3765,12 +3763,18 @@ class PayrollRunService {
                         total: 0
                     };
                 } else {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const periodEnd = new Date(period.period_end_date);
+                    periodEnd.setHours(23, 59, 59, 999);
+
+                    const isCurrentPeriod = today <= periodEnd;
                     // Get attendance data (this still needs individual calculation)
                     attendanceData = await this.calculateEarnedSalary(
                         emp.employee_id,
                         runId,
                         parseFloat(emp.base_salary) || 0,
-                        true  // Include today's live session for real-time preview
+                        isCurrentPeriod  // Include today's live session for real-time preview
                     );
                 }
 
