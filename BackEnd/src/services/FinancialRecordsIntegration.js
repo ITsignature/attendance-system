@@ -150,6 +150,7 @@ class FinancialRecordsIntegration {
                 advance_amount,
                 description,
                 deduction_start_date,
+                required_date,
                 deduction_months,
                 monthly_deduction,
                 total_deducted,
@@ -178,7 +179,7 @@ class FinancialRecordsIntegration {
 
         for (const advance of advances) {
             // Check if deduction should happen in this period
-            const shouldDeduct = this.shouldDeductInPeriod(advance.deduction_start_date, payrollPeriod);
+            const shouldDeduct = this.shouldDeductInPeriod(advance.required_date, payrollPeriod);
 
             if (shouldDeduct && advance.remaining_amount > 0) {
                 // Calculate deduction amount
