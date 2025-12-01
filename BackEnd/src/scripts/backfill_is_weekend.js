@@ -21,8 +21,8 @@ async function backfillIsWeekend() {
     const [records] = await db.execute(`
       SELECT id, date
       FROM attendance
-      WHERE date >= '2025-10-20'
-        AND date <= '2025-11-06'
+      WHERE date >= '2025-11-28'
+        AND date <= '2025-11-29'
       ORDER BY date DESC
     `);
 

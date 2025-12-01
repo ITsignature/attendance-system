@@ -1,0 +1,9 @@
+[2025-12-01T09:30:50.535Z] [INFO] 🚀 Payroll calculation logging started for run: ce2e504f-83f2-44c5-ba5d-d0c6b5fb1fbb
+[2025-12-01T09:30:50.535Z] [INFO] 📁 Log file: D:\attendance-system\BackEnd\logs\payroll-run-ce2e504f-83f2-44c5-ba5d-d0c6b5fb1fbb-2025-12-01T09-30-50-534Z.txt
+[2025-12-01T09:30:50.535Z] [INFO] ⏰ Started at: 2025-12-01T09:30:50.535Z
+[2025-12-01T09:30:50.535Z] [INFO] ================================================================================
+[2025-12-01T09:30:50.535Z] [LOG] 📊 [OPTIMIZED] Fetching live payroll data for run: ce2e504f-83f2-44c5-ba5d-d0c6b5fb1fbb
+[2025-12-01T09:30:51.004Z] [ERROR] ❌ Live payroll data fetch failed: {}
+[2025-12-01T09:30:51.011Z] [INFO] ================================================================================
+[2025-12-01T09:30:51.011Z] [INFO] ⏰ Completed at: 2025-12-01T09:30:51.011Z
+[2025-12-01T09:30:51.011Z] [INFO] 📊 Total log entries: 8
