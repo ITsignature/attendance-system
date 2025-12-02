@@ -4,7 +4,7 @@ const router = express.Router();
 const { body, validationResult, query } = require('express-validator');
 const { getDB } = require('../config/database');
 const { authenticate } = require('../middleware/authMiddleware');
-const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
+const { checkPermission,checkAnyPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 
 // Apply authentication to all settings routes
@@ -98,8 +98,10 @@ const validateSettingValue = (key, value, type) => {
 // =============================================
 // GET ALL SETTINGS
 // =============================================
-router.get('/', 
-  checkPermission('settings.view'),
+router.get('/',
+  checkAnyPermission(['settings.attendance.view', 'settings.leaves.view', 'settings.payroll.view',
+                      'settings.payroll_components.view', 'settings.employee_allowances.view',
+                      'settings.employee_deductions.view']),
   asyncHandler(async (req, res) => {
     const db = getDB();
     
@@ -184,8 +186,10 @@ function isValidJson(str) {
 // =============================================
 // GET SPECIFIC SETTING
 // =============================================
-router.get('/:key', 
-  checkPermission('settings.view'),
+router.get('/:key',
+  checkAnyPermission(['settings.attendance.view', 'settings.leaves.view', 'settings.payroll.view',
+                      'settings.payroll_components.view', 'settings.employee_allowances.view',
+                      'settings.employee_deductions.view']),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const { key } = req.params;
@@ -297,8 +301,7 @@ router.get('/public/all',
 // =============================================
 // UPDATE SINGLE SETTING
 // =============================================
-router.put('/:key', 
-  checkPermission('settings.edit'),
+router.put('/:key',
   [
     body('value').notEmpty().withMessage('Value is required'),
     body('description').optional().isString().isLength({ max: 500 })
@@ -322,6 +325,24 @@ router.put('/:key',
         success: false,
         message: 'Invalid setting key'
       });
+    }
+
+    // Check permission based on setting category
+    const { checkPermission } = require('../middleware/rbacMiddleware');
+    const attendanceSettings = ['working_hours_per_day', 'work_start_time', 'work_end_time', 'late_threshold_minutes', 'overtime_rate_multiplier', 'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'weekend_working_days', 'working_hours_config', 'day_specific_schedules'];
+    const leaveSettings = ['paid_leaves_per_month'];
+    const payrollSettings = ['payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'overtime_enabled'];
+
+    if (attendanceSettings.includes(key)) {
+      checkPermission('settings.attendance.edit')(req, res, () => {});
+    } else if (leaveSettings.includes(key)) {
+      checkPermission('settings.leaves.edit')(req, res, () => {});
+    } else if (payrollSettings.includes(key)) {
+      checkPermission('settings.payroll.edit')(req, res, () => {});
+    } else {
+      // For other settings, require any edit permission
+      const { checkAnyPermission } = require('../middleware/rbacMiddleware');
+      checkAnyPermission(['settings.attendance.edit', 'settings.leaves.edit', 'settings.payroll.edit'])(req, res, () => {});
     }
 
     const settingType = getSettingType(key, value);
@@ -373,7 +394,7 @@ router.put('/:key',
 // BULK UPDATE SETTINGS
 // =============================================
 router.put('/', [
-  checkPermission('settings.edit'),
+  checkAnyPermission(['settings.attendance.edit', 'settings.leaves.edit', 'settings.payroll.edit']),
   body('settings').isObject().withMessage('Settings must be an object')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -640,8 +661,8 @@ router.put('/', [
 // =============================================
 // DELETE SETTING (Reset to system default)
 // =============================================
-router.delete('/:key', 
-  checkPermission('settings.edit'),
+router.delete('/:key',
+  checkAnyPermission(['settings.attendance.edit', 'settings.leaves.edit', 'settings.payroll.edit']),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const { key } = req.params;
@@ -679,8 +700,10 @@ router.delete('/:key',
 // =============================================
 // GET SETTING CATEGORIES
 // =============================================
-router.get('/meta/categories', 
-  checkPermission('settings.view'),
+router.get('/meta/categories',
+  checkAnyPermission(['settings.attendance.view', 'settings.leaves.view', 'settings.payroll.view',
+                      'settings.payroll_components.view', 'settings.employee_allowances.view',
+                      'settings.employee_deductions.view']),
   asyncHandler(async (req, res) => {
     const categories = {
       general: {
@@ -740,8 +763,8 @@ router.get('/meta/categories',
 // =============================================
 // RESET ALL SETTINGS TO DEFAULT
 // =============================================
-router.post('/reset-all', 
-  checkPermission('settings.edit'),
+router.post('/reset-all',
+  checkAnyPermission(['settings.attendance.edit', 'settings.leaves.edit', 'settings.payroll.edit']),
   asyncHandler(async (req, res) => {
     const db = getDB();
 
@@ -764,8 +787,8 @@ router.post('/reset-all',
 // =============================================
 // EXPORT SETTINGS
 // =============================================
-router.get('/export/backup', 
-  checkPermission('settings.view'),
+router.get('/export/backup',
+  checkAnyPermission(['settings.attendance.view', 'settings.leaves.view', 'settings.payroll.view']),
   asyncHandler(async (req, res) => {
     const db = getDB();
     
@@ -818,7 +841,7 @@ router.get('/export/backup',
 
 // GET day-specific schedules
 router.get('/day-specific-schedules',
-  checkPermission('settings.view'),
+  checkPermission('settings.attendance.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     
@@ -853,7 +876,7 @@ router.get('/day-specific-schedules',
 
 // POST/PUT day-specific schedules
 router.post('/day-specific-schedules',
-  checkPermission('settings.edit'),
+  checkPermission('settings.attendance.edit'),
   [
     body('schedules').isObject().withMessage('Schedules must be an object'),
     body('schedules.*.scheduled_hours').optional().isFloat({ min: 0, max: 24 }).withMessage('Scheduled hours must be between 0 and 24'),
@@ -945,7 +968,7 @@ router.post('/day-specific-schedules',
 
 // DELETE specific day schedule
 router.delete('/day-specific-schedules/:dayName',
-  checkPermission('settings.edit'),
+  checkPermission('settings.attendance.edit'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const { dayName } = req.params;

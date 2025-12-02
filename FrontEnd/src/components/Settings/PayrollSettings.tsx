@@ -50,7 +50,7 @@ const PayrollSettings: React.FC = () => {
         <div className="flex items-center mb-2">
           <Settings className="w-6 h-6 mr-3 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Payroll Configuration
+            Payroll Component Configuration
           </h2>
         </div>
         <p className="text-gray-600 dark:text-gray-400">

@@ -167,7 +167,7 @@ router.get('/periods/available',
  * Get all payroll components
  */
 router.get('/components',
-    checkPermission('payroll.view'),
+    checkPermission('settings.payroll_components.view'),
     asyncHandler(async (req, res) => {
         const clientId = req.user.clientId;
         const db = await getDB();
@@ -213,7 +213,7 @@ router.get('/components',
  * Create new payroll component
  */
 router.post('/components',
-    checkPermission('payroll.edit'),
+    checkPermission('settings.payroll_components.add'),
     [
         body('component_name').notEmpty().withMessage('Component name is required'),
         body('component_type').isIn(['earning', 'deduction']).withMessage('Component type must be earning or deduction'),
@@ -292,7 +292,7 @@ router.post('/components',
  * Update payroll component
  */
 router.put('/components/:id',
-    checkPermission('payroll.edit'),
+    checkPermission('settings.payroll_components.edit'),
     [
         param('id').isUUID().withMessage('Valid component ID is required'),
         body('component_name').optional().notEmpty(),
@@ -377,7 +377,7 @@ router.put('/components/:id',
  * Delete payroll component
  */
 router.delete('/components/:id',
-    checkPermission('payroll.edit'),
+    checkPermission('settings.payroll_components.delete'),
     param('id').isUUID().withMessage('Valid component ID is required'),
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -425,7 +425,7 @@ router.delete('/components/:id',
  * Get employee allowances
  */
 router.get('/employee-allowances',
-    checkPermission('payroll.view'),
+    checkPermission('settings.employee_allowances.view'),
     [
         query('employee_id').optional().isUUID(),
         query('active_only').optional().isBoolean()
@@ -488,7 +488,8 @@ router.get('/employee-allowances',
  * Create employee allowance
  */
 router.post('/employee-allowances',
-    checkPermission('payroll.edit'),
+    
+    checkPermission('settings.employee_allowances.add'),
     [
         body('employee_id').isUUID().withMessage('Valid employee ID is required'),
         body('allowance_type').notEmpty().withMessage('Allowance type is required'),
@@ -522,7 +523,7 @@ router.post('/employee-allowances',
             is_percentage = false,
             is_taxable = true,
             effective_from,
-            effective_to
+            effective_to = null
         } = req.body;
 
         try {
@@ -558,7 +559,7 @@ router.post('/employee-allowances',
  * Update employee allowance
  */
 router.put('/employee-allowances/:id',
-    checkPermission('payroll.edit'),
+    checkPermission('settings.employee_allowances.edit'),
     [
         param('id').isUUID().withMessage('Valid allowance ID is required'),
         body('allowance_type').optional().notEmpty(),
@@ -637,7 +638,7 @@ router.put('/employee-allowances/:id',
  * Delete employee allowance
  */
 router.delete('/employee-allowances/:id',
-    checkPermission('payroll.delete'),
+    checkPermission('settings.employee_allowances.delete'),
     param('id').isUUID().withMessage('Valid allowance ID is required'),
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -685,7 +686,7 @@ router.delete('/employee-allowances/:id',
  * Get employee deductions
  */
 router.get('/employee-deductions',
-    checkPermission('payroll.view'),
+    checkPermission('settings.employee_deductions.view'),
     [
         query('employee_id').optional().isUUID(),
         query('active_only').optional().isBoolean()
@@ -749,7 +750,7 @@ router.get('/employee-deductions',
  * Create employee deduction
  */
 router.post('/employee-deductions',
-    checkPermission('payroll.edit'),
+    checkPermission('settings.employee_deductions.add'),
     [
         body('employee_id').isUUID().withMessage('Valid employee ID is required'),
         body('deduction_type').notEmpty().withMessage('Deduction type is required'),
@@ -821,7 +822,7 @@ router.post('/employee-deductions',
  * Update employee deduction
  */
 router.put('/employee-deductions/:id',
-    checkPermission('payroll.edit'),
+    checkPermission('settings.employee_deductions.edit'),
     [
         param('id').isUUID().withMessage('Valid deduction ID is required'),
         body('deduction_type').optional().notEmpty(),
@@ -901,7 +902,7 @@ router.put('/employee-deductions/:id',
  * Delete employee deduction
  */
 router.delete('/employee-deductions/:id',
-    checkPermission('payroll.delete'),
+    checkPermission('settings.employee_deductions.delete'),
     param('id').isUUID().withMessage('Valid deduction ID is required'),
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -1600,7 +1601,6 @@ router.post('/cron/auto-create',
         });
     })
 );
-
 
 /**
  * GET /api/payroll-runs/:runId/employee/:employeeId/daily-details

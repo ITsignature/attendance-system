@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import settingsApi from '../../services/settingsApi';
 import PayrollSettings from './PayrollSettings';
+import { useDynamicRBAC, DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
 import {
   Settings,
@@ -18,16 +19,18 @@ import {
 } from 'lucide-react';
 
 const SettingsWithBackend = () => {
-  const { 
-    settings, 
-    loading, 
-    error, 
+  const {
+    settings,
+    loading,
+    error,
     fetchSettings,
-    updateMultipleSettings, 
-    resetAllSettings 
+    updateMultipleSettings,
+    resetAllSettings
   } = useSettings();
 
-  const [activeSection, setActiveSection] = useState('attendance');
+  const { hasPermission } = useDynamicRBAC();
+
+  const [activeSection, setActiveSection] = useState<string>('');
   // FIX: Initialize with null instead of empty object
   const [localSettings, setLocalSettings] = useState<Record<string, any> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -145,12 +148,22 @@ useEffect(() => {
   }
 
   const settingSections = [
-    // { id: 'general', label: 'General', icon: Settings },
-    { id: 'attendance', label: 'Attendance', icon: Clock },
-    { id: 'leaves', label: 'Leaves', icon: Calendar },
-    { id: 'payroll', label: 'Payroll', icon: DollarSign },
-    { id: 'payroll-config', label: 'Payroll Configuration', icon: Building }
+    // { id: 'general', label: 'General', icon: Settings, permission: '' },
+    { id: 'attendance', label: 'Attendance', icon: Clock, permission: 'settings.attendance.view' },
+    { id: 'leaves', label: 'Leaves', icon: Calendar, permission: 'settings.leaves.view' },
+    { id: 'payroll', label: 'Payroll', icon: DollarSign, permission: 'settings.payroll.view' },
+    { id: 'payroll-config', label: 'Payroll Component Configuration', icon: Building, permission: 'settings.payroll_components.view' }
   ];
+
+  // Filter sections based on permissions
+  const visibleSections = settingSections.filter(section => hasPermission(section.permission));
+
+  // Set initial active section to first visible section
+  useEffect(() => {
+    if (!activeSection && visibleSections.length > 0) {
+      setActiveSection(visibleSections[0].id);
+    }
+  }, [visibleSections]);
 
 const updateLocalSetting = (key: string, value: any) => {
   console.log(`🔍 DEBUG updateLocalSetting - Key: "${key}", Value: "${value}", Type: ${typeof value}`);
@@ -506,7 +519,7 @@ const hhmmToMinutes = (t) => {
               </div>
 
               {/* WEEKEND WORKING DAYS CONFIGURATION */}
-              <div className="border-t pt-6 mt-6">
+              {/* <div className="border-t pt-6 mt-6">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
                   Weekend Working Days
                 </h4>
@@ -561,10 +574,10 @@ const hhmmToMinutes = (t) => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Day-Specific Schedules Configuration */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+              {/* <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
                   Day-Specific Schedule Override
                 </h4>
@@ -698,7 +711,7 @@ const hhmmToMinutes = (t) => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
         );
@@ -942,7 +955,7 @@ const hhmmToMinutes = (t) => {
                   Settings Categories
                 </h2>
                 <nav className="space-y-2">
-                  {settingSections.map((section) => {
+                  {visibleSections.map((section) => {
                     const Icon = section.icon;
                     return (
                       <button
