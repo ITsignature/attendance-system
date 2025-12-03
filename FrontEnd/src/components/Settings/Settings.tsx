@@ -136,17 +136,8 @@ useEffect(() => {
   localSettings?.work_end_time
 ]);
 
-    if (loading || localSettings === null) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading settings...</span>
-        </div>
-      </div>
-    );
-  }
-
+  // Set initial active section to first visible section
+  // Must be before early return to maintain consistent hook order
   const settingSections = [
     // { id: 'general', label: 'General', icon: Settings, permission: '' },
     { id: 'attendance', label: 'Attendance', icon: Clock, permission: 'settings.attendance.view' },
@@ -158,12 +149,22 @@ useEffect(() => {
   // Filter sections based on permissions
   const visibleSections = settingSections.filter(section => hasPermission(section.permission));
 
-  // Set initial active section to first visible section
   useEffect(() => {
     if (!activeSection && visibleSections.length > 0) {
       setActiveSection(visibleSections[0].id);
     }
-  }, [visibleSections]);
+  }, [visibleSections, activeSection]);
+
+    if (loading || localSettings === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading settings...</span>
+        </div>
+      </div>
+    );
+  }
 
 const updateLocalSetting = (key: string, value: any) => {
   console.log(`🔍 DEBUG updateLocalSetting - Key: "${key}", Value: "${value}", Type: ${typeof value}`);
@@ -204,7 +205,7 @@ const handleSave = async () => {
     Object.entries(localSettings).forEach(([key, value]) => {
       const currentValue = settings[key]?.value;
       const hasChanged = currentValue !== value;
-      
+
       console.log(`🔍 DEBUG comparing ${key}:`, {
         current: currentValue,
         local: value,
@@ -212,10 +213,10 @@ const handleSave = async () => {
         currentType: typeof currentValue,
         localType: typeof value
       });
-      
+
       if (hasChanged) {
         // Additional validation for time fields
-        if ((key === 'work_start_time' || key === 'work_end_time') && 
+        if ((key === 'work_start_time' || key === 'work_end_time') &&
             (value === '' || value === null || value === undefined)) {
           console.log(`❌ DEBUG - Skipping ${key} due to empty value`);
           return;
@@ -229,11 +230,11 @@ const handleSave = async () => {
     console.log('🔍 Current settings state:', settings);
 
     if (Object.keys(changedSettings).length > 0) {
-      const success = await updateMultipleSettings(changedSettings);
-      if (success) {
+      const result = await updateMultipleSettings(changedSettings);
+      if (result.success) {
         setHasChanges(false);
         alert('Settings saved successfully!');
-        
+
         // 🔧 FIX: Force refresh localSettings after successful save
         // This ensures UI state matches backend immediately
         console.log('🔄 Refreshing local settings after save...');
@@ -248,9 +249,20 @@ const handleSave = async () => {
             setLocalSettings({...converted}); // Force new object reference
           }
         }, 100); // Small delay to ensure hook state is updated
-        
+
       } else {
-        alert('Failed to save settings. Please try again.');
+        // Handle permission errors and other failures
+        const errorMessage = result.error || 'Failed to save settings. Please try again.';
+
+        // Check if it's a permission error
+        if (errorMessage.includes('Access denied') || errorMessage.includes('permission')) {
+          alert('You do not have permission to modify these settings.');
+        } else {
+          alert(errorMessage);
+        }
+
+        // Stay on the page - don't redirect
+        console.error('Settings save failed:', errorMessage);
       }
     } else {
       setHasChanges(false);
@@ -258,7 +270,14 @@ const handleSave = async () => {
     }
   } catch (error) {
     console.error('Error saving settings:', error);
-    alert('An error occurred while saving settings.');
+    const errorMsg = error instanceof Error ? error.message : 'An error occurred while saving settings.';
+
+    // Check if it's a permission error
+    if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+      alert('You do not have permission to modify these settings.');
+    } else {
+      alert(errorMsg);
+    }
   } finally {
     setSaving(false);
   }
@@ -268,16 +287,33 @@ const handleSave = async () => {
     if (confirm('Are you sure you want to reset all settings to default values?')) {
       setSaving(true);
       try {
-        const success = await resetAllSettings();
-        if (success) {
+        const result = await resetAllSettings();
+        if (result.success) {
           setHasChanges(false);
           alert('All settings reset to defaults successfully!');
         } else {
-          alert('Failed to reset settings. Please try again.');
+          // Handle permission errors and other failures
+          const errorMessage = result.error || 'Failed to reset settings. Please try again.';
+
+          // Check if it's a permission error
+          if (errorMessage.includes('Access denied') || errorMessage.includes('permission')) {
+            alert('You do not have permission to reset these settings.');
+          } else {
+            alert(errorMessage);
+          }
+
+          console.error('Settings reset failed:', errorMessage);
         }
       } catch (error) {
         console.error('Error resetting settings:', error);
-        alert('An error occurred while resetting settings.');
+        const errorMsg = error instanceof Error ? error.message : 'An error occurred while resetting settings.';
+
+        // Check if it's a permission error
+        if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+          alert('You do not have permission to reset these settings.');
+        } else {
+          alert(errorMsg);
+        }
       } finally {
         setSaving(false);
       }
