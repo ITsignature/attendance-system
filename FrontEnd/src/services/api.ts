@@ -248,6 +248,13 @@ class ApiService {
     if (res.status === 401) {
       this.removeToken();
     }
+
+    // If there are validation errors, include them in the error message
+    if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+      const validationMessages = data.errors.map((err: any) => err.msg).join(', ');
+      throw new Error(validationMessages);
+    }
+
     throw new Error(data?.message || `HTTP ${res.status}`);
   }
 
