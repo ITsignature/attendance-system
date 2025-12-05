@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, DollarSign, User } from 'lucide-react';
 import payrollConfigApi, { EmployeeAllowance, CreateEmployeeAllowanceRequest } from '../../../services/payrollConfigApi';
 import apiService from '../../../services/api';
+import { useDynamicRBAC } from '../../RBACSystem/rbacSystem';
 
 interface Employee {
   id: string;
@@ -13,6 +14,7 @@ interface Employee {
 }
 
 const EmployeeAllowances: React.FC = () => {
+  const { hasPermission } = useDynamicRBAC();
   const [allowances, setAllowances] = useState<EmployeeAllowance[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +22,11 @@ const EmployeeAllowances: React.FC = () => {
   const [editingAllowance, setEditingAllowance] = useState<EmployeeAllowance | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+
+  // Permission checks
+  const canAdd = hasPermission('settings.employee_allowances.add');
+  const canEdit = hasPermission('settings.employee_allowances.edit');
+  const canDelete = hasPermission('settings.employee_allowances.delete');
 
   const [formData, setFormData] = useState<CreateEmployeeAllowanceRequest>({
     employee_id: '',
@@ -83,7 +90,14 @@ const EmployeeAllowances: React.FC = () => {
       fetchData();
     } catch (error) {
       console.error('Error saving allowance:', error);
-      alert('Failed to save allowance');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to save allowance';
+
+      // Check if it's a permission error
+      if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+        alert('You do not have permission to modify these settings.');
+      } else {
+        alert(errorMsg);
+      }
     }
   };
 
@@ -110,7 +124,14 @@ const EmployeeAllowances: React.FC = () => {
         fetchData();
       } catch (error) {
         console.error('Error deleting allowance:', error);
-        alert('Failed to delete allowance');
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete allowance';
+
+        // Check if it's a permission error
+        if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+          alert('You do not have permission to delete these settings.');
+        } else {
+          alert(errorMsg);
+        }
       }
     }
   };
@@ -158,13 +179,15 @@ const EmployeeAllowances: React.FC = () => {
             Assign specific allowances to individual employees
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Allowance
-        </button>
+        {canAdd && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Allowance
+          </button>
+        )}
       </div>
 
       {/* Search and Filter */}
@@ -249,18 +272,22 @@ const EmployeeAllowances: React.FC = () => {
               </div>
 
               <div className="flex space-x-2">
-                <button
-                  onClick={() => handleEdit(allowance)}
-                  className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(allowance.id)}
-                  className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors dark:text-red-400 dark:hover:text-red-200 dark:hover:bg-red-900"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => handleEdit(allowance)}
+                    className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => handleDelete(allowance.id)}
+                    className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors dark:text-red-400 dark:hover:text-red-200 dark:hover:bg-red-900"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

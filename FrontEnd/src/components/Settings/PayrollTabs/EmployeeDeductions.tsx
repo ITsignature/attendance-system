@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Minus, User, AlertCircle } from 'lucide-react';
 import payrollConfigApi, { EmployeeDeduction, CreateEmployeeDeductionRequest } from '../../../services/payrollConfigApi';
 import apiService from '../../../services/api';
+import { useDynamicRBAC } from '../../RBACSystem/rbacSystem';
 
 interface Employee {
   id: string;
@@ -13,6 +14,7 @@ interface Employee {
 }
 
 const EmployeeDeductions: React.FC = () => {
+  const { hasPermission } = useDynamicRBAC();
   const [deductions, setDeductions] = useState<EmployeeDeduction[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +22,11 @@ const EmployeeDeductions: React.FC = () => {
   const [editingDeduction, setEditingDeduction] = useState<EmployeeDeduction | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+
+  // Permission checks
+  const canAdd = hasPermission('settings.employee_deductions.add');
+  const canEdit = hasPermission('settings.employee_deductions.edit');
+  const canDelete = hasPermission('settings.employee_deductions.delete');
 
   const [formData, setFormData] = useState<CreateEmployeeDeductionRequest>({
     employee_id: '',
@@ -44,7 +51,22 @@ const EmployeeDeductions: React.FC = () => {
       ]);
 
       setDeductions(deductionsData);
-      setEmployees(employeesResponse.data || []);
+
+      // Handle different possible response structures
+      let employeesArray: Employee[] = [];
+      if (employeesResponse.data) {
+        if (Array.isArray(employeesResponse.data)) {
+          employeesArray = employeesResponse.data;
+        } else if (employeesResponse.data.employees && Array.isArray(employeesResponse.data.employees)) {
+          employeesArray = employeesResponse.data.employees;
+        } else if (employeesResponse.data.data && Array.isArray(employeesResponse.data.data)) {
+          employeesArray = employeesResponse.data.data;
+        }
+      }
+
+      console.log('Employees response:', employeesResponse);
+      console.log('Parsed employees array:', employeesArray);
+      setEmployees(employeesArray);
     } catch (error) {
       console.error('Error fetching data:', error);
       alert('Failed to fetch data');
@@ -68,7 +90,14 @@ const EmployeeDeductions: React.FC = () => {
       fetchData();
     } catch (error) {
       console.error('Error saving deduction:', error);
-      alert('Failed to save deduction');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to save deduction';
+
+      // Check if it's a permission error
+      if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+        alert('You do not have permission to modify these settings.');
+      } else {
+        alert(errorMsg);
+      }
     }
   };
 
@@ -96,7 +125,14 @@ const EmployeeDeductions: React.FC = () => {
         fetchData();
       } catch (error) {
         console.error('Error deleting deduction:', error);
-        alert('Failed to delete deduction');
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete deduction';
+
+        // Check if it's a permission error
+        if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+          alert('You do not have permission to delete these settings.');
+        } else {
+          alert(errorMsg);
+        }
       }
     }
   };
@@ -145,13 +181,15 @@ const EmployeeDeductions: React.FC = () => {
             Manage employee-specific deductions like loans, advances, and penalties
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Deduction
-        </button>
+        {canAdd && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Deduction
+          </button>
+        )}
       </div>
 
       {/* Search and Filter */}
@@ -260,18 +298,22 @@ const EmployeeDeductions: React.FC = () => {
               </div>
 
               <div className="flex space-x-2">
-                <button
-                  onClick={() => handleEdit(deduction)}
-                  className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(deduction.id)}
-                  className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors dark:text-red-400 dark:hover:text-red-200 dark:hover:bg-red-900"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => handleEdit(deduction)}
+                    className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => handleDelete(deduction.id)}
+                    className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors dark:text-red-400 dark:hover:text-red-200 dark:hover:bg-red-900"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

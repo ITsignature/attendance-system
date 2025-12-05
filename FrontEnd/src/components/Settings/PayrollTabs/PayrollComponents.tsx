@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Filter, Settings } from 'lucide-react';
 import payrollConfigApi, { PayrollComponent, CreatePayrollComponentRequest } from '../../../services/payrollConfigApi';
+import { useDynamicRBAC } from '../../RBACSystem/rbacSystem';
 
 const PayrollComponents: React.FC = () => {
+  const { hasPermission } = useDynamicRBAC();
   const [components, setComponents] = useState<PayrollComponent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingComponent, setEditingComponent] = useState<PayrollComponent | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'earning' | 'deduction'>('all');
+
+  // Permission checks
+  const canAdd = hasPermission('settings.payroll_components.add');
+  const canEdit = hasPermission('settings.payroll_components.edit');
+  const canDelete = hasPermission('settings.payroll_components.delete');
+
   const [formData, setFormData] = useState<CreatePayrollComponentRequest>({
     component_name: '',
     component_type: 'earning',
@@ -54,7 +62,14 @@ const PayrollComponents: React.FC = () => {
       fetchComponents();
     } catch (error) {
       console.error('Error saving component:', error);
-      alert('Failed to save component');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to save component';
+
+      // Check if it's a permission error
+      if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+        alert('You do not have permission to modify these settings.');
+      } else {
+        alert(errorMsg);
+      }
     }
   };
 
@@ -83,7 +98,14 @@ const PayrollComponents: React.FC = () => {
         fetchComponents();
       } catch (error) {
         console.error('Error deleting component:', error);
-        alert('Failed to delete component. It may be in use.');
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete component';
+
+        // Check if it's a permission error
+        if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+          alert('You do not have permission to delete these settings.');
+        } else {
+          alert(errorMsg || 'Failed to delete component. It may be in use.');
+        }
       }
     }
   };
@@ -134,13 +156,15 @@ const PayrollComponents: React.FC = () => {
             Manage salary components like allowances, deductions, and bonuses
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Component
-        </button>
+        {canAdd && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Component
+          </button>
+        )}
       </div>
 
       {/* Search and Filter */}
@@ -226,18 +250,22 @@ const PayrollComponents: React.FC = () => {
               </div>
 
               <div className="flex space-x-2">
-                <button
-                  onClick={() => handleEdit(component)}
-                  className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(component.id)}
-                  className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors dark:text-red-400 dark:hover:text-red-200 dark:hover:bg-red-900"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => handleEdit(component)}
+                    className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => handleDelete(component.id)}
+                    className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors dark:text-red-400 dark:hover:text-red-200 dark:hover:bg-red-900"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
