@@ -54,7 +54,7 @@ export const useSettings = () => {
   const updateMultipleSettings = async (newSettings: Record<string, any>) => {
     try {
       const response = await settingsApi.updateSettings(newSettings);
-      
+
       if (response.success) {
         // Update local state
         setSettings(prev => {
@@ -67,14 +67,16 @@ export const useSettings = () => {
           });
           return updated;
         });
-        return true;
+        return { success: true };
       } else {
-        setError('Failed to update settings');
-        return false;
+        const errorMsg = response.message || 'Failed to update settings';
+        // Don't set global error state - let component handle it with alert
+        return { success: false, error: errorMsg };
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      return false;
+      const errorMsg = err instanceof Error ? err.message : 'An error occurred';
+      // Don't set global error state - let component handle it with alert
+      return { success: false, error: errorMsg };
     }
   };
 
@@ -99,18 +101,20 @@ export const useSettings = () => {
   const resetAllSettings = async () => {
     try {
       const response = await settingsApi.resetAllSettings();
-      
+
       if (response.success) {
         // Refresh settings to get the default values
         await fetchSettings();
-        return true;
+        return { success: true };
       } else {
-        setError('Failed to reset all settings');
-        return false;
+        const errorMsg = response.message || 'Failed to reset all settings';
+        // Don't set global error state - let component handle it with alert
+        return { success: false, error: errorMsg };
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      return false;
+      const errorMsg = err instanceof Error ? err.message : 'An error occurred';
+      // Don't set global error state - let component handle it with alert
+      return { success: false, error: errorMsg };
     }
   };
 

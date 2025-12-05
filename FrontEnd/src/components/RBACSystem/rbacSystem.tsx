@@ -712,7 +712,8 @@ export const useDynamicRBAC = (): DynamicRBACContextType => {
 
 interface DynamicProtectedRouteProps {
   children: React.ReactNode;
-  permission: string;
+  permission?: string;
+  anyPermission?: string[];
   redirectTo?: string;
   fallback?: React.ReactNode;
 }
@@ -720,6 +721,7 @@ interface DynamicProtectedRouteProps {
 export const DynamicProtectedRoute: React.FC<DynamicProtectedRouteProps> = ({
   children,
   permission,
+  anyPermission,
   fallback
 }) => {
   const { currentUser, hasPermission, isLoading } = useDynamicRBAC();
@@ -734,22 +736,31 @@ export const DynamicProtectedRoute: React.FC<DynamicProtectedRouteProps> = ({
   }
 
   // Check if user is logged in
-if (!currentUser) {
-  return <Navigate to="/admin/login" replace />;
-}
+  if (!currentUser) {
+    return <Navigate to="/admin/login" replace />;
+  }
 
   // Check if user has required permission
-  if (!hasPermission(permission)) {
-    console.log('🚫 User does not have required permission:', permission);
+  let hasAccess = false;
+  let requiredPermissionDisplay = '';
 
-    //User does not have required permission: dashboard.view
+  if (anyPermission && anyPermission.length > 0) {
+    hasAccess = anyPermission.some(perm => hasPermission(perm));
+    requiredPermissionDisplay = anyPermission.join(' OR ');
+  } else if (permission) {
+    hasAccess = hasPermission(permission);
+    requiredPermissionDisplay = permission;
+  }
+
+  if (!hasAccess) {
+    console.log('🚫 User does not have required permission:', requiredPermissionDisplay);
 
     return fallback ? <>{fallback}</> : (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
           <p className="text-gray-600">You don't have permission to access this page.</p>
-          <p className="text-sm text-gray-500 mt-2">Required permission: {permission}</p>
+          <p className="text-sm text-gray-500 mt-2">Required permission: {requiredPermissionDisplay}</p>
         </div>
       </div>
     );

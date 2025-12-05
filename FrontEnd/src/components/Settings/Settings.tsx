@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import settingsApi from '../../services/settingsApi';
 import PayrollSettings from './PayrollSettings';
+import { useDynamicRBAC, DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
 import {
   Settings,
@@ -18,16 +19,18 @@ import {
 } from 'lucide-react';
 
 const SettingsWithBackend = () => {
-  const { 
-    settings, 
-    loading, 
-    error, 
+  const {
+    settings,
+    loading,
+    error,
     fetchSettings,
-    updateMultipleSettings, 
-    resetAllSettings 
+    updateMultipleSettings,
+    resetAllSettings
   } = useSettings();
 
-  const [activeSection, setActiveSection] = useState('attendance');
+  const { hasPermission } = useDynamicRBAC();
+
+  const [activeSection, setActiveSection] = useState<string>('');
   // FIX: Initialize with null instead of empty object
   const [localSettings, setLocalSettings] = useState<Record<string, any> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -133,6 +136,25 @@ useEffect(() => {
   localSettings?.work_end_time
 ]);
 
+  // Set initial active section to first visible section
+  // Must be before early return to maintain consistent hook order
+  const settingSections = [
+    // { id: 'general', label: 'General', icon: Settings, permission: '' },
+    { id: 'attendance', label: 'Attendance', icon: Clock, permission: 'settings.attendance.view' },
+    { id: 'leaves', label: 'Leaves', icon: Calendar, permission: 'settings.leaves.view' },
+    { id: 'payroll', label: 'Payroll', icon: DollarSign, permission: 'settings.payroll.view' },
+    { id: 'payroll-config', label: 'Payroll Component Configuration', icon: Building, permission: 'settings.payroll_components.view' }
+  ];
+
+  // Filter sections based on permissions
+  const visibleSections = settingSections.filter(section => hasPermission(section.permission));
+
+  useEffect(() => {
+    if (!activeSection && visibleSections.length > 0) {
+      setActiveSection(visibleSections[0].id);
+    }
+  }, [visibleSections, activeSection]);
+
     if (loading || localSettings === null) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
@@ -143,14 +165,6 @@ useEffect(() => {
       </div>
     );
   }
-
-  const settingSections = [
-    // { id: 'general', label: 'General', icon: Settings },
-    { id: 'attendance', label: 'Attendance', icon: Clock },
-    { id: 'leaves', label: 'Leaves', icon: Calendar },
-    { id: 'payroll', label: 'Payroll', icon: DollarSign },
-    { id: 'payroll-config', label: 'Payroll Configuration', icon: Building }
-  ];
 
 const updateLocalSetting = (key: string, value: any) => {
   console.log(`🔍 DEBUG updateLocalSetting - Key: "${key}", Value: "${value}", Type: ${typeof value}`);
@@ -191,7 +205,7 @@ const handleSave = async () => {
     Object.entries(localSettings).forEach(([key, value]) => {
       const currentValue = settings[key]?.value;
       const hasChanged = currentValue !== value;
-      
+
       console.log(`🔍 DEBUG comparing ${key}:`, {
         current: currentValue,
         local: value,
@@ -199,10 +213,10 @@ const handleSave = async () => {
         currentType: typeof currentValue,
         localType: typeof value
       });
-      
+
       if (hasChanged) {
         // Additional validation for time fields
-        if ((key === 'work_start_time' || key === 'work_end_time') && 
+        if ((key === 'work_start_time' || key === 'work_end_time') &&
             (value === '' || value === null || value === undefined)) {
           console.log(`❌ DEBUG - Skipping ${key} due to empty value`);
           return;
@@ -216,11 +230,11 @@ const handleSave = async () => {
     console.log('🔍 Current settings state:', settings);
 
     if (Object.keys(changedSettings).length > 0) {
-      const success = await updateMultipleSettings(changedSettings);
-      if (success) {
+      const result = await updateMultipleSettings(changedSettings);
+      if (result.success) {
         setHasChanges(false);
         alert('Settings saved successfully!');
-        
+
         // 🔧 FIX: Force refresh localSettings after successful save
         // This ensures UI state matches backend immediately
         console.log('🔄 Refreshing local settings after save...');
@@ -235,9 +249,20 @@ const handleSave = async () => {
             setLocalSettings({...converted}); // Force new object reference
           }
         }, 100); // Small delay to ensure hook state is updated
-        
+
       } else {
-        alert('Failed to save settings. Please try again.');
+        // Handle permission errors and other failures
+        const errorMessage = result.error || 'Failed to save settings. Please try again.';
+
+        // Check if it's a permission error
+        if (errorMessage.includes('Access denied') || errorMessage.includes('permission')) {
+          alert('You do not have permission to modify these settings.');
+        } else {
+          alert(errorMessage);
+        }
+
+        // Stay on the page - don't redirect
+        console.error('Settings save failed:', errorMessage);
       }
     } else {
       setHasChanges(false);
@@ -245,7 +270,14 @@ const handleSave = async () => {
     }
   } catch (error) {
     console.error('Error saving settings:', error);
-    alert('An error occurred while saving settings.');
+    const errorMsg = error instanceof Error ? error.message : 'An error occurred while saving settings.';
+
+    // Check if it's a permission error
+    if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+      alert('You do not have permission to modify these settings.');
+    } else {
+      alert(errorMsg);
+    }
   } finally {
     setSaving(false);
   }
@@ -255,16 +287,33 @@ const handleSave = async () => {
     if (confirm('Are you sure you want to reset all settings to default values?')) {
       setSaving(true);
       try {
-        const success = await resetAllSettings();
-        if (success) {
+        const result = await resetAllSettings();
+        if (result.success) {
           setHasChanges(false);
           alert('All settings reset to defaults successfully!');
         } else {
-          alert('Failed to reset settings. Please try again.');
+          // Handle permission errors and other failures
+          const errorMessage = result.error || 'Failed to reset settings. Please try again.';
+
+          // Check if it's a permission error
+          if (errorMessage.includes('Access denied') || errorMessage.includes('permission')) {
+            alert('You do not have permission to reset these settings.');
+          } else {
+            alert(errorMessage);
+          }
+
+          console.error('Settings reset failed:', errorMessage);
         }
       } catch (error) {
         console.error('Error resetting settings:', error);
-        alert('An error occurred while resetting settings.');
+        const errorMsg = error instanceof Error ? error.message : 'An error occurred while resetting settings.';
+
+        // Check if it's a permission error
+        if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
+          alert('You do not have permission to reset these settings.');
+        } else {
+          alert(errorMsg);
+        }
       } finally {
         setSaving(false);
       }
@@ -506,7 +555,7 @@ const hhmmToMinutes = (t) => {
               </div>
 
               {/* WEEKEND WORKING DAYS CONFIGURATION */}
-              <div className="border-t pt-6 mt-6">
+              {/* <div className="border-t pt-6 mt-6">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
                   Weekend Working Days
                 </h4>
@@ -561,10 +610,10 @@ const hhmmToMinutes = (t) => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Day-Specific Schedules Configuration */}
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+              {/* <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
                   Day-Specific Schedule Override
                 </h4>
@@ -698,7 +747,7 @@ const hhmmToMinutes = (t) => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
         );
@@ -942,7 +991,7 @@ const hhmmToMinutes = (t) => {
                   Settings Categories
                 </h2>
                 <nav className="space-y-2">
-                  {settingSections.map((section) => {
+                  {visibleSections.map((section) => {
                     const Icon = section.icon;
                     return (
                       <button

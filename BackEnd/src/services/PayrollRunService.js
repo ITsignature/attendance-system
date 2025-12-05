@@ -3584,6 +3584,7 @@ class PayrollRunService {
             }
 
             const period = runInfo[0];
+            console.log(`📅 Payroll period: ${period.period_start_date} to ${period.period_end_date}`);
             const today = new Date();
             today.setHours(23, 59, 59, 999);
             const calculationEndDate = today < new Date(period.period_end_date) ? today : new Date(period.period_end_date);
@@ -3626,9 +3627,9 @@ class PayrollRunService {
                 WHERE ea.employee_id IN (${employeeIds.map(() => '?').join(',')})
                   AND ea.client_id = ?
                   AND ea.is_active = 1
-                  AND (ea.effective_to IS NULL OR ea.effective_to >= CURDATE())
+                  AND (ea.effective_to IS NULL OR ea.effective_to >= ?)
                   AND ea.effective_from <= CURDATE()
-            `, [...employeeIds, clientId]);
+            `, [...employeeIds, clientId, calculationEndDate]);
 
             // ========================================
             // BULK FETCH #2: All Deductions (Payroll Components)
@@ -3668,6 +3669,9 @@ class PayrollRunService {
                   AND start_date BETWEEN ? AND ?
             `, [...employeeIds, period.period_start_date, period.period_end_date]);
 
+            console.log(`📊 Found ${allLoans.length} active loans...`);
+            console.log('Loans are ${allLoans.map(l => l.id).join(', ')}');
+
             // Fetch advances - match based on required_date falling in the period
             const [allAdvances] = await db.execute(`
                 SELECT
@@ -3688,6 +3692,18 @@ class PayrollRunService {
                   AND remaining_amount > 0
             `, [...employeeIds, period.period_start_date, period.period_end_date]);
 
+            // In PayrollRunService.js → getLivePayrollData()
+                console.log(`📅 Fetching advances for period: ${period.period_start_date} to ${period.period_end_date}`);
+                console.log(`📊 Found ${allAdvances.length} advances`);
+                console.log(`Advances data:`, allAdvances.map(a => ({
+                    id: a.id,
+                    employee_id: a.employee_id,
+                    required_date: a.required_date,
+                    deduction_start_date: a.deduction_start_date,
+                    status: a.status,
+                    remaining_amount: a.remaining_amount
+                })));
+
             // Fetch bonuses
             const [allBonuses] = await db.execute(`
                 SELECT
@@ -3704,6 +3720,8 @@ class PayrollRunService {
                   AND effective_date BETWEEN ? AND ?
                   AND payment_method = 'next_payroll'
             `, [...employeeIds, period.period_start_date, period.period_end_date]);
+
+            console.log(`📊 Found ${allBonuses.length} active bonuses...`);
 
             // Group data by employee_id for fast lookup
             const allowancesByEmployee = {};
@@ -3732,7 +3750,7 @@ class PayrollRunService {
             allAdvances.forEach(a => {
                 if (!advancesByEmployee[a.employee_id]) advancesByEmployee[a.employee_id] = [];
                 const shouldDeduct = FinancialRecordsIntegration.shouldDeductInPeriod(
-                    a.deduction_start_date,
+                    a.required_date,
                     { start: period.period_start_date, end: period.period_end_date }
                 );
                 if (shouldDeduct && a.remaining_amount > 0) {

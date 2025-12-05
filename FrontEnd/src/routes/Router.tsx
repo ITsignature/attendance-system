@@ -302,10 +302,10 @@ const Router = [
         )
       },
       { 
-        path: '/settings', 
-        exact: true, 
+        path: '/settings',
+        exact: true,
         element: (
-          <DynamicProtectedRoute permission="settings.view">
+          <DynamicProtectedRoute anyPermission={['settings.attendance.view', 'settings.leaves.view', 'settings.payroll.view', 'settings.payroll_components.view', 'settings.employee_allowances.view', 'settings.employee_deductions.view']}>
             <Settings />
           </DynamicProtectedRoute>
         )

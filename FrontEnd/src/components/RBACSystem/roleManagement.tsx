@@ -269,37 +269,153 @@ const RoleManagementPage: React.FC = () => {
   const renderPermissionCheckboxes = () => {
     console.log('🔍 Rendering permissions. Current selections:', formData.permissions);
     console.log('🔍 Available permissions:', availablePermissions);
-    
+
+    // Helper function to get sub-category display name
+    const getSubCategoryName = (subCategory: string) => {
+      const nameMap: { [key: string]: string } = {
+        'attendance': 'Attendance Settings',
+        'leaves': 'Leave Settings',
+        'payroll': 'Payroll Settings',
+        'payroll_components': 'Payroll Components',
+        'employee_allowances': 'Employee Allowances',
+        'employee_deductions': 'Employee Deductions'
+      };
+      return nameMap[subCategory] || subCategory.charAt(0).toUpperCase() + subCategory.slice(1);
+    };
+
+    // Helper function to render settings permissions with sub-categories
+    const renderSettingsPermissions = (permissions: any[]) => {
+      // Group permissions by sub-category (first part of action before dot)
+      const groupedBySubCategory: { [key: string]: any[] } = {};
+
+      permissions.forEach((permission: any) => {
+        const subCategory = permission.action.split('.')[0];
+        if (!groupedBySubCategory[subCategory]) {
+          groupedBySubCategory[subCategory] = [];
+        }
+        groupedBySubCategory[subCategory].push(permission);
+      });
+
+      // Organize sub-categories into main categories
+      const mainCategories: { [key: string]: { [key: string]: any[] } } = {
+        'Attendance Settings': { 'attendance': [] },
+        'Leave Settings': { 'leaves': [] },
+        'Payroll Settings': { 'payroll': [] },
+        'Payroll Component Configuration': {
+          'payroll_components': [],
+          'employee_allowances': [],
+          'employee_deductions': []
+        }
+      };
+
+      // Populate categories
+      Object.entries(groupedBySubCategory).forEach(([subCategory, perms]) => {
+        if (subCategory === 'attendance') {
+          mainCategories['Attendance Settings']['attendance'] = perms;
+        } else if (subCategory === 'leaves') {
+          mainCategories['Leave Settings']['leaves'] = perms;
+        } else if (subCategory === 'payroll') {
+          mainCategories['Payroll Settings']['payroll'] = perms;
+        } else if (['payroll_components', 'employee_allowances', 'employee_deductions'].includes(subCategory)) {
+          mainCategories['Payroll Component Configuration'][subCategory] = perms;
+        }
+      });
+
+      return (
+        <>
+          {Object.entries(mainCategories).map(([mainCategory, subCategories]) => {
+            const hasPermissions = Object.values(subCategories).some(perms => perms.length > 0);
+            if (!hasPermissions) return null;
+
+            return (
+              <div key={mainCategory} className="mb-4">
+                <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                  {mainCategory}
+                </h5>
+                <div className="space-y-4 ml-2">
+                  {Object.entries(subCategories).map(([subCategory, perms]) => {
+                    if (!perms || perms.length === 0) return null;
+
+                    return (
+                      <div key={subCategory} className="space-y-2">
+                        <h6 className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                          {getSubCategoryName(subCategory)}
+                        </h6>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                          {perms.map((permission: any) => {
+                            const isChecked = formData.permissions.includes(permission.id);
+                            return (
+                              <div key={permission.id} className="flex items-center">
+                                <Checkbox
+                                  id={permission.id}
+                                  checked={isChecked}
+                                  onChange={(e) => handlePermissionChange(permission.id, e.target.checked)}
+                                />
+                                <Label htmlFor={permission.id} className="ml-2 text-sm">
+                                  <span className="font-medium">{permission.name}</span>
+                                  <br />
+                                  <span className="text-gray-500 text-xs">{permission.description}</span>
+                                </Label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      );
+    };
+
     // Use API permissions if available, otherwise fall back to MODULES
     if (Object.keys(availablePermissions).length > 0) {
-      return Object.entries(availablePermissions).map(([moduleName, permissions]: [string, any]) => (
-        <Card key={moduleName}>
-          <h4 className="text-md font-medium text-gray-900 dark:text-white mb-2">
-            {moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {Array.isArray(permissions) && permissions.map((permission: any) => {
-              const isChecked = formData.permissions.includes(permission.id);
-              console.log(`🔍 Permission ${permission.id} (${permission.name}) checked:`, isChecked);
-              
-              return (
-                <div key={permission.id} className="flex items-center">
-                  <Checkbox
-                    id={permission.id}
-                    checked={isChecked}
-                    onChange={(e) => handlePermissionChange(permission.id, e.target.checked)}
-                  />
-                  <Label htmlFor={permission.id} className="ml-2 text-sm">
-                    <span className="font-medium">{permission.name}</span>
-                    <br />
-                    <span className="text-gray-500 text-xs">{permission.description}</span>
-                  </Label>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      ));
+      return Object.entries(availablePermissions).map(([moduleName, permissions]: [string, any]) => {
+        // Special handling for Settings module
+        if (moduleName.toLowerCase() === 'settings') {
+          return (
+            <Card key={moduleName}>
+              <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
+                {moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}
+              </h4>
+              {renderSettingsPermissions(permissions)}
+            </Card>
+          );
+        }
+
+        // Regular module display
+        return (
+          <Card key={moduleName}>
+            <h4 className="text-md font-medium text-gray-900 dark:text-white mb-2">
+              {moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {Array.isArray(permissions) && permissions.map((permission: any) => {
+                const isChecked = formData.permissions.includes(permission.id);
+                console.log(`🔍 Permission ${permission.id} (${permission.name}) checked:`, isChecked);
+
+                return (
+                  <div key={permission.id} className="flex items-center">
+                    <Checkbox
+                      id={permission.id}
+                      checked={isChecked}
+                      onChange={(e) => handlePermissionChange(permission.id, e.target.checked)}
+                    />
+                    <Label htmlFor={permission.id} className="ml-2 text-sm">
+                      <span className="font-medium">{permission.name}</span>
+                      <br />
+                      <span className="text-gray-500 text-xs">{permission.description}</span>
+                    </Label>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      });
     }
 
     // Fallback to MODULES if API permissions not loaded
@@ -314,7 +430,7 @@ const RoleManagementPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {module.permissions.map((permission) => {
             const isChecked = formData.permissions.includes(permission.id);
-            
+
             return (
               <div key={permission.id} className="flex items-center">
                 <Checkbox

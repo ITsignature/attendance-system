@@ -1,0 +1,2308 @@
+[2025-12-02T06:38:16.114Z] [INFO] 🚀 Payroll calculation logging started for run: fae6e990-24ab-4308-bbfd-fdff79a3ecbc
+[2025-12-02T06:38:16.114Z] [INFO] 📁 Log file: D:\attendance-system\BackEnd\logs\payroll-run-fae6e990-24ab-4308-bbfd-fdff79a3ecbc-2025-12-02T06-38-16-113Z.txt
+[2025-12-02T06:38:16.114Z] [INFO] ⏰ Started at: 2025-12-02T06:38:16.114Z
+[2025-12-02T06:38:16.114Z] [INFO] ================================================================================
+[2025-12-02T06:38:16.114Z] [LOG] 📊 [OPTIMIZED] Fetching live payroll data for run: fae6e990-24ab-4308-bbfd-fdff79a3ecbc
+[2025-12-02T06:38:16.536Z] [LOG] 📅 Payroll period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:16.948Z] [LOG] 👥 Processing 31 employees...
+[2025-12-02T06:38:18.174Z] [LOG] 📊 Found 0 active loans...
+[2025-12-02T06:38:18.175Z] [LOG] Loans are ${allLoans.map(l => l.id).join( )}
+[2025-12-02T06:38:18.588Z] [LOG] 📅 Fetching advances for period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:18.588Z] [LOG] 📊 Found 1 advances
+[2025-12-02T06:38:18.589Z] [LOG] Advances data: [
+  {
+    "id": "12aa965c-ba87-48b4-a36d-f114d3479f33",
+    "employee_id": "0143a539-7105-11f0-a50f-98e743540430",
+    "required_date": "2025-12-01",
+    "deduction_start_date": "2025-12-01",
+    "remaining_amount": 5000
+  }
+]
+[2025-12-02T06:38:19.012Z] [LOG] 📊 Found 1 active bonuses...
+[2025-12-02T06:38:20.685Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:20.686Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:20.686Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:20.686Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:20.687Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:20.687Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:20.687Z] [LOG]    👤 Employee: Uthpala Sachini (EMP000006)
+[2025-12-02T06:38:20.688Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:20.688Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:20.688Z] [LOG]    Base Salary (Full Month): Rs.100000.00
+[2025-12-02T06:38:20.688Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:20.898Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:20.898Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:20.899Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:20.899Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:20.899Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:20.900Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:20.900Z] [LOG]    👤 Employee: R. D.A Kaushalya null (EMP000044)
+[2025-12-02T06:38:20.901Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:20.901Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:20.901Z] [LOG]    Base Salary (Full Month): Rs.80000.00
+[2025-12-02T06:38:20.902Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.099Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.099Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.100Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.100Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.101Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.101Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.102Z] [LOG]    👤 Employee: Nimdiya Ranasinghe null (EMP000045)
+[2025-12-02T06:38:21.102Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.102Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.103Z] [LOG]    Base Salary (Full Month): Rs.35000.00
+[2025-12-02T06:38:21.103Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.299Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.300Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.301Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.301Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.302Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.302Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.303Z] [LOG]    👤 Employee: Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046)
+[2025-12-02T06:38:21.304Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.304Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.305Z] [LOG]    Base Salary (Full Month): Rs.60000.00
+[2025-12-02T06:38:21.306Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.691Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.692Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.694Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.695Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.696Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.696Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.697Z] [LOG]    👤 Employee: Ratheeshanan Maneimannan (EMP000047)
+[2025-12-02T06:38:21.699Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.700Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.702Z] [LOG]    Base Salary (Full Month): Rs.35000.00
+[2025-12-02T06:38:21.703Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.713Z] [LOG] 
+   💵 Pre-calculated Rates for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:21.714Z] [LOG]       Daily Salary: Rs.3200.00
+[2025-12-02T06:38:21.715Z] [LOG]       Weekday Hourly Rate: Rs.376.47
+[2025-12-02T06:38:21.715Z] [LOG]       Saturday Hourly Rate: Rs.711.11
+[2025-12-02T06:38:21.716Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:21.716Z] [LOG] 
+   📊 Full Period Working Days for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:21.717Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:21.719Z] [LOG] 
+   💵 Pre-calculated Rates for Uthpala Sachini (EMP000006):
+[2025-12-02T06:38:21.720Z] [LOG]       Daily Salary: Rs.4000.00
+[2025-12-02T06:38:21.721Z] [LOG]       Weekday Hourly Rate: Rs.470.59
+[2025-12-02T06:38:21.722Z] [LOG]       Saturday Hourly Rate: Rs.888.89
+[2025-12-02T06:38:21.722Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:21.723Z] [LOG] 
+   📊 Full Period Working Days for Uthpala Sachini (EMP000006):
+[2025-12-02T06:38:21.723Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:21.730Z] [LOG] 
+   💵 Pre-calculated Rates for Nimdiya Ranasinghe null (EMP000045):
+[2025-12-02T06:38:21.731Z] [LOG]       Daily Salary: Rs.1400.00
+[2025-12-02T06:38:21.731Z] [LOG]       Weekday Hourly Rate: Rs.164.71
+[2025-12-02T06:38:21.732Z] [LOG]       Saturday Hourly Rate: Rs.311.11
+[2025-12-02T06:38:21.732Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:21.733Z] [LOG] 
+   📊 Full Period Working Days for Nimdiya Ranasinghe null (EMP000045):
+[2025-12-02T06:38:21.733Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:21.734Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.734Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.735Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.735Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.735Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.736Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.736Z] [LOG]    👤 Employee: Saruban null (EMP000007)
+[2025-12-02T06:38:21.736Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.737Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.737Z] [LOG]    Base Salary (Full Month): Rs.0.00
+[2025-12-02T06:38:21.737Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.742Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.742Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.743Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.744Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.744Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.745Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.745Z] [LOG]    👤 Employee: Hari null (EMP000017)
+[2025-12-02T06:38:21.745Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.746Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.746Z] [LOG]    Base Salary (Full Month): Rs.50000.00
+[2025-12-02T06:38:21.746Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.747Z] [LOG] 
+   💵 Pre-calculated Rates for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:21.748Z] [LOG]       Daily Salary: Rs.2400.00
+[2025-12-02T06:38:21.748Z] [LOG]       Weekday Hourly Rate: Rs.282.35
+[2025-12-02T06:38:21.748Z] [LOG]       Saturday Hourly Rate: Rs.533.33
+[2025-12-02T06:38:21.749Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:21.749Z] [LOG] 
+   📊 Full Period Working Days for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:21.749Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:21.750Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.751Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.751Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.751Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.752Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.752Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.752Z] [LOG]    👤 Employee: Chemil null (EMP000040)
+[2025-12-02T06:38:21.753Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.753Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.753Z] [LOG]    Base Salary (Full Month): Rs.250000.00
+[2025-12-02T06:38:21.753Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.754Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.755Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.755Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.755Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.756Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.756Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.756Z] [LOG]    👤 Employee: Maryam null (EMP000035)
+[2025-12-02T06:38:21.757Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.757Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.757Z] [LOG]    Base Salary (Full Month): Rs.40000.00
+[2025-12-02T06:38:21.758Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.761Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.762Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.762Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.762Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.762Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.763Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.763Z] [LOG]    👤 Employee: Anoj null (EMP000014)
+[2025-12-02T06:38:21.763Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.763Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.763Z] [LOG]    Base Salary (Full Month): Rs.50000.00
+[2025-12-02T06:38:21.764Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.764Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.764Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.765Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.765Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.765Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.765Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.765Z] [LOG]    👤 Employee: Franklin null (EMP000018)
+[2025-12-02T06:38:21.766Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.766Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.766Z] [LOG]    Base Salary (Full Month): Rs.50000.00
+[2025-12-02T06:38:21.766Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.767Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.767Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.767Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.767Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.767Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.767Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.768Z] [LOG]    👤 Employee: Viruna Damsiha Cooray null (EMP000038)
+[2025-12-02T06:38:21.768Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.768Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.768Z] [LOG]    Base Salary (Full Month): Rs.50000.00
+[2025-12-02T06:38:21.768Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.821Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.821Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.821Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.822Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.822Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.822Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.823Z] [LOG]    👤 Employee: Sithira null (EMP000039)
+[2025-12-02T06:38:21.823Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.823Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.824Z] [LOG]    Base Salary (Full Month): Rs.40000.00
+[2025-12-02T06:38:21.824Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.825Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.825Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.825Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.827Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.827Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.828Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.828Z] [LOG]    👤 Employee: Piyumi null (EMP000025)
+[2025-12-02T06:38:21.828Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.829Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.829Z] [LOG]    Base Salary (Full Month): Rs.35000.00
+[2025-12-02T06:38:21.829Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.880Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.881Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.881Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.882Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.882Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.882Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.883Z] [LOG]    👤 Employee: Dharshika null (EMP000009)
+[2025-12-02T06:38:21.883Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.883Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.884Z] [LOG]    Base Salary (Full Month): Rs.100000.00
+[2025-12-02T06:38:21.884Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.885Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.885Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.885Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.886Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.886Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.886Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.887Z] [LOG]    👤 Employee: Sumaiya null (EMP000016)
+[2025-12-02T06:38:21.888Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.888Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.888Z] [LOG]    Base Salary (Full Month): Rs.60000.00
+[2025-12-02T06:38:21.889Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.896Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.896Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.896Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.897Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.897Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.898Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.898Z] [LOG]    👤 Employee: Waruni null (EMP000024)
+[2025-12-02T06:38:21.899Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.899Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.899Z] [LOG]    Base Salary (Full Month): Rs.50000.00
+[2025-12-02T06:38:21.900Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.900Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.901Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.901Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.902Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.902Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.902Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.903Z] [LOG]    👤 Employee: Saru null (EMP000022)
+[2025-12-02T06:38:21.903Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.903Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.904Z] [LOG]    Base Salary (Full Month): Rs.50000.00
+[2025-12-02T06:38:21.904Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.915Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.916Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.916Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.916Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.917Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.917Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.918Z] [LOG]    👤 Employee: Chamodi null (EMP000032)
+[2025-12-02T06:38:21.918Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.918Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.919Z] [LOG]    Base Salary (Full Month): Rs.35000.00
+[2025-12-02T06:38:21.919Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.923Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.923Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.924Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.924Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.924Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.925Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.925Z] [LOG]    👤 Employee: Shandeep null (EMP000034)
+[2025-12-02T06:38:21.925Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.927Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.927Z] [LOG]    Base Salary (Full Month): Rs.80000.00
+[2025-12-02T06:38:21.928Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.929Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.929Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.929Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.930Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.931Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.931Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.932Z] [LOG]    👤 Employee: Ammaar Ilham (EMP000023)
+[2025-12-02T06:38:21.932Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.932Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.933Z] [LOG]    Base Salary (Full Month): Rs.70000.00
+[2025-12-02T06:38:21.933Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:21.946Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:21.947Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.947Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:21.948Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:21.948Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:21.948Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:21.949Z] [LOG]    👤 Employee: Sujevan Selvaratnam null (EMP000026)
+[2025-12-02T06:38:21.949Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:21.950Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:21.950Z] [LOG]    Base Salary (Full Month): Rs.1.00
+[2025-12-02T06:38:21.950Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:22.127Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:22.128Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:22.129Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:22.130Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:22.130Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:22.131Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:22.132Z] [LOG]    👤 Employee: Safna Nawas null (EMP000021)
+[2025-12-02T06:38:22.133Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:22.134Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:22.135Z] [LOG]    Base Salary (Full Month): Rs.50000.00
+[2025-12-02T06:38:22.136Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:22.138Z] [LOG] 
+   💵 Pre-calculated Rates for Sumaiya null (EMP000016):
+[2025-12-02T06:38:22.139Z] [LOG]       Daily Salary: Rs.2400.00
+[2025-12-02T06:38:22.140Z] [LOG]       Weekday Hourly Rate: Rs.282.35
+[2025-12-02T06:38:22.140Z] [LOG]       Saturday Hourly Rate: Rs.533.33
+[2025-12-02T06:38:22.141Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.142Z] [LOG] 
+   📊 Full Period Working Days for Sumaiya null (EMP000016):
+[2025-12-02T06:38:22.144Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.146Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2025-12-02T06:38:22.147Z] [LOG]       Today: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:22.148Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2025-12-02T06:38:22.148Z] [LOG]       Comparison (today < periodEndDateFull): true
+[2025-12-02T06:38:22.149Z] [LOG]       Calculation End Date: 2025-12-02 (2025-12-01T18:30:00.000Z)
+[2025-12-02T06:38:22.150Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (LIVE PREVIEW - Real-time)
+[2025-12-02T06:38:22.150Z] [LOG]    👤 Employee: Jessie null (EMP000013)
+[2025-12-02T06:38:22.151Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31
+[2025-12-02T06:38:22.152Z] [LOG]    📅 Calculation Until: 2025-12-02 (PARTIAL - Until Today)
+[2025-12-02T06:38:22.152Z] [LOG]    Base Salary (Full Month): Rs.60000.00
+[2025-12-02T06:38:22.152Z] [LOG]    Mode: ⚡ REAL-TIME (includes ongoing session)
+[2025-12-02T06:38:22.153Z] [LOG] 
+   💵 Pre-calculated Rates for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:22.154Z] [LOG]       Daily Salary: Rs.1400.00
+[2025-12-02T06:38:22.154Z] [LOG]       Weekday Hourly Rate: Rs.164.71
+[2025-12-02T06:38:22.154Z] [LOG]       Saturday Hourly Rate: Rs.311.11
+[2025-12-02T06:38:22.155Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.155Z] [LOG] 
+   📊 Full Period Working Days for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:22.155Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.159Z] [LOG] 
+   💵 Pre-calculated Rates for Saruban null (EMP000007):
+[2025-12-02T06:38:22.160Z] [LOG]       Daily Salary: Rs.0.00
+[2025-12-02T06:38:22.161Z] [LOG]       Weekday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.161Z] [LOG]       Saturday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.161Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.162Z] [LOG] 
+   📊 Full Period Working Days for Saruban null (EMP000007):
+[2025-12-02T06:38:22.162Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.215Z] [LOG] 
+   💵 Pre-calculated Rates for Hari null (EMP000017):
+[2025-12-02T06:38:22.216Z] [LOG]       Daily Salary: Rs.2000.00
+[2025-12-02T06:38:22.216Z] [LOG]       Weekday Hourly Rate: Rs.235.29
+[2025-12-02T06:38:22.216Z] [LOG]       Saturday Hourly Rate: Rs.444.44
+[2025-12-02T06:38:22.217Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.217Z] [LOG] 
+   📊 Full Period Working Days for Hari null (EMP000017):
+[2025-12-02T06:38:22.218Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.218Z] [LOG] 
+   💵 Pre-calculated Rates for Chemil null (EMP000040):
+[2025-12-02T06:38:22.219Z] [LOG]       Daily Salary: Rs.10000.00
+[2025-12-02T06:38:22.219Z] [LOG]       Weekday Hourly Rate: Rs.1176.47
+[2025-12-02T06:38:22.220Z] [LOG]       Saturday Hourly Rate: Rs.2222.22
+[2025-12-02T06:38:22.220Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.220Z] [LOG] 
+   📊 Full Period Working Days for Chemil null (EMP000040):
+[2025-12-02T06:38:22.220Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.242Z] [LOG] 
+   💵 Pre-calculated Rates for Maryam null (EMP000035):
+[2025-12-02T06:38:22.243Z] [LOG]       Daily Salary: Rs.1600.00
+[2025-12-02T06:38:22.244Z] [LOG]       Weekday Hourly Rate: Rs.188.24
+[2025-12-02T06:38:22.244Z] [LOG]       Saturday Hourly Rate: Rs.355.56
+[2025-12-02T06:38:22.245Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.245Z] [LOG] 
+   📊 Full Period Working Days for Maryam null (EMP000035):
+[2025-12-02T06:38:22.245Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.251Z] [LOG] 
+   💵 Pre-calculated Rates for Anoj null (EMP000014):
+[2025-12-02T06:38:22.251Z] [LOG]       Daily Salary: Rs.2000.00
+[2025-12-02T06:38:22.251Z] [LOG]       Weekday Hourly Rate: Rs.235.29
+[2025-12-02T06:38:22.252Z] [LOG]       Saturday Hourly Rate: Rs.444.44
+[2025-12-02T06:38:22.252Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.252Z] [LOG] 
+   📊 Full Period Working Days for Anoj null (EMP000014):
+[2025-12-02T06:38:22.253Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.310Z] [LOG] 
+   💵 Pre-calculated Rates for Sithira null (EMP000039):
+[2025-12-02T06:38:22.311Z] [LOG]       Daily Salary: Rs.1600.00
+[2025-12-02T06:38:22.311Z] [LOG]       Weekday Hourly Rate: Rs.188.24
+[2025-12-02T06:38:22.311Z] [LOG]       Saturday Hourly Rate: Rs.355.56
+[2025-12-02T06:38:22.312Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.312Z] [LOG] 
+   📊 Full Period Working Days for Sithira null (EMP000039):
+[2025-12-02T06:38:22.312Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.318Z] [LOG] 
+   💵 Pre-calculated Rates for Piyumi null (EMP000025):
+[2025-12-02T06:38:22.319Z] [LOG]       Daily Salary: Rs.1400.00
+[2025-12-02T06:38:22.319Z] [LOG]       Weekday Hourly Rate: Rs.164.71
+[2025-12-02T06:38:22.319Z] [LOG]       Saturday Hourly Rate: Rs.311.11
+[2025-12-02T06:38:22.320Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.320Z] [LOG] 
+   📊 Full Period Working Days for Piyumi null (EMP000025):
+[2025-12-02T06:38:22.321Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.322Z] [LOG] 
+   💵 Pre-calculated Rates for Viruna Damsiha Cooray null (EMP000038):
+[2025-12-02T06:38:22.322Z] [LOG]       Daily Salary: Rs.2000.00
+[2025-12-02T06:38:22.322Z] [LOG]       Weekday Hourly Rate: Rs.235.29
+[2025-12-02T06:38:22.323Z] [LOG]       Saturday Hourly Rate: Rs.444.44
+[2025-12-02T06:38:22.323Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.324Z] [LOG] 
+   📊 Full Period Working Days for Viruna Damsiha Cooray null (EMP000038):
+[2025-12-02T06:38:22.324Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.325Z] [LOG] 
+   💵 Pre-calculated Rates for Franklin null (EMP000018):
+[2025-12-02T06:38:22.326Z] [LOG]       Daily Salary: Rs.2000.00
+[2025-12-02T06:38:22.327Z] [LOG]       Weekday Hourly Rate: Rs.235.29
+[2025-12-02T06:38:22.327Z] [LOG]       Saturday Hourly Rate: Rs.444.44
+[2025-12-02T06:38:22.328Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.328Z] [LOG] 
+   📊 Full Period Working Days for Franklin null (EMP000018):
+[2025-12-02T06:38:22.328Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.329Z] [LOG] 
+   💵 Pre-calculated Rates for Chamodi null (EMP000032):
+[2025-12-02T06:38:22.330Z] [LOG]       Daily Salary: Rs.1400.00
+[2025-12-02T06:38:22.330Z] [LOG]       Weekday Hourly Rate: Rs.164.71
+[2025-12-02T06:38:22.330Z] [LOG]       Saturday Hourly Rate: Rs.311.11
+[2025-12-02T06:38:22.331Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.331Z] [LOG] 
+   📊 Full Period Working Days for Chamodi null (EMP000032):
+[2025-12-02T06:38:22.331Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.338Z] [LOG] 
+   💵 Pre-calculated Rates for Shandeep null (EMP000034):
+[2025-12-02T06:38:22.339Z] [LOG]       Daily Salary: Rs.3200.00
+[2025-12-02T06:38:22.339Z] [LOG]       Weekday Hourly Rate: Rs.376.47
+[2025-12-02T06:38:22.340Z] [LOG]       Saturday Hourly Rate: Rs.711.11
+[2025-12-02T06:38:22.340Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.340Z] [LOG] 
+   📊 Full Period Working Days for Shandeep null (EMP000034):
+[2025-12-02T06:38:22.341Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.346Z] [LOG] 
+   💵 Pre-calculated Rates for Ammaar Ilham (EMP000023):
+[2025-12-02T06:38:22.346Z] [LOG]       Daily Salary: Rs.2800.00
+[2025-12-02T06:38:22.347Z] [LOG]       Weekday Hourly Rate: Rs.329.41
+[2025-12-02T06:38:22.347Z] [LOG]       Saturday Hourly Rate: Rs.622.22
+[2025-12-02T06:38:22.348Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.348Z] [LOG] 
+   📊 Full Period Working Days for Ammaar Ilham (EMP000023):
+[2025-12-02T06:38:22.349Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.360Z] [LOG] 
+   💵 Pre-calculated Rates for Sujevan Selvaratnam null (EMP000026):
+[2025-12-02T06:38:22.361Z] [LOG]       Daily Salary: Rs.0.04
+[2025-12-02T06:38:22.361Z] [LOG]       Weekday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.362Z] [LOG]       Saturday Hourly Rate: Rs.0.01
+[2025-12-02T06:38:22.362Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.362Z] [LOG] 
+   📊 Full Period Working Days for Sujevan Selvaratnam null (EMP000026):
+[2025-12-02T06:38:22.363Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.368Z] [LOG] 
+   💵 Pre-calculated Rates for Jessie null (EMP000013):
+[2025-12-02T06:38:22.368Z] [LOG]       Daily Salary: Rs.2400.00
+[2025-12-02T06:38:22.369Z] [LOG]       Weekday Hourly Rate: Rs.282.35
+[2025-12-02T06:38:22.369Z] [LOG]       Saturday Hourly Rate: Rs.533.33
+[2025-12-02T06:38:22.369Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.370Z] [LOG] 
+   📊 Full Period Working Days for Jessie null (EMP000013):
+[2025-12-02T06:38:22.370Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.378Z] [LOG] 
+   💵 Pre-calculated Rates for Waruni null (EMP000024):
+[2025-12-02T06:38:22.379Z] [LOG]       Daily Salary: Rs.2000.00
+[2025-12-02T06:38:22.379Z] [LOG]       Weekday Hourly Rate: Rs.235.29
+[2025-12-02T06:38:22.380Z] [LOG]       Saturday Hourly Rate: Rs.444.44
+[2025-12-02T06:38:22.380Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.380Z] [LOG] 
+   📊 Full Period Working Days for Waruni null (EMP000024):
+[2025-12-02T06:38:22.381Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.382Z] [LOG] 
+   💵 Pre-calculated Rates for Saru null (EMP000022):
+[2025-12-02T06:38:22.382Z] [LOG]       Daily Salary: Rs.2000.00
+[2025-12-02T06:38:22.383Z] [LOG]       Weekday Hourly Rate: Rs.235.29
+[2025-12-02T06:38:22.383Z] [LOG]       Saturday Hourly Rate: Rs.444.44
+[2025-12-02T06:38:22.383Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.383Z] [LOG] 
+   📊 Full Period Working Days for Saru null (EMP000022):
+[2025-12-02T06:38:22.384Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.385Z] [LOG] 
+   💵 Pre-calculated Rates for Dharshika null (EMP000009):
+[2025-12-02T06:38:22.385Z] [LOG]       Daily Salary: Rs.4000.00
+[2025-12-02T06:38:22.386Z] [LOG]       Weekday Hourly Rate: Rs.470.59
+[2025-12-02T06:38:22.386Z] [LOG]       Saturday Hourly Rate: Rs.888.89
+[2025-12-02T06:38:22.386Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.387Z] [LOG] 
+   📊 Full Period Working Days for Dharshika null (EMP000009):
+[2025-12-02T06:38:22.387Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:22.564Z] [LOG] 
+   💵 Pre-calculated Rates for Safna Nawas null (EMP000021):
+[2025-12-02T06:38:22.564Z] [LOG]       Daily Salary: Rs.2000.00
+[2025-12-02T06:38:22.565Z] [LOG]       Weekday Hourly Rate: Rs.235.29
+[2025-12-02T06:38:22.565Z] [LOG]       Saturday Hourly Rate: Rs.444.44
+[2025-12-02T06:38:22.566Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2025-12-02T06:38:22.566Z] [LOG] 
+   📊 Full Period Working Days for Safna Nawas null (EMP000021):
+[2025-12-02T06:38:22.566Z] [LOG]       Weekdays: 21, Saturdays: 4, Sundays: 0
+[2025-12-02T06:38:23.130Z] [LOG] 
+   📊 Working Days for Expected Calculation for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:23.130Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.131Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.139Z] [LOG] 
+   📊 Working Days for Expected Calculation for Nimdiya Ranasinghe null (EMP000045):
+[2025-12-02T06:38:23.140Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.142Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.144Z] [LOG] 
+   📊 Working Days for Expected Calculation for Uthpala Sachini (EMP000006):
+[2025-12-02T06:38:23.145Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.146Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.171Z] [LOG] 
+   📊 Working Days for Expected Calculation for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:23.172Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.172Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.331Z] [LOG] 
+   📊 Working Days for Expected Calculation for Dharshika null (EMP000009):
+[2025-12-02T06:38:23.331Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.332Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.340Z] [LOG] 
+   📊 Working Days for Expected Calculation for Franklin null (EMP000018):
+[2025-12-02T06:38:23.341Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.341Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.451Z] [LOG] 
+   📊 Working Days for Expected Calculation for Sumaiya null (EMP000016):
+[2025-12-02T06:38:23.452Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.453Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.455Z] [LOG] 
+   📊 Working Days for Expected Calculation for Chamodi null (EMP000032):
+[2025-12-02T06:38:23.464Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.465Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.469Z] [LOG] 
+   📊 Working Days for Expected Calculation for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:23.470Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.471Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.492Z] [LOG] 
+   📊 Working Days for Expected Calculation for Hari null (EMP000017):
+[2025-12-02T06:38:23.494Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.495Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.496Z] [LOG] 
+   📊 Working Days for Expected Calculation for Jessie null (EMP000013):
+[2025-12-02T06:38:23.497Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.497Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.513Z] [LOG] 
+   📊 Working Days for Expected Calculation for Saruban null (EMP000007):
+[2025-12-02T06:38:23.514Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.514Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.531Z] [LOG] 
+   📊 Working Days for Expected Calculation for Piyumi null (EMP000025):
+[2025-12-02T06:38:23.531Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.532Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.536Z] [LOG] 
+   📊 Working Days for Expected Calculation for Viruna Damsiha Cooray null (EMP000038):
+[2025-12-02T06:38:23.537Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.537Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.559Z] [LOG] 
+   📊 Working Days for Expected Calculation for Ammaar Ilham (EMP000023):
+[2025-12-02T06:38:23.561Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.562Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.567Z] [LOG] 
+   ⏰ Calculating Completed Hours for R. D.A Kaushalya null (EMP000044) - All completed sessions:
+[2025-12-02T06:38:23.567Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.568Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:23.569Z] [LOG] 
+      📋 Attendance Breakdown for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:23.569Z] [LOG]          1. 2025-12-01 (Weekday): 30600 sec (8.50h)
+[2025-12-02T06:38:23.571Z] [LOG] 
+   ⏰ Calculating Completed Hours for Nimdiya Ranasinghe null (EMP000045) - All completed sessions:
+[2025-12-02T06:38:23.572Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.572Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.573Z] [LOG] 
+   📊 Working Days for Expected Calculation for Sithira null (EMP000039):
+[2025-12-02T06:38:23.574Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.574Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.579Z] [LOG] 
+   ⏰ Calculating Completed Hours for Uthpala Sachini (EMP000006) - All completed sessions:
+[2025-12-02T06:38:23.580Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.580Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.597Z] [LOG] 
+   📊 Working Days for Expected Calculation for Waruni null (EMP000024):
+[2025-12-02T06:38:23.597Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.598Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.619Z] [LOG] 
+   📊 Working Days for Expected Calculation for Maryam null (EMP000035):
+[2025-12-02T06:38:23.620Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.620Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.629Z] [LOG] 
+   ⏰ Calculating Completed Hours for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046) - All completed sessions:
+[2025-12-02T06:38:23.629Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.630Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:23.630Z] [LOG] 
+      📋 Attendance Breakdown for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:23.631Z] [LOG]          1. 2025-12-01 (Weekday): 30600 sec (8.50h)
+[2025-12-02T06:38:23.656Z] [LOG] 
+   📊 Working Days for Expected Calculation for Saru null (EMP000022):
+[2025-12-02T06:38:23.656Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.657Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.696Z] [LOG] 
+   📊 Working Days for Expected Calculation for Anoj null (EMP000014):
+[2025-12-02T06:38:23.696Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.697Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.711Z] [LOG] 
+   📊 Working Days for Expected Calculation for Chemil null (EMP000040):
+[2025-12-02T06:38:23.712Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.712Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.713Z] [LOG] 
+   📊 Working Days for Expected Calculation for Sujevan Selvaratnam null (EMP000026):
+[2025-12-02T06:38:23.714Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.715Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.772Z] [LOG] 
+   ⏰ Calculating Completed Hours for Piyumi null (EMP000025) - All completed sessions:
+[2025-12-02T06:38:23.773Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.773Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.774Z] [LOG] 
+   ⏰ Calculating Completed Hours for Viruna Damsiha Cooray null (EMP000038) - All completed sessions:
+[2025-12-02T06:38:23.775Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.775Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.781Z] [LOG] 
+   📊 Working Days for Expected Calculation for Safna Nawas null (EMP000021):
+[2025-12-02T06:38:23.782Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.782Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.784Z] [LOG] 
+   ⏰ Calculating Completed Hours for Ammaar Ilham (EMP000023) - All completed sessions:
+[2025-12-02T06:38:23.784Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.785Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.786Z] [LOG] 
+   📊 Working Days for Expected Calculation for Shandeep null (EMP000034):
+[2025-12-02T06:38:23.786Z] [LOG]       Up to: 2025-12-01 (yesterday, today calculated separately)
+[2025-12-02T06:38:23.787Z] [LOG]       Weekdays: 1, Saturdays: 0, Sundays: 0
+[2025-12-02T06:38:23.841Z] [LOG] 
+   ⏰ Calculating Completed Hours for Sithira null (EMP000039) - All completed sessions:
+[2025-12-02T06:38:23.842Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.844Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:23.844Z] [LOG] 
+      📋 Attendance Breakdown for Sithira null (EMP000039):
+[2025-12-02T06:38:23.845Z] [LOG]          1. 2025-12-01 (Weekday): 26700 sec (7.42h)
+[2025-12-02T06:38:23.868Z] [LOG] 
+   ⏰ Calculating Completed Hours for Dharshika null (EMP000009) - All completed sessions:
+[2025-12-02T06:38:23.869Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.869Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:23.870Z] [LOG] 
+      📋 Attendance Breakdown for Dharshika null (EMP000009):
+[2025-12-02T06:38:23.871Z] [LOG]          1. 2025-12-01 (Weekday): 25740 sec (7.15h)
+[2025-12-02T06:38:23.908Z] [LOG] 
+   ⏰ Calculating Completed Hours for Franklin null (EMP000018) - All completed sessions:
+[2025-12-02T06:38:23.908Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.909Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:23.910Z] [LOG] 
+      📋 Attendance Breakdown for Franklin null (EMP000018):
+[2025-12-02T06:38:23.911Z] [LOG]          1. 2025-12-01 (Weekday): 24900 sec (6.92h)
+[2025-12-02T06:38:23.922Z] [LOG] 
+   ⏰ Calculating Completed Hours for Sumaiya null (EMP000016) - All completed sessions:
+[2025-12-02T06:38:23.923Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.923Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:23.923Z] [LOG] 
+      📋 Attendance Breakdown for Sumaiya null (EMP000016):
+[2025-12-02T06:38:23.924Z] [LOG]          1. 2025-12-01 (Weekday): 30600 sec (8.50h)
+[2025-12-02T06:38:23.930Z] [LOG] 
+   ⏰ Calculating Completed Hours for Chamodi null (EMP000032) - All completed sessions:
+[2025-12-02T06:38:23.931Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.932Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.933Z] [LOG] 
+   ⏰ Calculating Completed Hours for Ratheeshanan Maneimannan (EMP000047) - All completed sessions:
+[2025-12-02T06:38:23.934Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.934Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:23.935Z] [LOG] 
+      📋 Attendance Breakdown for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:23.935Z] [LOG]          1. 2025-12-01 (Weekday): 28020 sec (7.78h)
+[2025-12-02T06:38:23.952Z] [LOG] 
+   ⏰ Calculating Completed Hours for Hari null (EMP000017) - All completed sessions:
+[2025-12-02T06:38:23.953Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.953Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.954Z] [LOG] 
+   ⏰ Calculating Completed Hours for Jessie null (EMP000013) - All completed sessions:
+[2025-12-02T06:38:23.955Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.955Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.956Z] [LOG] 
+   ⏰ Calculating Completed Hours for Saruban null (EMP000007) - All completed sessions:
+[2025-12-02T06:38:23.957Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.957Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.970Z] [LOG] 
+   ⏰ Calculating Completed Hours for Anoj null (EMP000014) - All completed sessions:
+[2025-12-02T06:38:23.970Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.971Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:23.972Z] [LOG] 
+   ⏰ Calculating Completed Hours for Saru null (EMP000022) - All completed sessions:
+[2025-12-02T06:38:23.973Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:23.973Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:24.005Z] [LOG] 
+   ⏰ Calculating Completed Hours for Sujevan Selvaratnam null (EMP000026) - All completed sessions:
+[2025-12-02T06:38:24.006Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:24.006Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:24.023Z] [LOG] 
+      📊 Attendance Hours for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:24.024Z] [LOG]          Weekday: 8.50h
+[2025-12-02T06:38:24.024Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.025Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.046Z] [LOG] 
+      📊 Attendance Hours for Nimdiya Ranasinghe null (EMP000045):
+[2025-12-02T06:38:24.047Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.048Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.049Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.080Z] [LOG] 
+      📊 Attendance Hours for Uthpala Sachini (EMP000006):
+[2025-12-02T06:38:24.080Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.081Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.081Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.082Z] [LOG] 
+   ⏰ Calculating Completed Hours for Safna Nawas null (EMP000021) - All completed sessions:
+[2025-12-02T06:38:24.083Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:24.083Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:24.135Z] [LOG] 
+   ⏰ Calculating Completed Hours for Shandeep null (EMP000034) - All completed sessions:
+[2025-12-02T06:38:24.135Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:24.136Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:24.136Z] [LOG] 
+      📋 Attendance Breakdown for Shandeep null (EMP000034):
+[2025-12-02T06:38:24.137Z] [LOG]          1. 2025-12-01 (Weekday): 28020 sec (7.78h)
+[2025-12-02T06:38:24.138Z] [LOG] 
+   ⏰ Calculating Completed Hours for Waruni null (EMP000024) - All completed sessions:
+[2025-12-02T06:38:24.139Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:24.139Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:24.139Z] [LOG] 
+      📋 Attendance Breakdown for Waruni null (EMP000024):
+[2025-12-02T06:38:24.140Z] [LOG]          1. 2025-12-01 (Weekday): 30600 sec (8.50h)
+[2025-12-02T06:38:24.165Z] [LOG] 
+   ⏰ Calculating Completed Hours for Maryam null (EMP000035) - All completed sessions:
+[2025-12-02T06:38:24.166Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:24.166Z] [LOG]       Total completed sessions found: 1
+[2025-12-02T06:38:24.167Z] [LOG] 
+      📋 Attendance Breakdown for Maryam null (EMP000035):
+[2025-12-02T06:38:24.168Z] [LOG]          1. 2025-12-01 (Weekday): 28860 sec (8.02h)
+[2025-12-02T06:38:24.169Z] [LOG] 
+      📊 Attendance Hours for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:24.170Z] [LOG]          Weekday: 8.50h
+[2025-12-02T06:38:24.170Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.170Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.218Z] [LOG] 
+   ⏰ Calculating Completed Hours for Chemil null (EMP000040) - All completed sessions:
+[2025-12-02T06:38:24.219Z] [LOG]       Period: 2025-12-01 to 2025-12-02
+[2025-12-02T06:38:24.220Z] [LOG]       Total completed sessions found: 0
+[2025-12-02T06:38:24.234Z] [LOG] 
+      📊 Attendance Hours for Saruban null (EMP000007):
+[2025-12-02T06:38:24.235Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.235Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.235Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.237Z] [LOG] 
+      📊 Attendance Hours for Piyumi null (EMP000025):
+[2025-12-02T06:38:24.237Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.238Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.238Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.254Z] [LOG] 
+      📊 Attendance Hours for Anoj null (EMP000014):
+[2025-12-02T06:38:24.255Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.255Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.256Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.278Z] [LOG] 
+      📊 Attendance Hours for Viruna Damsiha Cooray null (EMP000038):
+[2025-12-02T06:38:24.279Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.279Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.279Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.286Z] [LOG] 
+      📊 Attendance Hours for Saru null (EMP000022):
+[2025-12-02T06:38:24.286Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.287Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.287Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.336Z] [LOG] 
+      📊 Attendance Hours for Ammaar Ilham (EMP000023):
+[2025-12-02T06:38:24.337Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.337Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.338Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.350Z] [LOG] 
+      📊 Attendance Hours for Dharshika null (EMP000009):
+[2025-12-02T06:38:24.351Z] [LOG]          Weekday: 7.15h
+[2025-12-02T06:38:24.351Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.352Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.358Z] [LOG] 
+      📊 Attendance Hours for Franklin null (EMP000018):
+[2025-12-02T06:38:24.359Z] [LOG]          Weekday: 6.92h
+[2025-12-02T06:38:24.360Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.361Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.363Z] [LOG] 
+      📊 Attendance Hours for Sithira null (EMP000039):
+[2025-12-02T06:38:24.364Z] [LOG]          Weekday: 7.42h
+[2025-12-02T06:38:24.364Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.365Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.387Z] [LOG] 
+      📊 Attendance Hours for Sumaiya null (EMP000016):
+[2025-12-02T06:38:24.388Z] [LOG]          Weekday: 8.50h
+[2025-12-02T06:38:24.388Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.389Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.390Z] [LOG] 
+      📊 Attendance Hours for Chamodi null (EMP000032):
+[2025-12-02T06:38:24.391Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.391Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.391Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.393Z] [LOG] 
+      📊 Attendance Hours for Safna Nawas null (EMP000021):
+[2025-12-02T06:38:24.394Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.395Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.396Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.414Z] [LOG] 
+      📊 Attendance Hours for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:24.415Z] [LOG]          Weekday: 7.78h
+[2025-12-02T06:38:24.415Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.416Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.434Z] [LOG] 
+      📊 Attendance Hours for Hari null (EMP000017):
+[2025-12-02T06:38:24.437Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.437Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.437Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.440Z] [LOG] 
+      📊 Attendance Hours for Jessie null (EMP000013):
+[2025-12-02T06:38:24.453Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.454Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.454Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.458Z] [LOG] 
+      📊 Attendance Hours for Waruni null (EMP000024):
+[2025-12-02T06:38:24.458Z] [LOG]          Weekday: 8.50h
+[2025-12-02T06:38:24.458Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.459Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.460Z] [LOG] 
+      📊 Attendance Hours for Maryam null (EMP000035):
+[2025-12-02T06:38:24.461Z] [LOG]          Weekday: 8.02h
+[2025-12-02T06:38:24.461Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.461Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.487Z] [LOG] 
+      📊 Attendance Hours for Sujevan Selvaratnam null (EMP000026):
+[2025-12-02T06:38:24.494Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.495Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.498Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.500Z] [LOG] 
+      📊 Attendance Hours for Chemil null (EMP000040):
+[2025-12-02T06:38:24.500Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.500Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.500Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.577Z] [LOG]           R. D.A Kaushalya null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.578Z] [LOG] 
+      📅 Total Leave Hours for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:24.578Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.578Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.579Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.579Z] [LOG] 
+      📊 Total Actual Earned Hours for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:24.579Z] [LOG]          Weekday: 8.50h (Attendance: 8.50h + Leave: 0.00h)
+[2025-12-02T06:38:24.579Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.580Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.583Z] [LOG]           Nimdiya Ranasinghe null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.583Z] [LOG] 
+      📅 Total Leave Hours for Nimdiya Ranasinghe null (EMP000045):
+[2025-12-02T06:38:24.583Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.584Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.584Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.584Z] [LOG] 
+      📊 Total Actual Earned Hours for Nimdiya Ranasinghe null (EMP000045):
+[2025-12-02T06:38:24.585Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.585Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.585Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.615Z] [LOG]           Uthpala Sachini - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.616Z] [LOG] 
+      📅 Total Leave Hours for Uthpala Sachini (EMP000006):
+[2025-12-02T06:38:24.616Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.617Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.617Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.617Z] [LOG] 
+      📊 Total Actual Earned Hours for Uthpala Sachini (EMP000006):
+[2025-12-02T06:38:24.618Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.618Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.618Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.619Z] [LOG] 
+      📊 Attendance Hours for Shandeep null (EMP000034):
+[2025-12-02T06:38:24.620Z] [LOG]          Weekday: 7.78h
+[2025-12-02T06:38:24.620Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.621Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.675Z] [LOG]           Ashen Nirmal Wadugodapitiya Wadugodapitiya - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.678Z] [LOG] 
+      📅 Total Leave Hours for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:24.679Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.679Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.680Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.680Z] [LOG] 
+      📊 Total Actual Earned Hours for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:24.681Z] [LOG]          Weekday: 8.50h (Attendance: 8.50h + Leave: 0.00h)
+[2025-12-02T06:38:24.681Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.682Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.699Z] [LOG]           Saruban null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.700Z] [LOG] 
+      📅 Total Leave Hours for Saruban null (EMP000007):
+[2025-12-02T06:38:24.701Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.702Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.702Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.703Z] [LOG] 
+      📊 Total Actual Earned Hours for Saruban null (EMP000007):
+[2025-12-02T06:38:24.704Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.704Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.705Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.755Z] [LOG]           Piyumi null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.756Z] [LOG] 
+      📅 Total Leave Hours for Piyumi null (EMP000025):
+[2025-12-02T06:38:24.757Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.757Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.758Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.759Z] [LOG] 
+      📊 Total Actual Earned Hours for Piyumi null (EMP000025):
+[2025-12-02T06:38:24.761Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.762Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.762Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.784Z] [LOG]           Anoj null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.785Z] [LOG] 
+      📅 Total Leave Hours for Anoj null (EMP000014):
+[2025-12-02T06:38:24.786Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.787Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.788Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.788Z] [LOG] 
+      📊 Total Actual Earned Hours for Anoj null (EMP000014):
+[2025-12-02T06:38:24.789Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.789Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.790Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.792Z] [LOG]           Viruna Damsiha Cooray null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.795Z] [LOG] 
+      📅 Total Leave Hours for Viruna Damsiha Cooray null (EMP000038):
+[2025-12-02T06:38:24.796Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.797Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.797Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.798Z] [LOG] 
+      📊 Total Actual Earned Hours for Viruna Damsiha Cooray null (EMP000038):
+[2025-12-02T06:38:24.799Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.800Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.801Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.803Z] [LOG]           Waruni null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.804Z] [LOG] 
+      📅 Total Leave Hours for Waruni null (EMP000024):
+[2025-12-02T06:38:24.804Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.805Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.806Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.807Z] [LOG] 
+      📊 Total Actual Earned Hours for Waruni null (EMP000024):
+[2025-12-02T06:38:24.807Z] [LOG]          Weekday: 8.50h (Attendance: 8.50h + Leave: 0.00h)
+[2025-12-02T06:38:24.808Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.809Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.812Z] [LOG]           Saru null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.813Z] [LOG] 
+      📅 Total Leave Hours for Saru null (EMP000022):
+[2025-12-02T06:38:24.814Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.815Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.815Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.816Z] [LOG] 
+      📊 Total Actual Earned Hours for Saru null (EMP000022):
+[2025-12-02T06:38:24.817Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.817Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.818Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.820Z] [LOG]           Maryam null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.821Z] [LOG] 
+      📅 Total Leave Hours for Maryam null (EMP000035):
+[2025-12-02T06:38:24.821Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.821Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.822Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.822Z] [LOG] 
+      📊 Total Actual Earned Hours for Maryam null (EMP000035):
+[2025-12-02T06:38:24.822Z] [LOG]          Weekday: 8.02h (Attendance: 8.02h + Leave: 0.00h)
+[2025-12-02T06:38:24.823Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.823Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.824Z] [LOG]           Ammaar Ilham - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.824Z] [LOG] 
+      📅 Total Leave Hours for Ammaar Ilham (EMP000023):
+[2025-12-02T06:38:24.825Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.825Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.825Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.825Z] [LOG] 
+      📊 Total Actual Earned Hours for Ammaar Ilham (EMP000023):
+[2025-12-02T06:38:24.827Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.827Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.828Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.828Z] [LOG]           Dharshika null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.829Z] [LOG] 
+      📅 Total Leave Hours for Dharshika null (EMP000009):
+[2025-12-02T06:38:24.829Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.830Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.830Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.830Z] [LOG] 
+      📊 Total Actual Earned Hours for Dharshika null (EMP000009):
+[2025-12-02T06:38:24.831Z] [LOG]          Weekday: 7.15h (Attendance: 7.15h + Leave: 0.00h)
+[2025-12-02T06:38:24.831Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.831Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.832Z] [LOG]           Sithira null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.832Z] [LOG] 
+      📅 Total Leave Hours for Sithira null (EMP000039):
+[2025-12-02T06:38:24.833Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.833Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.834Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.834Z] [LOG] 
+      📊 Total Actual Earned Hours for Sithira null (EMP000039):
+[2025-12-02T06:38:24.834Z] [LOG]          Weekday: 7.42h (Attendance: 7.42h + Leave: 0.00h)
+[2025-12-02T06:38:24.834Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.835Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.836Z] [LOG]           Franklin null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.836Z] [LOG] 
+      📅 Total Leave Hours for Franklin null (EMP000018):
+[2025-12-02T06:38:24.836Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.837Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.837Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.837Z] [LOG] 
+      📊 Total Actual Earned Hours for Franklin null (EMP000018):
+[2025-12-02T06:38:24.838Z] [LOG]          Weekday: 6.92h (Attendance: 6.92h + Leave: 0.00h)
+[2025-12-02T06:38:24.838Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.838Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.839Z] [LOG]           Sujevan Selvaratnam null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.840Z] [LOG] 
+      📅 Total Leave Hours for Sujevan Selvaratnam null (EMP000026):
+[2025-12-02T06:38:24.840Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.840Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.840Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.841Z] [LOG] 
+      📊 Total Actual Earned Hours for Sujevan Selvaratnam null (EMP000026):
+[2025-12-02T06:38:24.841Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.841Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.842Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.853Z] [LOG]           Sumaiya null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.853Z] [LOG] 
+      📅 Total Leave Hours for Sumaiya null (EMP000016):
+[2025-12-02T06:38:24.854Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.854Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.854Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.855Z] [LOG] 
+      📊 Total Actual Earned Hours for Sumaiya null (EMP000016):
+[2025-12-02T06:38:24.855Z] [LOG]          Weekday: 8.50h (Attendance: 8.50h + Leave: 0.00h)
+[2025-12-02T06:38:24.855Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.855Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.856Z] [LOG]           Chamodi null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.857Z] [LOG] 
+      📅 Total Leave Hours for Chamodi null (EMP000032):
+[2025-12-02T06:38:24.857Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.858Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.858Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.858Z] [LOG] 
+      📊 Total Actual Earned Hours for Chamodi null (EMP000032):
+[2025-12-02T06:38:24.858Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.859Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.861Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.889Z] [LOG]           Safna Nawas null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.889Z] [LOG] 
+      📅 Total Leave Hours for Safna Nawas null (EMP000021):
+[2025-12-02T06:38:24.889Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.890Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.890Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.890Z] [LOG] 
+      📊 Total Actual Earned Hours for Safna Nawas null (EMP000021):
+[2025-12-02T06:38:24.891Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.891Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.891Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.893Z] [LOG]           Ratheeshanan Maneimannan - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.894Z] [LOG] 
+      📅 Total Leave Hours for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:24.894Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.894Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.895Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.895Z] [LOG] 
+      📊 Total Actual Earned Hours for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:24.895Z] [LOG]          Weekday: 7.78h (Attendance: 7.78h + Leave: 0.00h)
+[2025-12-02T06:38:24.896Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.896Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.915Z] [LOG]           Hari null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.916Z] [LOG] 
+      📅 Total Leave Hours for Hari null (EMP000017):
+[2025-12-02T06:38:24.916Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.917Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.917Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.917Z] [LOG] 
+      📊 Total Actual Earned Hours for Hari null (EMP000017):
+[2025-12-02T06:38:24.918Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.918Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.918Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.936Z] [LOG]           Jessie null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.937Z] [LOG] 
+      📅 Total Leave Hours for Jessie null (EMP000013):
+[2025-12-02T06:38:24.937Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.938Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.938Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.938Z] [LOG] 
+      📊 Total Actual Earned Hours for Jessie null (EMP000013):
+[2025-12-02T06:38:24.938Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.939Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.939Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.994Z] [LOG]           Shandeep null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:24.995Z] [LOG] 
+      📅 Total Leave Hours for Shandeep null (EMP000034):
+[2025-12-02T06:38:24.995Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:24.995Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:24.995Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:24.996Z] [LOG] 
+      📊 Total Actual Earned Hours for Shandeep null (EMP000034):
+[2025-12-02T06:38:24.996Z] [LOG]          Weekday: 7.78h (Attendance: 7.78h + Leave: 0.00h)
+[2025-12-02T06:38:24.996Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:24.997Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:25.034Z] [LOG]           Chemil null - Leave period: 2025-12-01 to 2025-12-02, Attendance period: 2025-12-01 to 2025-12-02,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2025-12-02T06:38:25.035Z] [LOG] 
+      📅 Total Leave Hours for Chemil null (EMP000040):
+[2025-12-02T06:38:25.035Z] [LOG]          Weekday: 0.00h
+[2025-12-02T06:38:25.036Z] [LOG]          Saturday: 0.00h
+[2025-12-02T06:38:25.036Z] [LOG]          Sunday: 0.00h
+[2025-12-02T06:38:25.036Z] [LOG] 
+      📊 Total Actual Earned Hours for Chemil null (EMP000040):
+[2025-12-02T06:38:25.036Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:25.037Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:25.037Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2025-12-02T06:38:25.102Z] [LOG] 
+   🔴 LIVE SESSION TODAY for R. D.A Kaushalya null (EMP000044) - WEEKDAY:
+[2025-12-02T06:38:25.103Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.103Z] [LOG]       Check-in Time: 08:30:00
+[2025-12-02T06:38:25.104Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.104Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.104Z] [LOG]       Actual Hours (check-in → now): 3.64h
+[2025-12-02T06:38:25.104Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for R. D.A Kaushalya null (EMP000044) - including live session:
+[2025-12-02T06:38:25.105Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.105Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.105Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.106Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.106Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for R. D.A Kaushalya null (EMP000044) - including live session:
+[2025-12-02T06:38:25.106Z] [LOG]       Weekday: 12.14h (includes 3.64h live)
+[2025-12-02T06:38:25.107Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.107Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.107Z] [LOG]       Total Actual: 12.14h
+[2025-12-02T06:38:25.107Z] [LOG] 
+   💵 EXPECTED Earned Salary for R. D.A Kaushalya null (EMP000044) - until NOW:
+[2025-12-02T06:38:25.108Z] [LOG]       Weekday: 12.14h × Rs.376.47 = Rs.4570.46
+[2025-12-02T06:38:25.108Z] [LOG]       Saturday: 0.00h × Rs.711.11 = Rs.0.00
+[2025-12-02T06:38:25.108Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.108Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.109Z] [LOG]       Total Expected Earned: Rs.4570.46
+[2025-12-02T06:38:25.110Z] [LOG] 
+   💵 ACTUAL Earned Salary for R. D.A Kaushalya null (EMP000044) - including live session:
+[2025-12-02T06:38:25.110Z] [LOG]       Weekday: 12.14h × Rs.376.47 = Rs.4570.46
+[2025-12-02T06:38:25.111Z] [LOG]       Saturday: 0.00h × Rs.711.11 = Rs.0.00
+[2025-12-02T06:38:25.111Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.111Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.111Z] [LOG]       Total Actual Earned: Rs.4570.46
+[2025-12-02T06:38:25.112Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for R. D.A Kaushalya null (EMP000044):
+[2025-12-02T06:38:25.112Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.112Z] [LOG]       Expected Earned: Rs.4570.46
+[2025-12-02T06:38:25.113Z] [LOG]       Actual Earned: Rs.4570.46
+[2025-12-02T06:38:25.113Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.113Z] [LOG]       Attendance Deduction: Rs.0.00
+[2025-12-02T06:38:25.113Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.114Z] [LOG]       ✅ No deduction - R. D.A Kaushalya null worked all expected hours!
+[2025-12-02T06:38:25.114Z] [LOG] 
+   ⚠️  NOTE: R. D.A Kaushalya null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.115Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.116Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Nimdiya Ranasinghe null (EMP000045) - WEEKDAY:
+[2025-12-02T06:38:25.116Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.116Z] [LOG]       Check-in Time: 07:32:00
+[2025-12-02T06:38:25.117Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.117Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.117Z] [LOG]       Actual Hours (check-in → now): 4.61h
+[2025-12-02T06:38:25.117Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Nimdiya Ranasinghe null (EMP000045) - including live session:
+[2025-12-02T06:38:25.118Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.118Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.119Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.119Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.119Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Nimdiya Ranasinghe null (EMP000045) - including live session:
+[2025-12-02T06:38:25.119Z] [LOG]       Weekday: 4.61h (includes 4.61h live)
+[2025-12-02T06:38:25.120Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.120Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.120Z] [LOG]       Total Actual: 4.61h
+[2025-12-02T06:38:25.120Z] [LOG] 
+   💵 EXPECTED Earned Salary for Nimdiya Ranasinghe null (EMP000045) - until NOW:
+[2025-12-02T06:38:25.121Z] [LOG]       Weekday: 12.14h × Rs.164.71 = Rs.1999.63
+[2025-12-02T06:38:25.121Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.121Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.122Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.122Z] [LOG]       Total Expected Earned: Rs.1999.63
+[2025-12-02T06:38:25.122Z] [LOG] 
+   💵 ACTUAL Earned Salary for Nimdiya Ranasinghe null (EMP000045) - including live session:
+[2025-12-02T06:38:25.122Z] [LOG]       Weekday: 4.61h × Rs.164.71 = Rs.758.82
+[2025-12-02T06:38:25.123Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.123Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.123Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.124Z] [LOG]       Total Actual Earned: Rs.758.82
+[2025-12-02T06:38:25.124Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Nimdiya Ranasinghe null (EMP000045):
+[2025-12-02T06:38:25.124Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.125Z] [LOG]       Expected Earned: Rs.1999.63
+[2025-12-02T06:38:25.125Z] [LOG]       Actual Earned: Rs.758.82
+[2025-12-02T06:38:25.125Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.125Z] [LOG]       Attendance Deduction: Rs.1240.82
+[2025-12-02T06:38:25.125Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.127Z] [LOG]       📉 Shortfall for Nimdiya Ranasinghe null: 7.53 hours (62.05% of expected)
+[2025-12-02T06:38:25.127Z] [LOG] 
+   ⚠️  NOTE: Nimdiya Ranasinghe null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.128Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.173Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Uthpala Sachini (EMP000006) - including live session:
+[2025-12-02T06:38:25.174Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.174Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.174Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.175Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.175Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Uthpala Sachini (EMP000006) - including live session:
+[2025-12-02T06:38:25.175Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.176Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.177Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.177Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.177Z] [LOG] 
+   💵 EXPECTED Earned Salary for Uthpala Sachini (EMP000006) - until NOW:
+[2025-12-02T06:38:25.178Z] [LOG]       Weekday: 8.50h × Rs.470.59 = Rs.4000.01
+[2025-12-02T06:38:25.178Z] [LOG]       Saturday: 0.00h × Rs.888.89 = Rs.0.00
+[2025-12-02T06:38:25.178Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.179Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.179Z] [LOG]       Total Expected Earned: Rs.4000.01
+[2025-12-02T06:38:25.179Z] [LOG] 
+   💵 ACTUAL Earned Salary for Uthpala Sachini (EMP000006) - including live session:
+[2025-12-02T06:38:25.180Z] [LOG]       Weekday: 0.00h × Rs.470.59 = Rs.0.00
+[2025-12-02T06:38:25.180Z] [LOG]       Saturday: 0.00h × Rs.888.89 = Rs.0.00
+[2025-12-02T06:38:25.180Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.181Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.181Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.181Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Uthpala Sachini (EMP000006):
+[2025-12-02T06:38:25.182Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.182Z] [LOG]       Expected Earned: Rs.4000.01
+[2025-12-02T06:38:25.182Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.182Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.183Z] [LOG]       Attendance Deduction: Rs.4000.01
+[2025-12-02T06:38:25.183Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.183Z] [LOG]       📉 Shortfall for Uthpala Sachini: 8.50 hours (100.00% of expected)
+[2025-12-02T06:38:25.198Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046) - WEEKDAY:
+[2025-12-02T06:38:25.198Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.199Z] [LOG]       Check-in Time: 08:01:00
+[2025-12-02T06:38:25.199Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.199Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.200Z] [LOG]       Actual Hours (check-in → now): 4.12h
+[2025-12-02T06:38:25.200Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046) - including live session:
+[2025-12-02T06:38:25.201Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.201Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.201Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.201Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.202Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046) - including live session:
+[2025-12-02T06:38:25.202Z] [LOG]       Weekday: 12.62h (includes 4.12h live)
+[2025-12-02T06:38:25.202Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.203Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.203Z] [LOG]       Total Actual: 12.62h
+[2025-12-02T06:38:25.203Z] [LOG] 
+   💵 EXPECTED Earned Salary for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046) - until NOW:
+[2025-12-02T06:38:25.204Z] [LOG]       Weekday: 12.14h × Rs.282.35 = Rs.3427.82
+[2025-12-02T06:38:25.204Z] [LOG]       Saturday: 0.00h × Rs.533.33 = Rs.0.00
+[2025-12-02T06:38:25.204Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.205Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.205Z] [LOG]       Total Expected Earned: Rs.3427.82
+[2025-12-02T06:38:25.205Z] [LOG] 
+   💵 ACTUAL Earned Salary for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046) - including live session:
+[2025-12-02T06:38:25.205Z] [LOG]       Weekday: 12.62h × Rs.282.35 = Rs.3564.29
+[2025-12-02T06:38:25.206Z] [LOG]       Saturday: 0.00h × Rs.533.33 = Rs.0.00
+[2025-12-02T06:38:25.206Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.206Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.206Z] [LOG]       Total Actual Earned: Rs.3564.29
+[2025-12-02T06:38:25.207Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046):
+[2025-12-02T06:38:25.207Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.208Z] [LOG]       Expected Earned: Rs.3427.82
+[2025-12-02T06:38:25.208Z] [LOG]       Actual Earned: Rs.3564.29
+[2025-12-02T06:38:25.208Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.208Z] [LOG]       Attendance Deduction: Rs.0.00
+[2025-12-02T06:38:25.208Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.209Z] [LOG]       ✅ No deduction - Ashen Nirmal Wadugodapitiya Wadugodapitiya worked all expected hours!
+[2025-12-02T06:38:25.210Z] [LOG] 
+   ⚠️  NOTE: Ashen Nirmal Wadugodapitiya Wadugodapitiya is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.210Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.214Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Saruban null (EMP000007) - including live session:
+[2025-12-02T06:38:25.215Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.215Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.215Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.216Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.216Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Saruban null (EMP000007) - including live session:
+[2025-12-02T06:38:25.216Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.217Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.217Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.217Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.217Z] [LOG] 
+   💵 EXPECTED Earned Salary for Saruban null (EMP000007) - until NOW:
+[2025-12-02T06:38:25.218Z] [LOG]       Weekday: 8.50h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.218Z] [LOG]       Saturday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.219Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.219Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.219Z] [LOG]       Total Expected Earned: Rs.0.00
+[2025-12-02T06:38:25.219Z] [LOG] 
+   💵 ACTUAL Earned Salary for Saruban null (EMP000007) - including live session:
+[2025-12-02T06:38:25.220Z] [LOG]       Weekday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.220Z] [LOG]       Saturday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.220Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.221Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.221Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.221Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Saruban null (EMP000007):
+[2025-12-02T06:38:25.222Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.222Z] [LOG]       Expected Earned: Rs.0.00
+[2025-12-02T06:38:25.222Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.222Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.223Z] [LOG]       Attendance Deduction: Rs.0.00
+[2025-12-02T06:38:25.223Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.223Z] [LOG]       ✅ No deduction - Saruban null worked all expected hours!
+[2025-12-02T06:38:25.232Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Viruna Damsiha Cooray null (EMP000038) - WEEKDAY:
+[2025-12-02T06:38:25.232Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.232Z] [LOG]       Check-in Time: 08:52:00
+[2025-12-02T06:38:25.233Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.233Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.234Z] [LOG]       Actual Hours (check-in → now): 3.27h
+[2025-12-02T06:38:25.234Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Viruna Damsiha Cooray null (EMP000038) - including live session:
+[2025-12-02T06:38:25.234Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.235Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.235Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.235Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.236Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Viruna Damsiha Cooray null (EMP000038) - including live session:
+[2025-12-02T06:38:25.236Z] [LOG]       Weekday: 3.27h (includes 3.27h live)
+[2025-12-02T06:38:25.236Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.237Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.237Z] [LOG]       Total Actual: 3.27h
+[2025-12-02T06:38:25.237Z] [LOG] 
+   💵 EXPECTED Earned Salary for Viruna Damsiha Cooray null (EMP000038) - until NOW:
+[2025-12-02T06:38:25.238Z] [LOG]       Weekday: 12.14h × Rs.235.29 = Rs.2856.50
+[2025-12-02T06:38:25.238Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.238Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.238Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.239Z] [LOG]       Total Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.239Z] [LOG] 
+   💵 ACTUAL Earned Salary for Viruna Damsiha Cooray null (EMP000038) - including live session:
+[2025-12-02T06:38:25.239Z] [LOG]       Weekday: 3.27h × Rs.235.29 = Rs.770.26
+[2025-12-02T06:38:25.240Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.240Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.240Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.240Z] [LOG]       Total Actual Earned: Rs.770.26
+[2025-12-02T06:38:25.241Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Viruna Damsiha Cooray null (EMP000038):
+[2025-12-02T06:38:25.241Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.242Z] [LOG]       Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.242Z] [LOG]       Actual Earned: Rs.770.26
+[2025-12-02T06:38:25.244Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.244Z] [LOG]       Attendance Deduction: Rs.2086.24
+[2025-12-02T06:38:25.245Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.245Z] [LOG]       📉 Shortfall for Viruna Damsiha Cooray null: 8.87 hours (73.03% of expected)
+[2025-12-02T06:38:25.245Z] [LOG] 
+   ⚠️  NOTE: Viruna Damsiha Cooray null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.246Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.247Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Waruni null (EMP000024) - WEEKDAY:
+[2025-12-02T06:38:25.247Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.247Z] [LOG]       Check-in Time: 08:15:00
+[2025-12-02T06:38:25.248Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.248Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.249Z] [LOG]       Actual Hours (check-in → now): 3.89h
+[2025-12-02T06:38:25.249Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Waruni null (EMP000024) - including live session:
+[2025-12-02T06:38:25.249Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.249Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.250Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.250Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.250Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Waruni null (EMP000024) - including live session:
+[2025-12-02T06:38:25.251Z] [LOG]       Weekday: 12.39h (includes 3.89h live)
+[2025-12-02T06:38:25.251Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.251Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.252Z] [LOG]       Total Actual: 12.39h
+[2025-12-02T06:38:25.252Z] [LOG] 
+   💵 EXPECTED Earned Salary for Waruni null (EMP000024) - until NOW:
+[2025-12-02T06:38:25.252Z] [LOG]       Weekday: 12.14h × Rs.235.29 = Rs.2856.50
+[2025-12-02T06:38:25.252Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.253Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.253Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.253Z] [LOG]       Total Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.253Z] [LOG] 
+   💵 ACTUAL Earned Salary for Waruni null (EMP000024) - including live session:
+[2025-12-02T06:38:25.254Z] [LOG]       Weekday: 12.39h × Rs.235.29 = Rs.2915.32
+[2025-12-02T06:38:25.254Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.254Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.255Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.255Z] [LOG]       Total Actual Earned: Rs.2915.32
+[2025-12-02T06:38:25.255Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Waruni null (EMP000024):
+[2025-12-02T06:38:25.256Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.256Z] [LOG]       Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.256Z] [LOG]       Actual Earned: Rs.2915.32
+[2025-12-02T06:38:25.256Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.256Z] [LOG]       Attendance Deduction: Rs.0.00
+[2025-12-02T06:38:25.257Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.257Z] [LOG]       ✅ No deduction - Waruni null worked all expected hours!
+[2025-12-02T06:38:25.257Z] [LOG] 
+   ⚠️  NOTE: Waruni null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.257Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.258Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Piyumi null (EMP000025) - WEEKDAY:
+[2025-12-02T06:38:25.259Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.259Z] [LOG]       Check-in Time: 07:52:00
+[2025-12-02T06:38:25.261Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.261Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.261Z] [LOG]       Actual Hours (check-in → now): 4.27h
+[2025-12-02T06:38:25.262Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Piyumi null (EMP000025) - including live session:
+[2025-12-02T06:38:25.262Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.262Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.262Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.263Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.263Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Piyumi null (EMP000025) - including live session:
+[2025-12-02T06:38:25.263Z] [LOG]       Weekday: 4.27h (includes 4.27h live)
+[2025-12-02T06:38:25.263Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.264Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.264Z] [LOG]       Total Actual: 4.27h
+[2025-12-02T06:38:25.264Z] [LOG] 
+   💵 EXPECTED Earned Salary for Piyumi null (EMP000025) - until NOW:
+[2025-12-02T06:38:25.265Z] [LOG]       Weekday: 12.14h × Rs.164.71 = Rs.1999.64
+[2025-12-02T06:38:25.265Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.265Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.265Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.265Z] [LOG]       Total Expected Earned: Rs.1999.64
+[2025-12-02T06:38:25.266Z] [LOG] 
+   💵 ACTUAL Earned Salary for Piyumi null (EMP000025) - including live session:
+[2025-12-02T06:38:25.266Z] [LOG]       Weekday: 4.27h × Rs.164.71 = Rs.703.92
+[2025-12-02T06:38:25.266Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.266Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.267Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.267Z] [LOG]       Total Actual Earned: Rs.703.92
+[2025-12-02T06:38:25.267Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Piyumi null (EMP000025):
+[2025-12-02T06:38:25.268Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.268Z] [LOG]       Expected Earned: Rs.1999.64
+[2025-12-02T06:38:25.268Z] [LOG]       Actual Earned: Rs.703.92
+[2025-12-02T06:38:25.268Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.269Z] [LOG]       Attendance Deduction: Rs.1295.72
+[2025-12-02T06:38:25.269Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.269Z] [LOG]       📉 Shortfall for Piyumi null: 7.87 hours (64.80% of expected)
+[2025-12-02T06:38:25.269Z] [LOG] 
+   ⚠️  NOTE: Piyumi null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.270Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.271Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Saru null (EMP000022) - WEEKDAY:
+[2025-12-02T06:38:25.271Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.271Z] [LOG]       Check-in Time: 08:53:00
+[2025-12-02T06:38:25.272Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.272Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.272Z] [LOG]       Actual Hours (check-in → now): 3.26h
+[2025-12-02T06:38:25.272Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Saru null (EMP000022) - including live session:
+[2025-12-02T06:38:25.272Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.272Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.273Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.273Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.273Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Saru null (EMP000022) - including live session:
+[2025-12-02T06:38:25.273Z] [LOG]       Weekday: 3.26h (includes 3.26h live)
+[2025-12-02T06:38:25.273Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.274Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.274Z] [LOG]       Total Actual: 3.26h
+[2025-12-02T06:38:25.274Z] [LOG] 
+   💵 EXPECTED Earned Salary for Saru null (EMP000022) - until NOW:
+[2025-12-02T06:38:25.274Z] [LOG]       Weekday: 12.14h × Rs.235.29 = Rs.2856.50
+[2025-12-02T06:38:25.275Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.275Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.275Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.275Z] [LOG]       Total Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.275Z] [LOG] 
+   💵 ACTUAL Earned Salary for Saru null (EMP000022) - including live session:
+[2025-12-02T06:38:25.276Z] [LOG]       Weekday: 3.26h × Rs.235.29 = Rs.766.34
+[2025-12-02T06:38:25.277Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.277Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.277Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.277Z] [LOG]       Total Actual Earned: Rs.766.34
+[2025-12-02T06:38:25.278Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Saru null (EMP000022):
+[2025-12-02T06:38:25.278Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.278Z] [LOG]       Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.279Z] [LOG]       Actual Earned: Rs.766.34
+[2025-12-02T06:38:25.279Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.279Z] [LOG]       Attendance Deduction: Rs.2090.16
+[2025-12-02T06:38:25.280Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.280Z] [LOG]       📉 Shortfall for Saru null: 8.88 hours (73.17% of expected)
+[2025-12-02T06:38:25.280Z] [LOG] 
+   ⚠️  NOTE: Saru null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.281Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.281Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Anoj null (EMP000014) - WEEKDAY:
+[2025-12-02T06:38:25.282Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.282Z] [LOG]       Check-in Time: 09:13:00
+[2025-12-02T06:38:25.282Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.282Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.283Z] [LOG]       Actual Hours (check-in → now): 2.92h
+[2025-12-02T06:38:25.283Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Anoj null (EMP000014) - including live session:
+[2025-12-02T06:38:25.283Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.283Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.283Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.284Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.284Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Anoj null (EMP000014) - including live session:
+[2025-12-02T06:38:25.284Z] [LOG]       Weekday: 2.92h (includes 2.92h live)
+[2025-12-02T06:38:25.284Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.285Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.285Z] [LOG]       Total Actual: 2.92h
+[2025-12-02T06:38:25.285Z] [LOG] 
+   💵 EXPECTED Earned Salary for Anoj null (EMP000014) - until NOW:
+[2025-12-02T06:38:25.285Z] [LOG]       Weekday: 12.14h × Rs.235.29 = Rs.2856.50
+[2025-12-02T06:38:25.286Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.286Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.286Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.286Z] [LOG]       Total Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.286Z] [LOG] 
+   💵 ACTUAL Earned Salary for Anoj null (EMP000014) - including live session:
+[2025-12-02T06:38:25.286Z] [LOG]       Weekday: 2.92h × Rs.235.29 = Rs.687.91
+[2025-12-02T06:38:25.287Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.287Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.287Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.287Z] [LOG]       Total Actual Earned: Rs.687.91
+[2025-12-02T06:38:25.288Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Anoj null (EMP000014):
+[2025-12-02T06:38:25.288Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.288Z] [LOG]       Expected Earned: Rs.2856.50
+[2025-12-02T06:38:25.288Z] [LOG]       Actual Earned: Rs.687.91
+[2025-12-02T06:38:25.288Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.289Z] [LOG]       Attendance Deduction: Rs.2168.59
+[2025-12-02T06:38:25.289Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.289Z] [LOG]       📉 Shortfall for Anoj null: 9.22 hours (75.92% of expected)
+[2025-12-02T06:38:25.289Z] [LOG] 
+   ⚠️  NOTE: Anoj null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.290Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.290Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Sithira null (EMP000039) - WEEKDAY:
+[2025-12-02T06:38:25.290Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.291Z] [LOG]       Check-in Time: 08:38:00
+[2025-12-02T06:38:25.291Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.291Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.292Z] [LOG]       Actual Hours (check-in → now): 3.51h
+[2025-12-02T06:38:25.292Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Sithira null (EMP000039) - including live session:
+[2025-12-02T06:38:25.292Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.293Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.293Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.294Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.294Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Sithira null (EMP000039) - including live session:
+[2025-12-02T06:38:25.294Z] [LOG]       Weekday: 10.92h (includes 3.51h live)
+[2025-12-02T06:38:25.294Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.295Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.295Z] [LOG]       Total Actual: 10.92h
+[2025-12-02T06:38:25.295Z] [LOG] 
+   💵 EXPECTED Earned Salary for Sithira null (EMP000039) - until NOW:
+[2025-12-02T06:38:25.295Z] [LOG]       Weekday: 12.14h × Rs.188.24 = Rs.2285.30
+[2025-12-02T06:38:25.296Z] [LOG]       Saturday: 0.00h × Rs.355.56 = Rs.0.00
+[2025-12-02T06:38:25.296Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.296Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.296Z] [LOG]       Total Expected Earned: Rs.2285.30
+[2025-12-02T06:38:25.296Z] [LOG] 
+   💵 ACTUAL Earned Salary for Sithira null (EMP000039) - including live session:
+[2025-12-02T06:38:25.297Z] [LOG]       Weekday: 10.92h × Rs.188.24 = Rs.2056.28
+[2025-12-02T06:38:25.297Z] [LOG]       Saturday: 0.00h × Rs.355.56 = Rs.0.00
+[2025-12-02T06:38:25.297Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.297Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.297Z] [LOG]       Total Actual Earned: Rs.2056.28
+[2025-12-02T06:38:25.298Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Sithira null (EMP000039):
+[2025-12-02T06:38:25.298Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.298Z] [LOG]       Expected Earned: Rs.2285.30
+[2025-12-02T06:38:25.298Z] [LOG]       Actual Earned: Rs.2056.28
+[2025-12-02T06:38:25.299Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.299Z] [LOG]       Attendance Deduction: Rs.229.03
+[2025-12-02T06:38:25.299Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.299Z] [LOG]       📉 Shortfall for Sithira null: 1.22 hours (10.02% of expected)
+[2025-12-02T06:38:25.299Z] [LOG] 
+   ⚠️  NOTE: Sithira null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.299Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.300Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Maryam null (EMP000035) - WEEKDAY:
+[2025-12-02T06:38:25.300Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.300Z] [LOG]       Check-in Time: 09:08:00
+[2025-12-02T06:38:25.301Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.301Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.301Z] [LOG]       Actual Hours (check-in → now): 3.01h
+[2025-12-02T06:38:25.301Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Maryam null (EMP000035) - including live session:
+[2025-12-02T06:38:25.302Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.302Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.302Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.302Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.302Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Maryam null (EMP000035) - including live session:
+[2025-12-02T06:38:25.303Z] [LOG]       Weekday: 11.02h (includes 3.01h live)
+[2025-12-02T06:38:25.303Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.303Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.303Z] [LOG]       Total Actual: 11.02h
+[2025-12-02T06:38:25.303Z] [LOG] 
+   💵 EXPECTED Earned Salary for Maryam null (EMP000035) - until NOW:
+[2025-12-02T06:38:25.303Z] [LOG]       Weekday: 12.14h × Rs.188.24 = Rs.2285.30
+[2025-12-02T06:38:25.304Z] [LOG]       Saturday: 0.00h × Rs.355.56 = Rs.0.00
+[2025-12-02T06:38:25.304Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.304Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.304Z] [LOG]       Total Expected Earned: Rs.2285.30
+[2025-12-02T06:38:25.304Z] [LOG] 
+   💵 ACTUAL Earned Salary for Maryam null (EMP000035) - including live session:
+[2025-12-02T06:38:25.304Z] [LOG]       Weekday: 11.02h × Rs.188.24 = Rs.2075.10
+[2025-12-02T06:38:25.305Z] [LOG]       Saturday: 0.00h × Rs.355.56 = Rs.0.00
+[2025-12-02T06:38:25.305Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.305Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.305Z] [LOG]       Total Actual Earned: Rs.2075.10
+[2025-12-02T06:38:25.305Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Maryam null (EMP000035):
+[2025-12-02T06:38:25.305Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.306Z] [LOG]       Expected Earned: Rs.2285.30
+[2025-12-02T06:38:25.306Z] [LOG]       Actual Earned: Rs.2075.10
+[2025-12-02T06:38:25.306Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.306Z] [LOG]       Attendance Deduction: Rs.210.20
+[2025-12-02T06:38:25.306Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.306Z] [LOG]       📉 Shortfall for Maryam null: 1.12 hours (9.20% of expected)
+[2025-12-02T06:38:25.306Z] [LOG] 
+   ⚠️  NOTE: Maryam null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.307Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.311Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Ammaar Ilham (EMP000023) - including live session:
+[2025-12-02T06:38:25.312Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.312Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.312Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.312Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.313Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Ammaar Ilham (EMP000023) - including live session:
+[2025-12-02T06:38:25.313Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.313Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.314Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.314Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.314Z] [LOG] 
+   💵 EXPECTED Earned Salary for Ammaar Ilham (EMP000023) - until NOW:
+[2025-12-02T06:38:25.314Z] [LOG]       Weekday: 8.50h × Rs.329.41 = Rs.2799.99
+[2025-12-02T06:38:25.315Z] [LOG]       Saturday: 0.00h × Rs.622.22 = Rs.0.00
+[2025-12-02T06:38:25.315Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.315Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.315Z] [LOG]       Total Expected Earned: Rs.2799.99
+[2025-12-02T06:38:25.316Z] [LOG] 
+   💵 ACTUAL Earned Salary for Ammaar Ilham (EMP000023) - including live session:
+[2025-12-02T06:38:25.316Z] [LOG]       Weekday: 0.00h × Rs.329.41 = Rs.0.00
+[2025-12-02T06:38:25.316Z] [LOG]       Saturday: 0.00h × Rs.622.22 = Rs.0.00
+[2025-12-02T06:38:25.317Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.317Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.317Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.317Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Ammaar Ilham (EMP000023):
+[2025-12-02T06:38:25.318Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.318Z] [LOG]       Expected Earned: Rs.2799.99
+[2025-12-02T06:38:25.318Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.318Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.319Z] [LOG]       Attendance Deduction: Rs.2799.99
+[2025-12-02T06:38:25.319Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.319Z] [LOG]       📉 Shortfall for Ammaar Ilham: 8.50 hours (100.00% of expected)
+[2025-12-02T06:38:25.320Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Hari null (EMP000017) - including live session:
+[2025-12-02T06:38:25.320Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.320Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.321Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.321Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.321Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Hari null (EMP000017) - including live session:
+[2025-12-02T06:38:25.321Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.321Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.321Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.322Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.322Z] [LOG] 
+   💵 EXPECTED Earned Salary for Hari null (EMP000017) - until NOW:
+[2025-12-02T06:38:25.322Z] [LOG]       Weekday: 8.50h × Rs.235.29 = Rs.1999.96
+[2025-12-02T06:38:25.322Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.323Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.323Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.323Z] [LOG]       Total Expected Earned: Rs.1999.96
+[2025-12-02T06:38:25.323Z] [LOG] 
+   💵 ACTUAL Earned Salary for Hari null (EMP000017) - including live session:
+[2025-12-02T06:38:25.323Z] [LOG]       Weekday: 0.00h × Rs.235.29 = Rs.0.00
+[2025-12-02T06:38:25.324Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.324Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.324Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.324Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.325Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Hari null (EMP000017):
+[2025-12-02T06:38:25.325Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.325Z] [LOG]       Expected Earned: Rs.1999.96
+[2025-12-02T06:38:25.325Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.325Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.325Z] [LOG]       Attendance Deduction: Rs.1999.96
+[2025-12-02T06:38:25.326Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.327Z] [LOG]       📉 Shortfall for Hari null: 8.50 hours (100.00% of expected)
+[2025-12-02T06:38:25.327Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Jessie null (EMP000013) - including live session:
+[2025-12-02T06:38:25.328Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.328Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.328Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.328Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.328Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Jessie null (EMP000013) - including live session:
+[2025-12-02T06:38:25.328Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.329Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.329Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.329Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.329Z] [LOG] 
+   💵 EXPECTED Earned Salary for Jessie null (EMP000013) - until NOW:
+[2025-12-02T06:38:25.329Z] [LOG]       Weekday: 8.50h × Rs.282.35 = Rs.2399.98
+[2025-12-02T06:38:25.329Z] [LOG]       Saturday: 0.00h × Rs.533.33 = Rs.0.00
+[2025-12-02T06:38:25.330Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.330Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.330Z] [LOG]       Total Expected Earned: Rs.2399.98
+[2025-12-02T06:38:25.330Z] [LOG] 
+   💵 ACTUAL Earned Salary for Jessie null (EMP000013) - including live session:
+[2025-12-02T06:38:25.330Z] [LOG]       Weekday: 0.00h × Rs.282.35 = Rs.0.00
+[2025-12-02T06:38:25.330Z] [LOG]       Saturday: 0.00h × Rs.533.33 = Rs.0.00
+[2025-12-02T06:38:25.330Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.331Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.331Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.331Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Jessie null (EMP000013):
+[2025-12-02T06:38:25.331Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.331Z] [LOG]       Expected Earned: Rs.2399.98
+[2025-12-02T06:38:25.332Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.332Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.332Z] [LOG]       Attendance Deduction: Rs.2399.98
+[2025-12-02T06:38:25.332Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.332Z] [LOG]       📉 Shortfall for Jessie null: 8.50 hours (100.00% of expected)
+[2025-12-02T06:38:25.333Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Franklin null (EMP000018) - including live session:
+[2025-12-02T06:38:25.333Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.333Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.333Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.333Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.334Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Franklin null (EMP000018) - including live session:
+[2025-12-02T06:38:25.334Z] [LOG]       Weekday: 6.92h
+[2025-12-02T06:38:25.334Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.334Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.334Z] [LOG]       Total Actual: 6.92h
+[2025-12-02T06:38:25.334Z] [LOG] 
+   💵 EXPECTED Earned Salary for Franklin null (EMP000018) - until NOW:
+[2025-12-02T06:38:25.335Z] [LOG]       Weekday: 8.50h × Rs.235.29 = Rs.1999.96
+[2025-12-02T06:38:25.335Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.335Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.335Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.335Z] [LOG]       Total Expected Earned: Rs.1999.96
+[2025-12-02T06:38:25.335Z] [LOG] 
+   💵 ACTUAL Earned Salary for Franklin null (EMP000018) - including live session:
+[2025-12-02T06:38:25.335Z] [LOG]       Weekday: 6.92h × Rs.235.29 = Rs.1627.42
+[2025-12-02T06:38:25.335Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.336Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.336Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.336Z] [LOG]       Total Actual Earned: Rs.1627.42
+[2025-12-02T06:38:25.336Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Franklin null (EMP000018):
+[2025-12-02T06:38:25.336Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.336Z] [LOG]       Expected Earned: Rs.1999.96
+[2025-12-02T06:38:25.337Z] [LOG]       Actual Earned: Rs.1627.42
+[2025-12-02T06:38:25.337Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.337Z] [LOG]       Attendance Deduction: Rs.372.54
+[2025-12-02T06:38:25.337Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.337Z] [LOG]       📉 Shortfall for Franklin null: 1.58 hours (18.63% of expected)
+[2025-12-02T06:38:25.338Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Sumaiya null (EMP000016) - WEEKDAY:
+[2025-12-02T06:38:25.338Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.338Z] [LOG]       Check-in Time: 08:58:00
+[2025-12-02T06:38:25.339Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.339Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.339Z] [LOG]       Actual Hours (check-in → now): 3.17h
+[2025-12-02T06:38:25.339Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Sumaiya null (EMP000016) - including live session:
+[2025-12-02T06:38:25.339Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.339Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.339Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.339Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.340Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Sumaiya null (EMP000016) - including live session:
+[2025-12-02T06:38:25.340Z] [LOG]       Weekday: 11.67h (includes 3.17h live)
+[2025-12-02T06:38:25.340Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.340Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.340Z] [LOG]       Total Actual: 11.67h
+[2025-12-02T06:38:25.340Z] [LOG] 
+   💵 EXPECTED Earned Salary for Sumaiya null (EMP000016) - until NOW:
+[2025-12-02T06:38:25.340Z] [LOG]       Weekday: 12.14h × Rs.282.35 = Rs.3427.83
+[2025-12-02T06:38:25.340Z] [LOG]       Saturday: 0.00h × Rs.533.33 = Rs.0.00
+[2025-12-02T06:38:25.341Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.341Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.341Z] [LOG]       Total Expected Earned: Rs.3427.83
+[2025-12-02T06:38:25.341Z] [LOG] 
+   💵 ACTUAL Earned Salary for Sumaiya null (EMP000016) - including live session:
+[2025-12-02T06:38:25.341Z] [LOG]       Weekday: 11.67h × Rs.282.35 = Rs.3296.07
+[2025-12-02T06:38:25.341Z] [LOG]       Saturday: 0.00h × Rs.533.33 = Rs.0.00
+[2025-12-02T06:38:25.342Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.342Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.342Z] [LOG]       Total Actual Earned: Rs.3296.07
+[2025-12-02T06:38:25.343Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Sumaiya null (EMP000016):
+[2025-12-02T06:38:25.343Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.344Z] [LOG]       Expected Earned: Rs.3427.83
+[2025-12-02T06:38:25.344Z] [LOG]       Actual Earned: Rs.3296.07
+[2025-12-02T06:38:25.344Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.344Z] [LOG]       Attendance Deduction: Rs.131.76
+[2025-12-02T06:38:25.345Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.345Z] [LOG]       📉 Shortfall for Sumaiya null: 0.47 hours (3.84% of expected)
+[2025-12-02T06:38:25.345Z] [LOG] 
+   ⚠️  NOTE: Sumaiya null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.345Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.346Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Sujevan Selvaratnam null (EMP000026) - including live session:
+[2025-12-02T06:38:25.346Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.347Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.347Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.347Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.347Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Sujevan Selvaratnam null (EMP000026) - including live session:
+[2025-12-02T06:38:25.347Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.348Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.348Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.348Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.348Z] [LOG] 
+   💵 EXPECTED Earned Salary for Sujevan Selvaratnam null (EMP000026) - until NOW:
+[2025-12-02T06:38:25.348Z] [LOG]       Weekday: 8.50h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.349Z] [LOG]       Saturday: 0.00h × Rs.0.01 = Rs.0.00
+[2025-12-02T06:38:25.349Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.349Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.349Z] [LOG]       Total Expected Earned: Rs.0.00
+[2025-12-02T06:38:25.349Z] [LOG] 
+   💵 ACTUAL Earned Salary for Sujevan Selvaratnam null (EMP000026) - including live session:
+[2025-12-02T06:38:25.350Z] [LOG]       Weekday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.350Z] [LOG]       Saturday: 0.00h × Rs.0.01 = Rs.0.00
+[2025-12-02T06:38:25.350Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.350Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.351Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.351Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Sujevan Selvaratnam null (EMP000026):
+[2025-12-02T06:38:25.351Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.351Z] [LOG]       Expected Earned: Rs.0.00
+[2025-12-02T06:38:25.352Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.352Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.352Z] [LOG]       Attendance Deduction: Rs.0.00
+[2025-12-02T06:38:25.352Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.352Z] [LOG]       ✅ No deduction - Sujevan Selvaratnam null worked all expected hours!
+[2025-12-02T06:38:25.354Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Chamodi null (EMP000032) - including live session:
+[2025-12-02T06:38:25.354Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.354Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.354Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.354Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.355Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Chamodi null (EMP000032) - including live session:
+[2025-12-02T06:38:25.355Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.355Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.355Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.355Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.356Z] [LOG] 
+   💵 EXPECTED Earned Salary for Chamodi null (EMP000032) - until NOW:
+[2025-12-02T06:38:25.356Z] [LOG]       Weekday: 8.50h × Rs.164.71 = Rs.1400.04
+[2025-12-02T06:38:25.356Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.356Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.356Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.357Z] [LOG]       Total Expected Earned: Rs.1400.04
+[2025-12-02T06:38:25.357Z] [LOG] 
+   💵 ACTUAL Earned Salary for Chamodi null (EMP000032) - including live session:
+[2025-12-02T06:38:25.357Z] [LOG]       Weekday: 0.00h × Rs.164.71 = Rs.0.00
+[2025-12-02T06:38:25.357Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.357Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.358Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.358Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.358Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Chamodi null (EMP000032):
+[2025-12-02T06:38:25.359Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.359Z] [LOG]       Expected Earned: Rs.1400.04
+[2025-12-02T06:38:25.360Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.360Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.360Z] [LOG]       Attendance Deduction: Rs.1400.04
+[2025-12-02T06:38:25.361Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.361Z] [LOG]       📉 Shortfall for Chamodi null: 8.50 hours (100.00% of expected)
+[2025-12-02T06:38:25.379Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Shandeep null (EMP000034) - WEEKDAY:
+[2025-12-02T06:38:25.379Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.379Z] [LOG]       Check-in Time: 09:01:00
+[2025-12-02T06:38:25.380Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.380Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.380Z] [LOG]       Actual Hours (check-in → now): 3.12h
+[2025-12-02T06:38:25.380Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Shandeep null (EMP000034) - including live session:
+[2025-12-02T06:38:25.381Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.381Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.381Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.381Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.381Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Shandeep null (EMP000034) - including live session:
+[2025-12-02T06:38:25.382Z] [LOG]       Weekday: 10.91h (includes 3.12h live)
+[2025-12-02T06:38:25.382Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.382Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.382Z] [LOG]       Total Actual: 10.91h
+[2025-12-02T06:38:25.382Z] [LOG] 
+   💵 EXPECTED Earned Salary for Shandeep null (EMP000034) - until NOW:
+[2025-12-02T06:38:25.383Z] [LOG]       Weekday: 12.14h × Rs.376.47 = Rs.4570.49
+[2025-12-02T06:38:25.383Z] [LOG]       Saturday: 0.00h × Rs.711.11 = Rs.0.00
+[2025-12-02T06:38:25.383Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.383Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.383Z] [LOG]       Total Expected Earned: Rs.4570.49
+[2025-12-02T06:38:25.384Z] [LOG] 
+   💵 ACTUAL Earned Salary for Shandeep null (EMP000034) - including live session:
+[2025-12-02T06:38:25.384Z] [LOG]       Weekday: 10.91h × Rs.376.47 = Rs.4106.18
+[2025-12-02T06:38:25.384Z] [LOG]       Saturday: 0.00h × Rs.711.11 = Rs.0.00
+[2025-12-02T06:38:25.384Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.384Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.385Z] [LOG]       Total Actual Earned: Rs.4106.18
+[2025-12-02T06:38:25.385Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Shandeep null (EMP000034):
+[2025-12-02T06:38:25.385Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.385Z] [LOG]       Expected Earned: Rs.4570.49
+[2025-12-02T06:38:25.386Z] [LOG]       Actual Earned: Rs.4106.18
+[2025-12-02T06:38:25.386Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.386Z] [LOG]       Attendance Deduction: Rs.464.31
+[2025-12-02T06:38:25.386Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.386Z] [LOG]       📉 Shortfall for Shandeep null: 1.23 hours (10.16% of expected)
+[2025-12-02T06:38:25.386Z] [LOG] 
+   ⚠️  NOTE: Shandeep null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.387Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.397Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Safna Nawas null (EMP000021) - including live session:
+[2025-12-02T06:38:25.398Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.398Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.398Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.398Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.398Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Safna Nawas null (EMP000021) - including live session:
+[2025-12-02T06:38:25.399Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.399Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.399Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.399Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.399Z] [LOG] 
+   💵 EXPECTED Earned Salary for Safna Nawas null (EMP000021) - until NOW:
+[2025-12-02T06:38:25.399Z] [LOG]       Weekday: 8.50h × Rs.235.29 = Rs.1999.96
+[2025-12-02T06:38:25.400Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.400Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.400Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.400Z] [LOG]       Total Expected Earned: Rs.1999.96
+[2025-12-02T06:38:25.400Z] [LOG] 
+   💵 ACTUAL Earned Salary for Safna Nawas null (EMP000021) - including live session:
+[2025-12-02T06:38:25.401Z] [LOG]       Weekday: 0.00h × Rs.235.29 = Rs.0.00
+[2025-12-02T06:38:25.401Z] [LOG]       Saturday: 0.00h × Rs.444.44 = Rs.0.00
+[2025-12-02T06:38:25.401Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.401Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.401Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.402Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Safna Nawas null (EMP000021):
+[2025-12-02T06:38:25.402Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.402Z] [LOG]       Expected Earned: Rs.1999.96
+[2025-12-02T06:38:25.402Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.402Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.403Z] [LOG]       Attendance Deduction: Rs.1999.96
+[2025-12-02T06:38:25.403Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.403Z] [LOG]       📉 Shortfall for Safna Nawas null: 8.50 hours (100.00% of expected)
+[2025-12-02T06:38:25.404Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Chemil null (EMP000040) - including live session:
+[2025-12-02T06:38:25.404Z] [LOG]       Weekday: 8.50h
+[2025-12-02T06:38:25.404Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.404Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.404Z] [LOG]       Total Expected: 8.50h
+[2025-12-02T06:38:25.405Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Chemil null (EMP000040) - including live session:
+[2025-12-02T06:38:25.405Z] [LOG]       Weekday: 0.00h
+[2025-12-02T06:38:25.405Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.405Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.405Z] [LOG]       Total Actual: 0.00h
+[2025-12-02T06:38:25.405Z] [LOG] 
+   💵 EXPECTED Earned Salary for Chemil null (EMP000040) - until NOW:
+[2025-12-02T06:38:25.406Z] [LOG]       Weekday: 8.50h × Rs.1176.47 = Rs.10000.00
+[2025-12-02T06:38:25.406Z] [LOG]       Saturday: 0.00h × Rs.2222.22 = Rs.0.00
+[2025-12-02T06:38:25.406Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.406Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.406Z] [LOG]       Total Expected Earned: Rs.10000.00
+[2025-12-02T06:38:25.406Z] [LOG] 
+   💵 ACTUAL Earned Salary for Chemil null (EMP000040) - including live session:
+[2025-12-02T06:38:25.407Z] [LOG]       Weekday: 0.00h × Rs.1176.47 = Rs.0.00
+[2025-12-02T06:38:25.407Z] [LOG]       Saturday: 0.00h × Rs.2222.22 = Rs.0.00
+[2025-12-02T06:38:25.407Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.407Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.407Z] [LOG]       Total Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.408Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Chemil null (EMP000040):
+[2025-12-02T06:38:25.408Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.408Z] [LOG]       Expected Earned: Rs.10000.00
+[2025-12-02T06:38:25.409Z] [LOG]       Actual Earned: Rs.0.00
+[2025-12-02T06:38:25.409Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.409Z] [LOG]       Attendance Deduction: Rs.10000.00
+[2025-12-02T06:38:25.410Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.410Z] [LOG]       📉 Shortfall for Chemil null: 8.50 hours (100.00% of expected)
+[2025-12-02T06:38:25.471Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Ratheeshanan Maneimannan (EMP000047) - WEEKDAY:
+[2025-12-02T06:38:25.472Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.472Z] [LOG]       Check-in Time: 09:04:00
+[2025-12-02T06:38:25.473Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.473Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.473Z] [LOG]       Actual Hours (check-in → now): 3.07h
+[2025-12-02T06:38:25.474Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Ratheeshanan Maneimannan (EMP000047) - including live session:
+[2025-12-02T06:38:25.474Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.475Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.475Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.475Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.476Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Ratheeshanan Maneimannan (EMP000047) - including live session:
+[2025-12-02T06:38:25.477Z] [LOG]       Weekday: 10.86h (includes 3.07h live)
+[2025-12-02T06:38:25.477Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.477Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.478Z] [LOG]       Total Actual: 10.86h
+[2025-12-02T06:38:25.478Z] [LOG] 
+   💵 EXPECTED Earned Salary for Ratheeshanan Maneimannan (EMP000047) - until NOW:
+[2025-12-02T06:38:25.479Z] [LOG]       Weekday: 12.14h × Rs.164.71 = Rs.1999.65
+[2025-12-02T06:38:25.479Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.479Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.480Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.480Z] [LOG]       Total Expected Earned: Rs.1999.65
+[2025-12-02T06:38:25.480Z] [LOG] 
+   💵 ACTUAL Earned Salary for Ratheeshanan Maneimannan (EMP000047) - including live session:
+[2025-12-02T06:38:25.481Z] [LOG]       Weekday: 10.86h × Rs.164.71 = Rs.1788.27
+[2025-12-02T06:38:25.481Z] [LOG]       Saturday: 0.00h × Rs.311.11 = Rs.0.00
+[2025-12-02T06:38:25.481Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.482Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.482Z] [LOG]       Total Actual Earned: Rs.1788.27
+[2025-12-02T06:38:25.483Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Ratheeshanan Maneimannan (EMP000047):
+[2025-12-02T06:38:25.483Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.483Z] [LOG]       Expected Earned: Rs.1999.65
+[2025-12-02T06:38:25.484Z] [LOG]       Actual Earned: Rs.1788.27
+[2025-12-02T06:38:25.484Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.484Z] [LOG]       Attendance Deduction: Rs.211.38
+[2025-12-02T06:38:25.484Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.485Z] [LOG]       📉 Shortfall for Ratheeshanan Maneimannan: 1.28 hours (10.57% of expected)
+[2025-12-02T06:38:25.485Z] [LOG] 
+   ⚠️  NOTE: Ratheeshanan Maneimannan is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.486Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.635Z] [LOG] 
+      📅 Unpaid Leave Deduction for Nimdiya Ranasinghe null (EMP000045): Rs.0.00
+[2025-12-02T06:38:25.646Z] [LOG] 
+      📅 Unpaid Leave Deduction for Uthpala Sachini (EMP000006): Rs.0.00
+[2025-12-02T06:38:25.648Z] [LOG] 
+      📅 Unpaid Leave Deduction for R. D.A Kaushalya null (EMP000044): Rs.0.00
+[2025-12-02T06:38:25.667Z] [LOG] 
+   🔴 LIVE SESSION TODAY for Dharshika null (EMP000009) - WEEKDAY:
+[2025-12-02T06:38:25.668Z] [LOG]       Scheduled Start: 08:30:00
+[2025-12-02T06:38:25.669Z] [LOG]       Check-in Time: 10:00:00
+[2025-12-02T06:38:25.671Z] [LOG]       Current Time: 12:08:25
+[2025-12-02T06:38:25.671Z] [LOG]       Expected Hours (scheduled → now): 3.64h
+[2025-12-02T06:38:25.672Z] [LOG]       Actual Hours (check-in → now): 2.14h
+[2025-12-02T06:38:25.673Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Dharshika null (EMP000009) - including live session:
+[2025-12-02T06:38:25.674Z] [LOG]       Weekday: 12.14h (includes 3.64h expected today)
+[2025-12-02T06:38:25.674Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.675Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.676Z] [LOG]       Total Expected: 12.14h
+[2025-12-02T06:38:25.679Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Dharshika null (EMP000009) - including live session:
+[2025-12-02T06:38:25.680Z] [LOG]       Weekday: 9.29h (includes 2.14h live)
+[2025-12-02T06:38:25.681Z] [LOG]       Saturday: 0.00h
+[2025-12-02T06:38:25.681Z] [LOG]       Sunday: 0.00h
+[2025-12-02T06:38:25.682Z] [LOG]       Total Actual: 9.29h
+[2025-12-02T06:38:25.682Z] [LOG] 
+   💵 EXPECTED Earned Salary for Dharshika null (EMP000009) - until NOW:
+[2025-12-02T06:38:25.683Z] [LOG]       Weekday: 12.14h × Rs.470.59 = Rs.5713.18
+[2025-12-02T06:38:25.684Z] [LOG]       Saturday: 0.00h × Rs.888.89 = Rs.0.00
+[2025-12-02T06:38:25.685Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.685Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.686Z] [LOG]       Total Expected Earned: Rs.5713.18
+[2025-12-02T06:38:25.687Z] [LOG] 
+   💵 ACTUAL Earned Salary for Dharshika null (EMP000009) - including live session:
+[2025-12-02T06:38:25.688Z] [LOG]       Weekday: 9.29h × Rs.470.59 = Rs.4372.00
+[2025-12-02T06:38:25.688Z] [LOG]       Saturday: 0.00h × Rs.888.89 = Rs.0.00
+[2025-12-02T06:38:25.689Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2025-12-02T06:38:25.689Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.690Z] [LOG]       Total Actual Earned: Rs.4372.00
+[2025-12-02T06:38:25.691Z] [LOG] 
+   📊 REAL-TIME (Live Preview) for Dharshika null (EMP000009):
+[2025-12-02T06:38:25.692Z] [LOG]       Calculated At: Dec 2, 2025, 12:08:25
+[2025-12-02T06:38:25.692Z] [LOG]       Expected Earned: Rs.5713.18
+[2025-12-02T06:38:25.694Z] [LOG]       Actual Earned: Rs.4372.00
+[2025-12-02T06:38:25.694Z] [LOG]       ─────────────────────────────────────────────────────
+[2025-12-02T06:38:25.695Z] [LOG]       Attendance Deduction: Rs.1341.18
+[2025-12-02T06:38:25.695Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2025-12-02T06:38:25.695Z] [LOG]       📉 Shortfall for Dharshika null: 2.85 hours (23.48% of expected)
+[2025-12-02T06:38:25.696Z] [LOG] 
+   ⚠️  NOTE: Dharshika null is currently checked in. This is a LIVE PREVIEW.
+[2025-12-02T06:38:25.696Z] [LOG]       Running this calculation again later will produce a different result as time progresses.
+[2025-12-02T06:38:25.698Z] [LOG] 
+      📅 Unpaid Leave Deduction for Saruban null (EMP000007): Rs.0.00
+[2025-12-02T06:38:25.699Z] [LOG] 
+      📅 Unpaid Leave Deduction for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046): Rs.0.00
+[2025-12-02T06:38:25.709Z] [LOG] 
+      📅 Unpaid Leave Deduction for Waruni null (EMP000024): Rs.0.00
+[2025-12-02T06:38:25.722Z] [LOG] 
+      📅 Unpaid Leave Deduction for Viruna Damsiha Cooray null (EMP000038): Rs.0.00
+[2025-12-02T06:38:25.735Z] [LOG] 
+      📅 Unpaid Leave Deduction for Anoj null (EMP000014): Rs.0.00
+[2025-12-02T06:38:25.744Z] [LOG] 
+      📅 Unpaid Leave Deduction for Ammaar Ilham (EMP000023): Rs.0.00
+[2025-12-02T06:38:25.745Z] [LOG] 
+      📅 Unpaid Leave Deduction for Sithira null (EMP000039): Rs.0.00
+[2025-12-02T06:38:25.749Z] [LOG] 
+      📅 Unpaid Leave Deduction for Maryam null (EMP000035): Rs.0.00
+[2025-12-02T06:38:25.750Z] [LOG] 
+      📅 Unpaid Leave Deduction for Saru null (EMP000022): Rs.0.00
+[2025-12-02T06:38:25.751Z] [LOG] 
+      📅 Unpaid Leave Deduction for Piyumi null (EMP000025): Rs.0.00
+[2025-12-02T06:38:25.762Z] [LOG] 
+      📅 Unpaid Leave Deduction for Hari null (EMP000017): Rs.0.00
+[2025-12-02T06:38:25.787Z] [LOG] 
+      📅 Unpaid Leave Deduction for Jessie null (EMP000013): Rs.0.00
+[2025-12-02T06:38:25.804Z] [LOG] 
+      📅 Unpaid Leave Deduction for Franklin null (EMP000018): Rs.0.00
+[2025-12-02T06:38:25.805Z] [LOG] 
+      📅 Unpaid Leave Deduction for Sumaiya null (EMP000016): Rs.0.00
+[2025-12-02T06:38:25.807Z] [LOG] 
+      📅 Unpaid Leave Deduction for Sujevan Selvaratnam null (EMP000026): Rs.0.00
+[2025-12-02T06:38:25.829Z] [LOG] 
+      📅 Unpaid Leave Deduction for Shandeep null (EMP000034): Rs.0.00
+[2025-12-02T06:38:25.841Z] [LOG] 
+      📅 Unpaid Leave Deduction for Safna Nawas null (EMP000021): Rs.0.00
+[2025-12-02T06:38:25.863Z] [LOG] 
+      📅 Unpaid Leave Deduction for Chemil null (EMP000040): Rs.0.00
+[2025-12-02T06:38:25.898Z] [LOG] 
+      📅 Unpaid Leave Deduction for Chamodi null (EMP000032): Rs.0.00
+[2025-12-02T06:38:25.939Z] [LOG] 
+      📅 Unpaid Leave Deduction for Dharshika null (EMP000009): Rs.0.00
+[2025-12-02T06:38:26.067Z] [LOG] 
+      📅 Unpaid Leave Deduction for Ratheeshanan Maneimannan (EMP000047): Rs.0.00
+[2025-12-02T06:38:26.119Z] [LOG] 
+      ⏰ Time Variance Deduction for Nimdiya Ranasinghe null (EMP000045): Rs.0.00
+[2025-12-02T06:38:26.120Z] [LOG] 
+      ❌ Absent Days Deduction for Nimdiya Ranasinghe null (EMP000045): Rs.1240.82
+[2025-12-02T06:38:26.120Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (1240.82) = 1240.82
+[2025-12-02T06:38:26.122Z] [LOG] 
+      ⏰ Time Variance Deduction for R. D.A Kaushalya null (EMP000044): Rs.0.00
+[2025-12-02T06:38:26.122Z] [LOG] 
+      ❌ Absent Days Deduction for R. D.A Kaushalya null (EMP000044): Rs.0.00
+[2025-12-02T06:38:26.123Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (0.00) = 0.00
+[2025-12-02T06:38:26.124Z] [LOG] 
+      ⏰ Time Variance Deduction for Uthpala Sachini (EMP000006): Rs.0.00
+[2025-12-02T06:38:26.125Z] [LOG] 
+      ❌ Absent Days Deduction for Uthpala Sachini (EMP000006): Rs.4000.01
+[2025-12-02T06:38:26.127Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (4000.01) = 4000.01
+[2025-12-02T06:38:26.138Z] [LOG] 
+      ⏰ Time Variance Deduction for Saruban null (EMP000007): Rs.0.00
+[2025-12-02T06:38:26.138Z] [LOG] 
+      ❌ Absent Days Deduction for Saruban null (EMP000007): Rs.0.00
+[2025-12-02T06:38:26.139Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (0.00) = 0.00
+[2025-12-02T06:38:26.155Z] [LOG] 
+      ⏰ Time Variance Deduction for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046): Rs.0.00
+[2025-12-02T06:38:26.155Z] [LOG] 
+      ❌ Absent Days Deduction for Ashen Nirmal Wadugodapitiya Wadugodapitiya (EMP000046): Rs.0.00
+[2025-12-02T06:38:26.156Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (0.00) = 0.00
+[2025-12-02T06:38:26.157Z] [LOG] 
+      ⏰ Time Variance Deduction for Waruni null (EMP000024): Rs.0.00
+[2025-12-02T06:38:26.158Z] [LOG] 
+      ❌ Absent Days Deduction for Waruni null (EMP000024): Rs.0.00
+[2025-12-02T06:38:26.158Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (0.00) = 0.00
+[2025-12-02T06:38:26.162Z] [LOG] 
+      ⏰ Time Variance Deduction for Viruna Damsiha Cooray null (EMP000038): Rs.0.00
+[2025-12-02T06:38:26.162Z] [LOG] 
+      ❌ Absent Days Deduction for Viruna Damsiha Cooray null (EMP000038): Rs.2086.24
+[2025-12-02T06:38:26.163Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (2086.24) = 2086.24
+[2025-12-02T06:38:26.179Z] [LOG] 
+      ⏰ Time Variance Deduction for Anoj null (EMP000014): Rs.0.00
+[2025-12-02T06:38:26.180Z] [LOG] 
+      ❌ Absent Days Deduction for Anoj null (EMP000014): Rs.2168.59
+[2025-12-02T06:38:26.180Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (2168.59) = 2168.59
+[2025-12-02T06:38:26.203Z] [LOG] 
+      ⏰ Time Variance Deduction for Ammaar Ilham (EMP000023): Rs.0.00
+[2025-12-02T06:38:26.204Z] [LOG] 
+      ❌ Absent Days Deduction for Ammaar Ilham (EMP000023): Rs.2799.99
+[2025-12-02T06:38:26.204Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (2799.99) = 2799.99
+[2025-12-02T06:38:26.205Z] [LOG] 
+      ⏰ Time Variance Deduction for Sithira null (EMP000039): Rs.0.00
+[2025-12-02T06:38:26.206Z] [LOG] 
+      ❌ Absent Days Deduction for Sithira null (EMP000039): Rs.229.03
+[2025-12-02T06:38:26.206Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (229.03) = 229.03
+[2025-12-02T06:38:26.207Z] [LOG] 
+      ⏰ Time Variance Deduction for Hari null (EMP000017): Rs.0.00
+[2025-12-02T06:38:26.208Z] [LOG] 
+      ❌ Absent Days Deduction for Hari null (EMP000017): Rs.1999.96
+[2025-12-02T06:38:26.208Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (1999.96) = 1999.96
+[2025-12-02T06:38:26.209Z] [LOG] 
+      ⏰ Time Variance Deduction for Piyumi null (EMP000025): Rs.0.00
+[2025-12-02T06:38:26.212Z] [LOG] 
+      ❌ Absent Days Deduction for Piyumi null (EMP000025): Rs.1295.72
+[2025-12-02T06:38:26.213Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (1295.72) = 1295.72
+[2025-12-02T06:38:26.214Z] [LOG] 
+      ⏰ Time Variance Deduction for Maryam null (EMP000035): Rs.0.00
+[2025-12-02T06:38:26.214Z] [LOG] 
+      ❌ Absent Days Deduction for Maryam null (EMP000035): Rs.210.20
+[2025-12-02T06:38:26.215Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (210.20) = 210.20
+[2025-12-02T06:38:26.222Z] [LOG] 
+      ⏰ Time Variance Deduction for Saru null (EMP000022): Rs.0.00
+[2025-12-02T06:38:26.223Z] [LOG] 
+      ❌ Absent Days Deduction for Saru null (EMP000022): Rs.2090.16
+[2025-12-02T06:38:26.223Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (2090.16) = 2090.16
+[2025-12-02T06:38:26.229Z] [LOG] 
+      ⏰ Time Variance Deduction for Jessie null (EMP000013): Rs.0.00
+[2025-12-02T06:38:26.230Z] [LOG] 
+      ❌ Absent Days Deduction for Jessie null (EMP000013): Rs.2399.98
+[2025-12-02T06:38:26.230Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (2399.98) = 2399.98
+[2025-12-02T06:38:26.245Z] [LOG] 
+      ⏰ Time Variance Deduction for Franklin null (EMP000018): Rs.0.00
+[2025-12-02T06:38:26.246Z] [LOG] 
+      ❌ Absent Days Deduction for Franklin null (EMP000018): Rs.372.54
+[2025-12-02T06:38:26.246Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (372.54) = 372.54
+[2025-12-02T06:38:26.283Z] [LOG] 
+      ⏰ Time Variance Deduction for Sumaiya null (EMP000016): Rs.0.00
+[2025-12-02T06:38:26.283Z] [LOG] 
+      ❌ Absent Days Deduction for Sumaiya null (EMP000016): Rs.131.76
+[2025-12-02T06:38:26.284Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (131.76) = 131.76
+[2025-12-02T06:38:26.324Z] [LOG] 
+      ⏰ Time Variance Deduction for Chemil null (EMP000040): Rs.0.00
+[2025-12-02T06:38:26.324Z] [LOG] 
+      ❌ Absent Days Deduction for Chemil null (EMP000040): Rs.10000.00
+[2025-12-02T06:38:26.325Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (10000.00) = 10000.00
+[2025-12-02T06:38:26.326Z] [LOG] 
+      ⏰ Time Variance Deduction for Sujevan Selvaratnam null (EMP000026): Rs.0.00
+[2025-12-02T06:38:26.327Z] [LOG] 
+      ❌ Absent Days Deduction for Sujevan Selvaratnam null (EMP000026): Rs.0.00
+[2025-12-02T06:38:26.328Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (0.00) = 0.00
+[2025-12-02T06:38:26.328Z] [LOG] 
+      ⏰ Time Variance Deduction for Chamodi null (EMP000032): Rs.0.00
+[2025-12-02T06:38:26.329Z] [LOG] 
+      ❌ Absent Days Deduction for Chamodi null (EMP000032): Rs.1400.04
+[2025-12-02T06:38:26.330Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (1400.04) = 1400.04
+[2025-12-02T06:38:26.331Z] [LOG] 
+      ⏰ Time Variance Deduction for Dharshika null (EMP000009): Rs.0.00
+[2025-12-02T06:38:26.331Z] [LOG] 
+      ❌ Absent Days Deduction for Dharshika null (EMP000009): Rs.1341.18
+[2025-12-02T06:38:26.332Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (1341.18) = 1341.18
+[2025-12-02T06:38:26.342Z] [LOG] 
+      ⏰ Time Variance Deduction for Ratheeshanan Maneimannan (EMP000047): Rs.0.00
+[2025-12-02T06:38:26.343Z] [LOG] 
+      ❌ Absent Days Deduction for Ratheeshanan Maneimannan (EMP000047): Rs.211.38
+[2025-12-02T06:38:26.345Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (211.38) = 211.38
+[2025-12-02T06:38:26.366Z] [LOG] 
+      ⏰ Time Variance Deduction for Shandeep null (EMP000034): Rs.0.00
+[2025-12-02T06:38:26.367Z] [LOG] 
+      ❌ Absent Days Deduction for Shandeep null (EMP000034): Rs.464.31
+[2025-12-02T06:38:26.367Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (464.31) = 464.31
+[2025-12-02T06:38:26.474Z] [LOG] 
+      ⏰ Time Variance Deduction for Safna Nawas null (EMP000021): Rs.0.00
+[2025-12-02T06:38:26.475Z] [LOG] 
+      ❌ Absent Days Deduction for Safna Nawas null (EMP000021): Rs.1999.96
+[2025-12-02T06:38:26.475Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (1999.96) = 1999.96
+[2025-12-02T06:38:26.476Z] [LOG] 
+⚡ PERFORMANCE: Loaded 31 employees in 10364ms (334ms per employee)
+[2025-12-02T06:38:26.477Z] [INFO] ================================================================================
+[2025-12-02T06:38:26.477Z] [INFO] ⏰ Completed at: 2025-12-02T06:38:26.477Z
+[2025-12-02T06:38:26.477Z] [INFO] 📊 Total log entries: 1852

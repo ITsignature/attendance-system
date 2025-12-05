@@ -12,6 +12,11 @@ const SidebarLayout = () => {
   // Don't show sidebar if not logged in
   if (!currentUser) return null;
 
+  // Helper function to check if user has any of the specified permissions
+  const hasAnyPermission = (permissions: string[]) => {
+    return permissions.some(permission => hasPermission(permission));
+  };
+
   return (
     <>
       <div className="xl:block hidden">
@@ -28,7 +33,11 @@ const SidebarLayout = () => {
                 {SidebarContent &&
                   SidebarContent?.map((item, index) => {
                     // Filter children based on permissions
-                    const filteredChildren = item.children?.filter((child) => {
+                    const filteredChildren = item.children?.filter((child: any) => {
+                      // Check anyPermission first
+                      if (child.anyPermission && Array.isArray(child.anyPermission)) {
+                        return hasAnyPermission(child.anyPermission);
+                      }
                       // If child has permission requirement, check it
                       if (child.permission) {
                         return hasPermission(child.permission);
@@ -48,9 +57,9 @@ const SidebarLayout = () => {
                           <h5 className="text-link dark:text-white/70 caption font-semibold leading-6 tracking-widest text-xs pb-2 uppercase">
                             {item.heading}
                           </h5>
-                          {filteredChildren.map((child, childIndex) => (
+                          {filteredChildren.map((child: any, childIndex: number) => (
                             <React.Fragment key={child.id && childIndex}>
-                              <NavItems item={child} />
+                              <NavItems item={child} hasPermission={hasPermission} />
                             </React.Fragment>
                           ))}
                         </React.Fragment>
