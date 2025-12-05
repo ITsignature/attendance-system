@@ -243,7 +243,7 @@ const EmployeeAllowances: React.FC = () => {
                   <div>
                     <span className="text-gray-500 dark:text-gray-400">Employee:</span>
                     <span className="ml-2 text-gray-900 dark:text-white">
-                      {allowance.employee_code} - {allowance.employee_name}
+                      {allowance.employee_name}
                     </span>
                   </div>
                   <div>
@@ -258,6 +258,14 @@ const EmployeeAllowances: React.FC = () => {
                       {new Date(allowance.effective_from).toLocaleDateString()}
                     </span>
                   </div>
+                  {allowance.effective_to && (
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">Effective To:</span>
+                      <span className="ml-2 text-gray-900 dark:text-white">
+                        {new Date(allowance.effective_to).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <span className="text-gray-500 dark:text-gray-400">Status:</span>
                     <span className={`ml-2 px-2 py-1 text-xs rounded-full ${

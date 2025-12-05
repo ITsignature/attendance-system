@@ -88,7 +88,7 @@ const EmployeeDeductions: React.FC = () => {
 
       resetForm();
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving deduction:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to save deduction';
 
@@ -96,6 +96,7 @@ const EmployeeDeductions: React.FC = () => {
       if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
         alert('You do not have permission to modify these settings.');
       } else {
+        // Display the error message (includes validation errors)
         alert(errorMsg);
       }
     }
@@ -232,7 +233,7 @@ const EmployeeDeductions: React.FC = () => {
                     {deduction.deduction_name}
                   </h5>
                   <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                    {deduction.is_percentage ? `${deduction.amount}%` : `₹${deduction.amount}`}
+                    {deduction.is_percentage ? `${deduction.amount}%` : `Rs.${deduction.amount}`}
                   </span>
                   {!deduction.is_recurring && (
                     <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
@@ -251,7 +252,7 @@ const EmployeeDeductions: React.FC = () => {
                   <div>
                     <span className="text-gray-500 dark:text-gray-400">Employee:</span>
                     <span className="ml-2 text-gray-900 dark:text-white">
-                      {deduction.employee_code} - {deduction.employee_name}
+                      {deduction.employee_name}
                     </span>
                   </div>
                   <div>

@@ -453,7 +453,7 @@ router.get('/employee-allowances',
                     ea.id,
                     ea.employee_id,
                     e.employee_code,
-                    CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+                    COALESCE(NULLIF(CONCAT(TRIM(e.first_name), ' ', TRIM(e.last_name)), ' '), e.employee_code) as employee_name,
                     ea.allowance_type,
                     ea.allowance_name,
                     ea.amount,
@@ -714,7 +714,7 @@ router.get('/employee-deductions',
                     ed.id,
                     ed.employee_id,
                     e.employee_code,
-                    CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+                    COALESCE(NULLIF(CONCAT(TRIM(e.first_name), ' ', TRIM(e.last_name)), ' '), e.employee_code) as employee_name,
                     ed.deduction_type,
                     ed.deduction_name,
                     ed.amount,
@@ -758,7 +758,7 @@ router.post('/employee-deductions',
         body('amount').isNumeric().withMessage('Amount must be numeric'),
         body('is_percentage').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
-        body('remaining_installments').optional().isInt({ min: 1 }),
+        body('remaining_installments').optional().isInt({ min: 1 }).withMessage('Remaining installments must be at least 1'),
         body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
         body('effective_to').optional().isISO8601()
     ],
@@ -772,6 +772,8 @@ router.post('/employee-deductions',
             });
         }
 
+        console.log("body",req.body);
+
         const clientId = req.user.clientId;
         const userId = req.user.userId;
         const db = await getDB();
@@ -784,9 +786,9 @@ router.post('/employee-deductions',
             amount,
             is_percentage = false,
             is_recurring = false,
-            remaining_installments,
+            remaining_installments = 1,
             effective_from,
-            effective_to
+            effective_to = null
         } = req.body;
 
         try {
@@ -811,7 +813,8 @@ router.post('/employee-deductions',
             res.status(500).json({
                 success: false,
                 message: 'Failed to create employee deduction',
-                error: error.message
+                error: error.message,
+                request: req.body
             });
         }
     })
@@ -830,7 +833,7 @@ router.put('/employee-deductions/:id',
         body('amount').optional().isNumeric(),
         body('is_percentage').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
-        body('remaining_installments').optional().isInt({ min: 0 }),
+        body('remaining_installments').optional().isInt({ min: 0 }).withMessage('Remaining installments cannot be negative'),
         body('effective_from').optional().isISO8601(),
         body('effective_to').optional().isISO8601()
     ],
@@ -867,9 +870,18 @@ router.put('/employee-deductions/:id',
                 });
             }
 
-            updateFields.push('updated_by = ?', 'updated_at = NOW()');
-            updateValues.push(userId, deductionId, clientId);
+            updateFields.push('updated_at = NOW()');
+            updateValues.push( deductionId, clientId);
 
+            console.log("updated fields: ",updateFields);
+            console.log("updated values: ",updateValues);
+
+            const query = `UPDATE employee_deductions
+                SET ${updateFields.join(', ')}
+                WHERE id = ? AND client_id = ?`;
+
+            console.log("query",query);
+            
             const [result] = await db.execute(`
                 UPDATE employee_deductions
                 SET ${updateFields.join(', ')}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, DollarSign, Minus, Calculator } from 'lucide-react';
+import { Settings, Minus, Calculator, Plus } from 'lucide-react';
 import PayrollComponents from './PayrollTabs/PayrollComponents';
 import EmployeeAllowances from './PayrollTabs/EmployeeAllowances';
 import EmployeeDeductions from './PayrollTabs/EmployeeDeductions';
@@ -22,7 +22,7 @@ const PayrollSettings: React.FC = () => {
     {
       id: 'allowances' as PayrollTab,
       name: 'Employee Allowances',
-      icon: DollarSign,
+      icon: Plus,
       description: 'Assign allowances to individual employees',
       permission: 'settings.employee_allowances.view'
     },
