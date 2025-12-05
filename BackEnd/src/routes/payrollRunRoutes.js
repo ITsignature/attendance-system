@@ -1097,6 +1097,8 @@ router.get('/:id/live-data',
         try {
             const liveData = await PayrollRunService.getLivePayrollData(runId, clientId);
 
+            console.log("liveData",liveData);
+            
             res.json({
                 success: true,
                 data: liveData

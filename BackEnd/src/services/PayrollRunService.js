@@ -3631,8 +3631,33 @@ class PayrollRunService {
                   AND ea.effective_from <= CURDATE()
             `, [...employeeIds, clientId, calculationEndDate]);
 
+            console.log('allowances: ',allAllowances);
+
             // ========================================
-            // BULK FETCH #2: All Deductions (Payroll Components)
+            // BULK FETCH #1: All Deductions
+            // ========================================
+            const [allDeductions] = await db.execute(`
+                SELECT
+                    ed.employee_id,
+                    ed.id,
+                    ed.deduction_type,
+                    ed.deduction_name,
+                    ed.amount,
+                    ed.is_percentage,
+                    ed.is_recurring,
+                    ed.remaining_installments
+                FROM employee_deductions ed
+                WHERE ed.employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND ed.client_id = ?
+                  AND ed.is_active = 1
+                  AND (ed.effective_to IS NULL OR ed.effective_to >= ?)
+                  AND ed.effective_from <= CURDATE()
+            `, [...employeeIds, clientId, calculationEndDate]);
+
+            console.log('deductions: ',allDeductions);
+
+            // ========================================
+            // BULK FETCH #2: Payroll Components
             // ========================================
             const [payrollComponents] = await db.execute(`
                 SELECT
@@ -3725,6 +3750,7 @@ class PayrollRunService {
 
             // Group data by employee_id for fast lookup
             const allowancesByEmployee = {};
+            const deductionsByEmployee = {};
             const loansByEmployee = {};
             const advancesByEmployee = {};
             const bonusesByEmployee = {};
@@ -3732,6 +3758,11 @@ class PayrollRunService {
             allAllowances.forEach(a => {
                 if (!allowancesByEmployee[a.employee_id]) allowancesByEmployee[a.employee_id] = [];
                 allowancesByEmployee[a.employee_id].push(a);
+            });
+
+            allDeductions.forEach(d => {
+                if (!deductionsByEmployee[d.employee_id]) deductionsByEmployee[d.employee_id] = [];
+                deductionsByEmployee[d.employee_id].push(d);
             });
 
             allLoans.forEach(l => {
@@ -3798,6 +3829,7 @@ class PayrollRunService {
 
                 // Use pre-fetched data
                 const employeeAllowances = allowancesByEmployee[emp.employee_id] || [];
+                const employeeDeductions = deductionsByEmployee[emp.employee_id] || [];
                 const employeeLoans = loansByEmployee[emp.employee_id] || [];
                 const employeeAdvances = advancesByEmployee[emp.employee_id] || [];
                 const employeeBonuses = bonusesByEmployee[emp.employee_id] || [];
@@ -3827,7 +3859,10 @@ class PayrollRunService {
                         shortfall_by_cause: attendanceData.shortfall_by_cause || null
                     },
                     allowances: employeeAllowances,
-                    deductions: payrollComponents,
+                    deductions: {
+                        payrollComponents,
+                        employeeDeductions
+                    },
                     financial: {
                         loans: loanDeductions,
                         advances: advanceDeductions,
