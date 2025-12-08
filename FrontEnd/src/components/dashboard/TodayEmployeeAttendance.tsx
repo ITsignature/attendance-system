@@ -66,13 +66,15 @@ const TodayEmployeeAttendance = () => {
   const formatTime = (time: string | null) => {
     if (!time) return '-';
 
-    // If time is already in HH:MM:SS format
+    // If time is already in HH:MM:SS or HH:MM format
     if (time.includes(':')) {
-      const [hours, minutes] = time.split(':');
-      const hour = parseInt(hours);
+      const parts = time.split(':');
+      const hour = parseInt(parts[0]);
+      const minutes = parts[1];
+      const seconds = parts[2] || '00';
       const ampm = hour >= 12 ? 'PM' : 'AM';
       const displayHour = hour % 12 || 12;
-      return `${displayHour}:${minutes} ${ampm}`;
+      return `${displayHour}:${minutes}:${seconds} ${ampm}`;
     }
 
     // Otherwise treat as full datetime
@@ -80,6 +82,7 @@ const TodayEmployeeAttendance = () => {
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
       hour12: true
     });
   };
