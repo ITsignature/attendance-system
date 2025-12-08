@@ -3848,6 +3848,31 @@ class PayrollRunService {
                 const advanceDeductions = employeeAdvances.reduce((sum, a) => sum + (a.deduction_amount || 0), 0);
                 const bonusTotal = employeeBonuses.reduce((sum, b) => sum + (b.bonus_amount || 0), 0);
 
+                // Filter applicable payroll components for this employee
+                const applicableComponents = await this.filterApplicableComponents(payrollComponents, emp.employee_id, clientId);
+                const applicableDeductions = applicableComponents.filter(c => c.component_type === 'deduction');
+
+                // Convert payroll component deductions to standard format
+                const componentDeductions = applicableDeductions.map(comp => ({
+                    id: comp.id,
+                    component_name: comp.component_name,
+                    calculation_type: comp.calculation_type,
+                    calculation_value: comp.calculation_value,
+                    category: comp.category
+                }));
+
+                // Convert employee-specific deductions to standard format
+                const specificDeductions = employeeDeductions.map(ded => ({
+                    id: ded.id,
+                    component_name: ded.deduction_name,
+                    calculation_type: ded.is_percentage ? 'percentage' : 'fixed',
+                    calculation_value: ded.amount,
+                    category: 'employee_specific'
+                }));
+
+                // Combine both types of deductions
+                const combinedDeductions = [...componentDeductions, ...specificDeductions];
+
                 return {
                     ...emp,
                     attendance: {
@@ -3859,10 +3884,7 @@ class PayrollRunService {
                         shortfall_by_cause: attendanceData.shortfall_by_cause || null
                     },
                     allowances: employeeAllowances,
-                    deductions: {
-                        payrollComponents,
-                        employeeDeductions
-                    },
+                    deductions: combinedDeductions,
                     financial: {
                         loans: loanDeductions,
                         advances: advanceDeductions,
