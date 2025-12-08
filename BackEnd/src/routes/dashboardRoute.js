@@ -32,17 +32,26 @@ router.get('/overview',
     `, [clientId]);
 
     // Get today's attendance
+    // Count employees with no attendance record as absent
     const [todayAttendance] = await db.execute(`
-      SELECT 
-        COUNT(*) as total_records,
+      SELECT
+        (SELECT COUNT(*) FROM employees WHERE client_id = ? AND employment_status = 'active') as total_active_employees,
+        COUNT(a.id) as total_records,
         COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_today,
-        COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent_today,
         COUNT(CASE WHEN a.status = 'late' THEN 1 END) as late_today,
-        COUNT(CASE WHEN a.status = 'on_leave' THEN 1 END) as on_leave_today
+        COUNT(CASE WHEN a.status = 'on_leave' THEN 1 END) as on_leave_today,
+        (
+          SELECT COUNT(*)
+          FROM employees e
+          LEFT JOIN attendance a2 ON e.id = a2.employee_id AND a2.date = CURDATE()
+          WHERE e.client_id = ?
+            AND e.employment_status = 'active'
+            AND a2.id IS NULL
+        ) as absent_today
       FROM attendance a
       JOIN employees e ON a.employee_id = e.id
       WHERE e.client_id = ? AND a.date = CURDATE()
-    `, [clientId]);
+    `, [clientId, clientId, clientId]);
 
     // Get leave requests
     const [leaveStats] = await db.execute(`
@@ -103,6 +112,7 @@ router.get('/attendance-overview',
     // Get attendance data for current week
     // This query creates all date-employee combinations for the week,
     // then counts based on whether attendance exists or not
+    // Only includes past dates and today (not future dates)
     const [weeklyAttendance] = await db.execute(`
       WITH RECURSIVE date_range AS (
         -- Generate dates for current week (Monday to Sunday)
@@ -114,6 +124,7 @@ router.get('/attendance-overview',
       ),
       employee_dates AS (
         -- Cross join all active employees with all dates in the week
+        -- Only include dates up to today
         SELECT
           e.id as employee_id,
           d.date
@@ -121,15 +132,16 @@ router.get('/attendance-overview',
         CROSS JOIN date_range d
         WHERE e.client_id = ?
           AND e.employment_status = 'active'
+          AND d.date <= CURDATE()
       )
       SELECT
         DAYNAME(ed.date) as day_name,
         DATE(ed.date) as date,
-        COUNT(ed.employee_id) as total_employees,
-        COUNT(CASE WHEN a.arrival_status = 'on_time' THEN 1 END) as on_time_count,
+        COUNT(ed.employee_id) as total_records,
+        COUNT(CASE WHEN a.arrival_status = 'on_time' THEN 1 END) as present_count,
         COUNT(CASE WHEN a.arrival_status = 'late' THEN 1 END) as late_count,
-        COUNT(CASE WHEN a.id IS NULL THEN 1 END) as on_leave_count,
-        COUNT(CASE WHEN a.arrival_status = 'absent' THEN 1 END) as absent_count,
+        COUNT(CASE WHEN a.arrival_status = 'on_leave' THEN 1 END) as on_leave_count,
+        COUNT(CASE WHEN a.id IS NULL THEN 1 END) as absent_count,
         COUNT(CASE WHEN a.arrival_status = 'voluntary_work' THEN 1 END) as voluntary_work_count,
         COUNT(CASE WHEN a.arrival_status = 'scheduled_off' THEN 1 END) as scheduled_off_count,
         ROUND(

@@ -33,8 +33,8 @@ type Employee = {
 
 type AttendanceRow = {
   employee: Employee;
-  check_in_time: string;   // "HH:MM"
-  check_out_time: string;  // "HH:MM"
+  check_in_time: string;   // "HH:MM:SS" or "HH:MM"
+  check_out_time: string;  // "HH:MM:SS" or "HH:MM"
 //   notes: string;
   work_type?: WorkType | ''; // display only (read-only)
   dirty: boolean;
@@ -54,8 +54,12 @@ const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
-const isTimeValid = (val: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(val || '');
-const padSeconds = (t?: string) => (t && t.length === 5 ? `${t}:00` : t);  // "17:30" → "17:30:00"
+const isTimeValid = (val: string) => /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(val || '');
+const padSeconds = (t?: string) => {
+  if (!t) return t;
+  if (t.length === 5) return `${t}:00`;  // "17:30" → "17:30:00"
+  return t;  // Already has seconds "17:30:45"
+};
 
 const ManualAttendance: React.FC = () => {
   const [date, setDate] = useState<string>(todayStr());
@@ -183,11 +187,11 @@ const ManualAttendance: React.FC = () => {
 
     // Kinda-basic validation for time fields
     if (r.check_in_time && !isTimeValid(r.check_in_time)) {
-      setRowField(idx, { error: 'Invalid in time (HH:MM)', saving: false });
+      setRowField(idx, { error: 'Invalid in time (HH:MM:SS)', saving: false });
       return;
     }
     if (r.check_out_time && !isTimeValid(r.check_out_time)) {
-      setRowField(idx, { error: 'Invalid out time (HH:MM)', saving: false });
+      setRowField(idx, { error: 'Invalid out time (HH:MM:SS)', saving: false });
       return;
     }
 
@@ -398,19 +402,21 @@ const ManualAttendance: React.FC = () => {
                       <Table.Cell>
                         <TextInput
                           type="time"
+                          step="1"
                           value={r.check_in_time}
                           onChange={(e) => setRowField(idx, { check_in_time: e.target.value })}
                           color={ciOk ? undefined : 'failure'}
-                          helperText={!ciOk ? 'Format HH:MM' : undefined}
+                          helperText={!ciOk ? 'Format HH:MM:SS' : undefined}
                         />
                       </Table.Cell>
                       <Table.Cell>
                         <TextInput
                           type="time"
+                          step="1"
                           value={r.check_out_time}
                           onChange={(e) => setRowField(idx, { check_out_time: e.target.value })}
                           color={coOk ? undefined : 'failure'}
-                          helperText={!coOk ? 'Format HH:MM' : undefined}
+                          helperText={!coOk ? 'Format HH:MM:SS' : undefined}
                         />
                       </Table.Cell>
                       {/* <Table.Cell>

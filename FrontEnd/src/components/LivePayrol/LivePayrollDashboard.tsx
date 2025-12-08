@@ -637,8 +637,7 @@ const LivePayrollDashboard: React.FC = () => {
                         {modalData.employee.financial_deductions_breakdown.map((deduction, idx) => (
                           <div key={idx} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
                             <div>
-                              <span className="font-medium text-gray-800">{deduction.description}</span>
-                              <Badge color="warning" size="xs" className="ml-2">
+                              <Badge color="warning" size="xs">
                                 {deduction.type}
                               </Badge>
                             </div>
