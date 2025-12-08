@@ -153,7 +153,11 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   try {
     /* helper functions */
-    const padSeconds = (t: string) => (t && t.length === 5 ? `${t}:00` : t);  // "17:30" → "17:30:00"
+    const padSeconds = (t: string) => {
+      if (!t) return t;
+      if (t.length === 5) return `${t}:00`;  // "17:30" → "17:30:00"
+      return t;  // Already has seconds "17:30:45"
+    };
     const stripEmpty = (v: string) => (v === '' ? undefined : v);
 
     /* 1️⃣ build payload with ONLY changed keys */
@@ -271,6 +275,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 <TextInput
                   id="check_in_time"
                   type="time"
+                  step="1"
                   value={formData.check_in_time || ''}
                   onChange={(e) => handleInputChange('check_in_time', e.target.value)}
                 />
@@ -281,6 +286,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 <TextInput
                   id="check_out_time"
                   type="time"
+                  step="1"
                   value={formData.check_out_time || ''}
                   onChange={(e) => handleInputChange('check_out_time', e.target.value)}
                 />

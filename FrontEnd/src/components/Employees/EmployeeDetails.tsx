@@ -551,12 +551,13 @@ const EmployeeDetails: React.FC = () => {
     if (!timeString) return 'N/A';
     try {
       // Handle both HH:MM and HH:MM:SS formats
-      const [hours, minutes] = timeString.split(':').map(Number);
+      const parts = timeString.split(':').map(Number);
       const date = new Date();
-      date.setHours(hours, minutes, 0);
+      date.setHours(parts[0] || 0, parts[1] || 0, parts[2] || 0);
       return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
+        second: '2-digit',
         hour12: true
       });
     } catch {

@@ -42,8 +42,8 @@ const AttendanceOverview = () => {
       return {
         categories: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
         onTimeData: [0, 0, 0, 0, 0, 0, 0],
-        lateData: [0, 0, 0, 0, 0, 0],
-        onLeaveData: [0, 0, 0, 0, 0, 0, 0],
+        lateData: [0, 0, 0, 0, 0, 0, 0],
+        absentData: [0, 0, 0, 0, 0, 0, 0],
       };
     }
 
@@ -52,22 +52,22 @@ const AttendanceOverview = () => {
 
     const onTimeData: number[] = [];
     const lateData: number[] = [];
-    const onLeaveData: number[] = [];
+    const absentData: number[] = [];
 
     dayOrder.forEach(day => {
       const dayData = dataMap.get(day);
       if (dayData && dayData.total_records > 0) {
         const onTimePercent = Math.round((dayData.present_count / dayData.total_records) * 100);
         const latePercent = Math.round((dayData.late_count / dayData.total_records) * 100);
-        const leavePercent = Math.round((dayData.on_leave_count / dayData.total_records) * 100);
+        const absentPercent = Math.round((dayData.absent_count / dayData.total_records) * 100);
 
         onTimeData.push(onTimePercent);
         lateData.push(latePercent);
-        onLeaveData.push(leavePercent);
+        absentData.push(absentPercent);
       } else {
         onTimeData.push(0);
         lateData.push(0);
-        onLeaveData.push(0);
+        absentData.push(0);
       }
     });
 
@@ -75,11 +75,11 @@ const AttendanceOverview = () => {
       categories: dayOrder,
       onTimeData,
       lateData,
-      onLeaveData,
+      absentData,
     };
   };
 
-  const { categories, onTimeData, lateData, onLeaveData } = calculatePercentages();
+  const { categories, onTimeData, lateData, absentData } = calculatePercentages();
 
   const attendanceData = {
     series: [
@@ -92,8 +92,8 @@ const AttendanceOverview = () => {
         data: lateData,
       },
       {
-        name: "On Leave",
-        data: onLeaveData,
+        name: "Absent",
+        data: absentData,
       },
     ],
   };
@@ -105,8 +105,8 @@ const AttendanceOverview = () => {
   const avgLate = lateData.length > 0
     ? Math.round(lateData.reduce((a, b) => a + b, 0) / lateData.filter(d => d > 0).length) || 0
     : 0;
-  const avgLeave = onLeaveData.length > 0
-    ? Math.round(onLeaveData.reduce((a, b) => a + b, 0) / onLeaveData.filter(d => d > 0).length) || 0
+  const avgAbsent = absentData.length > 0
+    ? Math.round(absentData.reduce((a, b) => a + b, 0) / absentData.filter(d => d > 0).length) || 0
     : 0;
 
   const optionsBarChart: ApexOptions = {
@@ -263,8 +263,8 @@ const AttendanceOverview = () => {
               <div className="text-sm text-gray-600 dark:text-gray-400">Average Late</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-red-500">{avgLeave}%</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Average On Leave</div>
+              <div className="text-2xl font-bold text-red-500">{avgAbsent}%</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Average Absent</div>
             </div>
           </div>
         </>
