@@ -27,6 +27,9 @@ const logToFile = (message) => {
   fs.appendFileSync(logFile, logMessage);
 };
 
+// Time validation regex - supports HH:MM and HH:MM:SS formats
+const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/;
+
 // =============================================
 // PUBLIC ENDPOINTS (No Authentication Required)
 // =============================================
@@ -57,7 +60,7 @@ router.post('/fingerprint', [
   const db = getDB();
   const { fingerprint_id, client_id } = req.body;
   const today = new Date().toISOString().split('T')[0];
-  const currentTime = new Date().toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+  const currentTime = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
 
   try {
     // Map fingerprint ID to employee in new system
@@ -384,16 +387,18 @@ router.post('/fingerprint', [
         schedule,
         today,
         departmentId,
-        null
+        null,
+        employeeId
       );
       const durationResult = await statusService.determineWorkDuration(
         totalHours,
         durationSettings,
         today,
         departmentId,
-        null
+        null,
+        employeeId
       );
-      const overtimeInfo = await statusService.getOvertimeMultiplier(today, departmentId);
+      const overtimeInfo = await statusService.getOvertimeMultiplier(today, departmentId, employeeId);
       const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
 
       // Update attendance record
@@ -450,6 +455,212 @@ router.post('/fingerprint', [
   }
 }));
 
+// MANUAL ATTENDANCE SYNC FROM OTHER SYSTEM
+/**
+ * This endpoint receives manual attendance records from the old system (attendance.php)
+ * No authentication required - similar to fingerprint endpoint
+ *
+ * Request body:
+ * - fingerprint_id: Integer (to identify employee)
+ * - date: Date string (YYYY-MM-DD)
+ * - check_in_time: Time string (HH:MM:SS or HH:MM)
+ * - check_out_time: Time string (optional, HH:MM:SS or HH:MM)
+ * - operation: String ('insert' or 'update')
+ * - client_id: UUID (optional)
+ */
+router.post('/manual-sync', [
+  body('fingerprint_id').isInt().withMessage('fingerprint_id must be an integer'),
+  body('date').isISO8601().withMessage('date must be in YYYY-MM-DD format'),
+  body('check_in_time').matches(timeRegex).withMessage('check_in_time must be in HH:MM or HH:MM:SS format'),
+  body('check_out_time').optional({ values: 'falsy' }).matches(timeRegex).withMessage('check_out_time must be in HH:MM or HH:MM:SS format'),
+  body('operation').isIn(['insert', 'update']).withMessage('operation must be either insert or update'),
+  body('client_id').optional().isUUID().withMessage('client_id must be a valid UUID')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: errors.array(),
+      status: 'error'
+    });
+  }
+
+  const db = getDB();
+  const { fingerprint_id, date, check_in_time, check_out_time, operation, client_id } = req.body;
+
+  try {
+    // Map fingerprint ID to employee
+    let query = `
+      SELECT
+        e.id as employee_id,
+        e.client_id,
+        CONCAT(e.first_name, ' ', e.last_name) as employee_name,
+        e.employee_code
+      FROM employees e
+      WHERE e.fingerprint_id = ?
+      AND e.employment_status = 'active'
+    `;
+
+    const queryParams = [fingerprint_id];
+
+    if (client_id) {
+      query += ' AND e.client_id = ?';
+      queryParams.push(client_id);
+    }
+
+    query += ' LIMIT 1';
+
+    const [employee] = await db.execute(query, queryParams);
+
+    if (employee.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found. Fingerprint ID: ' + fingerprint_id,
+        status: 'error'
+      });
+    }
+
+    const emp = employee[0];
+    const employeeId = emp.employee_id;
+    const clientId = emp.client_id;
+
+    console.log(`\n📝 MANUAL SYNC - ${emp.employee_name} | ${operation.toUpperCase()} | ${date}`);
+
+    if (operation === 'insert') {
+      // Check if attendance already exists
+      const [existing] = await db.execute(`
+        SELECT id FROM attendance WHERE employee_id = ? AND date = ?
+      `, [employeeId, date]);
+
+      if (existing.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Attendance already exists',
+          status: 'error'
+        });
+      }
+
+      const schedule = await getEmployeeSchedule(employeeId, clientId, db, date);
+      const attendanceId = uuidv4();
+      const attendanceDate = new Date(date);
+      const jsDayOfWeek = attendanceDate.getDay();
+      const isWeekend = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1;
+
+      let totalHours = null;
+      let overtimeHours = 0;
+
+      if (check_out_time) {
+        const calculated = await calculateWorkHours(check_in_time, check_out_time, 0, clientId, db, schedule);
+        totalHours = calculated.totalHours;
+        overtimeHours = calculated.overtimeHours;
+      }
+
+      const [employeeInfo] = await db.execute(`SELECT department_id FROM employees WHERE id = ?`, [employeeId]);
+      const departmentId = employeeInfo[0]?.department_id || null;
+
+      const statusService = new AttendanceStatusService(clientId);
+      const arrivalResult = await statusService.determineArrivalStatus(check_in_time, schedule, date, departmentId, null, employeeId);
+
+      const durationSettings = await getWorkDurationSettings(clientId, db);
+      const durationResult = await statusService.determineWorkDuration(totalHours, durationSettings, date, departmentId, null, employeeId);
+
+      const overtimeInfo = await statusService.getOvertimeMultiplier(date, departmentId, employeeId);
+      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
+
+      await db.execute(`
+        INSERT INTO attendance (
+          id, employee_id, date, check_in_time, check_out_time,
+          total_hours, overtime_hours, break_duration,
+          arrival_status, work_duration, work_type,
+          scheduled_in_time, scheduled_out_time, is_weekend, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'office', ?, ?, ?, ?)
+      `, [
+        attendanceId, employeeId, date, check_in_time, check_out_time,
+        totalHours, enhancedOvertimeHours, arrivalResult.status,
+        durationResult.status, schedule.start_time, schedule.end_time,
+        isWeekend, 'Synced from old system'
+      ]);
+
+      console.log(`   ✅ Inserted successfully`);
+
+      return res.status(201).json({
+        success: true,
+        message: `Attendance recorded for ${emp.employee_name}`,
+        status: 'success',
+        operation: 'insert',
+        data: {
+          employee_name: emp.employee_name,
+          date: date,
+          check_in_time: check_in_time,
+          check_out_time: check_out_time,
+          arrival_status: arrivalResult.status,
+          work_duration: durationResult.status
+        }
+      });
+
+    } else if (operation === 'update') {
+      const [existing] = await db.execute(`
+        SELECT id, check_in_time FROM attendance WHERE employee_id = ? AND date = ?
+      `, [employeeId, date]);
+
+      if (existing.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Attendance record not found',
+          status: 'error'
+        });
+      }
+
+      const record = existing[0];
+      const schedule = await getEmployeeSchedule(employeeId, clientId, db, date);
+      const { totalHours, overtimeHours } = await calculateWorkHours(record.check_in_time, check_out_time, 0, clientId, db, schedule);
+
+      const [employeeInfo] = await db.execute(`SELECT department_id FROM employees WHERE id = ?`, [employeeId]);
+      const departmentId = employeeInfo[0]?.department_id || null;
+
+      const statusService = new AttendanceStatusService(clientId);
+      const durationSettings = await getWorkDurationSettings(clientId, db);
+      const durationResult = await statusService.determineWorkDuration(totalHours, durationSettings, date, departmentId, null, employeeId);
+
+      const overtimeInfo = await statusService.getOvertimeMultiplier(date, departmentId, employeeId);
+      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
+
+      await db.execute(`
+        UPDATE attendance SET
+          check_out_time = ?, total_hours = ?, overtime_hours = ?,
+          work_duration = ?, notes = CONCAT(COALESCE(notes, ''), ' | Updated from old system')
+        WHERE id = ?
+      `, [check_out_time, totalHours, enhancedOvertimeHours, durationResult.status, record.id]);
+
+      console.log(`   ✅ Updated successfully`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Attendance updated for ${emp.employee_name}`,
+        status: 'success',
+        operation: 'update',
+        data: {
+          employee_name: emp.employee_name,
+          date: date,
+          check_in_time: record.check_in_time,
+          check_out_time: check_out_time,
+          total_hours: totalHours,
+          work_duration: durationResult.status
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Manual sync error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to sync attendance',
+      status: 'error'
+    });
+  }
+}));
+
 // =============================================
 // APPLY AUTHENTICATION TO ALL ROUTES BELOW
 // =============================================
@@ -484,7 +695,7 @@ const generateEnhancedNotes = (originalNotes, workingDayInfo, overtimeInfo) => {
 
   return notes.length > 0 ? notes.join(' | ') : null;
 };
-const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/;
+
 /**
  * Get employee work schedule from database
  */
@@ -615,15 +826,14 @@ const normalizeTimeFormat = (timeString) => {
   // Remove any extra whitespace
   timeString = timeString.trim();
 
-  // If already has seconds (HH:MM:SS), extract just HH:MM
+  // If already has seconds (HH:MM:SS), return as is
   if (timeString.includes(':') && timeString.split(':').length === 3) {
-    const parts = timeString.split(':');
-    return `${parts[0]}:${parts[1]}`;
+    return timeString;
   }
 
-  // If it's just HH:MM, return as is
+  // If it's just HH:MM, add :00 seconds for consistency
   if (timeString.includes(':') && timeString.split(':').length === 2) {
-    return timeString;
+    return `${timeString}:00`;
   }
 
   // If no colons, assume it's invalid
@@ -717,10 +927,10 @@ const determineArrivalStatus = (checkInTime, schedule, requestedArrivalStatus = 
     console.log('  ❌ Invalid time format detected');
     return 'late'; // Default to late if we can't parse times
   }
-  
-  // Parse times with consistent format
-  const scheduledStart = new Date(`2000-01-01T${normalizedScheduledStart}:00`);
-  const actualCheckIn = new Date(`2000-01-01T${normalizedCheckIn}:00`);
+
+  // Parse times with consistent format (already includes seconds from normalization)
+  const scheduledStart = new Date(`2000-01-01T${normalizedScheduledStart}`);
+  const actualCheckIn = new Date(`2000-01-01T${normalizedCheckIn}`);
   
   console.log('  scheduledStart Date object:', scheduledStart);
   console.log('  actualCheckIn Date object:', actualCheckIn);
@@ -916,13 +1126,14 @@ const calculateWorkHours = async (
 
       // Use enhanced attendance status service
       const statusService = new AttendanceStatusService(req.user.clientId);
-      
+
       const arrivalResult = await statusService.determineArrivalStatus(
         req.body.check_in_time,
         schedule,
         req.body.date,
         departmentId,
-        req.body.arrival_status
+        req.body.arrival_status,
+        req.body.employee_id
       );
 
       const durationResult = await statusService.determineWorkDuration(
@@ -930,10 +1141,11 @@ const calculateWorkHours = async (
         durationSettings,
         req.body.date,
         departmentId,
-        req.body.work_duration
+        req.body.work_duration,
+        req.body.employee_id
       );
 
-      const overtimeInfo = await statusService.getOvertimeMultiplier(req.body.date, departmentId);
+      const overtimeInfo = await statusService.getOvertimeMultiplier(req.body.date, departmentId, req.body.employee_id);
 
       console.log("Enhanced arrival status:", arrivalResult);
       console.log("Enhanced duration status:", durationResult);
@@ -1852,7 +2064,8 @@ router.post('/bulk-update-status', [
               schedule,
               record.date,
               departmentId,
-              null // Force recalculation for bulk update
+              null, // Force recalculation for bulk update
+              employeeId
             );
 
             if (record.arrival_status !== arrivalResult.status) {
@@ -1861,7 +2074,7 @@ router.post('/bulk-update-status', [
               arrivalUpdated = true;
             }
           }
-          
+
           // Auto-determine work duration if requested
           if (update_duration) {
             const durationResult = await statusService.determineWorkDuration(
@@ -1869,7 +2082,8 @@ router.post('/bulk-update-status', [
               durationSettings,
               record.date,
               departmentId,
-              null // Force recalculation for bulk update
+              null, // Force recalculation for bulk update
+              employeeId
             );
 
             if (record.work_duration !== durationResult.status) {

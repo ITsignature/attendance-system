@@ -1,5 +1,6 @@
 const { SettingsHelper } = require('../utils/settingsHelper');
 const holidayService = require('./HolidayService'); // This is already an instance
+const { getDB } = require('../config/database');
 
 class AttendanceStatusService {
   constructor(clientId) {
@@ -9,9 +10,61 @@ class AttendanceStatusService {
   }
 
   /**
+   * Get employee's weekend working configuration from database
+   */
+  async getEmployeeWeekendConfig(employeeId) {
+    if (!employeeId) {
+      return null;
+    }
+
+    const db = getDB();
+    try {
+      const [employees] = await db.execute(
+        'SELECT weekend_working_config FROM employees WHERE id = ? AND client_id = ?',
+        [employeeId, this.clientId]
+      );
+
+      if (employees.length === 0 || !employees[0].weekend_working_config) {
+        return null;
+      }
+
+      // Parse JSON if it's a string
+      const config = typeof employees[0].weekend_working_config === 'string'
+        ? JSON.parse(employees[0].weekend_working_config)
+        : employees[0].weekend_working_config;
+
+      return config;
+    } catch (error) {
+      console.error('Error fetching employee weekend config:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if a day is a weekend working day for a specific employee
+   */
+  async isEmployeeWeekendWorkingDay(dayOfWeek, employeeId) {
+    // Get employee-specific weekend configuration
+    const employeeConfig = await this.getEmployeeWeekendConfig(employeeId);
+
+    // Check employee's specific configuration only
+    if (employeeConfig) {
+      if (dayOfWeek === 0 && employeeConfig.sunday) { // Sunday
+        return employeeConfig.sunday.working === true;
+      }
+      if (dayOfWeek === 6 && employeeConfig.saturday) { // Saturday
+        return employeeConfig.saturday.working === true;
+      }
+    }
+
+    // If no employee config, weekend is not a working day by default
+    return false;
+  }
+
+  /**
    * Check if a specific date is a working day based on weekend and holiday settings
    */
-  async isWorkingDay(date, departmentId = null) {
+  async isWorkingDay(date, departmentId = null, employeeId = null) {
     const dateObj = new Date(date);
     const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
     const dateStr = dateObj.toISOString().split('T')[0];
@@ -26,8 +79,8 @@ class AttendanceStatusService {
       };
     }
 
-    // Check weekend settings
-    const isWeekendWorking = await this.settingsHelper.isWeekendWorkingDay(dayOfWeek);
+    // Check weekend settings - use employee-specific configuration
+    const isWeekendWorking = await this.isEmployeeWeekendWorkingDay(dayOfWeek, employeeId);
 
     // If it's a weekend day
     if (dayOfWeek === 0 || dayOfWeek === 6) {
@@ -49,9 +102,9 @@ class AttendanceStatusService {
   /**
    * Enhanced arrival status determination that considers working day status
    */
-    async determineArrivalStatus(checkInTime, schedule, date, departmentId = null, requestedArrivalStatus = null) {
+    async determineArrivalStatus(checkInTime, schedule, date, departmentId = null, requestedArrivalStatus = null, employeeId = null) {
     // Check if this is a working day
-    const workingDayInfo = await this.isWorkingDay(date, departmentId);
+    const workingDayInfo = await this.isWorkingDay(date, departmentId, employeeId);
 
     // If manually provided arrival status for specific cases, use it
     if (requestedArrivalStatus && ['absent', 'on_leave'].includes(requestedArrivalStatus)) {
@@ -101,8 +154,8 @@ class AttendanceStatusService {
       };
     }
 
-    const scheduledStart = new Date(`2000-01-01T${normalizedScheduledStart}:00`);
-    const actualCheckIn = new Date(`2000-01-01T${normalizedCheckIn}:00`);
+    const scheduledStart = new Date(`2000-01-01T${normalizedScheduledStart}`);
+    const actualCheckIn = new Date(`2000-01-01T${normalizedCheckIn}`);
     
     const timeDiffMinutes = (actualCheckIn - scheduledStart) / (1000 * 60);
 
@@ -124,9 +177,9 @@ class AttendanceStatusService {
   /**
    * Enhanced work duration determination that considers working day status
    */
-  async determineWorkDuration(totalHours, durationSettings, date, departmentId = null, requestedWorkDuration = null) {
+  async determineWorkDuration(totalHours, durationSettings, date, departmentId = null, requestedWorkDuration = null, employeeId = null) {
     // Check if this is a working day
-    const workingDayInfo = await this.isWorkingDay(date, departmentId);
+    const workingDayInfo = await this.isWorkingDay(date, departmentId, employeeId);
     // If manually provided, use it
     if (requestedWorkDuration) {
       return {
@@ -208,8 +261,8 @@ class AttendanceStatusService {
   /**
    * Calculate overtime multiplier based on working day type
    */
-  async getOvertimeMultiplier(date, departmentId = null) {
-    const workingDayInfo = await this.isWorkingDay(date, departmentId);
+  async getOvertimeMultiplier(date, departmentId = null, employeeId = null) {
+    const workingDayInfo = await this.isWorkingDay(date, departmentId, employeeId);
     const workingHoursConfig = await this.settingsHelper.getWeekendSettings();
 
     if (workingDayInfo.reason === 'holiday') {
@@ -231,22 +284,21 @@ class AttendanceStatusService {
   }
 
   /**
-   * Normalize time format helper
+   * Normalize time format helper - supports both HH:MM and HH:MM:SS
    */
   normalizeTimeFormat(timeString) {
     if (!timeString || typeof timeString !== 'string') {
       return null;
     }
 
-    // If already has seconds (HH:MM:SS), extract just HH:MM
+    // If already has seconds (HH:MM:SS), return as is
     if (timeString.includes(':') && timeString.split(':').length === 3) {
-      const parts = timeString.split(':');
-      return `${parts[0]}:${parts[1]}`;
+      return timeString;
     }
 
-    // If it's just HH:MM, return as is
+    // If it's just HH:MM, add :00 seconds for consistency
     if (timeString.includes(':') && timeString.split(':').length === 2) {
-      return timeString;
+      return `${timeString}:00`;
     }
 
     // If no colons, assume it's invalid
@@ -260,20 +312,24 @@ class AttendanceStatusService {
     const { date, check_in_time, total_hours, employee_id, department_id } = attendanceData;
 
     const arrivalResult = await this.determineArrivalStatus(
-      check_in_time, 
-      schedule, 
-      date, 
-      department_id
+      check_in_time,
+      schedule,
+      date,
+      department_id,
+      null,
+      employee_id
     );
 
     const durationResult = await this.determineWorkDuration(
-      total_hours, 
-      durationSettings, 
-      date, 
-      department_id
+      total_hours,
+      durationSettings,
+      date,
+      department_id,
+      null,
+      employee_id
     );
 
-    const overtimeInfo = await this.getOvertimeMultiplier(date, department_id);
+    const overtimeInfo = await this.getOvertimeMultiplier(date, department_id, employee_id);
 
     return {
       date,
