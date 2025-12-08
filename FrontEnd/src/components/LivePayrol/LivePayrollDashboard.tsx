@@ -438,7 +438,10 @@ const LivePayrollDashboard: React.FC = () => {
                       <Table.Cell>
                         {result.total_earnings > 0 ? (
                           <button
-                            onClick={() => openModal(result, 'allowances')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openModal(result, 'allowances');
+                            }}
                             className="text-green-600 hover:text-green-700 hover:underline cursor-pointer font-medium"
                             disabled={!hasAllowances}
                           >
@@ -454,7 +457,10 @@ const LivePayrollDashboard: React.FC = () => {
                       <Table.Cell>
                         {result.deductions_total > 0 ? (
                           <button
-                            onClick={() => openModal(result, 'deductions')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openModal(result, 'deductions');
+                            }}
                             className="text-red-600 hover:text-red-700 hover:underline cursor-pointer font-medium"
                             disabled={!hasDeductions}
                           >

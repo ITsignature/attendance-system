@@ -161,7 +161,7 @@ class LivePayrollCalculationService {
   }
 
   /**
-   * Calculate EPF and ETF deductions
+   * Calculate all deductions (EPF, ETF, and employee-specific)
    */
   calculateStatutoryDeductions(actualEarnedBase: number, employee: EmployeeData): {
     epf_employee: number;
@@ -171,6 +171,7 @@ class LivePayrollCalculationService {
   } {
     let epf_employee = 0;
     let etf_employer = 0;
+    let total = 0;
     const breakdown: DeductionBreakdown[] = [];
 
     if (!employee.deductions || employee.deductions.length === 0) {
@@ -193,6 +194,9 @@ class LivePayrollCalculationService {
           category: deduction.category
         });
 
+        // Add to total
+        total += calculatedAmount;
+
         // Identify EPF vs ETF by category or name
         if (deduction.category === 'epf' || deduction.component_name.toLowerCase().includes('epf')) {
           epf_employee += calculatedAmount;
@@ -210,6 +214,9 @@ class LivePayrollCalculationService {
           category: deduction.category
         });
 
+        // Add to total
+        total += calculatedAmount;
+
         // Add to appropriate category
         if (deduction.category === 'epf' || deduction.component_name.toLowerCase().includes('epf')) {
           epf_employee += calculatedAmount;
@@ -222,7 +229,7 @@ class LivePayrollCalculationService {
     return {
       epf_employee: Math.round(epf_employee * 100) / 100,
       etf_employer: Math.round(etf_employer * 100) / 100,
-      total: Math.round((epf_employee + etf_employer) * 100) / 100,
+      total: Math.round(total * 100) / 100,
       breakdown
     };
   }
