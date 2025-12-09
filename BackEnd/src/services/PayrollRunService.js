@@ -3870,8 +3870,12 @@ class PayrollRunService {
                     category: 'employee_specific'
                 }));
 
+                console.log(`💸 Calculated employee deductions for employee ${emp.first_name} ${emp.last_name}:`, specificDeductions)
+
                 // Combine both types of deductions
                 const combinedDeductions = [...componentDeductions, ...specificDeductions];
+
+                console.log(`💸 Calculated deductions for employee ${emp.first_name} ${emp.last_name}:`, combinedDeductions);
 
                 return {
                     ...emp,
