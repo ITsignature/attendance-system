@@ -784,7 +784,7 @@ const hhmmToMinutes = (t) => {
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">Payroll Settings</h3>
             
             <div className="grid grid-cols-1 gap-6">
-              <div>
+              {/* <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Payroll Cycle
                 </label>
@@ -830,7 +830,7 @@ const hhmmToMinutes = (t) => {
                   <option value="itemized">Itemized Deduction</option>
                   <option value="custom">Custom Method</option>
                 </select>
-              </div>
+              </div> */}
 
               {/* OVERTIME SETTINGS */}
               <div className="border-t pt-6 mt-6">
