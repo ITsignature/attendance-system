@@ -53,6 +53,7 @@ const TodayEmployeeAttendance = () => {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { color: string; text: string }> = {
+      'on_time': { color: 'success', text: 'On Time' },
       'present': { color: 'success', text: 'On Time' },
       'late': { color: 'warning', text: 'Late' },
       'absent': { color: 'failure', text: 'Absent' },

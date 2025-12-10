@@ -1353,17 +1353,20 @@ router.get('/',
 
     // Get attendance records with employee schedule info
     const query = `
-     SELECT 
+     SELECT
     a.*,
+    a.arrival_status AS status,
     CONCAT_WS(' ', e.first_name, e.last_name) AS employee_name,
     e.employee_code,
     e.in_time AS scheduled_in_time,
     e.out_time AS scheduled_out_time,
     e.follows_company_schedule,
-    d.name AS department_name
+    d.name AS department_name,
+    de.title AS designation_name
 FROM attendance a
 JOIN employees e ON a.employee_id = e.id
 LEFT JOIN departments d ON e.department_id = d.id
+LEFT JOIN designations de ON e.designation_id = de.id
 ${whereClause}
 ORDER BY a.${sortBy} ${sortOrder}
 LIMIT ? OFFSET ?
