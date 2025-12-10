@@ -502,7 +502,7 @@ const PayrollRunDashboard = () => {
                             Summary
                           </Button>
                         </DynamicProtectedComponent>
-                        <DynamicProtectedComponent permission="payroll.view">
+                        {/* <DynamicProtectedComponent permission="payroll.view">
                           <Button
                             size="xs"
                             color="blue"
@@ -511,7 +511,7 @@ const PayrollRunDashboard = () => {
                             <HiUsers className="w-3 h-3 mr-1" />
                             Employees
                           </Button>
-                        </DynamicProtectedComponent>
+                        </DynamicProtectedComponent> */}
                         {getActionButtons(run)}
                       </div>
                     </Table.Cell>
