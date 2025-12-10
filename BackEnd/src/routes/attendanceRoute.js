@@ -126,8 +126,14 @@ router.post('/fingerprint', [
       const jsDayOfWeek = attendanceDate.getDay();
       const isWeekend = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1;
 
-      // Determine arrival status at check-in time
-      const arrivalStatus = determineArrivalStatus(currentTime, schedule, null);
+      // Get employee department for status determination
+      const [employeeInfo] = await db.execute(`SELECT department_id FROM employees WHERE id = ?`, [employeeId]);
+      const departmentId = employeeInfo[0]?.department_id || null;
+
+      // Determine arrival status at check-in time using AttendanceStatusService
+      const statusService = new AttendanceStatusService(clientId);
+      const arrivalResult = await statusService.determineArrivalStatus(currentTime, schedule, today, departmentId, null, employeeId);
+      const arrivalStatus = arrivalResult.status;
 
       console.log(`   Arrival Status: ${arrivalStatus}`);
 
@@ -220,27 +226,40 @@ router.post('/fingerprint', [
       };
 
       // Calculate employee's scheduled work duration in hours
-      const normalizedSchedStart = normalizeTime(schedule.start_time);
-      const normalizedSchedEnd = normalizeTime(schedule.end_time);
+      let scheduledHours = 8; // Default to 8 hours
+      let minimumWorkHours = 4; // Default to 4 hours
 
-      const log1 = `   Normalized schedule start: ${normalizedSchedStart}`;
-      console.log(log1);
-      logToFile(log1);
+      // Only calculate scheduled hours if schedule times exist (not volunteer work)
+      if (schedule.start_time && schedule.end_time) {
+        const normalizedSchedStart = normalizeTime(schedule.start_time);
+        const normalizedSchedEnd = normalizeTime(schedule.end_time);
 
-      const log2 = `   Normalized schedule end: ${normalizedSchedEnd}`;
-      console.log(log2);
-      logToFile(log2);
+        const log1 = `   Normalized schedule start: ${normalizedSchedStart}`;
+        console.log(log1);
+        logToFile(log1);
 
-      const schedIn = new Date(`2000-01-01T${normalizedSchedStart}`);
-      const schedOut = new Date(`2000-01-01T${normalizedSchedEnd}`);
-      const scheduledHours = (schedOut - schedIn) / (1000 * 60 * 60);
+        const log2 = `   Normalized schedule end: ${normalizedSchedEnd}`;
+        console.log(log2);
+        logToFile(log2);
 
-      const log3 = `   Scheduled hours: ${scheduledHours}h`;
-      console.log(log3);
-      logToFile(log3);
+        const schedIn = new Date(`2000-01-01T${normalizedSchedStart}`);
+        const schedOut = new Date(`2000-01-01T${normalizedSchedEnd}`);
+        scheduledHours = (schedOut - schedIn) / (1000 * 60 * 60);
 
-      // Minimum work time = half of scheduled hours (e.g., 9h schedule → 4.5h minimum)
-      const minimumWorkHours = scheduledHours / 2;
+        const log3 = `   Scheduled hours: ${scheduledHours}h`;
+        console.log(log3);
+        logToFile(log3);
+
+        // Minimum work time = half of scheduled hours (e.g., 9h schedule → 4.5h minimum)
+        minimumWorkHours = scheduledHours / 2;
+      } else if (schedule.is_non_working_day) {
+        // Volunteer work on non-working day - no minimum hours required
+        const log1 = `   Volunteer work detected - no scheduled hours`;
+        console.log(log1);
+        logToFile(log1);
+
+        minimumWorkHours = 0; // No minimum for volunteer work
+      }
       const log4 = `   Minimum work hours required: ${minimumWorkHours}h`;
       console.log(log4);
       logToFile(log4);
@@ -759,11 +778,20 @@ const getEmployeeSchedule = async (employeeId, clientId, db, date = null) => {
       };
     }
 
-    // Non-working weekend day
+    // Non-working weekend day - allow as volunteer work
     if ((dayOfWeek === 6 || dayOfWeek === 0) &&
         !(weekendConfig.saturday?.working && dayOfWeek === 6) &&
         !(weekendConfig.sunday?.working && dayOfWeek === 0)) {
-      throw new Error('Employee does not work on this weekend day');
+      // Return NULL scheduled times for volunteer work (no schedule exists)
+      return {
+        start_time: null,
+        end_time: null,
+        late_threshold_minutes: 0,
+        employee_name: emp.employee_name,
+        follows_company_schedule: false,
+        is_non_working_day: true,
+        weekend_day: dayOfWeek === 6 ? 'saturday' : 'sunday'
+      };
     }
   }
   
@@ -860,6 +888,11 @@ const calculatePayableDuration = (checkInTime, checkOutTime, scheduledInTime, sc
   const checkOut = normalizeToFullTime(checkOutTime);
   const schedIn = normalizeToFullTime(scheduledInTime);
   const schedOut = normalizeToFullTime(scheduledOutTime);
+
+  // If scheduled times are NULL (volunteer work), don't calculate payable duration
+  if (scheduledInTime === null || scheduledOutTime === null) {
+    return null;
+  }
 
   // If any required time is missing, return null
   if (!checkIn || !checkOut || !schedIn || !schedOut) {
@@ -1028,7 +1061,7 @@ const calculateWorkHours = async (
   const rawHrs  = (outDate - inDate) / 3.6e6;   // ms ➜ h
   const worked  = Math.max(0, rawHrs - (breakDuration || 0));
 
-  /* what counts as “standard” today? */
+  /* what counts as "standard" today? */
   let standard = null;
 
   if (employeeSchedule?.start_time && employeeSchedule?.end_time) {
@@ -1037,6 +1070,9 @@ const calculateWorkHours = async (
     if (!isNaN(sIn) && !isNaN(sOut) && sOut > sIn) {
       standard = (sOut - sIn) / 3.6e6 - (breakDuration || 0); // subtract same break
     }
+  } else if (employeeSchedule?.is_non_working_day) {
+    // Volunteer work on non-working day: all hours are overtime
+    standard = 0;
   }
 
   /* fall back to company-wide setting */

@@ -387,29 +387,29 @@ const PayrollComponents: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center">
-                  <input
+                  {/* <input
                     type="checkbox"
                     id="is_taxable"
                     checked={formData.is_taxable}
                     onChange={(e) => setFormData({ ...formData, is_taxable: e.target.checked })}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="is_taxable" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  /> */}
+                  {/* <label htmlFor="is_taxable" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                     Include in taxable income
-                  </label>
+                  </label> */}
                 </div>
 
                 <div className="flex items-center">
-                  <input
+                  {/* <input
                     type="checkbox"
                     id="is_mandatory"
                     checked={formData.is_mandatory}
                     onChange={(e) => setFormData({ ...formData, is_mandatory: e.target.checked })}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="is_mandatory" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  /> */}
+                  {/* <label htmlFor="is_mandatory" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                     Mandatory for all employees
-                  </label>
+                  </label> */}
                 </div>
               </div>
 

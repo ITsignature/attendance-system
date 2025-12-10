@@ -224,7 +224,12 @@ router.post('/components',
         body('is_taxable').optional().isBoolean(),
         body('is_mandatory').optional().isBoolean(),
         body('applies_to').optional().isIn(['all', 'department', 'designation', 'individual']),
-        body('applies_to_ids').optional().isArray()
+        body('applies_to_ids').optional().custom((value) => {
+            // Allow null, empty array, or array of UUIDs
+            if (value === null || value === undefined) return true;
+            if (Array.isArray(value)) return true;
+            throw new Error('applies_to_ids must be an array or null');
+        })
     ],
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -254,6 +259,12 @@ router.post('/components',
             applies_to_ids = null
         } = req.body;
 
+        // Handle applies_to_ids: if it's an empty array or applies_to is 'all', set to null
+        let processedAppliesIds = null;
+        if (applies_to !== 'all' && applies_to_ids && Array.isArray(applies_to_ids) && applies_to_ids.length > 0) {
+            processedAppliesIds = JSON.stringify(applies_to_ids);
+        }
+
         try {
             await db.execute(`
             INSERT INTO payroll_components (
@@ -268,7 +279,7 @@ router.post('/components',
             calculation_value ?? null,          // handle missing numeric
             calculation_formula ?? null,        // handle missing formula
             is_taxable, is_mandatory, applies_to,
-            applies_to_ids ? JSON.stringify(applies_to_ids) : null,
+            processedAppliesIds,
             true
         ]);
 
@@ -304,7 +315,12 @@ router.put('/components/:id',
         body('is_taxable').optional().isBoolean(),
         body('is_mandatory').optional().isBoolean(),
         body('applies_to').optional().isIn(['all', 'department', 'designation', 'individual']),
-        body('applies_to_ids').optional().isArray()
+        body('applies_to_ids').optional().custom((value) => {
+            // Allow null, empty array, or array of UUIDs
+            if (value === null || value === undefined) return true;
+            if (Array.isArray(value)) return true;
+            throw new Error('applies_to_ids must be an array or null');
+        })
     ],
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -325,10 +341,20 @@ router.put('/components/:id',
             const updateFields = [];
             const updateValues = [];
 
+            // Handle applies_to_ids specially
             Object.keys(req.body).forEach(key => {
-                if (key === 'applies_to_ids' && req.body[key]) {
-                    updateFields.push(`${key} = ?`);
-                    updateValues.push(JSON.stringify(req.body[key]));
+                if (key === 'applies_to_ids') {
+                    // If applies_to is 'all' or applies_to_ids is empty/null, set to null
+                    const appliesToIds = req.body[key];
+                    if (appliesToIds === null || appliesToIds === undefined ||
+                        (Array.isArray(appliesToIds) && appliesToIds.length === 0) ||
+                        req.body.applies_to === 'all') {
+                        updateFields.push(`${key} = ?`);
+                        updateValues.push(null);
+                    } else if (Array.isArray(appliesToIds) && appliesToIds.length > 0) {
+                        updateFields.push(`${key} = ?`);
+                        updateValues.push(JSON.stringify(appliesToIds));
+                    }
                 } else if (req.body[key] !== undefined) {
                     updateFields.push(`${key} = ?`);
                     updateValues.push(req.body[key]);
@@ -488,7 +514,7 @@ router.get('/employee-allowances',
  * Create employee allowance
  */
 router.post('/employee-allowances',
-    
+
     checkPermission('settings.employee_allowances.add'),
     [
         body('employee_id').isUUID().withMessage('Valid employee ID is required'),
@@ -498,7 +524,12 @@ router.post('/employee-allowances',
         body('is_percentage').optional().isBoolean(),
         body('is_taxable').optional().isBoolean(),
         body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
-        body('effective_to').optional().isISO8601()
+        body('effective_to').optional().custom((value) => {
+            // Allow null or valid ISO8601 date
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        })
     ],
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -568,7 +599,12 @@ router.put('/employee-allowances/:id',
         body('is_percentage').optional().isBoolean(),
         body('is_taxable').optional().isBoolean(),
         body('effective_from').optional().isISO8601(),
-        body('effective_to').optional().isISO8601()
+        body('effective_to').optional().custom((value) => {
+            // Allow null or valid ISO8601 date
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        })
     ],
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -603,8 +639,8 @@ router.put('/employee-allowances/:id',
                 });
             }
 
-            updateFields.push('updated_by = ?', 'updated_at = NOW()');
-            updateValues.push(userId, allowanceId, clientId);
+            updateFields.push('updated_at = NOW()');
+            updateValues.push(allowanceId, clientId);
 
             const [result] = await db.execute(`
                 UPDATE employee_allowances
@@ -760,7 +796,12 @@ router.post('/employee-deductions',
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 1 }).withMessage('Remaining installments must be at least 1'),
         body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
-        body('effective_to').optional().isISO8601()
+        body('effective_to').optional().custom((value) => {
+            // Allow null or valid ISO8601 date
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        })
     ],
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);
@@ -835,7 +876,12 @@ router.put('/employee-deductions/:id',
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 0 }).withMessage('Remaining installments cannot be negative'),
         body('effective_from').optional().isISO8601(),
-        body('effective_to').optional().isISO8601()
+        body('effective_to').optional().custom((value) => {
+            // Allow null or valid ISO8601 date
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        })
     ],
     asyncHandler(async (req, res) => {
         const errors = validationResult(req);

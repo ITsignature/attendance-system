@@ -3666,9 +3666,12 @@ class PayrollRunService {
                     pc.component_type,
                     pc.category,
                     pc.calculation_type,
-                    pc.calculation_value
+                    pc.calculation_value,
+                    pc.is_taxable,
+                    pc.applies_to,
+                    pc.applies_to_ids
                 FROM payroll_components pc
-                WHERE pc.client_id = ? AND pc.is_active = 1 AND pc.component_type = 'deduction'
+                WHERE pc.client_id = ? AND pc.is_active = 1
             `, [clientId]);
 
             // ========================================
@@ -3851,6 +3854,7 @@ class PayrollRunService {
                 // Filter applicable payroll components for this employee
                 const applicableComponents = await this.filterApplicableComponents(payrollComponents, emp.employee_id, clientId);
                 const applicableDeductions = applicableComponents.filter(c => c.component_type === 'deduction');
+                const applicableAllowances = applicableComponents.filter(c => c.component_type === 'earning');
 
                 // Convert payroll component deductions to standard format
                 const componentDeductions = applicableDeductions.map(comp => ({
@@ -3861,6 +3865,19 @@ class PayrollRunService {
                     category: comp.category
                 }));
 
+                // Convert payroll component allowances to standard format
+                const componentAllowances = applicableAllowances.map(comp => ({
+                    id: comp.id,
+                    allowance_name: comp.component_name,
+                    allowance_type: comp.category,
+                    amount: comp.calculation_value,
+                    is_percentage: comp.calculation_type === 'percentage',
+                    is_taxable: comp.is_taxable || false
+                }));
+
+                // Convert employee-specific allowances to standard format (they're already in correct format)
+                const specificAllowances = employeeAllowances;
+
                 // Convert employee-specific deductions to standard format
                 const specificDeductions = employeeDeductions.map(ded => ({
                     id: ded.id,
@@ -3870,12 +3887,14 @@ class PayrollRunService {
                     category: 'employee_specific'
                 }));
 
-                console.log(`💸 Calculated employee deductions for employee ${emp.first_name} ${emp.last_name}:`, specificDeductions)
+                console.log(`💸 Calculated employee deductions for employee ${emp.employee_code}:`, specificDeductions)
 
-                // Combine both types of deductions
+                // Combine both types of allowances and deductions
+                const combinedAllowances = [...componentAllowances, ...specificAllowances];
                 const combinedDeductions = [...componentDeductions, ...specificDeductions];
 
-                console.log(`💸 Calculated deductions for employee ${emp.first_name} ${emp.last_name}:`, combinedDeductions);
+                console.log(`💸 Calculated deductions for employee ${emp.employee_code}:`, combinedDeductions);
+                console.log(`💰 Calculated allowances for employee ${emp.employee_code}:`, combinedAllowances);
 
                 return {
                     ...emp,
@@ -3887,7 +3906,7 @@ class PayrollRunService {
                         earnings_by_source: attendanceData.earnings_by_source || null,
                         shortfall_by_cause: attendanceData.shortfall_by_cause || null
                     },
-                    allowances: employeeAllowances,
+                    allowances: combinedAllowances,
                     deductions: combinedDeductions,
                     financial: {
                         loans: loanDeductions,
