@@ -583,7 +583,7 @@ class PayrollRunService {
         }
 
         // Get employee allowances and deductions
-        const employeeData = await this.getEmployeePayrollData(record.employee_id, record.client_id, record.run_id);
+        const employeeData = await this.getEmployeePayrollData(record.employee_id, record.client_id, record.run_id, payrollPeriod);
 
         // NOTE: We no longer need getAttendanceSummary() or approvedLeaves since we're using the new optimized
         // calculateEarnedSalary() method which directly queries worked hours from attendance table
@@ -1250,14 +1250,14 @@ class PayrollRunService {
         const period = periodInfo[0];
         const clientId = period.client_id;
 
-        // Use today's date if we're still in the period, otherwise use period end date
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         // Parse period end date in local time to match today's local time
         const periodEndParts = period.period_end_date.split('-');
         const periodEndDateFull = new Date(periodEndParts[0], periodEndParts[1] - 1, periodEndParts[2], 0, 0, 0, 0);
-
+ 
+        // Use today's date if we're still in the period, otherwise use period end date
         const calculationEndDate = today < periodEndDateFull ? today : periodEndDateFull;
         const isPartialPeriod = today < periodEndDateFull;
 
@@ -2386,7 +2386,7 @@ class PayrollRunService {
     /**
      * Get employee payroll configuration data
      */
-    async getEmployeePayrollData(employeeId, clientId, runId = null) {
+    async getEmployeePayrollData(employeeId, clientId, runId = null, period) {
         const db = getDB();
 
         // =============================================
@@ -2427,9 +2427,9 @@ class PayrollRunService {
                 ea.effective_to
             FROM employee_allowances ea
             WHERE ea.employee_id = ? AND ea.client_id = ? AND ea.is_active = 1
-            AND (ea.effective_to IS NULL OR ea.effective_to >= CURDATE())
-            AND ea.effective_from <= CURDATE()
-        `, [employeeId, clientId]);
+            AND (ea.effective_to IS NULL OR ea.effective_to >= ?)
+            AND ea.effective_from <= ?
+        `, [employeeId, clientId, period?.start || new Date().toISOString().split('T')[0], period?.end || new Date().toISOString().split('T')[0]]);
 
         // Get employee-specific deductions (manual assignments)
         const [employeeDeductions] = await db.execute(`
@@ -2445,10 +2445,10 @@ class PayrollRunService {
                 ed.effective_to
             FROM employee_deductions ed
             WHERE ed.employee_id = ? AND ed.client_id = ? AND ed.is_active = 1
-            AND (ed.effective_to IS NULL OR ed.effective_to >= CURDATE())
-            AND ed.effective_from <= CURDATE()
+            AND (ed.effective_to IS NULL OR ed.effective_to >= ?)
+            AND ed.effective_from <= ?
             AND (ed.is_recurring = 0 OR ed.remaining_installments > 0 OR ed.remaining_installments IS NULL)
-        `, [employeeId, clientId]);
+        `, [employeeId, clientId, period?.start || new Date().toISOString().split('T')[0], period?.end || new Date().toISOString().split('T')[0]]);
         
         // Get overtime hours for current period with holiday multipliers (if runId provided)
         let overtimeHours = 0;

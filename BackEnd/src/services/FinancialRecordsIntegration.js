@@ -161,10 +161,10 @@ class FinancialRecordsIntegration {
             FROM employee_advances
             WHERE employee_id = ?
               AND status IN ('approved', 'paid')
-              AND deduction_start_date <= ?
+              AND required_date BETWEEN ? AND ?
               AND remaining_amount > 0
             ORDER BY deduction_start_date ASC
-        `, [employeeId, payrollPeriod.end]);
+        `, [employeeId, payrollPeriod.start,payrollPeriod.end]);
 
         console.log(`📊 Found ${advances.length} active advances for employee ${employeeId}`);
         return advances;
