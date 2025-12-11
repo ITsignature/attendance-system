@@ -633,17 +633,9 @@ class PayrollRunService {
         }
 
         // =============================================
-        // STEP 2: Calculate EPF/ETF on ACTUAL EARNED BASE SALARY ONLY (not on allowances)
+        // STEP 2: Calculate allowances and bonuses (FULL amounts, not prorated)
         // =============================================
-        console.log(`\n💸 Step 2: Calculating statutory deductions (EPF/ETF) on actual earned base...`);
-        const deductionComponents = await this.calculateDeductions(actualEarnedBaseSalary, calculationMethod, employeeData);
-        console.log(`   EPF/ETF calculated on: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
-        console.log(`   Total EPF/ETF: Rs.${deductionComponents.total.toFixed(2)}`);
-
-        // =============================================
-        // STEP 3: Calculate allowances and bonuses (FULL amounts, not prorated)
-        // =============================================
-        console.log(`\n🎁 Step 3: Adding full allowances and bonuses (not prorated)...`);
+        console.log(`\n🎁 Step 2: Adding full allowances and bonuses (not prorated)...`);
         const grossComponents = await this.calculateGrossComponents(record, employeeData);
 
         // Extract allowances (everything except base salary)
@@ -654,17 +646,25 @@ class PayrollRunService {
         console.log(`   Financial Bonuses: Rs.${financialAdjustments.bonuses.toFixed(2)}`);
 
         // =============================================
-        // STEP 4: Calculate GROSS SALARY
+        // STEP 3: Calculate GROSS SALARY
         // =============================================
         const grossSalary = actualEarnedBaseSalary + allowancesAmount + financialAdjustments.bonuses;
-        console.log(`\n📊 Step 4: Gross Salary Calculation:`);
+        console.log(`\n📊 Step 3: Gross Salary Calculation:`);
         console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
         console.log(`   + Full Allowances: Rs.${allowancesAmount.toFixed(2)}`);
         console.log(`   + Bonuses: Rs.${financialAdjustments.bonuses.toFixed(2)}`);
         console.log(`   = Gross Salary: Rs.${grossSalary.toFixed(2)}`);
 
         // =============================================
-        // STEP 5: Combine all deductions (EPF/ETF + Loans + Advances + Attendance Shortfall)
+        // STEP 4: Calculate all deductions on GROSS SALARY
+        // Note: EPF/ETF calculated on actual earned base, employee deductions on gross salary
+        // =============================================
+        console.log(`\n💸 Step 4: Calculating deductions (EPF/ETF on earned base, employee deductions on gross)...`);
+        const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary);
+        console.log(`   Total Deductions: Rs.${deductionComponents.total.toFixed(2)}`);
+
+        // =============================================
+        // STEP 5: Combine all deductions (EPF/ETF + Employee Deductions + Loans + Advances + Attendance Shortfall)
         // Note: Attendance shortfall is added for informational display purposes
         // =============================================
         console.log(`\n💳 Step 5: Combining all deductions...`);
@@ -675,9 +675,9 @@ class PayrollRunService {
             total: deductionComponents.total + financialAdjustments.summary.totalDeductions
         };
 
-        // Add EPF/ETF breakdown
+        // Add all deductions breakdown
         if (deductionComponents.total > 0) {
-            console.log(`   EPF/ETF (on Actual Earned Base): Rs.${deductionComponents.total.toFixed(2)}`);
+            console.log(`   All Deductions (EPF/ETF + Employee Deductions): Rs.${deductionComponents.total.toFixed(2)}`);
         }
 
         // Add financial deduction components
@@ -2880,22 +2880,34 @@ class PayrollRunService {
     /**
      * Calculate deduction components
      */
-    async calculateDeductions(grossSalary, calculationMethod, employeeData) {
-        const baseSalary = parseFloat(grossSalary) || 0;
+    async calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary = null) {
+        // Use actualEarnedBaseSalary for EPF/ETF if provided, otherwise use grossSalary
+        const baseForStatutory = actualEarnedBaseSalary !== null ? parseFloat(actualEarnedBaseSalary) : parseFloat(grossSalary);
+        const baseForEmployee = parseFloat(grossSalary) || 0;
         const components = [];
         let total = 0;
 
         console.log(`💸 DEDUCTION CALCULATION:`);
-        console.log(`   Gross Salary: ${grossSalary}`);
+        console.log(`   Gross Salary (for employee deductions): ${grossSalary}`);
+        if (actualEarnedBaseSalary !== null) {
+            console.log(`   Actual Earned Base (for EPF/ETF): ${actualEarnedBaseSalary}`);
+        }
 
         // =============================================
-        // 1. CONFIGURED DEDUCTION COMPONENTS
+        // 1. CONFIGURED DEDUCTION COMPONENTS (EPF/ETF - calculated on earned base)
         // =============================================
         if (employeeData.configuredComponents && employeeData.configuredComponents.deductions) {
             console.log(`   📋 Processing ${employeeData.configuredComponents.deductions.length} configured deduction components`);
 
             for (const component of employeeData.configuredComponents.deductions) {
-                const calculatedAmount = await this.calculateComponentAmount(component, grossSalary, null);
+                // Use earned base for statutory deductions (EPF/ETF), gross for others
+                const baseAmount = (component.category === 'statutory' ||
+                                   component.component_name.toLowerCase().includes('epf') ||
+                                   component.component_name.toLowerCase().includes('etf'))
+                    ? baseForStatutory
+                    : baseForEmployee;
+
+                const calculatedAmount = await this.calculateComponentAmount(component, baseAmount, null);
 
                 if (calculatedAmount > 0) {
                     components.push({
@@ -2910,13 +2922,13 @@ class PayrollRunService {
                     });
                     total += calculatedAmount;
 
-                    console.log(`   ✅ ${component.component_name}: ${calculatedAmount} (${component.calculation_type})`);
+                    console.log(`   ✅ ${component.component_name}: ${calculatedAmount} (${component.calculation_type}, base: ${baseAmount.toFixed(2)})`);
                 }
             }
         }
 
         // =============================================
-        // 2. EMPLOYEE-SPECIFIC DEDUCTIONS
+        // 2. EMPLOYEE-SPECIFIC DEDUCTIONS (calculated on gross salary)
         // =============================================
         if (employeeData.employeeDeductions && employeeData.employeeDeductions.length > 0) {
             console.log(`   📝 Processing ${employeeData.employeeDeductions.length} employee-specific deductions`);
@@ -2924,9 +2936,9 @@ class PayrollRunService {
             for (const deduction of employeeData.employeeDeductions) {
                 let amount = parseFloat(deduction.amount) || 0;
 
-                // Handle percentage-based deductions
+                // Handle percentage-based deductions (calculated on gross salary)
                 if (deduction.is_percentage) {
-                    amount = (grossSalary * amount) / 100;
+                    amount = (baseForEmployee * amount) / 100;
                 }
 
                 if (amount > 0) {
@@ -2942,7 +2954,7 @@ class PayrollRunService {
                     });
                     total += amount;
 
-                    console.log(`   ✅ ${deduction.deduction_name}: ${amount} ${deduction.is_percentage ? '(%)' : ''}`);
+                    console.log(`   ✅ ${deduction.deduction_name}: ${amount} ${deduction.is_percentage ? `(${deduction.amount}% of ${baseForEmployee.toFixed(2)})` : ''}`);
 
                     // Update remaining installments if it's a recurring deduction
                     if (deduction.is_recurring && deduction.remaining_installments > 0) {
@@ -2954,7 +2966,7 @@ class PayrollRunService {
 
 
         // =============================================
-        // 3. FALLBACK: DEFAULT EPF IF NO CONFIGURED COMPONENTS
+        // 3. FALLBACK: DEFAULT EPF IF NO CONFIGURED COMPONENTS (calculated on earned base)
         // =============================================
         const hasEPFComponent = components.some(c =>
             c.name.toLowerCase().includes('epf') ||
@@ -2964,10 +2976,10 @@ class PayrollRunService {
         if (!hasEPFComponent && (!employeeData.configuredComponents ||
             employeeData.configuredComponents.deductions.length === 0)) {
 
-            console.log(`   🔧 Adding fallback EPF deduction (8%)`);
+            console.log(`   🔧 Adding fallback EPF deduction (8% of earned base)`);
 
-            // EPF (Employee Provident Fund) - 8% EMPLOYEE CONTRIBUTION
-            const epfAmount = baseSalary * 0.08;
+            // EPF (Employee Provident Fund) - 8% EMPLOYEE CONTRIBUTION (on earned base)
+            const epfAmount = baseForStatutory * 0.08;
             components.push({
                 code: 'EPF',
                 name: 'Employee Provident Fund (8%)',
@@ -2978,7 +2990,7 @@ class PayrollRunService {
             });
             total += epfAmount;
 
-            console.log(`   ✅ Fallback EPF: ${epfAmount}`);
+            console.log(`   ✅ Fallback EPF: ${epfAmount} (8% of ${baseForStatutory.toFixed(2)})`);
         }
 
         console.log(`   📊 Total Deductions: ${total}`);
