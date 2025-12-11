@@ -2508,12 +2508,12 @@ class PayrollRunService {
                 overtimeDetails = [];
             }
         }
-        
-        return {
-            // Legacy format for backward compatibility
-            allowances: employeeAllowances || [],
-            deductions: employeeDeductions || [],
 
+        console.log('employee allowancess:', employeeAllowances);
+        console.log('employee deductions:', employeeDeductions);
+        console.log('applicable components:', applicableComponents);
+
+        return {
             // New enhanced format with configured components
             configuredComponents: {
                 earnings: applicableComponents.filter(c => c.component_type === 'earning'),
@@ -2779,30 +2779,6 @@ class PayrollRunService {
             }
         }
 
-        // =============================================
-        // 3. LEGACY ALLOWANCES (for backward compatibility)
-        // =============================================
-        if (employeeData.allowances && employeeData.allowances.length > 0) {
-            console.log(`   🔄 Processing ${employeeData.allowances.length} legacy allowances`);
-
-            for (const allowance of employeeData.allowances) {
-                const amount = parseFloat(allowance.amount) || 0;
-                if (amount > 0) {
-                    total += amount;
-                    additionsTotal += amount;
-                    components.push({
-                        code: allowance.allowance_type.toUpperCase(),
-                        name: allowance.allowance_type.replace('_', ' '),
-                        type: 'earning',
-                        category: 'allowance',
-                        amount: amount,
-                        _legacy: true
-                    });
-
-                    console.log(`   ✅ Legacy ${allowance.allowance_type}: ${amount}`);
-                }
-            }
-        }
         
         // Add overtime (this is an addition) - with holiday awareness
         // First check if overtime is enabled in settings
@@ -2976,38 +2952,9 @@ class PayrollRunService {
             }
         }
 
-        // =============================================
-        // 3. LEGACY DEDUCTIONS (for backward compatibility)
-        // =============================================
-        if (employeeData.deductions && employeeData.deductions.length > 0) {
-            console.log(`   🔄 Processing ${employeeData.deductions.length} legacy deductions`);
-
-            for (const deduction of employeeData.deductions) {
-                let amount;
-                if (deduction.is_percentage) {
-                    amount = grossSalary * (parseFloat(deduction.amount) / 100);
-                } else {
-                    amount = parseFloat(deduction.amount) || 0;
-                }
-
-                if (amount > 0) {
-                    components.push({
-                        code: deduction.deduction_type.toUpperCase(),
-                        name: deduction.deduction_type.replace('_', ' '),
-                        type: 'deduction',
-                        category: 'custom',
-                        amount: amount,
-                        _legacy: true
-                    });
-                    total += amount;
-
-                    console.log(`   ✅ Legacy ${deduction.deduction_type}: ${amount}`);
-                }
-            }
-        }
 
         // =============================================
-        // 4. FALLBACK: DEFAULT EPF IF NO CONFIGURED COMPONENTS
+        // 3. FALLBACK: DEFAULT EPF IF NO CONFIGURED COMPONENTS
         // =============================================
         const hasEPFComponent = components.some(c =>
             c.name.toLowerCase().includes('epf') ||
