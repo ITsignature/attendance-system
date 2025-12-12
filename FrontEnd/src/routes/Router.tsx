@@ -50,6 +50,7 @@ const Error = Loadable(lazy(() => import('../views/auth/error/Error')));
 // RBAC System Components
 const RoleManagement = Loadable(lazy(() => import('../components/RBACSystem/roleManagement')));
 const AdminUserManagement = Loadable(lazy(() => import('../components/RBACSystem/adminUserManagement')));
+const ClientManagement = Loadable(lazy(() => import('../components/RBACSystem/ClientManagement')));
 const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLogin')));
 const ManualAttendance =Loadable(lazy(() => import('../components/Attendance/ManualAttendance')));
 const LivePayroll = Loadable(lazy(() => import('../components/LivePayrol/PayrollEmployeeRecords')));
@@ -321,25 +322,30 @@ const Router = [
           </DynamicProtectedRoute>
         )
       },
-      { 
-        path: '/adminusermanagement', 
-        exact: true, 
+      {
+        path: '/adminusermanagement',
+        exact: true,
         element: (
           <DynamicProtectedRoute permission="rbac.assign">
             <AdminUserManagement />
           </DynamicProtectedRoute>
         )
       },
-      // { 
-      //   path: '/rbacexamples', 
-      //   exact: true, 
+      {
+        path: '/clientmanagement',
+        exact: true,
+        element: <ClientManagement />
+      },
+      // {
+      //   path: '/rbacexamples',
+      //   exact: true,
       //   element: (
       //     <DynamicProtectedRoute permission="dashboard.view">
       //       <RbacExamples />
       //     </DynamicProtectedRoute>
       //   )
       // },
-      
+
       // Unauthorized page (for permission-denied within app)
       { 
         path: '/unauthorized', 
