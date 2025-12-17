@@ -86,16 +86,6 @@ const SettingsWithBackend = () => {
 
     Object.entries(settings).forEach(([key, setting]) => {
       converted[key] = cleanValue(setting.value);
-      
-      // 🔧 DEBUG: Special logging for overtime_enabled to track the issue
-      if (key === 'overtime_enabled') {
-        console.log(`🔍 DEBUG overtime_enabled conversion:`, {
-          original: setting.value,
-          originalType: typeof setting.value,
-          converted: converted[key],
-          convertedType: typeof converted[key]
-        });
-      }
     });
 
     console.log('🔍 Converted settings:', converted);
@@ -168,17 +158,7 @@ useEffect(() => {
 
 const updateLocalSetting = (key: string, value: any) => {
   console.log(`🔍 DEBUG updateLocalSetting - Key: "${key}", Value: "${value}", Type: ${typeof value}`);
-  
-  // 🔧 DEBUG: Special logging for overtime_enabled
-  if (key === 'overtime_enabled') {
-    console.log(`🔍 DEBUG overtime_enabled updateLocalSetting:`, {
-      newValue: value,
-      newValueType: typeof value,
-      currentLocalValue: localSettings?.overtime_enabled,
-      currentLocalType: typeof localSettings?.overtime_enabled
-    });
-  }
-  
+
   // Special handling for time inputs
   if (key === 'work_start_time' || key === 'work_end_time') {
     console.log(`⏰ DEBUG time input - Raw value: "${value}"`);
@@ -832,98 +812,17 @@ const hhmmToMinutes = (t) => {
                 </select>
               </div> */}
 
-              {/* OVERTIME SETTINGS */}
+              {/* OVERTIME SETTINGS - Now managed at employee level */}
               <div className="border-t pt-6 mt-6">
-                <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">
-                  Overtime Configuration
-                </h4>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={localSettings.overtime_enabled || false}
-                      onChange={(e) => updateLocalSetting('overtime_enabled', e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                      Enable Overtime Calculations
-                    </label>
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    When enabled, overtime will be calculated and applied to payroll
-                  </p>
-
-                  {localSettings.overtime_enabled && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Regular Overtime Rate Multiplier
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="1"
-                          max="3"
-                          value={localSettings.overtime_rate_multiplier || 1.5}
-                          onChange={(e) => updateLocalSetting('overtime_rate_multiplier', parseFloat(e.target.value))}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          Multiplier for regular overtime pay (e.g., 1.5 = 150% of regular rate)
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Weekend Hours Multiplier
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="1"
-                          max="3"
-                          value={localSettings.working_hours_config?.weekend_hours_multiplier || 1.5}
-                          onChange={(e) => {
-                            const current = localSettings.working_hours_config || {};
-                            updateLocalSetting('working_hours_config', {
-                              ...current,
-                              weekend_hours_multiplier: parseFloat(e.target.value)
-                            });
-                          }}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          Pay multiplier for weekend work (e.g., 1.5 = 150% of regular rate)
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Holiday Hours Multiplier
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="1"
-                          max="5"
-                          value={localSettings.working_hours_config?.holiday_hours_multiplier || 2.5}
-                          onChange={(e) => {
-                            const current = localSettings.working_hours_config || {};
-                            updateLocalSetting('working_hours_config', {
-                              ...current,
-                              holiday_hours_multiplier: parseFloat(e.target.value)
-                            });
-                          }}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          Pay multiplier for holiday work (e.g., 2.5 = 250% of regular rate)
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </div>
+                {/* <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg"> */}
+                  {/* <h5 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
+                    Overtime Configuration Moved
+                  </h5> */}
+                  {/* <div className="text-sm text-blue-800 dark:text-blue-400"> */}
+                    {/* <p>Overtime settings are now configured at the individual employee level in the Professional Information section when adding/editing employees.</p>
+                    <p className="mt-2">This allows you to enable overtime calculations for specific employees only.</p> */}
+                  {/* </div> */}
+                {/* </div> */}
               </div>
             </div>
           </div>

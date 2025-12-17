@@ -30,15 +30,15 @@ const validateSettingKey = (key) => {
     
     // Attendance Settings
     'working_hours_per_day', 'work_start_time', 'work_end_time',
-    'late_threshold_minutes', 'overtime_rate_multiplier',
+    'late_threshold_minutes',
     'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours',
-    'weekend_working_days', 'working_hours_config', 'day_specific_schedules',
+    'weekend_working_days', 'day_specific_schedules',
 
     // Leave Settings
     'paid_leaves_per_month',
 
     // Payroll Settings
-    'payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'overtime_enabled',
+    'payroll_cycle', 'salary_processing_date', 'tax_calculation_method',
     
     // Privacy Settings
     'data_retention_years', 'audit_logs_enabled', 'anonymize_data_enabled',
@@ -54,19 +54,19 @@ const getSettingType = (key, value) => {
   const booleanSettings = [
     'two_factor_auth_enabled', 'email_notifications_enabled', 'push_notifications_enabled',
     'sms_notifications_enabled', 'weekly_reports_enabled', 'audit_logs_enabled',
-    'anonymize_data_enabled', 'email_integration_enabled', 'calendar_sync_enabled', 'overtime_enabled'
+    'anonymize_data_enabled', 'email_integration_enabled', 'calendar_sync_enabled'
   ];
   
   const numberSettings = [
     'password_expiry_days', 'session_timeout_minutes', 'max_login_attempts',
-    'working_hours_per_day', 'late_threshold_minutes', 'overtime_rate_multiplier',
+    'working_hours_per_day', 'late_threshold_minutes',
     'data_retention_years', 'account_lockout_duration',
     'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours',
     'paid_leaves_per_month'
   ];
 
   const objectSettings = [
-    'weekend_working_days', 'working_hours_config'
+    'weekend_working_days'
   ];
   
   if (booleanSettings.includes(key)) {
@@ -329,9 +329,9 @@ router.put('/:key',
 
     // Check permission based on setting category
     const { checkPermission } = require('../middleware/rbacMiddleware');
-    const attendanceSettings = ['working_hours_per_day', 'work_start_time', 'work_end_time', 'late_threshold_minutes', 'overtime_rate_multiplier', 'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'weekend_working_days', 'working_hours_config', 'day_specific_schedules'];
+    const attendanceSettings = ['working_hours_per_day', 'work_start_time', 'work_end_time', 'late_threshold_minutes', 'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'weekend_working_days', 'day_specific_schedules'];
     const leaveSettings = ['paid_leaves_per_month'];
-    const payrollSettings = ['payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'overtime_enabled'];
+    const payrollSettings = ['payroll_cycle', 'salary_processing_date', 'tax_calculation_method'];
 
     if (attendanceSettings.includes(key)) {
       checkPermission('settings.attendance.edit')(req, res, () => {});
@@ -725,13 +725,13 @@ router.get('/meta/categories',
         name: 'Attendance Settings',
         description: 'Work schedule and attendance policies',
         settings: [
-          'working_hours_per_day', 
-          'work_start_time', 
-          'work_end_time', 
-          'late_threshold_minutes', 
-          'overtime_rate_multiplier',
-          'half_time_duration_minutes',     // NEW SETTING
-          'short_leave_duration_minutes'    // NEW SETTING
+          'working_hours_per_day',
+          'work_start_time',
+          'work_end_time',
+          'late_threshold_minutes',
+          'full_day_minimum_hours',
+          'half_day_minimum_hours',
+          'short_leave_minimum_hours'
         ]
       },
       payroll: {

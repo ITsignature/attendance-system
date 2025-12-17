@@ -417,6 +417,10 @@ router.put('/:id',
     body('follows_company_schedule').optional().isBoolean().withMessage('follows_company_schedule must be true or false'),
     body('attendance_affects_salary').optional().isBoolean().withMessage('attendance_affects_salary must be true or false'),
 
+    // Overtime Calculation Settings
+    body('overtime_enabled').optional().isBoolean().withMessage('overtime_enabled must be true or false'),
+    body('overtime_rate_multiplier').optional({ nullable: true }).isFloat({ min: 1.0, max: 5.0 }).withMessage('overtime_rate_multiplier must be between 1.0 and 5.0'),
+
     // Weekend Working Configuration Validation
     body('weekend_working_config')
       .optional({ nullable: true })
@@ -562,6 +566,10 @@ router.put('/:id',
 
       // Salary Calculation Settings
       'attendance_affects_salary',
+
+      // Overtime Calculation Settings
+      'overtime_enabled', 'pre_shift_overtime_enabled', 'post_shift_overtime_enabled',
+      'regular_ot_multiplier', 'weekend_ot_multiplier', 'holiday_ot_multiplier',
 
       // Weekend Working Configuration
       'weekend_working_config'
@@ -763,7 +771,7 @@ router.post('/',
     body('employee_code').trim().isLength({ min: 1 }).withMessage('Employee code is required'),
     body('department_id').isUUID().withMessage('Invalid department ID'),
     body('designation_id').isUUID().withMessage('Invalid designation ID'),
-     body('manager_id').optional({ values: 'falsy' }).isUUID().withMessage('Invalid manager ID'),
+    body('manager_id').optional({ values: 'falsy' }).isUUID().withMessage('Invalid manager ID'),
     body('hire_date').isISO8601().withMessage('Please enter a valid hire date'),
     body('employment_status').isIn(['active', 'inactive']).withMessage('Invalid employment status'),
     body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant']).withMessage('Invalid employee type'),
@@ -791,6 +799,37 @@ router.post('/',
       .optional({ checkFalsy: true })
       .isBoolean()
       .withMessage('attendance_affects_salary must be a boolean value'),
+
+    // Overtime Calculation Settings
+    body('overtime_enabled')
+      .optional({ checkFalsy: true })
+      .isBoolean()
+      .withMessage('overtime_enabled must be a boolean value'),
+
+    body('pre_shift_overtime_enabled')
+      .optional({ checkFalsy: true })
+      .isBoolean()
+      .withMessage('pre_shift_overtime_enabled must be a boolean value'),
+
+    body('post_shift_overtime_enabled')
+      .optional({ checkFalsy: true })
+      .isBoolean()
+      .withMessage('post_shift_overtime_enabled must be a boolean value'),
+
+    body('regular_ot_multiplier')
+      .optional({ nullable: true })
+      .isFloat({ min: 1.0, max: 5.0 })
+      .withMessage('regular_ot_multiplier must be between 1.0 and 5.0'),
+
+    body('weekend_ot_multiplier')
+      .optional({ nullable: true })
+      .isFloat({ min: 1.0, max: 5.0 })
+      .withMessage('weekend_ot_multiplier must be between 1.0 and 5.0'),
+
+    body('holiday_ot_multiplier')
+      .optional({ nullable: true })
+      .isFloat({ min: 1.0, max: 5.0 })
+      .withMessage('holiday_ot_multiplier must be between 1.0 and 5.0'),
 
     // Weekend Working Configuration Validation
     body('weekend_working_config')
@@ -875,7 +914,15 @@ router.post('/',
         weekend_working_config,
 
         // Salary Calculation Settings
-        attendance_affects_salary = true
+        attendance_affects_salary = true,
+
+        // Overtime Calculation Settings
+        overtime_enabled = false,
+        pre_shift_overtime_enabled = false,
+        post_shift_overtime_enabled = false,
+        regular_ot_multiplier = null,
+        weekend_ot_multiplier = null,
+        holiday_ot_multiplier = null
       } = req.body;
 
       // Validation for time fields
@@ -1005,8 +1052,10 @@ router.post('/',
           employment_status, base_salary, attendance_affects_salary,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
           in_time, out_time, follows_company_schedule, weekend_working_config,
+          overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
+          regular_ot_multiplier, weekend_ot_multiplier, holiday_ot_multiplier,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
@@ -1014,7 +1063,9 @@ router.post('/',
         manager_id || null, employee_type, employment_status, base_salary || null, attendance_affects_salary,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
         finalInTime, finalOutTime, follows_company_schedule,
-        weekend_working_config ? JSON.stringify(weekend_working_config) : null
+        weekend_working_config ? JSON.stringify(weekend_working_config) : null,
+        overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
+        regular_ot_multiplier, weekend_ot_multiplier, holiday_ot_multiplier
       ]);
 
       // Get created employee with relations (same as your existing code)

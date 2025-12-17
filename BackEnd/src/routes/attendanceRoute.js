@@ -1058,7 +1058,7 @@ const calculateWorkHours = async (
   }
 
   /* raw hours minus break */
-  const rawHrs  = (outDate - inDate) / 3.6e6;   // ms ➜ h
+  const rawHrs  = (outDate - inDate) / 1000;   // ms ➜ ස්
   const worked  = Math.max(0, rawHrs - (breakDuration || 0));
 
   /* what counts as "standard" today? */

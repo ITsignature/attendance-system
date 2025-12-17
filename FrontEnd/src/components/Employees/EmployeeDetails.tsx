@@ -37,6 +37,15 @@ interface Employee {
   employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
   base_salary?: number;
   attendance_affects_salary?: boolean;
+
+  // Overtime Configuration
+  overtime_enabled?: boolean;
+  pre_shift_overtime_enabled?: boolean;
+  post_shift_overtime_enabled?: boolean;
+  regular_ot_multiplier?: number | null;
+  weekend_ot_multiplier?: number | null;
+  holiday_ot_multiplier?: number | null;
+
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
@@ -1216,6 +1225,79 @@ const EmployeeDetails: React.FC = () => {
                           ? 'Salary calculated based on attendance records'
                           : 'Full salary paid regardless of attendance'}
                       </p>
+                    </div>
+
+                    {/* Overtime Configuration Display */}
+                    <div className={`md:col-span-2 p-6 rounded-lg border-2 shadow-md ${
+                      (employee.overtime_enabled === true || employee.overtime_enabled === 1)
+                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
+                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <HiClock className={`w-5 h-5 ${
+                          (employee.overtime_enabled === true || employee.overtime_enabled === 1) ? 'text-orange-600' : 'text-gray-500'
+                        }`} />
+                        <h4 className={`text-sm font-bold ${
+                          (employee.overtime_enabled === true || employee.overtime_enabled === 1)
+                            ? 'text-orange-800 dark:text-orange-200'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}>Overtime Configuration</h4>
+                      </div>
+
+                      {(employee.overtime_enabled === true || employee.overtime_enabled === 1) ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Badge color="success" icon={FaCheck}>Overtime Enabled</Badge>
+                          </div>
+
+                          {/* Overtime Shift Flags */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              {(employee.pre_shift_overtime_enabled === true || employee.pre_shift_overtime_enabled === 1) ? (
+                                <Badge color="info" icon={FaCheck} size="sm">Pre-Shift OT</Badge>
+                              ) : (
+                                <Badge color="gray" icon={FaTimes} size="sm">Pre-Shift OT</Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              {(employee.post_shift_overtime_enabled === true || employee.post_shift_overtime_enabled === 1) ? (
+                                <Badge color="info" icon={FaCheck} size="sm">Post-Shift OT</Badge>
+                              ) : (
+                                <Badge color="gray" icon={FaTimes} size="sm">Post-Shift OT</Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Overtime Multipliers */}
+                          <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Regular OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.regular_ot_multiplier ? `${employee.regular_ot_multiplier}x` : 'Not set'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Weekend OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.weekend_ot_multiplier ? `${employee.weekend_ot_multiplier}x` : 'Not set'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Holiday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.holiday_ot_multiplier ? `${employee.holiday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge color="gray" icon={FaTimes}>Overtime Disabled</Badge>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            No overtime pay calculated for this employee
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

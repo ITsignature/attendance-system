@@ -150,20 +150,6 @@ const seedDefaultSettings = async () => {
         is_public: true
       },
       {
-        setting_key: 'overtime_rate_multiplier',
-        setting_value: JSON.stringify(1.5),
-        setting_type: 'number',
-        description: 'Overtime pay multiplier (e.g., 1.5 for time and a half)',
-        is_public: false
-      },
-      {
-        setting_key: 'overtime_enabled',
-        setting_value: JSON.stringify(true),
-        setting_type: 'boolean',
-        description: 'Enable overtime calculations for payroll',
-        is_public: false
-      },
-      {
         setting_key: 'full_day_minimum_hours',
         setting_value: JSON.stringify(7),
         setting_type: 'number',
@@ -280,13 +266,14 @@ const seedDefaultSettings = async () => {
     console.log('🏢 General Settings: 5 items (company info, timezone, currency, etc.)');
     console.log('🔒 Security Settings: 5 items (passwords, 2FA, session timeout, etc.)');
     console.log('🔔 Notification Settings: 4 items (email, push, SMS, reports)');
-    console.log('⏰ Attendance Settings: 6 items (work hours, start/end time, overtime)');
+    console.log('⏰ Attendance Settings: 7 items (work hours, start/end time, late threshold, day minimums)');
     console.log('📅 Leave Settings: 1 item (paid leaves per month)');
     console.log('💰 Payroll Settings: 3 items (cycle, processing, tax calculation)');
     console.log('🔐 Privacy Settings: 3 items (data retention, audit logs, anonymization)');
     console.log('🔗 Integration Settings: 3 items (email, calendar, backup frequency)');
     console.log('');
-    console.log('🎉 Total: 29 system-wide default settings');
+    console.log('🎉 Total: 31 system-wide default settings');
+    console.log('Note: Overtime settings (overtime_enabled, overtime_rate_multiplier) are now managed at employee level');
     console.log('');
     console.log('Next Steps:');
     console.log('===========');
