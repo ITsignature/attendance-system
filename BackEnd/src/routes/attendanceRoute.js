@@ -374,8 +374,8 @@ router.post('/fingerprint', [
       // Get duration settings
       const durationSettings = await getWorkDurationSettings(clientId, db);
 
-      // Calculate work hours
-      const { totalHours, overtimeHours } = await calculateWorkHours(
+      // Calculate work hours (now returns actual OT without multiplier)
+      const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
         record.check_in_time,
         currentTime,
         0, // no break for fingerprint attendance
@@ -417,16 +417,16 @@ router.post('/fingerprint', [
         null,
         employeeId
       );
-      const overtimeInfo = await statusService.getOvertimeMultiplier(today, departmentId, employeeId);
-      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
 
-      // Update attendance record
+      // Update attendance record (store ACTUAL OT hours, NO multiplier)
       await db.execute(`
         UPDATE attendance
         SET
           check_out_time = ?,
           total_hours = ?,
           overtime_hours = ?,
+          pre_shift_overtime_seconds = ?,
+          post_shift_overtime_seconds = ?,
           payable_duration = ?,
           arrival_status = ?,
           work_duration = ?
@@ -434,7 +434,9 @@ router.post('/fingerprint', [
       `, [
         currentTime,
         totalHours,
-        enhancedOvertimeHours,
+        overtimeHours,  // ACTUAL hours without multiplier
+        preShiftOvertimeSeconds,
+        postShiftOvertimeSeconds,
         payableDuration,
         arrivalResult.status,
         durationResult.status,
@@ -442,7 +444,7 @@ router.post('/fingerprint', [
       ]);
 
       console.log(`   ✅ Check-out successful at ${currentTime}`);
-      console.log(`   Total Hours: ${totalHours}h, Overtime: ${enhancedOvertimeHours}h`);
+      console.log(`   Total Hours: ${totalHours}h, Overtime: ${overtimeHours}h (actual, no multiplier)`);
 
       return res.status(200).json({
         success: true,
@@ -455,7 +457,9 @@ router.post('/fingerprint', [
           check_in_time: record.check_in_time,
           check_out_time: currentTime,
           total_hours: totalHours,
-          overtime_hours: enhancedOvertimeHours,
+          overtime_hours: overtimeHours,
+          pre_shift_overtime_seconds: preShiftOvertimeSeconds,
+          post_shift_overtime_seconds: postShiftOvertimeSeconds,
           arrival_status: arrivalResult.status,
           work_duration: durationResult.status,
           date: today
@@ -568,11 +572,15 @@ router.post('/manual-sync', [
 
       let totalHours = null;
       let overtimeHours = 0;
+      let preShiftOvertimeSeconds = 0;
+      let postShiftOvertimeSeconds = 0;
 
       if (check_out_time) {
         const calculated = await calculateWorkHours(check_in_time, check_out_time, 0, clientId, db, schedule);
         totalHours = calculated.totalHours;
-        overtimeHours = calculated.overtimeHours;
+        overtimeHours = calculated.overtimeHours;  // Actual OT without multiplier
+        preShiftOvertimeSeconds = calculated.preShiftOvertimeSeconds;
+        postShiftOvertimeSeconds = calculated.postShiftOvertimeSeconds;
       }
 
       const [employeeInfo] = await db.execute(`SELECT department_id FROM employees WHERE id = ?`, [employeeId]);
@@ -584,19 +592,16 @@ router.post('/manual-sync', [
       const durationSettings = await getWorkDurationSettings(clientId, db);
       const durationResult = await statusService.determineWorkDuration(totalHours, durationSettings, date, departmentId, null, employeeId);
 
-      const overtimeInfo = await statusService.getOvertimeMultiplier(date, departmentId, employeeId);
-      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
-
       await db.execute(`
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time,
-          total_hours, overtime_hours, break_duration,
+          total_hours, overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds, break_duration,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'office', ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'office', ?, ?, ?, ?)
       `, [
         attendanceId, employeeId, date, check_in_time, check_out_time,
-        totalHours, enhancedOvertimeHours, arrivalResult.status,
+        totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds, arrivalResult.status,
         durationResult.status, schedule.start_time, schedule.end_time,
         isWeekend, 'Synced from old system'
       ]);
@@ -633,7 +638,7 @@ router.post('/manual-sync', [
 
       const record = existing[0];
       const schedule = await getEmployeeSchedule(employeeId, clientId, db, date);
-      const { totalHours, overtimeHours } = await calculateWorkHours(record.check_in_time, check_out_time, 0, clientId, db, schedule);
+      const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(record.check_in_time, check_out_time, 0, clientId, db, schedule);
 
       const [employeeInfo] = await db.execute(`SELECT department_id FROM employees WHERE id = ?`, [employeeId]);
       const departmentId = employeeInfo[0]?.department_id || null;
@@ -642,15 +647,13 @@ router.post('/manual-sync', [
       const durationSettings = await getWorkDurationSettings(clientId, db);
       const durationResult = await statusService.determineWorkDuration(totalHours, durationSettings, date, departmentId, null, employeeId);
 
-      const overtimeInfo = await statusService.getOvertimeMultiplier(date, departmentId, employeeId);
-      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
-
       await db.execute(`
         UPDATE attendance SET
           check_out_time = ?, total_hours = ?, overtime_hours = ?,
+          pre_shift_overtime_seconds = ?, post_shift_overtime_seconds = ?,
           work_duration = ?, notes = CONCAT(COALESCE(notes, ''), ' | Updated from old system')
         WHERE id = ?
-      `, [check_out_time, totalHours, enhancedOvertimeHours, durationResult.status, record.id]);
+      `, [check_out_time, totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds, durationResult.status, record.id]);
 
       console.log(`   ✅ Updated successfully`);
 
@@ -1047,47 +1050,91 @@ const calculateWorkHours = async (
   const outNorm = normalise(checkOutTime);
 
   if (!inNorm || !outNorm) {
-    return { totalHours: null, overtimeHours: 0, standardHours: null };
+    return {
+      totalHours: null,
+      overtimeHours: 0,
+      standardHours: null,
+      preShiftOvertimeSeconds: 0,
+      postShiftOvertimeSeconds: 0
+    };
   }
 
   const inDate  = new Date(`2000-01-01T${inNorm}`);
   const outDate = new Date(`2000-01-01T${outNorm}`);
 
   if (isNaN(inDate) || isNaN(outDate) || outDate <= inDate) {
-    return { totalHours: null, overtimeHours: 0, standardHours: null };
+    return {
+      totalHours: null,
+      overtimeHours: 0,
+      standardHours: null,
+      preShiftOvertimeSeconds: 0,
+      postShiftOvertimeSeconds: 0
+    };
   }
 
-  /* raw hours minus break */
-  const rawHrs  = (outDate - inDate) / 1000;   // ms ➜ ස්
-  const worked  = Math.max(0, rawHrs - (breakDuration || 0));
+  /* Calculate total worked time in seconds */
+  const rawSeconds = (outDate - inDate) / 1000;  // ms to seconds
+  const breakSeconds = (breakDuration || 0) * 3600;  // hours to seconds
+  const workedSeconds = Math.max(0, rawSeconds - breakSeconds);
+  const workedHours = workedSeconds / 3600;  // seconds to hours
 
   /* what counts as "standard" today? */
-  let standard = null;
+  let standardHours = null;
 
   if (employeeSchedule?.start_time && employeeSchedule?.end_time) {
     const sIn  = new Date(`2000-01-01T${normalise(employeeSchedule.start_time)}`);
     const sOut = new Date(`2000-01-01T${normalise(employeeSchedule.end_time)}`);
     if (!isNaN(sIn) && !isNaN(sOut) && sOut > sIn) {
-      standard = (sOut - sIn) / 3.6e6 - (breakDuration || 0); // subtract same break
+      standardHours = (sOut - sIn) / 3600000 - (breakDuration || 0); // ms to hours, subtract break
     }
   } else if (employeeSchedule?.is_non_working_day) {
     // Volunteer work on non-working day: all hours are overtime
-    standard = 0;
+    standardHours = 0;
   }
 
   /* fall back to company-wide setting */
-  if (standard === null) {
+  if (standardHours === null) {
     const { working_hours_per_day } = await getWorkDurationSettings(clientId, db);
-    standard = working_hours_per_day;
+    standardHours = working_hours_per_day;
   }
 
-  /* finally, overtime */
-  const ot = Math.max(0, worked - standard);
+  /* ==================== CALCULATE ACTUAL OVERTIME (NO MULTIPLIER) ==================== */
+
+  let preShiftOvertimeSeconds = 0;
+  let postShiftOvertimeSeconds = 0;
+  let totalOvertimeHours = 0;
+
+  // ALWAYS calculate actual overtime (regardless of overtime_enabled setting)
+  // This preserves data for retroactive OT enabling and multiplier changes
+  if (employeeSchedule?.start_time && employeeSchedule?.end_time) {
+    const scheduledStart = new Date(`2000-01-01T${normalise(employeeSchedule.start_time)}`);
+    const scheduledEnd = new Date(`2000-01-01T${normalise(employeeSchedule.end_time)}`);
+
+    // Pre-Shift OT: Seconds worked BEFORE scheduled start time
+    if (inDate < scheduledStart) {
+      preShiftOvertimeSeconds = Math.floor((scheduledStart - inDate) / 1000);
+    }
+
+    // Post-Shift OT: Seconds worked AFTER scheduled end time
+    if (outDate > scheduledEnd) {
+      postShiftOvertimeSeconds = Math.floor((outDate - scheduledEnd) / 1000);
+    }
+
+    // Total OT in hours (actual hours, NO multiplier applied)
+    totalOvertimeHours = (preShiftOvertimeSeconds + postShiftOvertimeSeconds) / 3600;
+  } else {
+    // No custom schedule - use simple calculation
+    totalOvertimeHours = Math.max(0, workedHours - standardHours);
+    // For non-scheduled employees, assume all OT is post-shift
+    postShiftOvertimeSeconds = Math.floor(totalOvertimeHours * 3600);
+  }
 
   return {
-    totalHours    : +worked.toFixed(2),      //  number
-    overtimeHours : +ot.toFixed(2),          //  number
-    standardHours : +standard.toFixed(2)     //  number
+    totalHours: +workedHours.toFixed(2),              // Total hours worked
+    overtimeHours: +totalOvertimeHours.toFixed(2),    // ACTUAL OT hours (NO multiplier)
+    standardHours: +standardHours.toFixed(2),         // Expected work hours
+    preShiftOvertimeSeconds: preShiftOvertimeSeconds,   // Seconds before scheduled start
+    postShiftOvertimeSeconds: postShiftOvertimeSeconds  // Seconds after scheduled end
   };
 };
 
@@ -1141,8 +1188,8 @@ const calculateWorkHours = async (
         });
       }
 
-      // Calculate work hours first
-      const { totalHours, overtimeHours, standardHours } = await calculateWorkHours(
+      // Calculate work hours first (returns actual OT without multiplier)
+      const { totalHours, overtimeHours, standardHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
         req.body.check_in_time,
         req.body.check_out_time,
         req.body.break_duration,
@@ -1152,6 +1199,7 @@ const calculateWorkHours = async (
       );
 
       console.log("totalHours", totalHours, "overtimeHours", overtimeHours, "standardHours", standardHours);
+      console.log("preShiftOvertimeSeconds", preShiftOvertimeSeconds, "postShiftOvertimeSeconds", postShiftOvertimeSeconds);
 
       // Get employee department for working day calculation
       const [employeeInfo] = await db.execute(`
@@ -1181,14 +1229,8 @@ const calculateWorkHours = async (
         req.body.employee_id
       );
 
-      const overtimeInfo = await statusService.getOvertimeMultiplier(req.body.date, departmentId, req.body.employee_id);
-
       console.log("Enhanced arrival status:", arrivalResult);
       console.log("Enhanced duration status:", durationResult);
-      console.log("Overtime multiplier:", overtimeInfo);
-
-      // Calculate enhanced overtime hours with multiplier
-      const enhancedOvertimeHours = overtimeHours * overtimeInfo.multiplier;
 
       // Calculate payable duration
       const payableDuration = calculatePayableDuration(
@@ -1213,12 +1255,14 @@ const calculateWorkHours = async (
         check_in_time: req.body.check_in_time || null,
         check_out_time: req.body.check_out_time || null,
         total_hours: totalHours,
-        overtime_hours: enhancedOvertimeHours, // Use enhanced overtime with multiplier
+        overtime_hours: overtimeHours, // ACTUAL overtime hours without multiplier
+        pre_shift_overtime_seconds: preShiftOvertimeSeconds,
+        post_shift_overtime_seconds: postShiftOvertimeSeconds,
         break_duration: req.body.break_duration || 0,
         arrival_status: arrivalResult.status,
         work_duration: durationResult.status,
         work_type: req.body.work_type || 'office',
-        notes: generateEnhancedNotes(req.body.notes, arrivalResult.workingDayInfo, overtimeInfo),
+        notes: req.body.notes || null,
         created_by: req.user.userId,
         scheduled_in_time: schedule.start_time || null,
         scheduled_out_time: schedule.end_time || null,
@@ -1231,8 +1275,8 @@ const calculateWorkHours = async (
       const insertQuery = `
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time, total_hours,
-          overtime_hours, break_duration, arrival_status, work_duration, work_type, notes, created_by, scheduled_in_time, scheduled_out_time, payable_duration, is_weekend
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds, break_duration, arrival_status, work_duration, work_type, notes, created_by, scheduled_in_time, scheduled_out_time, payable_duration, is_weekend
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       await db.execute(insertQuery, Object.values(attendanceData));
@@ -1672,8 +1716,8 @@ router.patch('/bulk', [
             break_duration: req.body.break_duration ?? current.break_duration,
           };
 
-          // Recalculate hours/overtime
-          const { totalHours, overtimeHours } = await calculateWorkHours(
+          // Recalculate hours/overtime (now includes seconds)
+          const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
             eff.check_in_time,
             eff.check_out_time,
             eff.break_duration,
@@ -1737,6 +1781,8 @@ router.patch('/bulk', [
           maybePush('work_duration', workDuration, current.work_duration);
           maybePush('total_hours', totalHours, current.total_hours);
           maybePush('overtime_hours', overtimeHours, current.overtime_hours);
+          maybePush('pre_shift_overtime_seconds', preShiftOvertimeSeconds, current.pre_shift_overtime_seconds);
+          maybePush('post_shift_overtime_seconds', postShiftOvertimeSeconds, current.post_shift_overtime_seconds);
           maybePush('payable_duration', payableDuration, current.payable_duration);
 
           ['work_type', 'notes'].forEach((k) =>
@@ -1872,15 +1918,14 @@ router.patch('/:id',
       break_duration : req.body.break_duration ?? current.break_duration,
     };
 
-    // recalc hours/overtime
-    const { totalHours, overtimeHours } = await calculateWorkHours(
+    // recalc hours/overtime (now includes seconds)
+    const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
       eff.check_in_time,
       eff.check_out_time,
       eff.break_duration,
       req.user.clientId,
       db,
       schedule
-
     );
 
     console.log('totalHours', totalHours);
@@ -1957,6 +2002,8 @@ console.log('final workDuration:', workDuration);
 
     maybePush('total_hours',    totalHours,         current.total_hours);
     maybePush('overtime_hours', overtimeHours,      current.overtime_hours);
+    maybePush('pre_shift_overtime_seconds', preShiftOvertimeSeconds, current.pre_shift_overtime_seconds);
+    maybePush('post_shift_overtime_seconds', postShiftOvertimeSeconds, current.post_shift_overtime_seconds);
     maybePush('payable_duration', payableDuration,  current.payable_duration);
 
     ['work_type', 'notes'].forEach((k) =>
@@ -2076,8 +2123,8 @@ router.post('/bulk-update-status', [
           let arrivalUpdated = false;
           let durationUpdated = false;
           
-          // First recalculate work hours using the same logic as PATCH endpoint
-          const { totalHours, overtimeHours } = await calculateWorkHours(
+          // First recalculate work hours using the same logic as PATCH endpoint (now includes seconds)
+          const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
             record.check_in_time,
             record.check_out_time,
             record.break_duration,
@@ -2141,6 +2188,16 @@ router.post('/bulk-update-status', [
           if (record.overtime_hours !== overtimeHours) {
             updates.push('overtime_hours = ?');
             updateValues.push(overtimeHours);
+          }
+
+          if (record.pre_shift_overtime_seconds !== preShiftOvertimeSeconds) {
+            updates.push('pre_shift_overtime_seconds = ?');
+            updateValues.push(preShiftOvertimeSeconds);
+          }
+
+          if (record.post_shift_overtime_seconds !== postShiftOvertimeSeconds) {
+            updates.push('post_shift_overtime_seconds = ?');
+            updateValues.push(postShiftOvertimeSeconds);
           }
 
           // Update if any changes

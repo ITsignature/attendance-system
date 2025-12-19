@@ -569,7 +569,7 @@ router.put('/:id',
 
       // Overtime Calculation Settings
       'overtime_enabled', 'pre_shift_overtime_enabled', 'post_shift_overtime_enabled',
-      'regular_ot_multiplier', 'weekend_ot_multiplier', 'holiday_ot_multiplier',
+      'weekday_ot_multiplier', 'saturday_ot_multiplier', 'sunday_ot_multiplier', 'holiday_ot_multiplier',
 
       // Weekend Working Configuration
       'weekend_working_config'
@@ -816,15 +816,20 @@ router.post('/',
       .isBoolean()
       .withMessage('post_shift_overtime_enabled must be a boolean value'),
 
-    body('regular_ot_multiplier')
+    body('weekday_ot_multiplier')
       .optional({ nullable: true })
       .isFloat({ min: 1.0, max: 5.0 })
-      .withMessage('regular_ot_multiplier must be between 1.0 and 5.0'),
+      .withMessage('weekday_ot_multiplier must be between 1.0 and 5.0'),
 
-    body('weekend_ot_multiplier')
+    body('saturday_ot_multiplier')
       .optional({ nullable: true })
       .isFloat({ min: 1.0, max: 5.0 })
-      .withMessage('weekend_ot_multiplier must be between 1.0 and 5.0'),
+      .withMessage('saturday_ot_multiplier must be between 1.0 and 5.0'),
+
+    body('sunday_ot_multiplier')
+      .optional({ nullable: true })
+      .isFloat({ min: 1.0, max: 5.0 })
+      .withMessage('sunday_ot_multiplier must be between 1.0 and 5.0'),
 
     body('holiday_ot_multiplier')
       .optional({ nullable: true })
@@ -920,8 +925,9 @@ router.post('/',
         overtime_enabled = false,
         pre_shift_overtime_enabled = false,
         post_shift_overtime_enabled = false,
-        regular_ot_multiplier = null,
-        weekend_ot_multiplier = null,
+        weekday_ot_multiplier = null,
+        saturday_ot_multiplier = null,
+        sunday_ot_multiplier = null,
         holiday_ot_multiplier = null
       } = req.body;
 
@@ -1053,9 +1059,9 @@ router.post('/',
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
           in_time, out_time, follows_company_schedule, weekend_working_config,
           overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
-          regular_ot_multiplier, weekend_ot_multiplier, holiday_ot_multiplier,
+          weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
@@ -1065,7 +1071,7 @@ router.post('/',
         finalInTime, finalOutTime, follows_company_schedule,
         weekend_working_config ? JSON.stringify(weekend_working_config) : null,
         overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
-        regular_ot_multiplier, weekend_ot_multiplier, holiday_ot_multiplier
+        weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier
       ]);
 
       // Get created employee with relations (same as your existing code)

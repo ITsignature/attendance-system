@@ -69,8 +69,9 @@ interface Employee {
   overtime_enabled?: boolean;
   pre_shift_overtime_enabled?: boolean;
   post_shift_overtime_enabled?: boolean;
-  regular_ot_multiplier?: number | null;
-  weekend_ot_multiplier?: number | null;
+  weekday_ot_multiplier?: number | null;
+  saturday_ot_multiplier?: number | null;
+  sunday_ot_multiplier?: number | null;
   holiday_ot_multiplier?: number | null;
 
   emergency_contact_name: string;
@@ -1152,34 +1153,49 @@ const EditEmployeeDetails: React.FC = () => {
                     </div>
 
                     {/* Overtime Multipliers */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                       <div>
-                        <Label htmlFor="regular_ot_multiplier" value="Regular OT Multiplier" />
+                        <Label htmlFor="weekday_ot_multiplier" value="Weekday OT Multiplier" />
                         <TextInput
-                          id="regular_ot_multiplier"
+                          id="weekday_ot_multiplier"
                           type="number"
                           step="0.1"
                           min="1.0"
                           max="5.0"
-                          value={formData.regular_ot_multiplier || ''}
-                          onChange={(e) => handleChange('regular_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
+                          value={formData.weekday_ot_multiplier || ''}
+                          onChange={(e) => handleChange('weekday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
                           placeholder="e.g., 1.5"
-                          helperText="Weekday overtime rate (e.g., 1.5 for time-and-a-half)"
+                          helperText="Mon-Fri overtime rate"
                         />
                       </div>
 
                       <div>
-                        <Label htmlFor="weekend_ot_multiplier" value="Weekend OT Multiplier" />
+                        <Label htmlFor="saturday_ot_multiplier" value="Saturday OT Multiplier" />
                         <TextInput
-                          id="weekend_ot_multiplier"
+                          id="saturday_ot_multiplier"
                           type="number"
                           step="0.1"
                           min="1.0"
                           max="5.0"
-                          value={formData.weekend_ot_multiplier || ''}
-                          onChange={(e) => handleChange('weekend_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
+                          value={formData.saturday_ot_multiplier || ''}
+                          onChange={(e) => handleChange('saturday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
                           placeholder="e.g., 2.0"
-                          helperText="Weekend overtime rate (e.g., 2.0 for double time)"
+                          helperText="Saturday overtime rate"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="sunday_ot_multiplier" value="Sunday OT Multiplier" />
+                        <TextInput
+                          id="sunday_ot_multiplier"
+                          type="number"
+                          step="0.1"
+                          min="1.0"
+                          max="5.0"
+                          value={formData.sunday_ot_multiplier || ''}
+                          onChange={(e) => handleChange('sunday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="e.g., 2.5"
+                          helperText="Sunday overtime rate"
                         />
                       </div>
 
@@ -1193,8 +1209,8 @@ const EditEmployeeDetails: React.FC = () => {
                           max="5.0"
                           value={formData.holiday_ot_multiplier || ''}
                           onChange={(e) => handleChange('holiday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
-                          placeholder="e.g., 2.5"
-                          helperText="Holiday overtime rate (e.g., 2.5 for double-and-a-half)"
+                          placeholder="e.g., 3.0"
+                          helperText="Holiday overtime rate"
                         />
                       </div>
                     </div>

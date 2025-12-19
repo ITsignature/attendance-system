@@ -59,8 +59,9 @@ interface EmployeeFormData {
   overtime_enabled: boolean;
   pre_shift_overtime_enabled: boolean;
   post_shift_overtime_enabled: boolean;
-  regular_ot_multiplier: number | '';
-  weekend_ot_multiplier: number | '';
+  weekday_ot_multiplier: number | '';
+  saturday_ot_multiplier: number | '';
+  sunday_ot_multiplier: number | '';
   holiday_ot_multiplier: number | '';
 
   // Work Schedule Information
@@ -193,8 +194,9 @@ const AddEmployees: React.FC = () => {
     overtime_enabled: false,
     pre_shift_overtime_enabled: false,
     post_shift_overtime_enabled: false,
-    regular_ot_multiplier: '',
-    weekend_ot_multiplier: '',
+    weekday_ot_multiplier: '',
+    saturday_ot_multiplier: '',
+    sunday_ot_multiplier: '',
     holiday_ot_multiplier: '',
 
     // Work Schedule Information
@@ -559,8 +561,9 @@ const AddEmployees: React.FC = () => {
         overtime_enabled: formData.overtime_enabled,
         pre_shift_overtime_enabled: formData.pre_shift_overtime_enabled,
         post_shift_overtime_enabled: formData.post_shift_overtime_enabled,
-        regular_ot_multiplier: formData.regular_ot_multiplier ? Number(formData.regular_ot_multiplier) : null,
-        weekend_ot_multiplier: formData.weekend_ot_multiplier ? Number(formData.weekend_ot_multiplier) : null,
+        weekday_ot_multiplier: formData.weekday_ot_multiplier ? Number(formData.weekday_ot_multiplier) : null,
+        saturday_ot_multiplier: formData.saturday_ot_multiplier ? Number(formData.saturday_ot_multiplier) : null,
+        sunday_ot_multiplier: formData.sunday_ot_multiplier ? Number(formData.sunday_ot_multiplier) : null,
         holiday_ot_multiplier: formData.holiday_ot_multiplier ? Number(formData.holiday_ot_multiplier) : null,
 
         // Work Schedule Information
@@ -701,8 +704,9 @@ const debugAuth = () => {
       overtime_enabled: false,
       pre_shift_overtime_enabled: false,
       post_shift_overtime_enabled: false,
-      regular_ot_multiplier: '',
-      weekend_ot_multiplier: '',
+      weekday_ot_multiplier: '',
+      saturday_ot_multiplier: '',
+      sunday_ot_multiplier: '',
       holiday_ot_multiplier: '',
 
       // Work Schedule Information
@@ -1303,34 +1307,49 @@ const debugAuth = () => {
                           </div>
 
                           {/* Overtime Multipliers */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                             <div>
-                              <Label htmlFor="regular_ot_multiplier" value="Regular OT Multiplier" />
+                              <Label htmlFor="weekday_ot_multiplier" value="Weekday OT Multiplier" />
                               <TextInput
-                                id="regular_ot_multiplier"
+                                id="weekday_ot_multiplier"
                                 type="number"
                                 step="0.1"
                                 min="1.0"
                                 max="5.0"
-                                value={formData.regular_ot_multiplier}
-                                onChange={(e) => handleInputChange('regular_ot_multiplier', e.target.value)}
+                                value={formData.weekday_ot_multiplier}
+                                onChange={(e) => handleInputChange('weekday_ot_multiplier', e.target.value)}
                                 placeholder="e.g., 1.5"
-                                helperText="Weekday overtime rate (e.g., 1.5 for time-and-a-half)"
+                                helperText="Mon-Fri overtime rate"
                               />
                             </div>
 
                             <div>
-                              <Label htmlFor="weekend_ot_multiplier" value="Weekend OT Multiplier" />
+                              <Label htmlFor="saturday_ot_multiplier" value="Saturday OT Multiplier" />
                               <TextInput
-                                id="weekend_ot_multiplier"
+                                id="saturday_ot_multiplier"
                                 type="number"
                                 step="0.1"
                                 min="1.0"
                                 max="5.0"
-                                value={formData.weekend_ot_multiplier}
-                                onChange={(e) => handleInputChange('weekend_ot_multiplier', e.target.value)}
+                                value={formData.saturday_ot_multiplier}
+                                onChange={(e) => handleInputChange('saturday_ot_multiplier', e.target.value)}
                                 placeholder="e.g., 2.0"
-                                helperText="Weekend overtime rate (e.g., 2.0 for double time)"
+                                helperText="Saturday overtime rate"
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor="sunday_ot_multiplier" value="Sunday OT Multiplier" />
+                              <TextInput
+                                id="sunday_ot_multiplier"
+                                type="number"
+                                step="0.1"
+                                min="1.0"
+                                max="5.0"
+                                value={formData.sunday_ot_multiplier}
+                                onChange={(e) => handleInputChange('sunday_ot_multiplier', e.target.value)}
+                                placeholder="e.g., 2.5"
+                                helperText="Sunday overtime rate"
                               />
                             </div>
 
@@ -1344,8 +1363,8 @@ const debugAuth = () => {
                                 max="5.0"
                                 value={formData.holiday_ot_multiplier}
                                 onChange={(e) => handleInputChange('holiday_ot_multiplier', e.target.value)}
-                                placeholder="e.g., 2.5"
-                                helperText="Holiday overtime rate (e.g., 2.5 for double-and-a-half)"
+                                placeholder="e.g., 3.0"
+                                helperText="Holiday overtime rate"
                               />
                             </div>
                           </div>

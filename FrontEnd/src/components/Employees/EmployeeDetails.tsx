@@ -42,8 +42,9 @@ interface Employee {
   overtime_enabled?: boolean;
   pre_shift_overtime_enabled?: boolean;
   post_shift_overtime_enabled?: boolean;
-  regular_ot_multiplier?: number | null;
-  weekend_ot_multiplier?: number | null;
+  weekday_ot_multiplier?: number | null;
+  saturday_ot_multiplier?: number | null;
+  sunday_ot_multiplier?: number | null;
   holiday_ot_multiplier?: number | null;
 
   emergency_contact_name?: string;
@@ -1269,24 +1270,34 @@ const EmployeeDetails: React.FC = () => {
                           </div>
 
                           {/* Overtime Multipliers */}
-                          <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Regular OT</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Weekday OT</p>
                               <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
-                                {employee.regular_ot_multiplier ? `${employee.regular_ot_multiplier}x` : 'Not set'}
+                                {employee.weekday_ot_multiplier ? `${employee.weekday_ot_multiplier}x` : 'Not set'}
                               </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Mon-Fri</p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Weekend OT</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Saturday OT</p>
                               <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
-                                {employee.weekend_ot_multiplier ? `${employee.weekend_ot_multiplier}x` : 'Not set'}
+                                {employee.saturday_ot_multiplier ? `${employee.saturday_ot_multiplier}x` : 'Not set'}
                               </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Sat</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Sunday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.sunday_ot_multiplier ? `${employee.sunday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Sun</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-600 dark:text-gray-400">Holiday OT</p>
                               <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
                                 {employee.holiday_ot_multiplier ? `${employee.holiday_ot_multiplier}x` : 'Not set'}
                               </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Holidays</p>
                             </div>
                           </div>
                         </div>
