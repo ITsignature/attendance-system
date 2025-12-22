@@ -3767,12 +3767,40 @@ class PayrollRunService {
 
             console.log(`📊 Found ${allBonuses.length} active bonuses...`);
 
+            // ========================================
+            // BULK FETCH #4: Overtime Data
+            // ========================================
+            const [allOvertime] = await db.execute(`
+                SELECT
+                    a.employee_id,
+                    a.date,
+                    a.overtime_hours,
+                    a.pre_shift_overtime_seconds,
+                    a.post_shift_overtime_seconds,
+                    e.overtime_enabled,
+                    e.pre_shift_overtime_enabled,
+                    e.post_shift_overtime_enabled,
+                    e.weekday_ot_multiplier,
+                    e.saturday_ot_multiplier,
+                    e.sunday_ot_multiplier,
+                    e.holiday_ot_multiplier
+                FROM attendance a
+                JOIN employees e ON a.employee_id = e.id
+                WHERE a.employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND DATE(a.date) BETWEEN ? AND ?
+                  AND a.overtime_hours > 0
+                ORDER BY a.employee_id, a.date
+            `, [...employeeIds, period.period_start_date, period.period_end_date]);
+
+            console.log(`📊 Found ${allOvertime.length} overtime records...`);
+
             // Group data by employee_id for fast lookup
             const allowancesByEmployee = {};
             const deductionsByEmployee = {};
             const loansByEmployee = {};
             const advancesByEmployee = {};
             const bonusesByEmployee = {};
+            const overtimeByEmployee = {};
 
             allAllowances.forEach(a => {
                 if (!allowancesByEmployee[a.employee_id]) allowancesByEmployee[a.employee_id] = [];
@@ -3814,6 +3842,11 @@ class PayrollRunService {
                 bonusesByEmployee[b.employee_id].push({ ...b, addition_amount: b.bonus_amount });
             });
 
+            allOvertime.forEach(ot => {
+                if (!overtimeByEmployee[ot.employee_id]) overtimeByEmployee[ot.employee_id] = [];
+                overtimeByEmployee[ot.employee_id].push(ot);
+            });
+
             // ========================================
             // Process each employee with pre-fetched data
             // ========================================
@@ -3852,6 +3885,7 @@ class PayrollRunService {
                 const employeeLoans = loansByEmployee[emp.employee_id] || [];
                 const employeeAdvances = advancesByEmployee[emp.employee_id] || [];
                 const employeeBonuses = bonusesByEmployee[emp.employee_id] || [];
+                const employeeOvertime = overtimeByEmployee[emp.employee_id] || [];
 
                 // Add description field to loans if missing (use notes field)
                 employeeLoans.forEach(loan => {
@@ -3931,6 +3965,9 @@ class PayrollRunService {
                         loanRecords: employeeLoans,
                         advanceRecords: employeeAdvances,
                         bonusRecords: employeeBonuses
+                    },
+                    overtime: {
+                        records: employeeOvertime
                     }
                 };
             });
