@@ -37,6 +37,7 @@ interface Employee {
   employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
   base_salary?: number;
   attendance_affects_salary?: boolean;
+  payable_hours_policy?: 'strict_schedule' | 'actual_worked';
 
   // Overtime Configuration
   overtime_enabled?: boolean;
@@ -1351,6 +1352,30 @@ const EmployeeDetails: React.FC = () => {
                           </p>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Payable Hours Policy */}
+                  <div className="mb-6">
+                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <HiClock className="w-4 h-4 text-gray-500" />
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Payable Hours Policy</p>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge
+                          color={employee.payable_hours_policy === 'actual_worked' ? 'blue' : 'purple'}
+                          size="sm"
+                        >
+                          {employee.payable_hours_policy === 'actual_worked' ? 'Actual Worked Hours' : 'Strict Schedule'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {employee.payable_hours_policy === 'actual_worked'
+                          ? 'Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid full 8 hours.'
+                          : 'Pay is capped to scheduled hours. Late arrival or early departure results in lost hours. Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid only 7 hours.'
+                        }
+                      </p>
                     </div>
                   </div>
 

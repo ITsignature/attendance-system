@@ -385,12 +385,14 @@ router.post('/fingerprint', [
       );
 
       // Calculate payable duration
-      const payableDuration = calculatePayableDuration(
+      const payableDuration = await calculatePayableDuration(
         record.check_in_time,
         currentTime,
         schedule.start_time,
         schedule.end_time,
-        0
+        0,
+        record.employee_id,
+        db
       );
 
       // Get department for status determination
@@ -876,7 +878,7 @@ const normalizeTimeFormat = (timeString) => {
  * Works for both weekdays and weekends (uses the stored scheduled times)
  * Returns SECONDS for precision without excessive storage
  */
-const calculatePayableDuration = (checkInTime, checkOutTime, scheduledInTime, scheduledOutTime, breakDuration = 0) => {
+const calculatePayableDuration = async (checkInTime, checkOutTime, scheduledInTime, scheduledOutTime, breakDuration = 0, employeeId = null, db = null) => {
   // Normalize all times to HH:MM:SS format
   const normalizeToFullTime = (t) => {
     if (!t) return null;
@@ -913,22 +915,61 @@ const calculatePayableDuration = (checkInTime, checkOutTime, scheduledInTime, sc
     return null;
   }
 
-  // Calculate overlap between scheduled and actual times
-  const overlapStart = actualIn > scheduledIn ? actualIn : scheduledIn;
-  const overlapEnd = actualOut < scheduledOut ? actualOut : scheduledOut;
-
-  // If no overlap, payable is 0
-  if (overlapEnd <= overlapStart) {
-    return 0;
+  // Fetch employee's payable hours policy
+  let payableHoursPolicy = 'strict_schedule'; // Default
+  if (employeeId && db) {
+    try {
+      const [employee] = await db.execute(
+        'SELECT payable_hours_policy FROM employees WHERE id = ?',
+        [employeeId]
+      );
+      if (employee.length > 0 && employee[0].payable_hours_policy) {
+        payableHoursPolicy = employee[0].payable_hours_policy;
+      }
+    } catch (error) {
+      console.error('Error fetching payable_hours_policy:', error);
+      // Fall back to strict_schedule on error
+    }
   }
 
-  // Calculate overlap in SECONDS (good precision, reasonable storage)
-  const overlapMs = overlapEnd - overlapStart;
-  const overlapSeconds = Math.round(overlapMs / 1000); // Convert ms to seconds
+  let payableDurationSeconds;
+
+  if (payableHoursPolicy === 'actual_worked') {
+    // POLICY: actual_worked - Allow time shifting if total duration is met
+    // Calculate total worked time
+    const workedMs = actualOut - actualIn;
+    const workedSeconds = Math.round(workedMs / 1000);
+
+    // Calculate scheduled duration
+    const scheduledMs = scheduledOut - scheduledIn;
+    const scheduledSeconds = Math.round(scheduledMs / 1000);
+
+    // If employee worked >= scheduled hours, pay full scheduled hours
+    // Otherwise, pay only what they worked (capped to scheduled)
+    if (workedSeconds >= scheduledSeconds) {
+      payableDurationSeconds = scheduledSeconds;
+    } else {
+      payableDurationSeconds = workedSeconds;
+    }
+  } else {
+    // POLICY: strict_schedule (default) - Cap to scheduled hours
+    // Calculate overlap between scheduled and actual times
+    const overlapStart = actualIn > scheduledIn ? actualIn : scheduledIn;
+    const overlapEnd = actualOut < scheduledOut ? actualOut : scheduledOut;
+
+    // If no overlap, payable is 0
+    if (overlapEnd <= overlapStart) {
+      payableDurationSeconds = 0;
+    } else {
+      // Calculate overlap in SECONDS
+      const overlapMs = overlapEnd - overlapStart;
+      payableDurationSeconds = Math.round(overlapMs / 1000);
+    }
+  }
 
   // Subtract break duration (convert break from hours to seconds)
   const breakSeconds = Math.round((breakDuration || 0) * 60 * 60); // hours to seconds
-  const payableDurationSeconds = Math.max(0, overlapSeconds - breakSeconds);
+  payableDurationSeconds = Math.max(0, payableDurationSeconds - breakSeconds);
 
   return payableDurationSeconds; // Return as INTEGER seconds
 };
@@ -1110,15 +1151,35 @@ const calculateWorkHours = async (
     const scheduledStart = new Date(`2000-01-01T${normalise(employeeSchedule.start_time)}`);
     const scheduledEnd = new Date(`2000-01-01T${normalise(employeeSchedule.end_time)}`);
 
-    // Pre-Shift OT: Seconds worked BEFORE scheduled start time
-    if (inDate < scheduledStart) {
-      preShiftOvertimeSeconds = Math.floor((scheduledStart - inDate) / 1000);
-    }
+    // Calculate early arrival (seconds worked before scheduled start)
+    const preScheduleSeconds = inDate < scheduledStart
+      ? Math.floor((scheduledStart - inDate) / 1000)
+      : 0;
 
-    // Post-Shift OT: Seconds worked AFTER scheduled end time
-    if (outDate > scheduledEnd) {
-      postShiftOvertimeSeconds = Math.floor((outDate - scheduledEnd) / 1000);
-    }
+    // Calculate early departure (seconds left before scheduled end)
+    const earlyDepartureSeconds = outDate < scheduledEnd
+      ? Math.floor((scheduledEnd - outDate) / 1000)
+      : 0;
+
+    // Pre-Shift OT: Only count if early arrival exceeds early departure (fair compensation)
+    // Example: Arrived 1 hour early, left 1 hour early = NO overtime
+    // Example: Arrived 1.5 hours early, left 1 hour early = 0.5 hours overtime
+    preShiftOvertimeSeconds = Math.max(0, preScheduleSeconds - earlyDepartureSeconds);
+
+    // Calculate late arrival (seconds arrived after scheduled start)
+    const lateArrivalSeconds = inDate > scheduledStart
+      ? Math.floor((inDate - scheduledStart) / 1000)
+      : 0;
+
+    // Calculate time worked after scheduled end
+    const postScheduleSeconds = outDate > scheduledEnd
+      ? Math.floor((outDate - scheduledEnd) / 1000)
+      : 0;
+
+    // Post-Shift OT: Only count if post-schedule time exceeds late arrival (fair compensation)
+    // Example: Arrived 1 hour late, left 1 hour late = NO overtime
+    // Example: Arrived 1 hour late, left 1.5 hours late = 0.5 hours overtime
+    postShiftOvertimeSeconds = Math.max(0, postScheduleSeconds - lateArrivalSeconds);
 
     // Total OT in hours (actual hours, NO multiplier applied)
     totalOvertimeHours = (preShiftOvertimeSeconds + postShiftOvertimeSeconds) / 3600;
@@ -1233,12 +1294,14 @@ const calculateWorkHours = async (
       console.log("Enhanced duration status:", durationResult);
 
       // Calculate payable duration
-      const payableDuration = calculatePayableDuration(
+      const payableDuration = await calculatePayableDuration(
         req.body.check_in_time,
         req.body.check_out_time,
         schedule.start_time,
         schedule.end_time,
-        req.body.break_duration || 0
+        req.body.break_duration || 0,
+        req.body.employee_id,
+        db
       );
 
       // Get day of week for the attendance date
@@ -1755,12 +1818,14 @@ router.patch('/bulk', [
           }
 
           /* ───────── 7. calculate payable duration ───────── */
-          const payableDuration = calculatePayableDuration(
+          const payableDuration = await calculatePayableDuration(
             eff.check_in_time,
             eff.check_out_time,
             current.scheduled_in_time,
             current.scheduled_out_time,
-            eff.break_duration
+            eff.break_duration,
+            employeeId,
+            db
           );
 
           /* ───────── 8. build UPDATE SET list (only changed columns) ───────── */
@@ -1975,12 +2040,14 @@ if (leaveRow) {
 console.log('final workDuration:', workDuration);
 
     /* ───────── 4. calculate payable duration ───────── */
-    const payableDuration = calculatePayableDuration(
+    const payableDuration = await calculatePayableDuration(
       eff.check_in_time,
       eff.check_out_time,
       current.scheduled_in_time,
       current.scheduled_out_time,
-      eff.break_duration
+      eff.break_duration,
+      current.employee_id,
+      db
     );
 
     /* ───────── 5. build UPDATE SET list (only cols that changed) ───────── */

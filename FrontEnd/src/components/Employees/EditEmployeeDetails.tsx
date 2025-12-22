@@ -64,6 +64,7 @@ interface Employee {
   employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
   base_salary?: number;
   attendance_affects_salary?: boolean;
+  payable_hours_policy?: 'strict_schedule' | 'actual_worked';
 
   // Overtime Configuration
   overtime_enabled?: boolean;
@@ -1098,6 +1099,26 @@ const EditEmployeeDetails: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Payable Hours Policy */}
+              <div className="mt-6">
+                <Label htmlFor="payable_hours_policy" value="Payable Hours Policy" />
+                <select
+                  id="payable_hours_policy"
+                  value={formData.payable_hours_policy || 'strict_schedule'}
+                  onChange={(e) => handleChange('payable_hours_policy', e.target.value)}
+                  className="mt-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                >
+                  <option value="strict_schedule">Strict Schedule</option>
+                  <option value="actual_worked">Actual Worked Hours</option>
+                </select>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {(formData.payable_hours_policy || 'strict_schedule') === 'strict_schedule'
+                    ? "Pay is capped to scheduled hours. Late arrival or early departure results in lost hours. Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid only 7 hours."
+                    : "Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid full 8 hours."
+                  }
+                </p>
+              </div>
 
               {/* Overtime Configuration */}
               <div className="border-t pt-6 mt-6">

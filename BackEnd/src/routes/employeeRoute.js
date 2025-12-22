@@ -571,6 +571,9 @@ router.put('/:id',
       'overtime_enabled', 'pre_shift_overtime_enabled', 'post_shift_overtime_enabled',
       'weekday_ot_multiplier', 'saturday_ot_multiplier', 'sunday_ot_multiplier', 'holiday_ot_multiplier',
 
+      // Payable Hours Policy
+      'payable_hours_policy',
+
       // Weekend Working Configuration
       'weekend_working_config'
     ];
@@ -836,6 +839,12 @@ router.post('/',
       .isFloat({ min: 1.0, max: 5.0 })
       .withMessage('holiday_ot_multiplier must be between 1.0 and 5.0'),
 
+    // Payable Hours Policy Validation
+    body('payable_hours_policy')
+      .optional({ nullable: true })
+      .isIn(['strict_schedule', 'actual_worked'])
+      .withMessage('payable_hours_policy must be either strict_schedule or actual_worked'),
+
     // Weekend Working Configuration Validation
     body('weekend_working_config')
       .optional({ nullable: true })
@@ -928,7 +937,10 @@ router.post('/',
         weekday_ot_multiplier = null,
         saturday_ot_multiplier = null,
         sunday_ot_multiplier = null,
-        holiday_ot_multiplier = null
+        holiday_ot_multiplier = null,
+
+        // Payable Hours Policy
+        payable_hours_policy = 'strict_schedule'
       } = req.body;
 
       // Validation for time fields
@@ -1060,8 +1072,9 @@ router.post('/',
           in_time, out_time, follows_company_schedule, weekend_working_config,
           overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
           weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,
+          payable_hours_policy,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
@@ -1071,7 +1084,8 @@ router.post('/',
         finalInTime, finalOutTime, follows_company_schedule,
         weekend_working_config ? JSON.stringify(weekend_working_config) : null,
         overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
-        weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier
+        weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,
+        payable_hours_policy
       ]);
 
       // Get created employee with relations (same as your existing code)
