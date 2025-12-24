@@ -2837,7 +2837,6 @@ class PayrollRunService {
             }
         }
 
-
         // Add overtime (this is an addition) - with EMPLOYEE-LEVEL configuration
         // Overtime is already filtered by employee's overtime_enabled flag in getEmployeeData
         if (employeeData.overtimeHours > 0) {
@@ -3020,7 +3019,6 @@ class PayrollRunService {
                 }
             }
         }
-
 
         // =============================================
         // 3. FALLBACK: DEFAULT EPF IF NO CONFIGURED COMPONENTS (calculated on earned base)
@@ -3583,7 +3581,7 @@ class PayrollRunService {
             const [runInfo] = await db.execute(`
                 SELECT
                     pr.id as run_id,
-                    pr.run_name,
+                    pr.run_name, 
                     pr.run_number,
                     pr.calculation_method,
                     pp.id as period_id,
