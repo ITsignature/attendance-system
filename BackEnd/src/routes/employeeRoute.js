@@ -374,6 +374,7 @@ router.put('/:id',
     body('date_of_birth').optional().isISO8601().withMessage('Please enter a valid date'),
     body('gender').optional().isIn(['male', 'female', 'other']).withMessage('Gender must be male, female, or other'),
     body('employee_code').optional().trim().isLength({ min: 1 }).withMessage('Employee code cannot be empty'),
+    body('fingerprint_id').optional({ nullable: true }).isInt({ min: 1 }).withMessage('Fingerprint ID must be a positive integer'),
     body('department_id').optional().isUUID().withMessage('Invalid department ID'),
     body('designation_id').optional().isUUID().withMessage('Invalid designation ID'),
     body('manager_id').optional().isUUID().withMessage('Invalid manager ID'),
@@ -548,14 +549,31 @@ router.put('/:id',
       }
     }
 
+    // Check for duplicate fingerprint_id if being updated
+    if (req.body.hasOwnProperty('fingerprint_id') && req.body.fingerprint_id) {
+      const [existingFingerprint] = await db.execute(`
+        SELECT id, employee_code, CONCAT(first_name, ' ', last_name) as employee_name
+        FROM employees
+        WHERE client_id = ? AND fingerprint_id = ? AND id != ?
+      `, [req.user.clientId, req.body.fingerprint_id, employeeId]);
+
+      if (existingFingerprint.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Fingerprint ID ${req.body.fingerprint_id} is already assigned to ${existingFingerprint[0].employee_name} (${existingFingerprint[0].employee_code})`,
+          field: 'fingerprint_id'
+        });
+      }
+    }
+
     // Build update query for all fields (including your existing ones + new schedule fields)
     const allowedFields = [
       // Personal Information
       'first_name', 'last_name', 'email', 'phone', 'date_of_birth', 'gender',
       'address', 'city', 'state', 'zip_code', 'nationality', 'marital_status',
-      
+
       // Professional Information
-      'employee_code', 'department_id', 'designation_id', 'manager_id',
+      'employee_code', 'fingerprint_id', 'department_id', 'designation_id', 'manager_id',
       'hire_date', 'employment_status', 'employee_type', 'base_salary',
 
       // Emergency Contact
@@ -770,8 +788,9 @@ router.post('/',
     body('date_of_birth').isISO8601().withMessage('Please enter a valid date of birth'),
     body('gender').isIn(['male', 'female', 'other']).withMessage('Gender must be male, female, or other'),
     
-    // Professional Information Validations  
+    // Professional Information Validations
     body('employee_code').trim().isLength({ min: 1 }).withMessage('Employee code is required'),
+    body('fingerprint_id').optional({ nullable: true }).isInt({ min: 1 }).withMessage('Fingerprint ID must be a positive integer'),
     body('department_id').isUUID().withMessage('Invalid department ID'),
     body('designation_id').isUUID().withMessage('Invalid designation ID'),
     body('manager_id').optional({ values: 'falsy' }).isUUID().withMessage('Invalid manager ID'),
@@ -912,9 +931,9 @@ router.post('/',
         // Personal Information
         first_name, last_name, email, phone, date_of_birth, gender,
         address, city, state, zip_code, nationality, marital_status,
-        
+
         // Professional Information
-        employee_code, department_id, designation_id, manager_id,
+        employee_code, fingerprint_id, department_id, designation_id, manager_id,
         hire_date, employment_status = 'active', employee_type,
         base_salary,
         
@@ -1026,6 +1045,25 @@ router.post('/',
         });
       }
 
+      // Check for duplicate fingerprint_id within the same client
+      if (fingerprint_id) {
+        console.log('🔍 Checking for duplicate fingerprint ID...');
+        const [existingFingerprint] = await db.execute(`
+          SELECT id, employee_code, CONCAT(first_name, ' ', last_name) as employee_name
+          FROM employees
+          WHERE client_id = ? AND fingerprint_id = ?
+        `, [req.user.clientId, fingerprint_id]);
+
+        if (existingFingerprint.length > 0) {
+          console.log('❌ Duplicate fingerprint ID found');
+          return res.status(400).json({
+            success: false,
+            message: `Fingerprint ID ${fingerprint_id} is already assigned to ${existingFingerprint[0].employee_name} (${existingFingerprint[0].employee_code})`,
+            field: 'fingerprint_id'
+          });
+        }
+      }
+
       // Verify department exists
       const [deptCheck] = await db.execute(`
         SELECT id FROM departments WHERE id = ? AND client_id = ? AND is_active = TRUE
@@ -1064,7 +1102,7 @@ router.post('/',
       console.log('💾 Inserting employee into database...');
       await db.execute(`
         INSERT INTO employees (
-          id, client_id, employee_code, first_name, last_name, email, phone,
+          id, client_id, employee_code, fingerprint_id, first_name, last_name, email, phone,
           date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
           hire_date, department_id, designation_id, manager_id, employee_type,
           employment_status, base_salary, attendance_affects_salary,
@@ -1074,9 +1112,9 @@ router.post('/',
           weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,
           payable_hours_policy,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
-        employeeUuid, req.user.clientId, employee_code, first_name, last_name, email, phone,
+        employeeUuid, req.user.clientId, employee_code, fingerprint_id || null, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
         nationality || null, marital_status || null, hire_date, department_id, designation_id,
         manager_id || null, employee_type, employment_status, base_salary || null, attendance_affects_salary,

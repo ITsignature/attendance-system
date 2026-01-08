@@ -10,6 +10,7 @@
     "create-admin": "node createSuperAdmin.js"
   },
   "dependencies": {
+    "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "common": "^0.2.5",
     "compression": "^1.8.1",

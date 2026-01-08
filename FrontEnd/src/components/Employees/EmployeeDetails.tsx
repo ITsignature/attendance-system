@@ -26,6 +26,7 @@ interface Employee {
   state?: string;
   zip_code?: string;
   employee_code: string;
+  fingerprint_id?: number | null;
   department_id?: string;
   department_name?: string;
   designation_id?: string;
@@ -1082,6 +1083,12 @@ const EmployeeDetails: React.FC = () => {
                     <HiIdentification className="w-4 h-4 text-gray-500" />
                     <Badge color="gray" size="sm">{employee.employee_code}</Badge>
                   </div>
+                  {employee.fingerprint_id && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 text-sm">Fingerprint ID:</span>
+                      <Badge color="info" size="sm">{employee.fingerprint_id}</Badge>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
