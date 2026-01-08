@@ -6,6 +6,7 @@ const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess, checkResourceOwnership } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const AttendanceStatusService = require('../services/AttendanceStatusService');
+const smsService = require('../services/smsService');
 const fs = require('fs');
 const path = require('path');
 
@@ -48,7 +49,7 @@ const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/;
  * Or without client_id: GET /api/attendance/fingerprint?fingerprint_id=123
  */
 router.get('/fingerprint', [
-  query('client_id').optional().isUUID().withMessage('client_id must be a valid UUID'),
+  query('client_id').optional().isString().trim().notEmpty().withMessage('client_id must be a non-empty string'),
   query('fingerprint_id').isInt().withMessage('fingerprint_id must be an integer')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -75,9 +76,12 @@ router.get('/fingerprint', [
         e.in_time,
         e.out_time,
         e.fingerprint_id,
+        e.phone,
         CONCAT(e.first_name, ' ', e.last_name) as employee_name,
-        e.employee_code
+        e.employee_code,
+        c.name as client_name
       FROM employees e
+      LEFT JOIN clients c ON e.client_id = c.id
       WHERE e.fingerprint_id = ?
       AND e.employment_status = 'active'
     `;
@@ -160,6 +164,29 @@ router.get('/fingerprint', [
       ]);
 
       console.log(`   ✅ Check-in successful at ${currentTime}`);
+
+      // Send check-in SMS notification
+      if (emp.phone && emp.client_name) {
+        const lateBy = smsService.calculateLateTime(currentTime, schedule.start_time);
+
+        smsService.sendCheckInSMS({
+          employeeName: emp.employee_name,
+          companyName: emp.client_name,
+          phoneNumber: emp.phone,
+          date: today,
+          time: currentTime,
+          isLate: !!lateBy,
+          lateBy: lateBy || ''
+        }).then(smsResult => {
+          if (smsResult.success) {
+            console.log(`   📱 Check-in SMS sent to ${emp.phone}`);
+          } else {
+            console.log(`   ⚠️  Check-in SMS failed: ${smsResult.error}`);
+          }
+        }).catch(err => {
+          console.error(`   ❌ SMS error:`, err.message);
+        });
+      }
 
       return res.status(201).json({
         success: true,
@@ -453,6 +480,28 @@ router.get('/fingerprint', [
 
       console.log(`   ✅ Check-out successful at ${currentTime}`);
       console.log(`   Total Hours: ${totalHours}h, Overtime: ${overtimeHours}h (actual, no multiplier)`);
+
+      // Send check-out SMS notification
+      if (emp.phone && emp.client_name) {
+        const workingHours = smsService.calculateWorkingHours(record.check_in_time, currentTime);
+
+        smsService.sendCheckOutSMS({
+          employeeName: emp.employee_name,
+          companyName: emp.client_name,
+          phoneNumber: emp.phone,
+          date: today,
+          time: currentTime,
+          workingHours: workingHours
+        }).then(smsResult => {
+          if (smsResult.success) {
+            console.log(`   📱 Check-out SMS sent to ${emp.phone}`);
+          } else {
+            console.log(`   ⚠️  Check-out SMS failed: ${smsResult.error}`);
+          }
+        }).catch(err => {
+          console.error(`   ❌ SMS error:`, err.message);
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -1352,20 +1401,72 @@ const calculateWorkHours = async (
 
       // Get created record with employee info
       const [newRecord] = await db.execute(`
-        SELECT 
+        SELECT
           a.*,
           CONCAT(e.first_name, ' ', e.last_name) as employee_name,
           e.employee_code,
+          e.phone,
           e.in_time as scheduled_in_time,
-          e.out_time as scheduled_out_time
+          e.out_time as scheduled_out_time,
+          c.name as client_name
         FROM attendance a
         JOIN employees e ON a.employee_id = e.id
+        LEFT JOIN clients c ON e.client_id = c.id
         WHERE a.id = ?
       `, [attendanceId]);
 
       // Determine what was auto-calculated
       const arrivalAutoCalculated = !req.body.arrival_status || req.body.arrival_status !== autoArrivalStatus;
       const durationAutoCalculated = !req.body.work_duration || req.body.work_duration !== autoWorkDuration;
+
+      // Send SMS notifications for check-in and/or check-out
+      const record = newRecord[0];
+      if (record.phone && record.client_name) {
+        // Send check-in SMS if check_in_time exists
+        if (record.check_in_time) {
+          const lateBy = smsService.calculateLateTime(record.check_in_time, schedule.start_time);
+
+          smsService.sendCheckInSMS({
+            employeeName: record.employee_name,
+            companyName: record.client_name,
+            phoneNumber: record.phone,
+            date: record.date,
+            time: record.check_in_time,
+            isLate: !!lateBy,
+            lateBy: lateBy || ''
+          }).then(smsResult => {
+            if (smsResult.success) {
+              console.log(`   📱 Check-in SMS sent to ${record.phone}`);
+            } else {
+              console.log(`   ⚠️  Check-in SMS failed: ${smsResult.error}`);
+            }
+          }).catch(err => {
+            console.error(`   ❌ SMS error:`, err.message);
+          });
+        }
+
+        // Send check-out SMS if check_out_time exists
+        if (record.check_out_time && record.check_in_time) {
+          const workingHours = smsService.calculateWorkingHours(record.check_in_time, record.check_out_time);
+
+          smsService.sendCheckOutSMS({
+            employeeName: record.employee_name,
+            companyName: record.client_name,
+            phoneNumber: record.phone,
+            date: record.date,
+            time: record.check_out_time,
+            workingHours: workingHours
+          }).then(smsResult => {
+            if (smsResult.success) {
+              console.log(`   📱 Check-out SMS sent to ${record.phone}`);
+            } else {
+              console.log(`   ⚠️  Check-out SMS failed: ${smsResult.error}`);
+            }
+          }).catch(err => {
+            console.error(`   ❌ SMS error:`, err.message);
+          });
+        }
+      }
 
       res.status(201).json({
         success: true,
@@ -2100,11 +2201,68 @@ console.log('final workDuration:', workDuration);
     const [[updated]] = await db.execute(
       `SELECT a.*,
               CONCAT(e.first_name,' ',e.last_name) AS employee_name,
-              e.employee_code
+              e.employee_code,
+              e.phone,
+              c.name as client_name
          FROM attendance a
          JOIN employees e ON a.employee_id = e.id
+         LEFT JOIN clients c ON e.client_id = c.id
         WHERE a.id = ?`, [attendanceId]
     );
+
+    // Send SMS notifications if times were added/changed
+    if (updated.phone && updated.client_name) {
+      // Send check-in SMS if check_in_time was added or changed
+      const checkInChanged = req.body.check_in_time !== undefined &&
+                             req.body.check_in_time !== current.check_in_time;
+
+      if (checkInChanged && updated.check_in_time) {
+        const lateBy = smsService.calculateLateTime(updated.check_in_time, schedule.start_time);
+
+        smsService.sendCheckInSMS({
+          employeeName: updated.employee_name,
+          companyName: updated.client_name,
+          phoneNumber: updated.phone,
+          date: updated.date,
+          time: updated.check_in_time,
+          isLate: !!lateBy,
+          lateBy: lateBy || ''
+        }).then(smsResult => {
+          if (smsResult.success) {
+            console.log(`   📱 Check-in SMS sent to ${updated.phone}`);
+          } else {
+            console.log(`   ⚠️  Check-in SMS failed: ${smsResult.error}`);
+          }
+        }).catch(err => {
+          console.error(`   ❌ SMS error:`, err.message);
+        });
+      }
+
+      // Send check-out SMS if check_out_time was added or changed
+      const checkOutChanged = req.body.check_out_time !== undefined &&
+                              req.body.check_out_time !== current.check_out_time;
+
+      if (checkOutChanged && updated.check_out_time && updated.check_in_time) {
+        const workingHours = smsService.calculateWorkingHours(updated.check_in_time, updated.check_out_time);
+
+        smsService.sendCheckOutSMS({
+          employeeName: updated.employee_name,
+          companyName: updated.client_name,
+          phoneNumber: updated.phone,
+          date: updated.date,
+          time: updated.check_out_time,
+          workingHours: workingHours
+        }).then(smsResult => {
+          if (smsResult.success) {
+            console.log(`   📱 Check-out SMS sent to ${updated.phone}`);
+          } else {
+            console.log(`   ⚠️  Check-out SMS failed: ${smsResult.error}`);
+          }
+        }).catch(err => {
+          console.error(`   ❌ SMS error:`, err.message);
+        });
+      }
+    }
 
     res.json({ success:true, message:'Attendance updated', data:updated });
   })

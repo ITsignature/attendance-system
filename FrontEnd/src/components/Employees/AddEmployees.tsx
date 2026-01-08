@@ -46,6 +46,7 @@ interface EmployeeFormData {
   
   // Professional Information
   employee_code: string;
+  fingerprint_id: number | '';
   department_id: string;
   designation_id: string;
   manager_id: string;
@@ -182,6 +183,7 @@ const AddEmployees: React.FC = () => {
     
     // Professional Information
     employee_code: '',
+    fingerprint_id: '',
     department_id: '',
     designation_id: '',
     manager_id: '',
@@ -545,6 +547,7 @@ const AddEmployees: React.FC = () => {
 
         // Professional Information
         employee_code: formData.employee_code,
+        fingerprint_id: formData.fingerprint_id ? Number(formData.fingerprint_id) : undefined,
         department_id: formData.department_id,
         designation_id: formData.designation_id,
         manager_id: formData.manager_id,
@@ -1074,6 +1077,22 @@ const debugAuth = () => {
                     </div>
                     {validationErrors.employee_code && (
                       <p className="text-red-600 text-sm mt-1">{validationErrors.employee_code}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="fingerprint_id" value="Fingerprint ID" />
+                    <TextInput
+                      id="fingerprint_id"
+                      type="number"
+                      value={formData.fingerprint_id}
+                      onChange={(e) => handleInputChange('fingerprint_id', e.target.value ? parseInt(e.target.value) : '')}
+                      placeholder="Enter fingerprint device ID (optional)"
+                      color={validationErrors.fingerprint_id ? 'failure' : undefined}
+                      helperText="Unique ID from fingerprint scanner device"
+                    />
+                    {validationErrors.fingerprint_id && (
+                      <p className="text-red-600 text-sm mt-1">{validationErrors.fingerprint_id}</p>
                     )}
                   </div>
 

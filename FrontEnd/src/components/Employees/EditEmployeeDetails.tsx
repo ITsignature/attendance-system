@@ -56,6 +56,7 @@ interface Employee {
   nationality?: string;
   marital_status: 'single' | 'married' | 'divorced' | 'widowed';
   employee_code: string;
+  fingerprint_id?: number | null;
   department_id: string;
   designation_id: string;
   manager_id?: string;
@@ -950,6 +951,22 @@ const EditEmployeeDetails: React.FC = () => {
               />
               {validationErrors.employee_code && (
                 <p className="text-red-600 text-sm mt-1">{validationErrors.employee_code}</p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="fingerprint_id" value="Fingerprint ID" />
+              <TextInput
+                id="fingerprint_id"
+                type="number"
+                value={formData.fingerprint_id || ''}
+                onChange={(e) => handleChange('fingerprint_id', e.target.value ? parseInt(e.target.value) : null)}
+                placeholder="Enter fingerprint device ID (optional)"
+                color={validationErrors.fingerprint_id ? 'failure' : undefined}
+                helperText="Unique ID from fingerprint scanner device"
+              />
+              {validationErrors.fingerprint_id && (
+                <p className="text-red-600 text-sm mt-1">{validationErrors.fingerprint_id}</p>
               )}
             </div>
 
