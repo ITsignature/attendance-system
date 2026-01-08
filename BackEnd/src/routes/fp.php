@@ -20,8 +20,6 @@ curl_close($ch);
 //$data = json_decode($response, true);
 //file_put_contents('response.json', json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-
-
 include('database.php'); 
     $today = date('Y-m-d');
     $dayName = date('l', strtotime($today));

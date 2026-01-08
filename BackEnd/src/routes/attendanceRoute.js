@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body, query, validationResult } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 const { getDB } = require('../config/database');
 const { authenticate } = require('../middleware/authMiddleware');
@@ -36,16 +36,20 @@ const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/;
 
 // FINGERPRINT ATTENDANCE ENDPOINT - Must be BEFORE authentication middleware
 /**
+ * GET /api/attendance/fingerprint
  * This endpoint receives fingerprint check-in/check-out from fp.php
  * No authentication required as it's called from the fingerprint device
  *
- * Request body:
- * - fingerprint_id: Integer (matches employees.fingerprint_id)
+ * Query parameters (in order):
  * - client_id: UUID (optional, if multiple clients use same fingerprint device)
+ * - fingerprint_id: Integer (matches employees.fingerprint_id)
+ *
+ * Example: GET /api/attendance/fingerprint?client_id=uuid-here&fingerprint_id=123
+ * Or without client_id: GET /api/attendance/fingerprint?fingerprint_id=123
  */
-router.post('/fingerprint', [
-  body('fingerprint_id').isInt().withMessage('fingerprint_id must be an integer'),
-  body('client_id').optional().isUUID().withMessage('client_id must be a valid UUID')
+router.get('/fingerprint', [
+  query('client_id').optional().isUUID().withMessage('client_id must be a valid UUID'),
+  query('fingerprint_id').isInt().withMessage('fingerprint_id must be an integer')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -58,7 +62,7 @@ router.post('/fingerprint', [
   }
 
   const db = getDB();
-  const { fingerprint_id, client_id } = req.body;
+  const { fingerprint_id, client_id } = req.query;
   const today = new Date().toISOString().split('T')[0];
   const currentTime = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
 

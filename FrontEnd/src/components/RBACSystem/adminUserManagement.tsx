@@ -52,6 +52,21 @@ const AdminUserManagementPage: React.FC = () => {
     loadAdminUsers();
   }, []);
 
+  // Helper function to get available roles based on current user's permissions
+  const getAvailableRoles = () => {
+    const isCurrentUserSuperAdmin = !!(currentUser?.isSuperAdmin || (currentUser as any)?.is_super_admin);
+
+    if (isCurrentUserSuperAdmin) {
+      // Super admins can see all roles
+      return roles;
+    }
+
+    // Non-super admins cannot see/assign roles that are used by super admin users
+    // We'll filter out any role that might grant super admin privileges
+    // For now, we'll just return all roles since super admin is a user property, not a role property
+    return roles;
+  };
+
   const loadAdminUsers = async () => {
     try {
       setIsLoading(true);
@@ -62,7 +77,17 @@ const AdminUserManagementPage: React.FC = () => {
       
       if (response.success && response.data) {
         console.log('✅ Admin users loaded:', response.data.users.length);
-        setAdminUsers(response.data.users);
+
+        // Filter out super admin users if current user is not a super admin
+        let filteredUsers = response.data.users;
+        const isCurrentUserSuperAdmin = !!(currentUser?.isSuperAdmin || (currentUser as any)?.is_super_admin);
+
+        if (!isCurrentUserSuperAdmin) {
+          filteredUsers = response.data.users.filter((user: AdminUser) => !user.is_super_admin);
+          console.log('🔒 Filtered super admin users. Showing', filteredUsers.length, 'of', response.data.users.length, 'users');
+        }
+
+        setAdminUsers(filteredUsers);
 
         console.log(response.data);
       } else {

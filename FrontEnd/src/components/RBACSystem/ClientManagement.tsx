@@ -281,7 +281,10 @@ const ClientManagement: React.FC = () => {
   };
 
   // Check if user is super admin
-  if (!currentUser?.isSuperAdmin) {
+  // Support both boolean (true/false) and number (1/0) formats for backward compatibility
+  const isSuperAdmin = !!(currentUser?.isSuperAdmin || (currentUser as any)?.is_super_admin);
+
+  if (!isSuperAdmin) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
