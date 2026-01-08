@@ -2456,56 +2456,114 @@ class PayrollRunService {
         
         if (runId) {
             const [overtime] = await db.execute(`
-                SELECT 
+                SELECT
                     a.date,
                     a.overtime_hours,
+                    a.pre_shift_overtime_seconds,
+                    a.post_shift_overtime_seconds,
+                    e.overtime_enabled,
+                    e.pre_shift_overtime_enabled,
+                    e.post_shift_overtime_enabled,
+                    e.weekday_ot_multiplier,
+                    e.saturday_ot_multiplier,
+                    e.sunday_ot_multiplier,
+                    e.holiday_ot_multiplier,
                     SUM(a.overtime_hours) OVER() as total_overtime_hours
                 FROM attendance a
                 JOIN payroll_runs pr ON pr.id = ?
                 JOIN payroll_periods pp ON pr.period_id = pp.id
-                WHERE a.employee_id = ? 
+                JOIN employees e ON a.employee_id = e.id
+                WHERE a.employee_id = ?
                   AND DATE(a.date) BETWEEN pp.period_start_date AND pp.period_end_date
                   AND a.overtime_hours > 0
                 ORDER BY a.date
             `, [runId, employeeId]);
             
-            overtimeHours = overtime[0]?.total_overtime_hours || 0;
-            
-            // Calculate holiday multipliers for each overtime day
-            try {
-                // Get employee department for holiday calculation
-                const [employee] = await db.execute(`
-                    SELECT department_id FROM employees WHERE id = ?
-                `, [employeeId]);
-                
-                const departmentId = employee[0]?.department_id || null;
-                
-                for (const record of overtime) {
-                    if (record.overtime_hours > 0) {
-                        const dateStr = typeof record.date === 'string' ? record.date : record.date.toISOString().split('T')[0];
-                        
-                        // Check if this date is a holiday
-                        const holidayMultiplier = await HolidayService.getHolidayOvertimeMultiplier(
-                            clientId, 
-                            dateStr, 
-                            departmentId
-                        );
-                        
-                        // Get regular overtime multiplier from settings (not hardcoded!)
-                        const regularOvertimeRate = await this.getRegularOvertimeMultiplier(clientId);
-                        
-                        overtimeDetails.push({
-                            date: dateStr,
-                            hours: parseFloat(record.overtime_hours),
-                            holiday_multiplier: holidayMultiplier || regularOvertimeRate, // Dynamic weekday multiplier
-                            is_holiday: !!holidayMultiplier
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Error calculating holiday overtime multipliers:', error);
-                // Fallback - treat all as regular overtime
+            // Check if employee has overtime enabled (first record has employee settings)
+            const employeeOvertimeEnabled = overtime[0]?.overtime_enabled || false;
+
+            if (!employeeOvertimeEnabled) {
+                // Overtime is disabled for this employee, return empty overtime data
+                overtimeHours = 0;
                 overtimeDetails = [];
+            } else {
+                overtimeHours = overtime[0]?.total_overtime_hours || 0;
+
+                // Calculate employee-specific multipliers for each overtime day
+                try {
+                    // Get employee department for holiday calculation
+                    const [employee] = await db.execute(`
+                        SELECT department_id FROM employees WHERE id = ?
+                    `, [employeeId]);
+
+                    const departmentId = employee[0]?.department_id || null;
+
+                    for (const record of overtime) {
+                        if (record.overtime_hours > 0) {
+                            const dateStr = typeof record.date === 'string' ? record.date : record.date.toISOString().split('T')[0];
+
+                            // Get day of week (JavaScript: 0=Sunday, 1=Monday, ..., 6=Saturday)
+                            const dayOfWeek = new Date(dateStr).getDay();
+
+                            // Check if this date is a holiday
+                            const isHoliday = await HolidayService.getHolidayOvertimeMultiplier(
+                                clientId,
+                                dateStr,
+                                departmentId
+                            );
+
+                            // Determine multiplier based on day type using EMPLOYEE-SPECIFIC multipliers
+                            let multiplier = 1.0;
+                            let dayType = 'weekday';
+
+                            if (isHoliday && record.holiday_ot_multiplier) {
+                                // Holiday takes priority
+                                multiplier = parseFloat(record.holiday_ot_multiplier);
+                                dayType = 'holiday';
+                            } else if (dayOfWeek === 0 && record.sunday_ot_multiplier) {
+                                // Sunday
+                                multiplier = parseFloat(record.sunday_ot_multiplier);
+                                dayType = 'sunday';
+                            } else if (dayOfWeek === 6 && record.saturday_ot_multiplier) {
+                                // Saturday
+                                multiplier = parseFloat(record.saturday_ot_multiplier);
+                                dayType = 'saturday';
+                            } else if (record.weekday_ot_multiplier) {
+                                // Weekday (Monday-Friday)
+                                multiplier = parseFloat(record.weekday_ot_multiplier);
+                                dayType = 'weekday';
+                            }
+
+                            // Calculate pre-shift and post-shift overtime separately
+                            const preShiftSeconds = parseInt(record.pre_shift_overtime_seconds) || 0;
+                            const postShiftSeconds = parseInt(record.post_shift_overtime_seconds) || 0;
+                            const preShiftHours = preShiftSeconds / 3600;
+                            const postShiftHours = postShiftSeconds / 3600;
+
+                            // Respect pre/post shift overtime flags
+                            const preShiftEnabled = record.pre_shift_overtime_enabled || false;
+                            const postShiftEnabled = record.post_shift_overtime_enabled || false;
+
+                            const applicablePreShiftHours = preShiftEnabled ? preShiftHours : 0;
+                            const applicablePostShiftHours = postShiftEnabled ? postShiftHours : 0;
+                            const applicableOvertimeHours = applicablePreShiftHours + applicablePostShiftHours;
+
+                            overtimeDetails.push({
+                                date: dateStr,
+                                hours: applicableOvertimeHours,
+                                pre_shift_hours: applicablePreShiftHours,
+                                post_shift_hours: applicablePostShiftHours,
+                                multiplier: multiplier,
+                                day_type: dayType,
+                                is_holiday: !!isHoliday
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error calculating employee overtime multipliers:', error);
+                    // Fallback - treat all as regular overtime
+                    overtimeDetails = [];
+                }
             }
         }
 
@@ -2779,58 +2837,56 @@ class PayrollRunService {
             }
         }
 
-        
-        // Add overtime (this is an addition) - with holiday awareness
-        // First check if overtime is enabled in settings
-        const overtimeEnabled = await this.isOvertimeEnabled(record.client_id);
-        if (employeeData.overtimeHours > 0 && overtimeEnabled) {
+        // Add overtime (this is an addition) - with EMPLOYEE-LEVEL configuration
+        // Overtime is already filtered by employee's overtime_enabled flag in getEmployeeData
+        if (employeeData.overtimeHours > 0) {
             // Get employee-specific daily hours for accurate hourly rate
             const employeeDailyHours = await this.getEmployeeDailyHours(record.employee_id, 8, record.period_start_date, record.period_end_date);
             const workingDaysInMonth = await this.calculateWorkingDaysInPeriod(
-                record.period_start_date || '2024-01-01', 
-                record.period_end_date || '2024-01-31', 
+                record.period_start_date || '2024-01-01',
+                record.period_end_date || '2024-01-31',
                 record.client_id,
                 record.department_id
             );
             const hourlyRate = baseSalary / (workingDaysInMonth * employeeDailyHours);
             let overtimeAmount = 0;
-            
+
             console.log(`⏰ OVERTIME CALCULATION: Employee ${record.employee_id}`);
             console.log(`   Base Salary: ${baseSalary}`);
             console.log(`   Working Days: ${workingDaysInMonth}`);
             console.log(`   Employee Daily Hours: ${employeeDailyHours}h`);
             console.log(`   Hourly Rate: ${hourlyRate.toFixed(2)} (${baseSalary} ÷ (${workingDaysInMonth} × ${employeeDailyHours}))`);
-            
-            // Try to calculate overtime with holiday multipliers
-            try {
-                if (employeeData.overtimeDetails && Array.isArray(employeeData.overtimeDetails)) {
-                    // Detailed overtime with holiday multipliers
-                    for (const overtime of employeeData.overtimeDetails) {
-                        // Get dynamic multiplier from settings (not hardcoded!)
-                        const defaultMultiplier = await this.getRegularOvertimeMultiplier(record.client_id);
-                        const multiplier = overtime.holiday_multiplier || defaultMultiplier;
-                        overtimeAmount += (overtime.hours || 0) * hourlyRate * multiplier;
+
+            // Calculate overtime with EMPLOYEE-SPECIFIC multipliers
+            if (employeeData.overtimeDetails && Array.isArray(employeeData.overtimeDetails) && employeeData.overtimeDetails.length > 0) {
+                // Detailed overtime with employee-specific day-based multipliers
+                console.log(`   Processing ${employeeData.overtimeDetails.length} overtime records:`);
+
+                for (const overtime of employeeData.overtimeDetails) {
+                    const dayAmount = (overtime.hours || 0) * hourlyRate * (overtime.multiplier || 1.0);
+                    overtimeAmount += dayAmount;
+
+                    console.log(`     ${overtime.date} (${overtime.day_type}): ${overtime.hours.toFixed(2)}h × ${hourlyRate.toFixed(2)} × ${overtime.multiplier}x = ${dayAmount.toFixed(2)}`);
+                    if (overtime.pre_shift_hours > 0) {
+                        console.log(`       Pre-shift: ${overtime.pre_shift_hours.toFixed(2)}h`);
                     }
-                } else {
-                    // Fallback to standard calculation with dynamic rate
-                    const fallbackMultiplier = await this.getRegularOvertimeMultiplier(record.client_id);
-                    overtimeAmount = employeeData.overtimeHours * hourlyRate * fallbackMultiplier;
+                    if (overtime.post_shift_hours > 0) {
+                        console.log(`       Post-shift: ${overtime.post_shift_hours.toFixed(2)}h`);
+                    }
                 }
-            } catch (error) {
-                console.error('Error calculating holiday overtime:', error);
-                // Fallback to standard calculation with dynamic rate
-                const emergencyFallbackMultiplier = await this.getRegularOvertimeMultiplier(record.client_id);
-                overtimeAmount = employeeData.overtimeHours * hourlyRate * emergencyFallbackMultiplier;
-                console.log(`   Fallback Calculation: ${employeeData.overtimeHours}h × ${hourlyRate.toFixed(2)} × ${emergencyFallbackMultiplier} = ${overtimeAmount.toFixed(2)}`);
+            } else {
+                // No overtime details available (should not happen with new system)
+                console.log(`   ⚠️  No overtime details available for calculation`);
+                overtimeAmount = 0;
             }
-            
+
             console.log(`   Total Overtime Hours: ${employeeData.overtimeHours}h`);
             console.log(`   Total Overtime Amount: ${overtimeAmount.toFixed(2)}`);
             console.log('');
-            
+
             total += overtimeAmount;
             additionsTotal += overtimeAmount;
-            
+
             components.push({
                 code: 'OVERTIME',
                 name: 'Overtime Pay',
@@ -2963,7 +3019,6 @@ class PayrollRunService {
                 }
             }
         }
-
 
         // =============================================
         // 3. FALLBACK: DEFAULT EPF IF NO CONFIGURED COMPONENTS (calculated on earned base)
@@ -3526,7 +3581,7 @@ class PayrollRunService {
             const [runInfo] = await db.execute(`
                 SELECT
                     pr.id as run_id,
-                    pr.run_name,
+                    pr.run_name, 
                     pr.run_number,
                     pr.calculation_method,
                     pp.id as period_id,
@@ -3710,12 +3765,40 @@ class PayrollRunService {
 
             console.log(`📊 Found ${allBonuses.length} active bonuses...`);
 
+            // ========================================
+            // BULK FETCH #4: Overtime Data
+            // ========================================
+            const [allOvertime] = await db.execute(`
+                SELECT
+                    a.employee_id,
+                    a.date,
+                    a.overtime_hours,
+                    a.pre_shift_overtime_seconds,
+                    a.post_shift_overtime_seconds,
+                    e.overtime_enabled,
+                    e.pre_shift_overtime_enabled,
+                    e.post_shift_overtime_enabled,
+                    e.weekday_ot_multiplier,
+                    e.saturday_ot_multiplier,
+                    e.sunday_ot_multiplier,
+                    e.holiday_ot_multiplier
+                FROM attendance a
+                JOIN employees e ON a.employee_id = e.id
+                WHERE a.employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND DATE(a.date) BETWEEN ? AND ?
+                  AND a.overtime_hours > 0
+                ORDER BY a.employee_id, a.date
+            `, [...employeeIds, period.period_start_date, period.period_end_date]);
+
+            console.log(`📊 Found ${allOvertime.length} overtime records...`);
+
             // Group data by employee_id for fast lookup
             const allowancesByEmployee = {};
             const deductionsByEmployee = {};
             const loansByEmployee = {};
             const advancesByEmployee = {};
             const bonusesByEmployee = {};
+            const overtimeByEmployee = {};
 
             allAllowances.forEach(a => {
                 if (!allowancesByEmployee[a.employee_id]) allowancesByEmployee[a.employee_id] = [];
@@ -3757,6 +3840,11 @@ class PayrollRunService {
                 bonusesByEmployee[b.employee_id].push({ ...b, addition_amount: b.bonus_amount });
             });
 
+            allOvertime.forEach(ot => {
+                if (!overtimeByEmployee[ot.employee_id]) overtimeByEmployee[ot.employee_id] = [];
+                overtimeByEmployee[ot.employee_id].push(ot);
+            });
+
             // ========================================
             // Process each employee with pre-fetched data
             // ========================================
@@ -3795,6 +3883,7 @@ class PayrollRunService {
                 const employeeLoans = loansByEmployee[emp.employee_id] || [];
                 const employeeAdvances = advancesByEmployee[emp.employee_id] || [];
                 const employeeBonuses = bonusesByEmployee[emp.employee_id] || [];
+                const employeeOvertime = overtimeByEmployee[emp.employee_id] || [];
 
                 // Add description field to loans if missing (use notes field)
                 employeeLoans.forEach(loan => {
@@ -3874,6 +3963,9 @@ class PayrollRunService {
                         loanRecords: employeeLoans,
                         advanceRecords: employeeAdvances,
                         bonusRecords: employeeBonuses
+                    },
+                    overtime: {
+                        records: employeeOvertime
                     }
                 };
             });

@@ -54,6 +54,16 @@ interface EmployeeFormData {
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant';
   salary: number | '';
   attendance_affects_salary: boolean;
+  payable_hours_policy: 'strict_schedule' | 'actual_worked';
+
+  // Overtime Configuration
+  overtime_enabled: boolean;
+  pre_shift_overtime_enabled: boolean;
+  post_shift_overtime_enabled: boolean;
+  weekday_ot_multiplier: number | '';
+  saturday_ot_multiplier: number | '';
+  sunday_ot_multiplier: number | '';
+  holiday_ot_multiplier: number | '';
 
   // Work Schedule Information
   in_time: string;
@@ -180,6 +190,16 @@ const AddEmployees: React.FC = () => {
     employee_type: 'permanent',
     salary: '',
     attendance_affects_salary: true,
+    payable_hours_policy: 'strict_schedule',
+
+    // Overtime Configuration
+    overtime_enabled: false,
+    pre_shift_overtime_enabled: false,
+    post_shift_overtime_enabled: false,
+    weekday_ot_multiplier: '',
+    saturday_ot_multiplier: '',
+    sunday_ot_multiplier: '',
+    holiday_ot_multiplier: '',
 
     // Work Schedule Information
     in_time: '',
@@ -522,7 +542,7 @@ const AddEmployees: React.FC = () => {
         zip_code: formData.zip_code,
         nationality: formData.nationality,
         marital_status: formData.marital_status,
-        
+
         // Professional Information
         employee_code: formData.employee_code,
         department_id: formData.department_id,
@@ -538,7 +558,16 @@ const AddEmployees: React.FC = () => {
         emergency_contact_name: formData.emergency_contact_name,
         emergency_contact_phone: formData.emergency_contact_phone,
         emergency_contact_relation: formData.emergency_contact_relation,
-        
+
+        // Overtime Configuration
+        overtime_enabled: formData.overtime_enabled,
+        pre_shift_overtime_enabled: formData.pre_shift_overtime_enabled,
+        post_shift_overtime_enabled: formData.post_shift_overtime_enabled,
+        weekday_ot_multiplier: formData.weekday_ot_multiplier ? Number(formData.weekday_ot_multiplier) : null,
+        saturday_ot_multiplier: formData.saturday_ot_multiplier ? Number(formData.saturday_ot_multiplier) : null,
+        sunday_ot_multiplier: formData.sunday_ot_multiplier ? Number(formData.sunday_ot_multiplier) : null,
+        holiday_ot_multiplier: formData.holiday_ot_multiplier ? Number(formData.holiday_ot_multiplier) : null,
+
         // Work Schedule Information
         in_time: formData.in_time,
         out_time: formData.out_time,
@@ -671,6 +700,18 @@ const debugAuth = () => {
       employment_status: 'active',
       employee_type: 'permanent',
       salary: '',
+      attendance_affects_salary: true,
+      payable_hours_policy: 'strict_schedule',
+
+      // Overtime Configuration
+      overtime_enabled: false,
+      pre_shift_overtime_enabled: false,
+      post_shift_overtime_enabled: false,
+      weekday_ot_multiplier: '',
+      saturday_ot_multiplier: '',
+      sunday_ot_multiplier: '',
+      holiday_ot_multiplier: '',
+
       // Work Schedule Information
       in_time: '',
       out_time: '',
@@ -1210,6 +1251,157 @@ const debugAuth = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Payable Hours Policy */}
+                    <div className="mt-6">
+                      <Label htmlFor="payable_hours_policy" value="Payable Hours Policy" />
+                      <select
+                        id="payable_hours_policy"
+                        value={formData.payable_hours_policy}
+                        onChange={(e) => handleInputChange('payable_hours_policy', e.target.value as 'strict_schedule' | 'actual_worked')}
+                        className="mt-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                      >
+                        <option value="strict_schedule">Strict Schedule</option>
+                        <option value="actual_worked">Actual Worked Hours</option>
+                      </select>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {formData.payable_hours_policy === 'strict_schedule'
+                          ? "Pay is capped to scheduled hours. Late arrival or early departure results in lost hours. Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid only 7 hours."
+                          : "Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid full 8 hours."
+                        }
+                      </p>
+                    </div>
+
+                    {/* Overtime Configuration */}
+                    <div className="border-t pt-6 mt-6">
+                      <h5 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
+                        Overtime Calculation Settings
+                      </h5>
+
+                      {/* Overtime Enabled Checkbox */}
+                      <div className="mb-4">
+                        <div className="flex items-center">
+                          <input
+                            id="overtime_enabled"
+                            type="checkbox"
+                            checked={formData.overtime_enabled}
+                            onChange={(e) => handleInputChange('overtime_enabled', e.target.checked)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                          />
+                          <label htmlFor="overtime_enabled" className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                            Enable Overtime Calculation
+                          </label>
+                        </div>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Calculate and include overtime pay in this employee's salary based on hours worked beyond scheduled time.
+                        </p>
+                      </div>
+
+                      {/* Overtime Configuration Fields - Only shown when overtime is enabled */}
+                      {formData.overtime_enabled && (
+                        <div className="ml-6 space-y-4 border-l-2 border-blue-300 dark:border-blue-600 pl-4">
+                          {/* Pre-Shift and Post-Shift Overtime */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex items-center">
+                              <input
+                                id="pre_shift_overtime_enabled"
+                                type="checkbox"
+                                checked={formData.pre_shift_overtime_enabled}
+                                onChange={(e) => handleInputChange('pre_shift_overtime_enabled', e.target.checked)}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <label htmlFor="pre_shift_overtime_enabled" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                Pre-Shift Overtime (before scheduled start time)
+                              </label>
+                            </div>
+
+                            <div className="flex items-center">
+                              <input
+                                id="post_shift_overtime_enabled"
+                                type="checkbox"
+                                checked={formData.post_shift_overtime_enabled}
+                                onChange={(e) => handleInputChange('post_shift_overtime_enabled', e.target.checked)}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <label htmlFor="post_shift_overtime_enabled" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                Post-Shift Overtime (after scheduled end time)
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Overtime Multipliers */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                            <div>
+                              <Label htmlFor="weekday_ot_multiplier" value="Weekday OT Multiplier" />
+                              <TextInput
+                                id="weekday_ot_multiplier"
+                                type="number"
+                                step="0.1"
+                                min="1.0"
+                                max="5.0"
+                                value={formData.weekday_ot_multiplier}
+                                onChange={(e) => handleInputChange('weekday_ot_multiplier', e.target.value)}
+                                placeholder="e.g., 1.5"
+                                helperText="Mon-Fri overtime rate"
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor="saturday_ot_multiplier" value="Saturday OT Multiplier" />
+                              <TextInput
+                                id="saturday_ot_multiplier"
+                                type="number"
+                                step="0.1"
+                                min="1.0"
+                                max="5.0"
+                                value={formData.saturday_ot_multiplier}
+                                onChange={(e) => handleInputChange('saturday_ot_multiplier', e.target.value)}
+                                placeholder="e.g., 2.0"
+                                helperText="Saturday overtime rate"
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor="sunday_ot_multiplier" value="Sunday OT Multiplier" />
+                              <TextInput
+                                id="sunday_ot_multiplier"
+                                type="number"
+                                step="0.1"
+                                min="1.0"
+                                max="5.0"
+                                value={formData.sunday_ot_multiplier}
+                                onChange={(e) => handleInputChange('sunday_ot_multiplier', e.target.value)}
+                                placeholder="e.g., 2.5"
+                                helperText="Sunday overtime rate"
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor="holiday_ot_multiplier" value="Holiday OT Multiplier" />
+                              <TextInput
+                                id="holiday_ot_multiplier"
+                                type="number"
+                                step="0.1"
+                                min="1.0"
+                                max="5.0"
+                                value={formData.holiday_ot_multiplier}
+                                onChange={(e) => handleInputChange('holiday_ot_multiplier', e.target.value)}
+                                placeholder="e.g., 3.0"
+                                helperText="Holiday overtime rate"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Overtime Info */}
+                          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md">
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                              <strong>Note:</strong> Overtime multipliers determine how much extra the employee earns for overtime hours.
+                              For example, 1.5x means they earn 150% of their regular hourly rate for overtime work.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

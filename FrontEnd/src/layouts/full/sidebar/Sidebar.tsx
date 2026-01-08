@@ -34,6 +34,11 @@ const SidebarLayout = () => {
                   SidebarContent?.map((item, index) => {
                     // Filter children based on permissions
                     const filteredChildren = item.children?.filter((child: any) => {
+                      // Check if super admin is required
+                      if (child.requireSuperAdmin) {
+                        // Support both boolean (true/false) and number (1/0) formats
+                        return !!(currentUser?.isSuperAdmin || (currentUser as any)?.is_super_admin);
+                      }
                       // Check anyPermission first
                       if (child.anyPermission && Array.isArray(child.anyPermission)) {
                         return hasAnyPermission(child.anyPermission);

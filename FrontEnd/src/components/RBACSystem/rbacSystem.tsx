@@ -495,14 +495,27 @@ const initializeAuth = async () => {
   try {
     setIsLoading(true);
     const response = await apiService.getCurrentUser();
-    
+
     if (response.success && response.data) {
-      const userData = response.data.user;
-      
-      
+      const rawUserData = response.data.user as any; // Backend returns snake_case
+
+      // Transform snake_case to camelCase for frontend consistency
+      const userData: User = {
+        id: rawUserData.id,
+        name: rawUserData.name,
+        email: rawUserData.email,
+        clientId: rawUserData.client_id,
+        clientName: rawUserData.client_name,
+        roleId: rawUserData.role_id,
+        roleName: rawUserData.role_name,
+        accessLevel: rawUserData.access_level,
+        isSuperAdmin: rawUserData.is_super_admin,  // ← Convert snake_case to camelCase
+        permissions: rawUserData.permissions
+      };
+
       setCurrentUser(userData);
-      
-     
+
+
       localStorage.setItem('user', JSON.stringify(userData));
       
       

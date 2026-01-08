@@ -590,9 +590,9 @@ router.get('/admin-users', [
     `;
     params = [];
   } else {
-    // Regular users can only see users from their client
+    // Regular users can only see users from their client (excluding super admins)
     query = `
-      SELECT 
+      SELECT
         au.id,
         au.name,
         au.email,
@@ -610,7 +610,7 @@ router.get('/admin-users', [
       FROM admin_users au
       JOIN roles r ON au.role_id = r.id
       LEFT JOIN clients c ON au.client_id = c.id
-      WHERE au.client_id = ?
+      WHERE au.client_id = ? AND au.is_super_admin = FALSE
       ORDER BY au.created_at DESC
     `;
     params = [req.user.clientId];
@@ -723,7 +723,6 @@ body('department').optional().trim(),
 body('is_active').optional().isBoolean()
 ], asyncHandler(async (req, res) => {
 
-
   console.log('🔍 Create admin user request 1:', req.body);
   
   const errors = validationResult(req);
@@ -786,6 +785,9 @@ body('is_active').optional().isBoolean()
     clientId = req.user.clientId;
   }
 
+  // Only super admins can create other super admins
+  const isSuperAdmin = req.user.isSuperAdmin && req.body.is_super_admin === true;
+
   const userData = {
     id: userId,
     client_id: clientId,
@@ -794,7 +796,7 @@ body('is_active').optional().isBoolean()
     password_hash: passwordHash,
     role_id: req.body.role_id,
     department: req.body.department || null,
-    is_super_admin: req.body.is_super_admin || false,
+    is_super_admin: isSuperAdmin, // Only super admins can set this to true
     is_active: req.body.is_active !== false // Default to true
   };
 

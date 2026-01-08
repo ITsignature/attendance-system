@@ -136,10 +136,17 @@ const SidebarContent = [
       },
       {
         id: uniqueId(),
-        title: 'User Management', 
+        title: 'User Management',
         icon: IconUsers,
         href: '/adminusermanagement',
         permission: 'rbac.assign',
+      },
+      {
+        id: uniqueId(),
+        title: 'Client Management',
+        icon: IconBuilding,
+        href: '/clientmanagement',
+        requireSuperAdmin: true,
       },
     ],
   },

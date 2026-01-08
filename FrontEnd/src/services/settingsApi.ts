@@ -125,7 +125,6 @@ class SettingsApiService {
       end_time: settingsData.work_end_time?.value || '17:00',
       hours_per_day: settingsData.working_hours_per_day?.value || 8,
       late_threshold: settingsData.late_threshold_minutes?.value || 15,
-      overtime_rate: settingsData.overtime_rate_multiplier?.value || 1.5,
       full_day_minimum_hours: settingsData.full_day_minimum_hours?.value || 7,
       half_day_minimum_hours: settingsData.half_day_minimum_hours?.value || 4,
       short_leave_minimum_hours: settingsData.short_leave_minimum_hours?.value || 1,

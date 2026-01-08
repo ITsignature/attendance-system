@@ -1,500 +1,242 @@
--- HR Management System Database Schema
--- MySQL Database with Multi-tenant RBAC Support
+-- phpMyAdmin SQL Dump
+-- version 5.2.2
+-- https://www.phpmyadmin.net/
+--
+-- Host: localhost
+-- Generation Time: Oct 29, 2025 at 01:41 PM
+-- Server version: 10.11.10-MariaDB-log
+-- PHP Version: 7.3.32
 
--- Drop database if exists (for development)
--- DROP DATABASE IF EXISTS hrms_system;
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
 
--- Create database
-CREATE DATABASE IF NOT EXISTS hrms_system 
-CHARACTER SET utf8mb4 
-COLLATE utf8mb4_unicode_ci;
 
-USE hrms_system;
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
 
--- =============================================
--- 1. CLIENTS TABLE (Multi-tenancy)
--- =============================================
-CREATE TABLE clients (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    contact_email VARCHAR(255),
-    phone VARCHAR(20),
-    address TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    subscription_plan ENUM('basic', 'premium', 'enterprise') DEFAULT 'basic',
-    subscription_expires_at DATETIME,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    INDEX idx_clients_active (is_active),
-    INDEX idx_clients_name (name)
-);
+--
+-- Database: `u770612336_attendance_sys`
+--
 
--- =============================================
--- 2. SYSTEM PERMISSIONS TABLE
--- =============================================
-CREATE TABLE permissions (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    module VARCHAR(50) NOT NULL,
-    action VARCHAR(50) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    UNIQUE KEY unique_permission (module, action),
-    INDEX idx_permissions_module (module),
-    INDEX idx_permissions_active (is_active)
-);
+-- --------------------------------------------------------
 
--- =============================================
--- 3. ROLES TABLE (Client-specific + System roles)
--- =============================================
-CREATE TABLE roles (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36),
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    access_level ENUM('basic', 'moderate', 'full') DEFAULT 'basic',
-    is_system_role BOOLEAN DEFAULT FALSE,
-    is_editable BOOLEAN DEFAULT TRUE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    INDEX idx_roles_client (client_id),
-    INDEX idx_roles_system (is_system_role),
-    INDEX idx_roles_active (is_active),
-    UNIQUE KEY unique_role_per_client (client_id, name)
-);
+--
+-- Table structure for table `admin_users`
+--
 
--- =============================================
--- 4. ROLE PERMISSIONS MAPPING (Many-to-Many)
--- =============================================
-CREATE TABLE role_permissions (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    role_id VARCHAR(36) NOT NULL,
-    permission_id VARCHAR(36) NOT NULL,
-    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    granted_by VARCHAR(36),
-    
-    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
-    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_role_permission (role_id, permission_id),
-    INDEX idx_role_permissions_role (role_id),
-    INDEX idx_role_permissions_permission (permission_id)
-);
+CREATE TABLE `admin_users` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) DEFAULT NULL,
+  `employee_id` varchar(36) DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `role_id` varchar(36) NOT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `last_login_at` timestamp NULL DEFAULT NULL,
+  `password_changed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `failed_login_attempts` int(11) DEFAULT 0,
+  `account_locked_until` timestamp NULL DEFAULT NULL,
+  `two_factor_enabled` tinyint(1) DEFAULT 0,
+  `two_factor_secret` varchar(100) DEFAULT NULL,
+  `is_super_admin` tinyint(1) DEFAULT 0,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- =============================================
--- 5. DEPARTMENTS TABLE
--- =============================================
-CREATE TABLE departments (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    manager_id VARCHAR(36),
-    budget DECIMAL(15,2),
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    INDEX idx_departments_client (client_id),
-    INDEX idx_departments_manager (manager_id),
-    INDEX idx_departments_active (is_active),
-    UNIQUE KEY unique_department_per_client (client_id, name)
-);
+-- --------------------------------------------------------
 
--- =============================================
--- 6. DESIGNATIONS TABLE
--- =============================================
-CREATE TABLE designations (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36) NOT NULL,
-    title VARCHAR(100) NOT NULL,
-    department_id VARCHAR(36),
-    min_salary DECIMAL(15,2),
-    max_salary DECIMAL(15,2),
-    responsibilities TEXT,
-    requirements TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
-    INDEX idx_designations_client (client_id),
-    INDEX idx_designations_department (department_id),
-    INDEX idx_designations_active (is_active),
-    UNIQUE KEY unique_designation_per_client (client_id, title)
-);
+--
+-- Table structure for table `attendance`
+--
 
--- =============================================
--- 7. EMPLOYEES TABLE (Central Entity)
--- =============================================
-CREATE TABLE employees (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36) NOT NULL,
-    employee_code VARCHAR(50) NOT NULL,
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    phone VARCHAR(20),
-    date_of_birth DATE,
-    gender ENUM('male', 'female', 'other'),
-    address TEXT,
-    city VARCHAR(100),
-    state VARCHAR(100),
-    zip_code VARCHAR(20),
-    nationality VARCHAR(100),
-    marital_status ENUM('single', 'married', 'divorced', 'widowed'),
-    
-    -- Employment Details
-    hire_date DATE NOT NULL,
-    department_id VARCHAR(36),
-    designation_id VARCHAR(36),
-    manager_id VARCHAR(36),
-    employee_type ENUM('permanent', 'contract', 'intern', 'consultant') DEFAULT 'permanent',
-    work_location ENUM('office', 'remote', 'hybrid') DEFAULT 'office',
-    employment_status ENUM('active', 'inactive', 'terminated', 'resigned') DEFAULT 'active',
-    
-    -- Salary Information
-    base_salary DECIMAL(15,2),
-    currency VARCHAR(3) DEFAULT 'USD',
-    
-    -- Documents and Additional Info
-    profile_image VARCHAR(500),
-    emergency_contact_name VARCHAR(100),
-    emergency_contact_phone VARCHAR(20),
-    emergency_contact_relation VARCHAR(50),
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
-    FOREIGN KEY (designation_id) REFERENCES designations(id) ON DELETE SET NULL,
-    FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL,
-    
-    INDEX idx_employees_client (client_id),
-    INDEX idx_employees_code (employee_code),
-    INDEX idx_employees_email (email),
-    INDEX idx_employees_department (department_id),
-    INDEX idx_employees_manager (manager_id),
-    INDEX idx_employees_status (employment_status),
-    UNIQUE KEY unique_employee_code_per_client (client_id, employee_code)
-);
+CREATE TABLE `attendance` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `date` date NOT NULL,
+  `check_in_time` time DEFAULT NULL,
+  `check_out_time` time DEFAULT NULL,
+  `total_hours` decimal(4,2) DEFAULT NULL,
+  `overtime_hours` decimal(4,2) DEFAULT 0.00,
+  `break_duration` decimal(4,2) DEFAULT 0.00,
+  `status` enum('present','absent','late','half_day','on_leave') DEFAULT 'present',
+  `work_type` enum('office','remote','hybrid') DEFAULT 'office',
+  `notes` text DEFAULT NULL,
+  `created_by` varchar(36) DEFAULT NULL,
+  `updated_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `scheduled_in_time` time DEFAULT NULL,
+  `scheduled_out_time` time DEFAULT NULL,
+  `arrival_status` enum('on_time','late','absent','voluntary_work','scheduled_off') DEFAULT 'on_time',
+  `work_duration` enum('full_day','half_day','short_leave','absent','voluntary_full_day','voluntary_half_day','voluntary_short_work','scheduled_off','insufficient_hours') DEFAULT 'full_day',
+  `leave_request_id` varchar(36) DEFAULT NULL,
+  `is_weekend` tinyint(1) UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Day of week: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday',
+  `payable_duration` decimal(5,2) DEFAULT NULL COMMENT 'Pre-calculated payable hours based on overlap of scheduled and actual hours'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- =============================================
--- 8. ADMIN USERS TABLE (System Access)
--- =============================================
-CREATE TABLE admin_users (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36),
-    employee_id VARCHAR(36),
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role_id VARCHAR(36) NOT NULL,
-    department VARCHAR(100),
-    
-    -- Authentication & Security
-    last_login_at TIMESTAMP NULL,
-    password_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    failed_login_attempts INT DEFAULT 0,
-    account_locked_until TIMESTAMP NULL,
-    two_factor_enabled BOOLEAN DEFAULT FALSE,
-    two_factor_secret VARCHAR(100),
-    
-    -- Super Admin (cross-client access)
-    is_super_admin BOOLEAN DEFAULT FALSE,
-    
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL,
-    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT,
-    
-    INDEX idx_admin_users_client (client_id),
-    INDEX idx_admin_users_employee (employee_id),
-    INDEX idx_admin_users_email (email),
-    INDEX idx_admin_users_role (role_id),
-    INDEX idx_admin_users_super (is_super_admin),
-    INDEX idx_admin_users_active (is_active)
-);
+-- --------------------------------------------------------
 
--- =============================================
--- 9. USER SESSIONS TABLE (JWT Session Management)
--- =============================================
-CREATE TABLE user_sessions (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    admin_user_id VARCHAR(36) NOT NULL,
-    client_id VARCHAR(36),
-    token_jti VARCHAR(100) NOT NULL,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    expires_at TIMESTAMP NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (admin_user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    
-    UNIQUE KEY unique_token (token_jti),
-    INDEX idx_sessions_user (admin_user_id),
-    INDEX idx_sessions_client (client_id),
-    INDEX idx_sessions_expires (expires_at),
-    INDEX idx_sessions_active (is_active)
-);
+--
+-- Table structure for table `attendance_master`
+--
 
--- =============================================
--- 10. ATTENDANCE TABLE
--- =============================================
-CREATE TABLE attendance (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    employee_id VARCHAR(36) NOT NULL,
-    date DATE NOT NULL,
-    check_in_time TIME,
-    check_out_time TIME,
-    total_hours DECIMAL(4,2),
-    overtime_hours DECIMAL(4,2) DEFAULT 0.00,
-    break_duration DECIMAL(4,2) DEFAULT 0.00,
-    status ENUM('present', 'absent', 'late', 'half_day', 'on_leave') DEFAULT 'present',
-    work_type ENUM('office', 'remote', 'hybrid') DEFAULT 'office',
-    notes TEXT,
-    created_by VARCHAR(36),
-    updated_by VARCHAR(36),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by) REFERENCES admin_users(id) ON DELETE SET NULL,
-    FOREIGN KEY (updated_by) REFERENCES admin_users(id) ON DELETE SET NULL,
-    
-    UNIQUE KEY unique_employee_date (employee_id, date),
-    INDEX idx_attendance_employee (employee_id),
-    INDEX idx_attendance_date (date),
-    INDEX idx_attendance_status (status),
-    INDEX idx_attendance_work_type (work_type)
-);
+CREATE TABLE `attendance_master` (
+  `id` int(11) NOT NULL,
+  `userID` int(11) NOT NULL,
+  `entered_by` varchar(30) NOT NULL,
+  `att_date` date NOT NULL,
+  `in_time` time NOT NULL,
+  `out_time` time NOT NULL,
+  `working_hours` time NOT NULL,
+  `working_type` varchar(50) NOT NULL,
+  `reason` varchar(500) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `late_reason` varchar(300) NOT NULL,
+  `late_pay` int(11) NOT NULL,
+  `ot_pay` int(11) NOT NULL,
+  `note` varchar(250) NOT NULL,
+  `active` int(6) NOT NULL,
+  `manual_attendance_in_time_marked` varchar(225) NOT NULL,
+  `manual_attendance_out_time_marked` varchar(225) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
 
--- =============================================
--- 11. LEAVE TYPES TABLE
--- =============================================
-CREATE TABLE leave_types (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    max_days_per_year INT DEFAULT 0,
-    max_consecutive_days INT DEFAULT 0,
-    is_paid BOOLEAN DEFAULT TRUE,
-    requires_approval BOOLEAN DEFAULT TRUE,
-    approval_hierarchy JSON, -- Store approval workflow
-    notice_period_days INT DEFAULT 0,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    
-    INDEX idx_leave_types_client (client_id),
-    INDEX idx_leave_types_active (is_active),
-    UNIQUE KEY unique_leave_type_per_client (client_id, name)
-);
+-- --------------------------------------------------------
 
--- =============================================
--- 12. LEAVE REQUESTS TABLE
--- =============================================
-CREATE TABLE leave_requests (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    employee_id VARCHAR(36) NOT NULL,
-    leave_type_id VARCHAR(36) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    days_requested INT NOT NULL,
-    reason TEXT NOT NULL,
-    status ENUM('pending', 'approved', 'rejected', 'cancelled') DEFAULT 'pending',
-    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    reviewed_at TIMESTAMP NULL,
-    reviewed_by VARCHAR(36),
-    reviewer_comments TEXT,
-    supporting_documents JSON, -- Store file paths
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
-    FOREIGN KEY (leave_type_id) REFERENCES leave_types(id) ON DELETE RESTRICT,
-    FOREIGN KEY (reviewed_by) REFERENCES admin_users(id) ON DELETE SET NULL,
-    
-    INDEX idx_leave_requests_employee (employee_id),
-    INDEX idx_leave_requests_type (leave_type_id),
-    INDEX idx_leave_requests_status (status),
-    INDEX idx_leave_requests_dates (start_date, end_date),
-    INDEX idx_leave_requests_reviewer (reviewed_by)
-);
+--
+-- Table structure for table `audit_logs`
+--
 
--- =============================================
--- 13. PAYROLL RECORDS TABLE
--- =============================================
-CREATE TABLE payroll_records (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    employee_id VARCHAR(36) NOT NULL,
-    pay_period_start DATE NOT NULL,
-    pay_period_end DATE NOT NULL,
-    
-    -- Earnings
-    base_salary DECIMAL(15,2) NOT NULL,
-    allowances DECIMAL(15,2) DEFAULT 0.00,
-    overtime_amount DECIMAL(15,2) DEFAULT 0.00,
-    bonus DECIMAL(15,2) DEFAULT 0.00,
-    commission DECIMAL(15,2) DEFAULT 0.00,
-    gross_salary DECIMAL(15,2) NOT NULL,
-    
-    -- Deductions
-    tax_deduction DECIMAL(15,2) DEFAULT 0.00,
-    provident_fund DECIMAL(15,2) DEFAULT 0.00,
-    insurance DECIMAL(15,2) DEFAULT 0.00,
-    loan_deduction DECIMAL(15,2) DEFAULT 0.00,
-    other_deductions DECIMAL(15,2) DEFAULT 0.00,
-    total_deductions DECIMAL(15,2) DEFAULT 0.00,
-    
-    -- Final Amount
-    net_salary DECIMAL(15,2) NOT NULL,
-    
-    -- Payment Info
-    payment_status ENUM('pending', 'processing', 'paid', 'failed') DEFAULT 'pending',
-    payment_method ENUM('bank_transfer', 'cash', 'cheque') DEFAULT 'bank_transfer',
-    payment_date DATE,
-    payment_reference VARCHAR(100),
-    
-    -- Audit
-    processed_by VARCHAR(36),
-    processed_at TIMESTAMP NULL,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
-    FOREIGN KEY (processed_by) REFERENCES admin_users(id) ON DELETE SET NULL,
-    
-    INDEX idx_payroll_employee (employee_id),
-    INDEX idx_payroll_period (pay_period_start, pay_period_end),
-    INDEX idx_payroll_status (payment_status),
-    INDEX idx_payroll_payment_date (payment_date),
-    UNIQUE KEY unique_employee_pay_period (employee_id, pay_period_start, pay_period_end)
-);
+CREATE TABLE `audit_logs` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) DEFAULT NULL,
+  `admin_user_id` varchar(36) DEFAULT NULL,
+  `entity_type` varchar(50) NOT NULL,
+  `entity_id` varchar(36) DEFAULT NULL,
+  `action` enum('create','read','update','delete') NOT NULL,
+  `old_values` longtext DEFAULT NULL CHECK (json_valid(`old_values`)),
+  `new_values` longtext DEFAULT NULL CHECK (json_valid(`new_values`)),
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- =============================================
--- 14. HOLIDAYS TABLE
--- =============================================
-CREATE TABLE holidays (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    date DATE NOT NULL,
-    description TEXT,
-    is_optional BOOLEAN DEFAULT FALSE,
-    applies_to_all BOOLEAN DEFAULT TRUE,
-    department_ids JSON, -- If not applies_to_all, store specific dept IDs
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    
-    INDEX idx_holidays_client (client_id),
-    INDEX idx_holidays_date (date),
-    UNIQUE KEY unique_holiday_per_client_date (client_id, date, name)
-);
+-- --------------------------------------------------------
 
--- =============================================
--- 15. SYSTEM SETTINGS TABLE
--- =============================================
-CREATE TABLE system_settings (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36),
-    setting_key VARCHAR(100) NOT NULL,
-    setting_value JSON NOT NULL,
-    setting_type ENUM('string', 'number', 'boolean', 'object', 'array') DEFAULT 'string',
-    description TEXT,
-    is_public BOOLEAN DEFAULT FALSE, -- Can non-admin users see this?
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    
-    INDEX idx_settings_client (client_id),
-    INDEX idx_settings_key (setting_key),
-    UNIQUE KEY unique_setting_per_client (client_id, setting_key)
-);
+--
+-- Table structure for table `clients`
+--
 
--- =============================================
--- 16. AUDIT LOGS TABLE
--- =============================================
-CREATE TABLE audit_logs (
-    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    client_id VARCHAR(36),
-    admin_user_id VARCHAR(36),
-    entity_type VARCHAR(50) NOT NULL, -- 'employee', 'attendance', 'payroll', etc.
-    entity_id VARCHAR(36),
-    action ENUM('create', 'read', 'update', 'delete') NOT NULL,
-    old_values JSON,
-    new_values JSON,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-    FOREIGN KEY (admin_user_id) REFERENCES admin_users(id) ON DELETE SET NULL,
-    
-    INDEX idx_audit_client (client_id),
-    INDEX idx_audit_user (admin_user_id),
-    INDEX idx_audit_entity (entity_type, entity_id),
-    INDEX idx_audit_action (action),
-    INDEX idx_audit_created (created_at)
-);
+CREATE TABLE `clients` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `name` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `contact_email` varchar(255) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `subscription_plan` enum('basic','premium','enterprise') DEFAULT 'basic',
+  `subscription_expires_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- =============================================
--- FOREIGN KEY CONSTRAINTS (Delayed due to dependencies)
--- =============================================
+-- --------------------------------------------------------
 
--- Add manager foreign key to departments (circular dependency)
-ALTER TABLE departments 
-ADD CONSTRAINT fk_departments_manager 
-FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL;
+--
+-- Table structure for table `departments`
+--
 
--- =============================================
--- INDEXES FOR PERFORMANCE
--- =============================================
+CREATE TABLE `departments` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `manager_id` varchar(36) DEFAULT NULL,
+  `budget` decimal(15,2) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Composite indexes for common queries
-CREATE INDEX idx_employees_client_status ON employees(client_id, employment_status);
-CREATE INDEX idx_attendance_employee_date_range ON attendance(employee_id, date);
-CREATE INDEX idx_leave_requests_employee_status ON leave_requests(employee_id, status);
-CREATE INDEX idx_payroll_employee_period ON payroll_records(employee_id, pay_period_start, pay_period_end);
+-- --------------------------------------------------------
 
--- Full-text search indexes
-ALTER TABLE employees ADD FULLTEXT(first_name, last_name, email);
-ALTER TABLE departments ADD FULLTEXT(name, description);
-ALTER TABLE designations ADD FULLTEXT(title, responsibilities);
+--
+-- Table structure for table `designations`
+--
 
--- =============================================
--- TRIGGERS FOR AUDIT LOGGING
--- =============================================
+CREATE TABLE `designations` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `title` varchar(100) NOT NULL,
+  `department_id` varchar(36) DEFAULT NULL,
+  `min_salary` decimal(15,2) DEFAULT NULL,
+  `max_salary` decimal(15,2) DEFAULT NULL,
+  `responsibilities` text DEFAULT NULL,
+  `requirements` text DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-DELIMITER //
+-- --------------------------------------------------------
 
--- Trigger for employee updates
-CREATE TRIGGER tr_employees_audit_update
-AFTER UPDATE ON employees
-FOR EACH ROW
-BEGIN
+--
+-- Table structure for table `employees`
+--
+
+CREATE TABLE `employees` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `employee_code` varchar(50) NOT NULL,
+  `first_name` varchar(100) NOT NULL,
+  `last_name` varchar(100) DEFAULT NULL,
+  `email` varchar(255) NOT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `date_of_birth` date DEFAULT NULL,
+  `gender` enum('male','female','other') DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `city` varchar(100) DEFAULT NULL,
+  `state` varchar(100) DEFAULT NULL,
+  `zip_code` varchar(20) DEFAULT NULL,
+  `nationality` varchar(100) DEFAULT NULL,
+  `marital_status` enum('single','married','divorced','widowed') DEFAULT NULL,
+  `hire_date` date DEFAULT NULL,
+  `department_id` varchar(36) DEFAULT NULL,
+  `designation_id` varchar(36) DEFAULT NULL,
+  `manager_id` varchar(36) DEFAULT NULL,
+  `employee_type` enum('permanent','contract','intern','consultant') DEFAULT 'permanent',
+  `work_location` enum('office','remote','hybrid') DEFAULT 'office',
+  `employment_status` enum('active','inactive','terminated','resigned') DEFAULT 'active',
+  `base_salary` decimal(15,2) DEFAULT NULL,
+  `bank_account_number` varchar(50) DEFAULT NULL,
+  `bank_name` varchar(100) DEFAULT NULL,
+  `bank_branch` varchar(100) DEFAULT NULL,
+  `bank_routing_number` varchar(50) DEFAULT NULL,
+  `payment_method` enum('bank_transfer','cash','cheque') DEFAULT 'bank_transfer',
+  `currency` varchar(3) DEFAULT 'USD',
+  `profile_image` varchar(500) DEFAULT NULL,
+  `emergency_contact_name` varchar(100) DEFAULT NULL,
+  `emergency_contact_phone` varchar(20) DEFAULT NULL,
+  `emergency_contact_relation` varchar(50) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `in_time` time DEFAULT NULL COMMENT 'Employee specific work start time',
+  `out_time` time DEFAULT NULL COMMENT 'Employee specific work end time',
+  `follows_company_schedule` tinyint(1) DEFAULT 1 COMMENT 'Whether employee follows company default schedule',
+  `weekend_working_config` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'JSON object containing weekend working configuration for Saturday and Sunday' CHECK (json_valid(`weekend_working_config`)),
+  `attendance_affects_salary` tinyint(1) DEFAULT 1 COMMENT 'If TRUE (default), salary is calculated based on attendance. If FALSE, full salary is paid regardless of attendance.'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Triggers `employees`
+--
+DELIMITER $$
+CREATE TRIGGER `tr_employees_audit_update` AFTER UPDATE ON `employees` FOR EACH ROW BEGIN
     INSERT INTO audit_logs (client_id, entity_type, entity_id, action, old_values, new_values)
     VALUES (
         NEW.client_id,
@@ -520,540 +262,1354 @@ BEGIN
             'employment_status', NEW.employment_status
         )
     );
-END//
-
+END
+$$
 DELIMITER ;
 
--- =============================================
--- INITIAL DATA SEEDING
--- =============================================
+-- --------------------------------------------------------
 
--- Insert default permissions
-INSERT INTO permissions (module, action, name, description) VALUES
--- Dashboard
-('dashboard', 'view', 'View Dashboard', 'Access to main dashboard and overview'),
+--
+-- Table structure for table `employee_advances`
+--
 
--- Employee Management
-('employees', 'view', 'View Employees', 'View employee list and profiles'),
-('employees', 'create', 'Add Employees', 'Add new employees to the system'),
-('employees', 'edit', 'Edit Employees', 'Modify employee information'),
-('employees', 'delete', 'Delete Employees', 'Remove employees from system'),
+CREATE TABLE `employee_advances` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `advance_type` enum('salary','emergency','travel','medical','educational') DEFAULT 'salary',
+  `advance_amount` decimal(15,2) NOT NULL,
+  `description` varchar(255) NOT NULL,
+  `request_date` date NOT NULL DEFAULT curdate(),
+  `required_date` date DEFAULT NULL COMMENT 'When employee needs the money',
+  `deduction_start_date` date DEFAULT NULL COMMENT 'When to start salary deductions',
+  `deduction_months` int(11) DEFAULT 1 COMMENT 'Over how many months to deduct',
+  `monthly_deduction` decimal(15,2) DEFAULT NULL,
+  `total_deducted` decimal(15,2) DEFAULT 0.00,
+  `remaining_amount` decimal(15,2) DEFAULT NULL,
+  `status` enum('pending','approved','paid','completed','cancelled','rejected') DEFAULT 'pending',
+  `approved_by` varchar(36) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `paid_by` varchar(36) DEFAULT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `payment_method` enum('bank_transfer','cash','cheque') DEFAULT 'bank_transfer',
+  `payment_reference` varchar(100) DEFAULT NULL,
+  `justification` text DEFAULT NULL COMMENT 'Reason for advance request',
+  `attachments` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Supporting documents' CHECK (json_valid(`attachments`)),
+  `notes` text DEFAULT NULL,
+  `created_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Attendance Management
-('attendance', 'view', 'View Attendance', 'View attendance records and reports'),
-('attendance', 'edit', 'Edit Attendance', 'Modify attendance records'),
-('attendance', 'reports', 'Attendance Reports', 'Generate attendance reports'),
+-- --------------------------------------------------------
 
--- Leave Management
-('leaves', 'view', 'View Leaves', 'View leave records and requests'),
-('leaves', 'approve', 'Approve Leaves', 'Approve employee leave requests'),
-('leaves', 'reject', 'Reject Leaves', 'Reject employee leave requests'),
+--
+-- Table structure for table `employee_allowances`
+--
 
--- Payroll Management
-('payroll', 'view', 'View Payroll', 'View payroll information and reports'),
-('payroll', 'process', 'Process Payroll', 'Process monthly payroll'),
-('payroll', 'edit', 'Edit Payroll', 'Modify payroll records and salaries'),
-('payroll', 'reports', 'Payroll Reports', 'Generate payroll reports'),
+CREATE TABLE `employee_allowances` (
+  `id` varchar(36) NOT NULL,
+  `client_id` varchar(36) NOT NULL,
+  `employee_id` varchar(36) NOT NULL,
+  `allowance_type` varchar(50) NOT NULL,
+  `allowance_name` varchar(100) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `is_percentage` tinyint(1) DEFAULT 0,
+  `is_taxable` tinyint(1) DEFAULT 1,
+  `is_active` tinyint(1) DEFAULT 1,
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `created_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- System Settings
-('settings', 'view', 'View Settings', 'View system configuration'),
-('settings', 'edit', 'Edit Settings', 'Modify system settings'),
-('settings', 'admin', 'Admin Settings', 'Access admin-only configurations'),
+-- --------------------------------------------------------
 
--- RBAC Management
-('rbac', 'view', 'View Roles', 'View roles and permissions'),
-('rbac', 'create', 'Create Roles', 'Create new custom roles'),
-('rbac', 'edit', 'Edit Roles', 'Modify existing roles'),
-('rbac', 'delete', 'Delete Roles', 'Delete custom roles'),
-('rbac', 'assign', 'Assign Roles', 'Assign roles to users');
+--
+-- Table structure for table `employee_bonuses`
+--
 
--- Insert default client for testing
-INSERT INTO clients (id, name, description, contact_email) 
-VALUES 
-('demo-client-1', 'Demo Corporation', 'Demo company for testing', 'admin@demo.com'),
-('demo-client-2', 'TechStart Inc', 'Technology startup company', 'hr@techstart.com');
+CREATE TABLE `employee_bonuses` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `bonus_type` enum('performance','annual','quarterly','project','spot','retention','referral') DEFAULT 'performance',
+  `bonus_amount` decimal(15,2) NOT NULL,
+  `description` varchar(255) NOT NULL,
+  `bonus_period` varchar(50) DEFAULT NULL COMMENT 'E.g., Q1 2024, Annual 2024',
+  `calculation_basis` text DEFAULT NULL COMMENT 'How bonus was calculated',
+  `effective_date` date NOT NULL DEFAULT curdate(),
+  `payment_date` date DEFAULT NULL,
+  `status` enum('pending','approved','paid','cancelled','rejected') DEFAULT 'pending',
+  `approved_by` varchar(36) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `processed_by` varchar(36) DEFAULT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `payment_method` enum('salary_addition','separate_payment','next_payroll') DEFAULT 'next_payroll',
+  `payment_reference` varchar(100) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Create default system roles (these will be editable)
-INSERT INTO roles (id, client_id, name, description, access_level, is_system_role, is_editable) VALUES
-('employee-basic', NULL, 'Employee', 'Basic employee access - can view own data and apply for leave', 'basic', TRUE, TRUE),
-('manager', NULL, 'Manager', 'Department manager - can manage team, approve leaves, view reports', 'moderate', TRUE, TRUE),
-('hr-admin', NULL, 'HR Admin', 'Full HR access - can manage all employees, payroll, and system settings', 'full', TRUE, TRUE),
-('super-admin', NULL, 'Super Admin', 'System-wide access across all clients', 'full', TRUE, FALSE);
+-- --------------------------------------------------------
 
--- =============================================
--- VIEWS FOR COMMON QUERIES
--- =============================================
+--
+-- Table structure for table `employee_deductions`
+--
 
--- View for employee details with department and designation
-CREATE VIEW v_employee_details AS
-SELECT 
-    e.id,
-    e.client_id,
-    e.employee_code,
-    CONCAT(e.first_name, ' ', e.last_name) AS full_name,
-    e.email,
-    e.phone,
-    e.hire_date,
-    e.employee_type,
-    e.work_location,
-    e.employment_status,
-    e.base_salary,
-    d.name AS department_name,
-    des.title AS designation_title,
-    CONCAT(m.first_name, ' ', m.last_name) AS manager_name,
-    e.created_at,
-    e.updated_at
-FROM employees e
-LEFT JOIN departments d ON e.department_id = d.id
-LEFT JOIN designations des ON e.designation_id = des.id
-LEFT JOIN employees m ON e.manager_id = m.id;
+CREATE TABLE `employee_deductions` (
+  `id` varchar(36) NOT NULL,
+  `client_id` varchar(36) NOT NULL,
+  `employee_id` varchar(36) NOT NULL,
+  `deduction_type` varchar(50) NOT NULL,
+  `deduction_name` varchar(100) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `is_percentage` tinyint(1) DEFAULT 0,
+  `is_recurring` tinyint(1) DEFAULT 1,
+  `remaining_installments` int(11) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `created_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- View for current month attendance summary
-CREATE VIEW v_attendance_summary AS
-SELECT 
-    e.id AS employee_id,
-    e.client_id,
-    CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
-    COUNT(a.id) AS total_days,
-    SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) AS present_days,
-    SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) AS absent_days,
-    SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) AS late_days,
-    SUM(a.total_hours) AS total_hours,
-    SUM(a.overtime_hours) AS total_overtime_hours
-FROM employees e
-LEFT JOIN attendance a ON e.id = a.employee_id 
-    AND a.date >= DATE_FORMAT(NOW(), '%Y-%m-01')
-    AND a.date < DATE_FORMAT(DATE_ADD(NOW(), INTERVAL 1 MONTH), '%Y-%m-01')
-WHERE e.employment_status = 'active'
-GROUP BY e.id, e.client_id;
+-- --------------------------------------------------------
 
--- =============================================
--- STORED PROCEDURES
--- =============================================
+--
+-- Table structure for table `employee_documents`
+--
 
-DELIMITER //
+CREATE TABLE `employee_documents` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `client_id` varchar(36) NOT NULL,
+  `document_type` enum('national_id','passport','other','resume','education','experience') NOT NULL,
+  `original_filename` varchar(255) NOT NULL,
+  `stored_filename` varchar(255) NOT NULL,
+  `file_path` varchar(500) NOT NULL,
+  `file_size` int(11) NOT NULL,
+  `mime_type` varchar(100) NOT NULL,
+  `uploaded_by` varchar(36) NOT NULL,
+  `uploaded_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `is_active` tinyint(1) DEFAULT 1,
+  `notes` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Procedure to get user permissions
-CREATE PROCEDURE GetUserPermissions(IN user_id VARCHAR(36))
-BEGIN
-    SELECT DISTINCT 
-        p.module,
-        p.action,
-        p.name,
-        p.description
-    FROM admin_users au
-    JOIN roles r ON au.role_id = r.id
-    JOIN role_permissions rp ON r.id = rp.role_id
-    JOIN permissions p ON rp.permission_id = p.id
-    WHERE au.id = user_id 
-    AND au.is_active = TRUE 
-    AND r.is_active = TRUE 
-    AND p.is_active = TRUE;
-END//
+-- --------------------------------------------------------
 
--- Procedure to calculate monthly payroll
-CREATE PROCEDURE CalculateMonthlyPayroll(
-    IN emp_id VARCHAR(36),
-    IN pay_start DATE,
-    IN pay_end DATE
-)
-BEGIN
-    DECLARE base_sal DECIMAL(15,2);
-    DECLARE total_hrs DECIMAL(8,2);
-    DECLARE overtime_hrs DECIMAL(8,2);
-    DECLARE working_days INT;
-    DECLARE actual_days INT;
-    
-    -- Get employee base salary
-    SELECT base_salary INTO base_sal FROM employees WHERE id = emp_id;
-    
-    -- Calculate working days in period (excluding weekends)
-    SELECT COUNT(*) INTO working_days
-    FROM (
-        SELECT ADDDATE(pay_start, t4.i*1000 + t3.i*100 + t2.i*10 + t1.i) AS date
-        FROM (SELECT 0 i UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) t1,
-             (SELECT 0 i UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) t2,
-             (SELECT 0 i UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) t3,
-             (SELECT 0 i UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) t4
-    ) v
-    WHERE date BETWEEN pay_start AND pay_end
-    AND WEEKDAY(date) < 5; -- Monday=0, Friday=4
-    
-    -- Get actual attendance data
-    SELECT 
-        COALESCE(SUM(total_hours), 0),
-        COALESCE(SUM(overtime_hours), 0),
-        COUNT(*)
-    INTO total_hrs, overtime_hrs, actual_days
-    FROM attendance 
-    WHERE employee_id = emp_id 
-    AND date BETWEEN pay_start AND pay_end
-    AND status IN ('present', 'late');
-    
-    SELECT 
-        base_sal,
-        working_days,
-        actual_days,
-        total_hrs,
-        overtime_hrs,
-        (base_sal / working_days) * actual_days AS prorated_salary,
-        overtime_hrs * (base_sal / working_days / 8) * 1.5 AS overtime_amount;
+--
+-- Table structure for table `employee_loans`
+--
+
+CREATE TABLE `employee_loans` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `loan_type` enum('personal','advance','emergency','housing','education') DEFAULT 'personal',
+  `loan_amount` decimal(15,2) NOT NULL,
+  `interest_rate` decimal(5,2) DEFAULT 0.00,
+  `tenure_months` int(11) NOT NULL,
+  `monthly_deduction` decimal(15,2) NOT NULL,
+  `total_paid` decimal(15,2) DEFAULT 0.00,
+  `remaining_amount` decimal(15,2) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date DEFAULT NULL,
+  `status` enum('active','completed','defaulted','cancelled') DEFAULT 'active',
+  `approved_by` varchar(36) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Stand-in structure for view `employee_monthly_allowances`
+-- (See below for the actual view)
+--
+CREATE TABLE `employee_monthly_allowances` (
+`client_id` varchar(36)
+,`employee_id` varchar(36)
+,`employee_code` varchar(50)
+,`employee_name` varchar(201)
+,`total_allowances` decimal(56,8)
+,`allowance_count` bigint(21)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Stand-in structure for view `employee_monthly_deductions`
+-- (See below for the actual view)
+--
+CREATE TABLE `employee_monthly_deductions` (
+`client_id` varchar(36)
+,`employee_id` varchar(36)
+,`employee_code` varchar(50)
+,`employee_name` varchar(201)
+,`total_deductions` decimal(56,8)
+,`deduction_count` bigint(21)
+);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `employee_payroll_components`
+--
+
+CREATE TABLE `employee_payroll_components` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `component_id` varchar(36) NOT NULL,
+  `custom_value` decimal(15,2) DEFAULT NULL COMMENT 'Override component default value',
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `holidays`
+--
+
+CREATE TABLE `holidays` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `date` date NOT NULL,
+  `description` text DEFAULT NULL,
+  `is_optional` tinyint(1) DEFAULT 0,
+  `applies_to_all` tinyint(1) DEFAULT 1,
+  `department_ids` longtext DEFAULT NULL CHECK (json_valid(`department_ids`)),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leave_requests`
+--
+
+CREATE TABLE `leave_requests` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `leave_type_id` varchar(36) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `start_time` time DEFAULT NULL,
+  `end_time` time DEFAULT NULL,
+  `days_requested` decimal(4,2) NOT NULL,
+  `is_paid` tinyint(1) DEFAULT 1 COMMENT 'Whether this specific leave request is paid',
+  `leave_duration` enum('full_day','half_day','short_leave') DEFAULT 'full_day',
+  `reason` text NOT NULL,
+  `status` enum('pending','approved','rejected','cancelled') DEFAULT 'pending',
+  `applied_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `reviewed_by` varchar(36) DEFAULT NULL,
+  `reviewer_comments` text DEFAULT NULL,
+  `supporting_documents` longtext DEFAULT NULL CHECK (json_valid(`supporting_documents`)),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `balance_deducted` tinyint(1) DEFAULT 0,
+  `balance_transaction_id` varchar(36) DEFAULT NULL,
+  `balance_validation_status` enum('pending','validated','insufficient') DEFAULT 'pending'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leave_types`
+--
+
+CREATE TABLE `leave_types` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `max_days_per_year` int(11) DEFAULT 0,
+  `max_consecutive_days` int(11) DEFAULT 0,
+  `is_paid` tinyint(1) DEFAULT 1,
+  `requires_approval` tinyint(1) DEFAULT 1,
+  `approval_hierarchy` longtext DEFAULT NULL CHECK (json_valid(`approval_hierarchy`)),
+  `notice_period_days` int(11) DEFAULT 0,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payroll_adjustments`
+--
+
+CREATE TABLE `payroll_adjustments` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `payroll_record_id` varchar(36) DEFAULT NULL,
+  `employee_id` varchar(36) NOT NULL,
+  `adjustment_type` enum('addition','deduction') NOT NULL,
+  `adjustment_reason` varchar(255) NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `applicable_month` date NOT NULL,
+  `is_processed` tinyint(1) DEFAULT 0,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `approved_by` varchar(36) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payroll_audit_log`
+--
+
+CREATE TABLE `payroll_audit_log` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `run_id` varchar(36) NOT NULL,
+  `action` varchar(50) NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `new_value` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payroll_components`
+--
+
+CREATE TABLE `payroll_components` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `component_name` varchar(100) NOT NULL,
+  `component_type` enum('earning','deduction') NOT NULL,
+  `category` enum('basic','allowance','bonus','tax','insurance','loan','other','financial','attendance','statutory') NOT NULL,
+  `calculation_type` enum('fixed','percentage','formula') DEFAULT 'fixed',
+  `calculation_value` decimal(15,2) DEFAULT NULL,
+  `calculation_formula` text DEFAULT NULL,
+  `is_taxable` tinyint(1) DEFAULT 1,
+  `is_mandatory` tinyint(1) DEFAULT 0,
+  `applies_to` enum('all','department','designation','individual') DEFAULT 'all',
+  `applies_to_ids` longtext DEFAULT NULL CHECK (json_valid(`applies_to_ids`)),
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payroll_periods`
+--
+
+CREATE TABLE `payroll_periods` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `period_number` int(11) NOT NULL,
+  `period_year` year(4) NOT NULL,
+  `period_type` enum('weekly','bi-weekly','monthly','quarterly') DEFAULT 'monthly',
+  `period_start_date` date NOT NULL,
+  `period_end_date` date NOT NULL,
+  `cut_off_date` date NOT NULL,
+  `pay_date` date NOT NULL,
+  `status` enum('active','closed','archived') DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payroll_records`
+--
+
+CREATE TABLE `payroll_records` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `run_id` varchar(36) NOT NULL,
+  `employee_id` varchar(36) NOT NULL,
+  `employee_code` varchar(50) NOT NULL,
+  `employee_name` varchar(200) NOT NULL,
+  `department_name` varchar(100) DEFAULT NULL,
+  `designation_name` varchar(100) DEFAULT NULL,
+  `calculation_status` enum('pending','calculating','calculated','error','excluded') DEFAULT 'pending',
+  `calculation_errors` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`calculation_errors`)),
+  `worked_days` decimal(5,2) DEFAULT 0.00,
+  `worked_hours` decimal(8,2) DEFAULT 0.00,
+  `overtime_hours` decimal(8,2) DEFAULT 0.00,
+  `leave_days` decimal(5,2) DEFAULT 0.00,
+  `total_earnings` decimal(12,2) DEFAULT 0.00,
+  `total_deductions` decimal(12,2) DEFAULT 0.00,
+  `total_taxes` decimal(12,2) DEFAULT 0.00,
+  `total_benefits` decimal(12,2) DEFAULT 0.00,
+  `gross_salary` decimal(12,2) DEFAULT 0.00,
+  `taxable_income` decimal(12,2) DEFAULT 0.00,
+  `net_salary` decimal(12,2) DEFAULT 0.00,
+  `payment_status` enum('pending','paid','failed','cancelled') DEFAULT 'pending',
+  `payment_method` enum('bank_transfer','cash','cheque') DEFAULT 'bank_transfer',
+  `payment_date` date DEFAULT NULL,
+  `payment_reference` varchar(100) DEFAULT NULL,
+  `approved_by` varchar(36) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `calculated_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `notes` text DEFAULT NULL,
+  `weekday_working_days` decimal(10,2) DEFAULT NULL COMMENT 'Pre-calculated weekday (Mon-Fri) working days excluding holidays',
+  `working_saturdays` decimal(10,2) DEFAULT NULL COMMENT 'Pre-calculated Saturday working days for this employee',
+  `working_sundays` decimal(10,2) DEFAULT NULL COMMENT 'Pre-calculated Sunday working days for this employee',
+  `weekday_daily_hours` decimal(5,2) DEFAULT NULL COMMENT 'Pre-calculated daily hours for weekdays (Mon-Fri)',
+  `saturday_daily_hours` decimal(5,2) DEFAULT NULL COMMENT 'Pre-calculated daily hours for Saturday',
+  `sunday_daily_hours` decimal(5,2) DEFAULT NULL COMMENT 'Pre-calculated daily hours for Sunday',
+  `daily_salary` decimal(10,2) DEFAULT NULL COMMENT 'Pre-calculated daily salary (base_salary / total_working_days)',
+  `weekday_hourly_rate` decimal(10,2) DEFAULT NULL COMMENT 'Pre-calculated hourly rate for weekdays',
+  `saturday_hourly_rate` decimal(10,2) DEFAULT NULL COMMENT 'Pre-calculated hourly rate for Saturday',
+  `sunday_hourly_rate` decimal(10,2) DEFAULT NULL COMMENT 'Pre-calculated hourly rate for Sunday',
+  `base_salary` decimal(12,2) DEFAULT NULL COMMENT 'Employee base salary at the time of payroll run creation',
+  `attendance_affects_salary` tinyint(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payroll_records_old_backup`
+--
+
+CREATE TABLE `payroll_records_old_backup` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `employee_id` varchar(36) NOT NULL,
+  `pay_period_start` date NOT NULL,
+  `pay_period_end` date NOT NULL,
+  `base_salary` decimal(15,2) NOT NULL,
+  `allowances` decimal(15,2) DEFAULT 0.00,
+  `overtime_amount` decimal(15,2) DEFAULT 0.00,
+  `bonus` decimal(15,2) DEFAULT 0.00,
+  `commission` decimal(15,2) DEFAULT 0.00,
+  `gross_salary` decimal(15,2) NOT NULL,
+  `tax_deduction` decimal(15,2) DEFAULT 0.00,
+  `provident_fund` decimal(15,2) DEFAULT 0.00,
+  `insurance` decimal(15,2) DEFAULT 0.00,
+  `loan_deduction` decimal(15,2) DEFAULT 0.00,
+  `other_deductions` decimal(15,2) DEFAULT 0.00,
+  `total_deductions` decimal(15,2) DEFAULT 0.00,
+  `net_salary` decimal(15,2) NOT NULL,
+  `payment_status` enum('pending','processing','paid','failed') DEFAULT 'pending',
+  `payment_method` enum('bank_transfer','cash','cheque') DEFAULT 'bank_transfer',
+  `payment_date` date DEFAULT NULL,
+  `payment_reference` varchar(100) DEFAULT NULL,
+  `processed_by` varchar(36) DEFAULT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Triggers `payroll_records_old_backup`
+--
+DELIMITER $$
+CREATE TRIGGER `trg_payroll_after_update` AFTER UPDATE ON `payroll_records_old_backup` FOR EACH ROW BEGIN
+  -- If payment status changed to 'paid', update loan balances
+  IF OLD.payment_status != 'paid' AND NEW.payment_status = 'paid' THEN
+    UPDATE employee_loans 
+    SET 
+      total_paid = total_paid + NEW.loan_deduction,
+      remaining_amount = remaining_amount - NEW.loan_deduction,
+      status = CASE 
+        WHEN remaining_amount - NEW.loan_deduction <= 0 THEN 'completed'
+        ELSE status 
+      END
+    WHERE employee_id = NEW.employee_id 
+      AND status = 'active';
+  END IF;
+END
+$$
+DELIMITER ;
+DELIMITER $$
+CREATE TRIGGER `trg_payroll_before_insert` BEFORE INSERT ON `payroll_records_old_backup` FOR EACH ROW BEGIN
+  -- Ensure net salary is not negative
+  IF NEW.net_salary < 0 THEN
+    SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Net salary cannot be negative';
+  END IF;
+  
+  -- Ensure dates are valid
+  IF NEW.pay_period_end <= NEW.pay_period_start THEN
+    SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Pay period end date must be after start date';
+  END IF;
+END
+$$
+DELIMITER ;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payroll_record_components`
+--
+
+CREATE TABLE `payroll_record_components` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `record_id` varchar(36) NOT NULL,
+  `component_id` varchar(36) DEFAULT NULL,
+  `component_code` varchar(30) NOT NULL,
+  `component_name` varchar(100) NOT NULL,
+  `component_type` enum('earning','deduction','tax','benefit') NOT NULL,
+  `component_category` varchar(50) NOT NULL,
+  `calculation_method` varchar(20) NOT NULL,
+  `base_amount` decimal(12,2) DEFAULT 0.00,
+  `rate` decimal(10,4) DEFAULT 0.0000,
+  `quantity` decimal(10,2) DEFAULT 1.00,
+  `calculated_amount` decimal(12,2) NOT NULL,
+  `is_overridden` tinyint(1) DEFAULT 0,
+  `original_amount` decimal(12,2) DEFAULT NULL,
+  `override_reason` varchar(255) DEFAULT NULL,
+  `overridden_by` varchar(36) DEFAULT NULL,
+  `overridden_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Triggers `payroll_record_components`
+--
+DELIMITER $$
+CREATE TRIGGER `update_deduction_installments` AFTER INSERT ON `payroll_record_components` FOR EACH ROW BEGIN
+    -- Decrease remaining installments for loan deductions
+    IF NEW.component_type = 'deduction' AND NEW.component_code LIKE '%LOAN%' THEN
+        UPDATE employee_deductions 
+        SET remaining_installments = remaining_installments - 1
+        WHERE employee_id = (
+            SELECT pr.employee_id 
+            FROM payroll_records pr 
+            WHERE pr.id = NEW.record_id
+        )
+        AND deduction_type = 'loan_deduction'
+        AND remaining_installments > 0;
         
-END//
-
+        -- Deactivate deduction if installments are complete
+        UPDATE employee_deductions 
+        SET is_active = FALSE
+        WHERE employee_id = (
+            SELECT pr.employee_id 
+            FROM payroll_records pr 
+            WHERE pr.id = NEW.record_id
+        )
+        AND deduction_type = 'loan_deduction'
+        AND remaining_installments <= 0;
+    END IF;
+END
+$$
 DELIMITER ;
 
--- =============================================
--- SECURITY & OPTIMIZATION
--- =============================================
+-- --------------------------------------------------------
 
--- Create database user for application (run this separately with appropriate privileges)
--- CREATE USER 'hrms_app'@'localhost' IDENTIFIED BY 'secure_password_here';
--- GRANT SELECT, INSERT, UPDATE, DELETE ON hrms_system.* TO 'hrms_app'@'localhost';
--- FLUSH PRIVILEGES;
+--
+-- Table structure for table `payroll_runs`
+--
 
--- =============================================
--- SCHEMA VALIDATION & CONSTRAINTS
--- =============================================
+CREATE TABLE `payroll_runs` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `run_number` varchar(50) NOT NULL,
+  `period_id` varchar(36) NOT NULL,
+  `run_name` varchar(100) NOT NULL,
+  `run_type` enum('regular','bonus','correction','off-cycle') DEFAULT 'regular',
+  `run_status` enum('draft','calculating','calculated','review','approved','processing','completed','cancelled') DEFAULT 'draft',
+  `total_employees` int(11) DEFAULT 0,
+  `processed_employees` int(11) DEFAULT 0,
+  `total_gross_amount` decimal(15,2) DEFAULT 0.00,
+  `total_deductions_amount` decimal(15,2) DEFAULT 0.00,
+  `total_net_amount` decimal(15,2) DEFAULT 0.00,
+  `calculation_started_at` timestamp NULL DEFAULT NULL,
+  `calculation_completed_at` timestamp NULL DEFAULT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `reviewed_by` varchar(36) DEFAULT NULL,
+  `approved_by` varchar(36) DEFAULT NULL,
+  `processed_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `calculation_method` enum('simple','advanced') DEFAULT 'advanced',
+  `notes` text DEFAULT NULL,
+  `processing_errors` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`processing_errors`))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Add check constraints for data validation
-ALTER TABLE employees 
-ADD CONSTRAINT chk_employees_salary CHECK (base_salary >= 0),
-ADD CONSTRAINT chk_employees_hire_date CHECK (hire_date <= CURDATE());
+-- --------------------------------------------------------
 
-ALTER TABLE attendance 
-ADD CONSTRAINT chk_attendance_hours CHECK (total_hours >= 0 AND total_hours <= 24),
-ADD CONSTRAINT chk_attendance_overtime CHECK (overtime_hours >= 0);
+--
+-- Table structure for table `payroll_schedules`
+--
 
-ALTER TABLE payroll_records 
-ADD CONSTRAINT chk_payroll_gross_salary CHECK (gross_salary >= 0),
-ADD CONSTRAINT chk_payroll_net_salary CHECK (net_salary >= 0),
-ADD CONSTRAINT chk_payroll_period CHECK (pay_period_end >= pay_period_start);
+CREATE TABLE `payroll_schedules` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `schedule_name` varchar(100) NOT NULL,
+  `frequency` enum('weekly','bi-weekly','monthly','quarterly') DEFAULT 'monthly',
+  `day_of_month` int(11) DEFAULT NULL COMMENT 'Day of month for monthly frequency',
+  `day_of_week` int(11) DEFAULT NULL COMMENT 'Day of week for weekly frequency (0-6)',
+  `processing_time` time DEFAULT '09:00:00',
+  `default_values` longtext DEFAULT NULL CHECK (json_valid(`default_values`)),
+  `is_active` tinyint(1) DEFAULT 1,
+  `last_processed_date` date DEFAULT NULL,
+  `last_result` longtext DEFAULT NULL CHECK (json_valid(`last_result`)),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-ALTER TABLE leave_requests 
-ADD CONSTRAINT chk_leave_dates CHECK (end_date >= start_date),
-ADD CONSTRAINT chk_leave_days CHECK (days_requested > 0);
+-- --------------------------------------------------------
 
--- =============================================
--- PERFORMANCE OPTIMIZATION QUERIES
--- =============================================
+--
+-- Table structure for table `payroll_tax_slabs`
+--
 
--- Query to analyze table sizes and optimize
--- Run these periodically for maintenance
-/*
-SELECT 
-    table_name,
-    table_rows,
-    ROUND(((data_length + index_length) / 1024 / 1024), 2) AS "DB Size in MB"
-FROM information_schema.tables 
-WHERE table_schema = 'hrms_system'
-ORDER BY (data_length + index_length) DESC;
-*/
+CREATE TABLE `payroll_tax_slabs` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) NOT NULL,
+  `slab_name` varchar(100) NOT NULL,
+  `min_amount` decimal(15,2) NOT NULL,
+  `max_amount` decimal(15,2) DEFAULT NULL,
+  `tax_rate` decimal(5,4) NOT NULL COMMENT 'Tax rate as decimal (e.g., 0.15 for 15%)',
+  `fixed_amount` decimal(15,2) DEFAULT 0.00 COMMENT 'Fixed tax amount for this slab',
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- =============================================
--- BACKUP AND MAINTENANCE PROCEDURES
--- =============================================
+-- --------------------------------------------------------
 
-DELIMITER //
+--
+-- Table structure for table `permissions`
+--
 
--- Procedure for database cleanup (remove old sessions, logs)
-CREATE PROCEDURE CleanupOldData()
-BEGIN
-    -- Remove expired sessions
-    DELETE FROM user_sessions 
-    WHERE expires_at < NOW() OR is_active = FALSE;
-    
-    -- Archive old audit logs (older than 1 year)
-    DELETE FROM audit_logs 
-    WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 YEAR);
-    
-    -- Remove old attendance records (older than 3 years)
-    DELETE FROM attendance 
-    WHERE date < DATE_SUB(CURDATE(), INTERVAL 3 YEAR);
-    
-    -- Optimize tables
-    OPTIMIZE TABLE admin_users, employees, attendance, payroll_records;
-    
-    SELECT 'Database cleanup completed' AS status;
-END//
+CREATE TABLE `permissions` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `module` varchar(50) NOT NULL,
+  `action` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Procedure for generating client statistics
-CREATE PROCEDURE GetClientStatistics(IN client_uuid VARCHAR(36))
-BEGIN
-    SELECT 
-        c.name AS client_name,
-        COUNT(DISTINCT e.id) AS total_employees,
-        COUNT(DISTINCT d.id) AS total_departments,
-        COUNT(DISTINCT des.id) AS total_designations,
-        COUNT(DISTINCT au.id) AS total_admin_users,
-        COUNT(DISTINCT r.id) AS total_custom_roles,
-        (SELECT COUNT(*) FROM attendance a 
-         JOIN employees emp ON a.employee_id = emp.id 
-         WHERE emp.client_id = client_uuid 
-         AND a.date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS attendance_records_last_30_days,
-        (SELECT COUNT(*) FROM leave_requests lr 
-         JOIN employees emp ON lr.employee_id = emp.id 
-         WHERE emp.client_id = client_uuid 
-         AND lr.status = 'pending') AS pending_leave_requests
-    FROM clients c
-    LEFT JOIN employees e ON c.id = e.client_id AND e.employment_status = 'active'
-    LEFT JOIN departments d ON c.id = d.client_id AND d.is_active = TRUE
-    LEFT JOIN designations des ON c.id = des.client_id AND des.is_active = TRUE
-    LEFT JOIN admin_users au ON c.id = au.client_id AND au.is_active = TRUE
-    LEFT JOIN roles r ON c.id = r.client_id AND r.is_system_role = FALSE
-    WHERE c.id = client_uuid
-    GROUP BY c.id, c.name;
-END//
+-- --------------------------------------------------------
 
-DELIMITER ;
+--
+-- Table structure for table `roles`
+--
 
--- =============================================
--- DATA MIGRATION SCRIPTS
--- =============================================
+CREATE TABLE `roles` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `access_level` enum('basic','moderate','full') DEFAULT 'basic',
+  `is_system_role` tinyint(1) DEFAULT 0,
+  `is_editable` tinyint(1) DEFAULT 1,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Script to migrate from old system (if needed)
-/*
--- Example migration from old employee table
-INSERT INTO employees (
-    client_id, employee_code, first_name, last_name, email, 
-    hire_date, department_id, base_salary, employment_status
-)
-SELECT 
-    'default-client-id',
-    old_emp_code,
-    old_first_name,
-    old_last_name,
-    old_email,
-    old_join_date,
-    (SELECT id FROM departments WHERE name = old_department_name LIMIT 1),
-    old_salary,
-    CASE 
-        WHEN old_status = 'A' THEN 'active'
-        WHEN old_status = 'I' THEN 'inactive'
-        ELSE 'terminated'
-    END
-FROM old_employee_table
-WHERE migration_status IS NULL;
-*/
+-- --------------------------------------------------------
 
--- =============================================
--- API HELPER VIEWS
--- =============================================
+--
+-- Table structure for table `role_permissions`
+--
 
--- View for dashboard statistics per client
-CREATE VIEW v_dashboard_stats AS
-SELECT 
-    c.id AS client_id,
-    c.name AS client_name,
-    COUNT(DISTINCT e.id) AS total_employees,
-    COUNT(DISTINCT CASE WHEN e.employment_status = 'active' THEN e.id END) AS active_employees,
-    COUNT(DISTINCT d.id) AS total_departments,
-    COUNT(DISTINCT au.id) AS total_admin_users,
-    
-    -- Today's attendance
-    COUNT(DISTINCT CASE 
-        WHEN a.date = CURDATE() AND a.status = 'present' 
-        THEN a.employee_id 
-    END) AS present_today,
-    
-    COUNT(DISTINCT CASE 
-        WHEN a.date = CURDATE() AND a.status = 'absent' 
-        THEN a.employee_id 
-    END) AS absent_today,
-    
-    COUNT(DISTINCT CASE 
-        WHEN a.date = CURDATE() AND a.status = 'late' 
-        THEN a.employee_id 
-    END) AS late_today,
-    
-    -- Leave requests
-    COUNT(DISTINCT CASE 
-        WHEN lr.status = 'pending' 
-        THEN lr.id 
-    END) AS pending_leave_requests,
-    
-    -- This month's payroll
-    COUNT(DISTINCT CASE 
-        WHEN pr.pay_period_start >= DATE_FORMAT(NOW(), '%Y-%m-01')
-        AND pr.payment_status = 'pending'
-        THEN pr.id 
-    END) AS pending_payroll_records
-    
-FROM clients c
-LEFT JOIN employees e ON c.id = e.client_id
-LEFT JOIN departments d ON c.id = d.client_id AND d.is_active = TRUE
-LEFT JOIN admin_users au ON c.id = au.client_id AND au.is_active = TRUE
-LEFT JOIN attendance a ON e.id = a.employee_id
-LEFT JOIN leave_requests lr ON e.id = lr.employee_id
-LEFT JOIN payroll_records pr ON e.id = pr.employee_id
-WHERE c.is_active = TRUE
-GROUP BY c.id, c.name;
+CREATE TABLE `role_permissions` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `role_id` varchar(36) NOT NULL,
+  `permission_id` varchar(36) NOT NULL,
+  `granted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `granted_by` varchar(36) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- View for employee directory with search capabilities
-CREATE VIEW v_employee_directory AS
-SELECT 
-    e.id,
-    e.client_id,
-    e.employee_code,
-    e.first_name,
-    e.last_name,
-    CONCAT(e.first_name, ' ', e.last_name) AS full_name,
-    e.email,
-    e.phone,
-    e.hire_date,
-    e.employee_type,
-    e.work_location,
-    e.employment_status,
-    d.name AS department,
-    des.title AS designation,
-    CONCAT(m.first_name, ' ', m.last_name) AS manager,
-    e.profile_image,
-    
-    -- Calculate years of service
-    TIMESTAMPDIFF(YEAR, e.hire_date, CURDATE()) AS years_of_service,
-    
-    -- Last attendance status
-    (SELECT a.status 
-     FROM attendance a 
-     WHERE a.employee_id = e.id 
-     ORDER BY a.date DESC 
-     LIMIT 1) AS last_attendance_status,
-     
-    -- Current leave status
-    CASE 
-        WHEN EXISTS (
-            SELECT 1 FROM leave_requests lr 
-            WHERE lr.employee_id = e.id 
-            AND CURDATE() BETWEEN lr.start_date AND lr.end_date
-            AND lr.status = 'approved'
-        ) THEN 'On Leave'
-        ELSE 'Available'
-    END AS current_status
-    
-FROM employees e
-LEFT JOIN departments d ON e.department_id = d.id
-LEFT JOIN designations des ON e.designation_id = des.id
-LEFT JOIN employees m ON e.manager_id = m.id
-WHERE e.employment_status = 'active';
+-- --------------------------------------------------------
 
--- =============================================
--- SAMPLE DATA FOR TESTING
--- =============================================
+--
+-- Table structure for table `system_settings`
+--
 
--- Insert sample departments for demo client
-INSERT INTO departments (client_id, name, description) VALUES
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Human Resources', 'Manages employee relations and policies'),
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Engineering', 'Software development and technical operations'),
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Marketing', 'Brand promotion and customer acquisition'),
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Sales', 'Revenue generation and client relations'),
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Finance', 'Financial planning and accounting');
+CREATE TABLE `system_settings` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `client_id` varchar(36) DEFAULT NULL,
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` longtext NOT NULL CHECK (json_valid(`setting_value`)),
+  `setting_type` enum('string','number','boolean','object','array') DEFAULT 'string',
+  `description` text DEFAULT NULL,
+  `is_public` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Insert sample designations
-INSERT INTO designations (client_id, title, department_id, min_salary, max_salary) VALUES
--- HR Department
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'HR Manager', 
- (SELECT id FROM departments WHERE name = 'Human Resources' AND client_id = (SELECT id FROM clients WHERE name = 'Demo Corporation')), 
- 80000, 120000),
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'HR Executive', 
- (SELECT id FROM departments WHERE name = 'Human Resources' AND client_id = (SELECT id FROM clients WHERE name = 'Demo Corporation')), 
- 50000, 70000),
+-- --------------------------------------------------------
 
--- Engineering Department  
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Senior Software Engineer', 
- (SELECT id FROM departments WHERE name = 'Engineering' AND client_id = (SELECT id FROM clients WHERE name = 'Demo Corporation')), 
- 90000, 140000),
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Software Engineer', 
- (SELECT id FROM departments WHERE name = 'Engineering' AND client_id = (SELECT id FROM clients WHERE name = 'Demo Corporation')), 
- 60000, 90000),
-((SELECT id FROM clients WHERE name = 'Demo Corporation'), 'Junior Developer', 
- (SELECT id FROM departments WHERE name = 'Engineering' AND client_id = (SELECT id FROM clients WHERE name = 'Demo Corporation')), 
- 40000, 60000);
+--
+-- Table structure for table `users`
+--
 
--- =============================================
--- FINAL OPTIMIZATION & SECURITY
--- =============================================
+CREATE TABLE `users` (
+  `id` int(11) NOT NULL,
+  `user_level` int(11) NOT NULL,
+  `username` varchar(10) NOT NULL,
+  `email` tinytext NOT NULL,
+  `password` varchar(64) NOT NULL,
+  `password_salt` varchar(20) NOT NULL,
+  `name` varchar(30) NOT NULL,
+  `created` datetime NOT NULL,
+  `attempt` varchar(15) NOT NULL DEFAULT '0',
+  `api_key` text NOT NULL,
+  `api_secret` text NOT NULL,
+  `language` text NOT NULL,
+  `mobile_or_reg_id` text NOT NULL,
+  `zoom_first_name` text NOT NULL,
+  `online_payment` text NOT NULL,
+  `video_records` text NOT NULL,
+  `placeholder_to_input` text NOT NULL,
+  `send_pin_code_automatically` text NOT NULL,
+  `video_count` text NOT NULL,
+  `zoom_recording_in_url` text NOT NULL,
+  `student_error_msg` text NOT NULL,
+  `white_label_name` text NOT NULL,
+  `white_label_url` text NOT NULL,
+  `text_it_username` text NOT NULL,
+  `no_more` text NOT NULL,
+  `profile_picture` text NOT NULL,
+  `art` varchar(255) DEFAULT NULL,
+  `attendance_allowed` varchar(225) NOT NULL,
+  `fixed_salary` varchar(225) NOT NULL,
+  `salary_allowes` varchar(225) NOT NULL,
+  `company_join_month_and_year` varchar(225) NOT NULL,
+  `theme_color` varchar(225) NOT NULL DEFAULT '',
+  `art_work_com_not_allowed` varchar(225) NOT NULL DEFAULT '',
+  `system_create_allowed` varchar(225) NOT NULL,
+  `if_artwork_correction_allow` varchar(225) NOT NULL,
+  `card_list_reminder_maintain` varchar(225) NOT NULL,
+  `card_list_invoice_maintain` varchar(225) NOT NULL,
+  `new_user_level` varchar(225) NOT NULL,
+  `work_start_time` varchar(255) NOT NULL,
+  `rfid_no` varchar(225) NOT NULL,
+  `if_user_can_login` varchar(225) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
 
--- Create indexes for JSON columns (MySQL 5.7+)
--- ALTER TABLE system_settings ADD INDEX idx_settings_value ((CAST(setting_value->>'$.type' AS CHAR(50))));
+-- --------------------------------------------------------
 
--- Enable general query log for debugging (disable in production)
--- SET GLOBAL general_log = 'ON';
--- SET GLOBAL general_log_file = '/var/log/mysql/hrms-query.log';
+--
+-- Table structure for table `user_sessions`
+--
 
--- Performance monitoring queries
-/*
--- Check slow queries
-SELECT * FROM mysql.slow_log WHERE start_time > DATE_SUB(NOW(), INTERVAL 1 DAY);
+CREATE TABLE `user_sessions` (
+  `id` varchar(36) NOT NULL DEFAULT uuid(),
+  `admin_user_id` varchar(36) NOT NULL,
+  `client_id` varchar(36) DEFAULT NULL,
+  `token_jti` varchar(100) NOT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` text DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Check table locks
-SHOW OPEN TABLES WHERE In_use > 0;
+-- --------------------------------------------------------
 
--- Check connection status
-SHOW STATUS LIKE 'Connections';
-SHOW STATUS LIKE 'Threads_connected';
-*/
+--
+-- Stand-in structure for view `v_attendance_summary`
+-- (See below for the actual view)
+--
+CREATE TABLE `v_attendance_summary` (
+`employee_id` varchar(36)
+,`client_id` varchar(36)
+,`employee_name` varchar(201)
+,`total_days` bigint(21)
+,`present_days` decimal(22,0)
+,`absent_days` decimal(22,0)
+,`late_days` decimal(22,0)
+,`total_hours` decimal(26,2)
+,`total_overtime_hours` decimal(26,2)
+);
 
--- =============================================
--- SCHEMA DOCUMENTATION
--- =============================================
+-- --------------------------------------------------------
 
-/*
-HRMS DATABASE SCHEMA DOCUMENTATION
-==================================
+--
+-- Stand-in structure for view `v_current_month_payroll`
+-- (See below for the actual view)
+--
+CREATE TABLE `v_current_month_payroll` (
+`id` varchar(36)
+,`employee_id` varchar(36)
+,`employee_name` varchar(201)
+,`employee_code` varchar(50)
+,`department` varchar(100)
+,`designation` varchar(100)
+,`gross_salary` decimal(12,2)
+,`total_deductions` decimal(12,2)
+,`net_salary` decimal(12,2)
+,`payment_status` enum('pending','paid','failed','cancelled')
+,`payment_date` date
+,`client_id` varchar(36)
+);
 
-1. MULTI-TENANCY:
-   - All data is isolated by client_id
-   - Super admins can access cross-client data
-   - Each client has their own roles and settings
+-- --------------------------------------------------------
 
-2. RBAC SYSTEM:
-   - Flat permission assignment (no inheritance)
-   - Module.action permission format
-   - Editable system roles per client
-   - Custom roles supported
+--
+-- Table structure for table `v_dashboard_stats`
+--
 
-3. CORE ENTITIES:
-   - Clients: Multi-tenant organizations
-   - Admin Users: System access with roles
-   - Employees: Core HR entity
-   - Attendance: Daily work tracking
-   - Leave Management: Request/approval workflow
-   - Payroll: Salary processing
-   
-4. SECURITY FEATURES:
-   - Password hashing required in application
-   - Session management with JWT
-   - Audit logging for sensitive operations
-   - Failed login attempt tracking
-   - Account lockout mechanism
+CREATE TABLE `v_dashboard_stats` (
+  `client_id` varchar(36) DEFAULT NULL,
+  `client_name` varchar(255) DEFAULT NULL,
+  `total_employees` bigint(21) DEFAULT NULL,
+  `active_employees` bigint(21) DEFAULT NULL,
+  `total_departments` bigint(21) DEFAULT NULL,
+  `total_admin_users` bigint(21) DEFAULT NULL,
+  `present_today` bigint(21) DEFAULT NULL,
+  `absent_today` bigint(21) DEFAULT NULL,
+  `late_today` bigint(21) DEFAULT NULL,
+  `pending_leave_requests` bigint(21) DEFAULT NULL,
+  `pending_payroll_records` bigint(21) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-5. PERFORMANCE:
-   - Proper indexing on foreign keys
-   - Composite indexes for common queries
-   - Views for complex reporting
-   - Stored procedures for calculations
-   - Partitioning ready for large datasets
+-- --------------------------------------------------------
 
-6. MAINTENANCE:
-   - Automated cleanup procedures
-   - Data archival strategies
-   - Backup considerations
-   - Monitoring queries provided
+--
+-- Table structure for table `v_employee_details`
+--
 
-7. API READY:
-   - Helper views for dashboard
-   - Employee directory with search
-   - Statistics aggregation
-   - Optimized for REST endpoints
-*/
+CREATE TABLE `v_employee_details` (
+  `id` varchar(36) DEFAULT NULL,
+  `client_id` varchar(36) DEFAULT NULL,
+  `employee_code` varchar(50) DEFAULT NULL,
+  `full_name` varchar(201) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `hire_date` date DEFAULT NULL,
+  `employee_type` enum('permanent','contract','intern','consultant') DEFAULT NULL,
+  `work_location` enum('office','remote','hybrid') DEFAULT NULL,
+  `employment_status` enum('active','inactive','terminated','resigned') DEFAULT NULL,
+  `base_salary` decimal(15,2) DEFAULT NULL,
+  `department_name` varchar(100) DEFAULT NULL,
+  `designation_title` varchar(100) DEFAULT NULL,
+  `manager_name` varchar(201) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =============================================
--- END OF SCHEMA
--- =============================================
+-- --------------------------------------------------------
 
--- Success message
-SELECT 'HRMS Database Schema Created Successfully!' AS message,
-       'Total Tables Created: 16' AS tables_count,
-       'Views Created: 3' AS views_count,
-       'Stored Procedures: 3' AS procedures_count,
-       'Ready for Application Integration' AS status;
+--
+-- Table structure for table `v_employee_directory`
+--
+
+CREATE TABLE `v_employee_directory` (
+  `id` varchar(36) DEFAULT NULL,
+  `client_id` varchar(36) DEFAULT NULL,
+  `employee_code` varchar(50) DEFAULT NULL,
+  `first_name` varchar(100) DEFAULT NULL,
+  `last_name` varchar(100) DEFAULT NULL,
+  `full_name` varchar(201) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `hire_date` date DEFAULT NULL,
+  `employee_type` enum('permanent','contract','intern','consultant') DEFAULT NULL,
+  `work_location` enum('office','remote','hybrid') DEFAULT NULL,
+  `employment_status` enum('active','inactive','terminated','resigned') DEFAULT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `designation` varchar(100) DEFAULT NULL,
+  `manager` varchar(201) DEFAULT NULL,
+  `profile_image` varchar(500) DEFAULT NULL,
+  `years_of_service` bigint(21) DEFAULT NULL,
+  `last_attendance_status` varchar(8) DEFAULT NULL,
+  `current_status` varchar(9) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Stand-in structure for view `v_payroll_stats_by_department`
+-- (See below for the actual view)
+--
+CREATE TABLE `v_payroll_stats_by_department` (
+`client_id` varchar(36)
+,`department_id` varchar(36)
+,`department_name` varchar(100)
+,`employee_count` bigint(21)
+,`avg_gross_salary` decimal(16,6)
+,`avg_net_salary` decimal(16,6)
+,`total_gross_salary` decimal(34,2)
+,`total_net_salary` decimal(34,2)
+,`year` int(5)
+,`month` int(3)
+);
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `admin_users`
+--
+ALTER TABLE `admin_users`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `attendance`
+--
+ALTER TABLE `attendance`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_attendance_overtime` (`employee_id`,`date`,`overtime_hours`),
+  ADD KEY `fk_attendance_leave_request` (`leave_request_id`),
+  ADD KEY `idx_attendance_leave_status` (`employee_id`,`date`,`status`,`leave_request_id`),
+  ADD KEY `idx_attendance_is_weekend` (`employee_id`,`is_weekend`,`date`),
+  ADD KEY `idx_attendance_payable_duration` (`employee_id`,`date`,`payable_duration`);
+
+--
+-- Indexes for table `attendance_master`
+--
+ALTER TABLE `attendance_master`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `clients`
+--
+ALTER TABLE `clients`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `employees`
+--
+ALTER TABLE `employees`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_employees_attendance_affects_salary` (`attendance_affects_salary`);
+
+--
+-- Indexes for table `employee_advances`
+--
+ALTER TABLE `employee_advances`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_employee_advances_employee` (`employee_id`),
+  ADD KEY `idx_employee_advances_status` (`status`),
+  ADD KEY `idx_employee_advances_type` (`advance_type`),
+  ADD KEY `idx_employee_advances_dates` (`request_date`,`required_date`),
+  ADD KEY `fk_employee_advances_approver` (`approved_by`),
+  ADD KEY `fk_employee_advances_payer` (`paid_by`),
+  ADD KEY `fk_employee_advances_creator` (`created_by`),
+  ADD KEY `idx_advances_employee_status` (`employee_id`,`status`),
+  ADD KEY `idx_advances_deduction_date` (`deduction_start_date`,`status`);
+
+--
+-- Indexes for table `employee_allowances`
+--
+ALTER TABLE `employee_allowances`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_emp_allowances_client_employee` (`client_id`,`employee_id`),
+  ADD KEY `idx_emp_allowances_active` (`is_active`,`effective_from`,`effective_to`),
+  ADD KEY `fk_allowances_employee` (`employee_id`);
+
+--
+-- Indexes for table `employee_bonuses`
+--
+ALTER TABLE `employee_bonuses`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_employee_bonuses_employee` (`employee_id`),
+  ADD KEY `idx_employee_bonuses_status` (`status`),
+  ADD KEY `idx_employee_bonuses_type` (`bonus_type`),
+  ADD KEY `idx_employee_bonuses_dates` (`effective_date`,`payment_date`),
+  ADD KEY `idx_employee_bonuses_period` (`bonus_period`),
+  ADD KEY `fk_employee_bonuses_approver` (`approved_by`),
+  ADD KEY `fk_employee_bonuses_processor` (`processed_by`),
+  ADD KEY `fk_employee_bonuses_creator` (`created_by`),
+  ADD KEY `idx_bonuses_employee_status` (`employee_id`,`status`),
+  ADD KEY `idx_bonuses_type_period` (`bonus_type`,`bonus_period`);
+
+--
+-- Indexes for table `employee_deductions`
+--
+ALTER TABLE `employee_deductions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_emp_deductions_client_employee` (`client_id`,`employee_id`),
+  ADD KEY `idx_emp_deductions_active` (`is_active`,`effective_from`,`effective_to`),
+  ADD KEY `fk_deductions_employee` (`employee_id`);
+
+--
+-- Indexes for table `employee_documents`
+--
+ALTER TABLE `employee_documents`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_employee_documents` (`employee_id`,`client_id`),
+  ADD KEY `idx_document_type` (`document_type`),
+  ADD KEY `idx_uploaded_at` (`uploaded_at`),
+  ADD KEY `idx_active_documents` (`is_active`,`employee_id`),
+  ADD KEY `fk_employee_documents_client` (`client_id`);
+
+--
+-- Indexes for table `employee_loans`
+--
+ALTER TABLE `employee_loans`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_employee_loans_employee` (`employee_id`),
+  ADD KEY `idx_employee_loans_status` (`status`),
+  ADD KEY `idx_employee_loans_dates` (`start_date`,`end_date`),
+  ADD KEY `fk_employee_loans_approver` (`approved_by`);
+
+--
+-- Indexes for table `employee_payroll_components`
+--
+ALTER TABLE `employee_payroll_components`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uk_employee_component` (`employee_id`,`component_id`,`effective_from`),
+  ADD KEY `idx_emp_payroll_comp_employee` (`employee_id`),
+  ADD KEY `idx_emp_payroll_comp_component` (`component_id`),
+  ADD KEY `idx_emp_payroll_comp_dates` (`effective_from`,`effective_to`);
+
+--
+-- Indexes for table `leave_requests`
+--
+ALTER TABLE `leave_requests`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_leave_balance_transaction` (`balance_transaction_id`),
+  ADD KEY `idx_leave_requests_is_paid` (`is_paid`);
+
+--
+-- Indexes for table `leave_types`
+--
+ALTER TABLE `leave_types`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `payroll_adjustments`
+--
+ALTER TABLE `payroll_adjustments`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_payroll_adj_employee` (`employee_id`),
+  ADD KEY `idx_payroll_adj_month` (`applicable_month`),
+  ADD KEY `idx_payroll_adj_processed` (`is_processed`),
+  ADD KEY `fk_payroll_adj_record` (`payroll_record_id`),
+  ADD KEY `fk_payroll_adj_approver` (`approved_by`),
+  ADD KEY `fk_payroll_adj_creator` (`created_by`);
+
+--
+-- Indexes for table `payroll_audit_log`
+--
+ALTER TABLE `payroll_audit_log`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_run_action` (`run_id`,`action`),
+  ADD KEY `idx_user_action` (`user_id`,`action`),
+  ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indexes for table `payroll_components`
+--
+ALTER TABLE `payroll_components`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_payroll_components_client` (`client_id`),
+  ADD KEY `idx_payroll_components_type` (`component_type`);
+
+--
+-- Indexes for table `payroll_periods`
+--
+ALTER TABLE `payroll_periods`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_period` (`client_id`,`period_year`,`period_number`,`period_type`),
+  ADD KEY `idx_period_dates` (`period_start_date`,`period_end_date`),
+  ADD KEY `idx_pay_date` (`pay_date`);
+
+--
+-- Indexes for table `payroll_records`
+--
+ALTER TABLE `payroll_records`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_run_employee` (`run_id`,`employee_id`),
+  ADD KEY `idx_calculation_status` (`calculation_status`),
+  ADD KEY `idx_payment_status` (`payment_status`),
+  ADD KEY `idx_employee` (`employee_id`),
+  ADD KEY `fk_payroll_records_approver` (`approved_by`),
+  ADD KEY `idx_payroll_records_calculation` (`calculation_status`,`run_id`),
+  ADD KEY `idx_payroll_records_working_days` (`weekday_working_days`,`working_saturdays`,`working_sundays`),
+  ADD KEY `idx_payroll_records_salary_rates` (`daily_salary`,`weekday_hourly_rate`),
+  ADD KEY `idx_payroll_records_base_salary` (`base_salary`),
+  ADD KEY `idx_payroll_records_attendance_affects_salary` (`attendance_affects_salary`);
+
+--
+-- Indexes for table `payroll_records_old_backup`
+--
+ALTER TABLE `payroll_records_old_backup`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_payroll_payment_status` (`payment_status`),
+  ADD KEY `idx_payroll_payment_date` (`payment_date`),
+  ADD KEY `idx_payroll_period` (`pay_period_start`,`pay_period_end`),
+  ADD KEY `idx_payroll_employee_period` (`employee_id`,`pay_period_start`,`pay_period_end`);
+
+--
+-- Indexes for table `payroll_record_components`
+--
+ALTER TABLE `payroll_record_components`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_record_id` (`record_id`),
+  ADD KEY `idx_component_type` (`component_type`),
+  ADD KEY `idx_component_category` (`component_category`),
+  ADD KEY `fk_payroll_record_components_overridden_by` (`overridden_by`);
+
+--
+-- Indexes for table `payroll_runs`
+--
+ALTER TABLE `payroll_runs`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_run_number` (`client_id`,`run_number`),
+  ADD KEY `idx_run_status` (`run_status`),
+  ADD KEY `idx_period` (`period_id`),
+  ADD KEY `idx_created_by` (`created_by`),
+  ADD KEY `fk_payroll_runs_reviewed_by` (`reviewed_by`),
+  ADD KEY `fk_payroll_runs_approved_by` (`approved_by`),
+  ADD KEY `fk_payroll_runs_processed_by` (`processed_by`),
+  ADD KEY `idx_payroll_runs_status_date` (`run_status`,`created_at`);
+
+--
+-- Indexes for table `payroll_schedules`
+--
+ALTER TABLE `payroll_schedules`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_payroll_schedules_client` (`client_id`),
+  ADD KEY `idx_payroll_schedules_active` (`is_active`);
+
+--
+-- Indexes for table `payroll_tax_slabs`
+--
+ALTER TABLE `payroll_tax_slabs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_tax_slabs_client` (`client_id`),
+  ADD KEY `idx_tax_slabs_amounts` (`min_amount`,`max_amount`),
+  ADD KEY `idx_tax_slabs_dates` (`effective_from`,`effective_to`);
+
+--
+-- Indexes for table `system_settings`
+--
+ALTER TABLE `system_settings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `user_sessions`
+--
+ALTER TABLE `user_sessions`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `attendance_master`
+--
+ALTER TABLE `attendance_master`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `users`
+--
+ALTER TABLE `users`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `employee_monthly_allowances`
+--
+DROP TABLE IF EXISTS `employee_monthly_allowances`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`u770612336_root`@`localhost` SQL SECURITY DEFINER VIEW `employee_monthly_allowances`  AS SELECT `ea`.`client_id` AS `client_id`, `ea`.`employee_id` AS `employee_id`, `e`.`employee_code` AS `employee_code`, concat(`e`.`first_name`,' ',`e`.`last_name`) AS `employee_name`, sum(case when `ea`.`is_percentage` then `e`.`base_salary` * `ea`.`amount` / 100 else `ea`.`amount` end) AS `total_allowances`, count(`ea`.`id`) AS `allowance_count` FROM (`employee_allowances` `ea` join `employees` `e` on(`ea`.`employee_id` = `e`.`id`)) WHERE `ea`.`is_active` = 1 AND `ea`.`effective_from` <= curdate() AND (`ea`.`effective_to` is null OR `ea`.`effective_to` >= curdate()) GROUP BY `ea`.`client_id`, `ea`.`employee_id` ;
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `employee_monthly_deductions`
+--
+DROP TABLE IF EXISTS `employee_monthly_deductions`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`u770612336_root`@`localhost` SQL SECURITY DEFINER VIEW `employee_monthly_deductions`  AS SELECT `ed`.`client_id` AS `client_id`, `ed`.`employee_id` AS `employee_id`, `e`.`employee_code` AS `employee_code`, concat(`e`.`first_name`,' ',`e`.`last_name`) AS `employee_name`, sum(case when `ed`.`is_percentage` then `e`.`base_salary` * `ed`.`amount` / 100 else `ed`.`amount` end) AS `total_deductions`, count(`ed`.`id`) AS `deduction_count` FROM (`employee_deductions` `ed` join `employees` `e` on(`ed`.`employee_id` = `e`.`id`)) WHERE `ed`.`is_active` = 1 AND `ed`.`effective_from` <= curdate() AND (`ed`.`effective_to` is null OR `ed`.`effective_to` >= curdate()) GROUP BY `ed`.`client_id`, `ed`.`employee_id` ;
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `v_attendance_summary`
+--
+DROP TABLE IF EXISTS `v_attendance_summary`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`u770612336_root`@`localhost` SQL SECURITY DEFINER VIEW `v_attendance_summary`  AS SELECT `e`.`id` AS `employee_id`, `e`.`client_id` AS `client_id`, concat(`e`.`first_name`,' ',`e`.`last_name`) AS `employee_name`, count(`a`.`id`) AS `total_days`, sum(case when `a`.`status` = 'present' then 1 else 0 end) AS `present_days`, sum(case when `a`.`status` = 'absent' then 1 else 0 end) AS `absent_days`, sum(case when `a`.`status` = 'late' then 1 else 0 end) AS `late_days`, sum(`a`.`total_hours`) AS `total_hours`, sum(`a`.`overtime_hours`) AS `total_overtime_hours` FROM (`employees` `e` left join `attendance` `a` on(`e`.`id` = `a`.`employee_id` and `a`.`date` >= date_format(current_timestamp(),'%Y-%m-01') and `a`.`date` < date_format(current_timestamp() + interval 1 month,'%Y-%m-01'))) WHERE `e`.`employment_status` = 'active' GROUP BY `e`.`id`, `e`.`client_id` ;
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `v_current_month_payroll`
+--
+DROP TABLE IF EXISTS `v_current_month_payroll`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`u770612336_root`@`localhost` SQL SECURITY DEFINER VIEW `v_current_month_payroll`  AS SELECT `pr`.`id` AS `id`, `pr`.`employee_id` AS `employee_id`, concat(`e`.`first_name`,' ',`e`.`last_name`) AS `employee_name`, `e`.`employee_code` AS `employee_code`, `d`.`name` AS `department`, `des`.`title` AS `designation`, `pr`.`gross_salary` AS `gross_salary`, `pr`.`total_deductions` AS `total_deductions`, `pr`.`net_salary` AS `net_salary`, `pr`.`payment_status` AS `payment_status`, `pr`.`payment_date` AS `payment_date`, `e`.`client_id` AS `client_id` FROM (((((`payroll_records` `pr` join `employees` `e` on(`pr`.`employee_id` = `e`.`id`)) left join `departments` `d` on(`e`.`department_id` = `d`.`id`)) left join `designations` `des` on(`e`.`designation_id` = `des`.`id`)) join `payroll_runs` `run` on(`pr`.`run_id` = `run`.`id`)) join `payroll_periods` `pp` on(`run`.`period_id` = `pp`.`id`)) WHERE year(`pp`.`period_start_date`) = year(curdate()) AND month(`pp`.`period_start_date`) = month(curdate()) ;
+
+-- --------------------------------------------------------
+
+--
+-- Structure for view `v_payroll_stats_by_department`
+--
+DROP TABLE IF EXISTS `v_payroll_stats_by_department`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`u770612336_root`@`localhost` SQL SECURITY DEFINER VIEW `v_payroll_stats_by_department`  AS SELECT `e`.`client_id` AS `client_id`, `d`.`id` AS `department_id`, `d`.`name` AS `department_name`, count(distinct `pr`.`employee_id`) AS `employee_count`, avg(`pr`.`gross_salary`) AS `avg_gross_salary`, avg(`pr`.`net_salary`) AS `avg_net_salary`, sum(`pr`.`gross_salary`) AS `total_gross_salary`, sum(`pr`.`net_salary`) AS `total_net_salary`, year(`pp`.`period_start_date`) AS `year`, month(`pp`.`period_start_date`) AS `month` FROM ((((`payroll_records` `pr` join `employees` `e` on(`pr`.`employee_id` = `e`.`id`)) left join `departments` `d` on(`e`.`department_id` = `d`.`id`)) join `payroll_runs` `run` on(`pr`.`run_id` = `run`.`id`)) join `payroll_periods` `pp` on(`run`.`period_id` = `pp`.`id`)) GROUP BY `e`.`client_id`, `d`.`id`, `d`.`name`, year(`pp`.`period_start_date`), month(`pp`.`period_start_date`) ;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `attendance`
+--
+ALTER TABLE `attendance`
+  ADD CONSTRAINT `fk_attendance_leave_request` FOREIGN KEY (`leave_request_id`) REFERENCES `leave_requests` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `employee_advances`
+--
+ALTER TABLE `employee_advances`
+  ADD CONSTRAINT `fk_employee_advances_approver` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_employee_advances_creator` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_employee_advances_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_employee_advances_payer` FOREIGN KEY (`paid_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `employee_allowances`
+--
+ALTER TABLE `employee_allowances`
+  ADD CONSTRAINT `fk_allowances_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `employee_bonuses`
+--
+ALTER TABLE `employee_bonuses`
+  ADD CONSTRAINT `fk_employee_bonuses_approver` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_employee_bonuses_creator` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_employee_bonuses_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_employee_bonuses_processor` FOREIGN KEY (`processed_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `employee_deductions`
+--
+ALTER TABLE `employee_deductions`
+  ADD CONSTRAINT `fk_deductions_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `employee_documents`
+--
+ALTER TABLE `employee_documents`
+  ADD CONSTRAINT `fk_employee_documents_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_employee_documents_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `employee_loans`
+--
+ALTER TABLE `employee_loans`
+  ADD CONSTRAINT `fk_employee_loans_approver` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_employee_loans_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `employee_payroll_components`
+--
+ALTER TABLE `employee_payroll_components`
+  ADD CONSTRAINT `fk_emp_payroll_comp_component` FOREIGN KEY (`component_id`) REFERENCES `payroll_components` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_emp_payroll_comp_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `leave_requests`
+--
+ALTER TABLE `leave_requests`
+  ADD CONSTRAINT `fk_leave_balance_transaction` FOREIGN KEY (`balance_transaction_id`) REFERENCES `leave_balance_transactions` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `payroll_adjustments`
+--
+ALTER TABLE `payroll_adjustments`
+  ADD CONSTRAINT `fk_payroll_adj_approver` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_payroll_adj_creator` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`),
+  ADD CONSTRAINT `fk_payroll_adj_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_payroll_adj_record` FOREIGN KEY (`payroll_record_id`) REFERENCES `payroll_records_old_backup` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `payroll_audit_log`
+--
+ALTER TABLE `payroll_audit_log`
+  ADD CONSTRAINT `fk_payroll_audit_log_run` FOREIGN KEY (`run_id`) REFERENCES `payroll_runs` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_payroll_audit_log_user` FOREIGN KEY (`user_id`) REFERENCES `admin_users` (`id`);
+
+--
+-- Constraints for table `payroll_components`
+--
+ALTER TABLE `payroll_components`
+  ADD CONSTRAINT `fk_payroll_components_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `payroll_periods`
+--
+ALTER TABLE `payroll_periods`
+  ADD CONSTRAINT `fk_payroll_periods_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `payroll_records`
+--
+ALTER TABLE `payroll_records`
+  ADD CONSTRAINT `fk_payroll_records_approver` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`),
+  ADD CONSTRAINT `fk_payroll_records_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_payroll_records_run` FOREIGN KEY (`run_id`) REFERENCES `payroll_runs` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `payroll_record_components`
+--
+ALTER TABLE `payroll_record_components`
+  ADD CONSTRAINT `fk_payroll_record_components_overridden_by` FOREIGN KEY (`overridden_by`) REFERENCES `admin_users` (`id`),
+  ADD CONSTRAINT `fk_payroll_record_components_record` FOREIGN KEY (`record_id`) REFERENCES `payroll_records` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `payroll_runs`
+--
+ALTER TABLE `payroll_runs`
+  ADD CONSTRAINT `fk_payroll_runs_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `admin_users` (`id`),
+  ADD CONSTRAINT `fk_payroll_runs_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_payroll_runs_created_by` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`),
+  ADD CONSTRAINT `fk_payroll_runs_period` FOREIGN KEY (`period_id`) REFERENCES `payroll_periods` (`id`),
+  ADD CONSTRAINT `fk_payroll_runs_processed_by` FOREIGN KEY (`processed_by`) REFERENCES `admin_users` (`id`),
+  ADD CONSTRAINT `fk_payroll_runs_reviewed_by` FOREIGN KEY (`reviewed_by`) REFERENCES `admin_users` (`id`);
+
+--
+-- Constraints for table `payroll_schedules`
+--
+ALTER TABLE `payroll_schedules`
+  ADD CONSTRAINT `fk_payroll_schedules_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `payroll_tax_slabs`
+--
+ALTER TABLE `payroll_tax_slabs`
+  ADD CONSTRAINT `fk_tax_slabs_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

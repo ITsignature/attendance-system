@@ -37,6 +37,17 @@ interface Employee {
   employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
   base_salary?: number;
   attendance_affects_salary?: boolean;
+  payable_hours_policy?: 'strict_schedule' | 'actual_worked';
+
+  // Overtime Configuration
+  overtime_enabled?: boolean;
+  pre_shift_overtime_enabled?: boolean;
+  post_shift_overtime_enabled?: boolean;
+  weekday_ot_multiplier?: number | null;
+  saturday_ot_multiplier?: number | null;
+  sunday_ot_multiplier?: number | null;
+  holiday_ot_multiplier?: number | null;
+
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
@@ -1217,6 +1228,89 @@ const EmployeeDetails: React.FC = () => {
                           : 'Full salary paid regardless of attendance'}
                       </p>
                     </div>
+
+                    {/* Overtime Configuration Display */}
+                    <div className={`md:col-span-2 p-6 rounded-lg border-2 shadow-md ${
+                      (employee.overtime_enabled === true || employee.overtime_enabled === 1)
+                        ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
+                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <HiClock className={`w-5 h-5 ${
+                          (employee.overtime_enabled === true || employee.overtime_enabled === 1) ? 'text-orange-600' : 'text-gray-500'
+                        }`} />
+                        <h4 className={`text-sm font-bold ${
+                          (employee.overtime_enabled === true || employee.overtime_enabled === 1)
+                            ? 'text-orange-800 dark:text-orange-200'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}>Overtime Configuration</h4>
+                      </div>
+
+                      {(employee.overtime_enabled === true || employee.overtime_enabled === 1) ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Badge color="success" icon={FaCheck}>Overtime Enabled</Badge>
+                          </div>
+
+                          {/* Overtime Shift Flags */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              {(employee.pre_shift_overtime_enabled === true || employee.pre_shift_overtime_enabled === 1) ? (
+                                <Badge color="info" icon={FaCheck} size="sm">Pre-Shift OT</Badge>
+                              ) : (
+                                <Badge color="gray" icon={FaTimes} size="sm">Pre-Shift OT</Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              {(employee.post_shift_overtime_enabled === true || employee.post_shift_overtime_enabled === 1) ? (
+                                <Badge color="info" icon={FaCheck} size="sm">Post-Shift OT</Badge>
+                              ) : (
+                                <Badge color="gray" icon={FaTimes} size="sm">Post-Shift OT</Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Overtime Multipliers */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Weekday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.weekday_ot_multiplier ? `${employee.weekday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Mon-Fri</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Saturday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.saturday_ot_multiplier ? `${employee.saturday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Sat</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Sunday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.sunday_ot_multiplier ? `${employee.sunday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Sun</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Holiday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.holiday_ot_multiplier ? `${employee.holiday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Holidays</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge color="gray" icon={FaTimes}>Overtime Disabled</Badge>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            No overtime pay calculated for this employee
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1258,6 +1352,30 @@ const EmployeeDetails: React.FC = () => {
                           </p>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Payable Hours Policy */}
+                  <div className="mb-6">
+                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <HiClock className="w-4 h-4 text-gray-500" />
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Payable Hours Policy</p>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge
+                          color={employee.payable_hours_policy === 'actual_worked' ? 'blue' : 'purple'}
+                          size="sm"
+                        >
+                          {employee.payable_hours_policy === 'actual_worked' ? 'Actual Worked Hours' : 'Strict Schedule'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {employee.payable_hours_policy === 'actual_worked'
+                          ? 'Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid full 8 hours.'
+                          : 'Pay is capped to scheduled hours. Late arrival or early departure results in lost hours. Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid only 7 hours.'
+                        }
+                      </p>
                     </div>
                   </div>
 
