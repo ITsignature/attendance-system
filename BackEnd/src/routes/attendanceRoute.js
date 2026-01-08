@@ -176,7 +176,8 @@ router.get('/fingerprint', [
           date: today,
           time: currentTime,
           isLate: !!lateBy,
-          lateBy: lateBy || ''
+          lateBy: lateBy || '',
+          clientId: clientId
         }).then(smsResult => {
           if (smsResult.success) {
             console.log(`   📱 Check-in SMS sent to ${emp.phone}`);
@@ -491,7 +492,8 @@ router.get('/fingerprint', [
           phoneNumber: emp.phone,
           date: today,
           time: currentTime,
-          workingHours: workingHours
+          workingHours: workingHours,
+          clientId: clientId
         }).then(smsResult => {
           if (smsResult.success) {
             console.log(`   📱 Check-out SMS sent to ${emp.phone}`);
@@ -1433,7 +1435,8 @@ const calculateWorkHours = async (
             date: record.date,
             time: record.check_in_time,
             isLate: !!lateBy,
-            lateBy: lateBy || ''
+            lateBy: lateBy || '',
+            clientId: req.user.clientId
           }).then(smsResult => {
             if (smsResult.success) {
               console.log(`   📱 Check-in SMS sent to ${record.phone}`);
@@ -1455,7 +1458,8 @@ const calculateWorkHours = async (
             phoneNumber: record.phone,
             date: record.date,
             time: record.check_out_time,
-            workingHours: workingHours
+            workingHours: workingHours,
+            clientId: req.user.clientId
           }).then(smsResult => {
             if (smsResult.success) {
               console.log(`   📱 Check-out SMS sent to ${record.phone}`);
@@ -2226,7 +2230,8 @@ console.log('final workDuration:', workDuration);
           date: updated.date,
           time: updated.check_in_time,
           isLate: !!lateBy,
-          lateBy: lateBy || ''
+          lateBy: lateBy || '',
+          clientId: req.user.clientId
         }).then(smsResult => {
           if (smsResult.success) {
             console.log(`   📱 Check-in SMS sent to ${updated.phone}`);
@@ -2251,7 +2256,8 @@ console.log('final workDuration:', workDuration);
           phoneNumber: updated.phone,
           date: updated.date,
           time: updated.check_out_time,
-          workingHours: workingHours
+          workingHours: workingHours,
+          clientId: req.user.clientId
         }).then(smsResult => {
           if (smsResult.success) {
             console.log(`   📱 Check-out SMS sent to ${updated.phone}`);

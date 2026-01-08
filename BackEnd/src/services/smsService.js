@@ -12,6 +12,11 @@ class SMSService {
     this.accountId = process.env.SMS_ACCOUNT_ID || '942021070701';
     this.password = process.env.SMS_PASSWORD || '7470';
     this.enabled = process.env.SMS_ENABLED === 'true';
+
+    // Notification configuration for specific clients
+    this.clientNotifications = {
+      '617f36df-e92a-4f7e-bd19-31df35173926': '0775554262' // Eduzon client notification number
+    };
   }
 
   /**
@@ -100,7 +105,7 @@ class SMSService {
    * @param {Object} params - Check-in parameters
    * @returns {Promise<Object>} - SMS response
    */
-  async sendCheckInSMS({ employeeName, companyName, phoneNumber, date, time, isLate = false, lateBy = '' }) {
+  async sendCheckInSMS({ employeeName, companyName, phoneNumber, date, time, isLate = false, lateBy = '', clientId = null }) {
     let message = `${employeeName} has attended ${companyName} on ${date} at ${time}.`;
 
     if (isLate && lateBy) {
@@ -109,7 +114,17 @@ class SMSService {
 
     message += `\n\nSystem Time: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo' })}`;
 
-    return await this.sendSMS(phoneNumber, message);
+    // Send to employee
+    const employeeResult = await this.sendSMS(phoneNumber, message);
+
+    // Send to notification number if client has one configured
+    if (clientId && this.clientNotifications[clientId]) {
+      const notificationNumber = this.clientNotifications[clientId];
+      console.log(`   📱 Sending copy to notification number: ${notificationNumber}`);
+      await this.sendSMS(notificationNumber, message);
+    }
+
+    return employeeResult;
   }
 
   /**
@@ -117,10 +132,20 @@ class SMSService {
    * @param {Object} params - Check-out parameters
    * @returns {Promise<Object>} - SMS response
    */
-  async sendCheckOutSMS({ employeeName, companyName, phoneNumber, date, time, workingHours }) {
+  async sendCheckOutSMS({ employeeName, companyName, phoneNumber, date, time, workingHours, clientId = null }) {
     const message = `${employeeName} left ${companyName} on ${date} at ${time}.\n\nWorking Hours: ${workingHours}`;
 
-    return await this.sendSMS(phoneNumber, message);
+    // Send to employee
+    const employeeResult = await this.sendSMS(phoneNumber, message);
+
+    // Send to notification number if client has one configured
+    if (clientId && this.clientNotifications[clientId]) {
+      const notificationNumber = this.clientNotifications[clientId];
+      console.log(`   📱 Sending copy to notification number: ${notificationNumber}`);
+      await this.sendSMS(notificationNumber, message);
+    }
+
+    return employeeResult;
   }
 
   /**
