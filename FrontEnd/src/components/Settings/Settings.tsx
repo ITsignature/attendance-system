@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import settingsApi from '../../services/settingsApi';
+import leaveApiService, { LeaveType, CreateLeaveTypeData } from '../../services/leaveApi';
 import PayrollSettings from './PayrollSettings';
 import { useDynamicRBAC, DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
 
@@ -15,7 +16,11 @@ import {
   ChevronRight,
   Download,
   Upload,
-  Calendar
+  Calendar,
+  Plus,
+  Edit,
+  Trash2,
+  X
 } from 'lucide-react';
 
 const SettingsWithBackend = () => {
@@ -35,6 +40,21 @@ const SettingsWithBackend = () => {
   const [localSettings, setLocalSettings] = useState<Record<string, any> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Leave Types state
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false);
+  const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
+  const [editingLeaveType, setEditingLeaveType] = useState<LeaveType | null>(null);
+  const [leaveTypeFormData, setLeaveTypeFormData] = useState<CreateLeaveTypeData>({
+    name: '',
+    description: '',
+    max_days_per_year: 0,
+    max_consecutive_days: 0,
+    is_paid: true,
+    requires_approval: true,
+    notice_period_days: 0
+  });
 
   // 🔧 FIX: Force refresh settings when component mounts to avoid stale data
   useEffect(() => {
@@ -125,6 +145,94 @@ useEffect(() => {
   localSettings?.work_start_time,
   localSettings?.work_end_time
 ]);
+
+  // Load leave types when leaves tab is active
+  useEffect(() => {
+    if (activeSection === 'leaves') {
+      loadLeaveTypes();
+    }
+  }, [activeSection]);
+
+  const loadLeaveTypes = async () => {
+    setLoadingLeaveTypes(true);
+    try {
+      const response = await leaveApiService.getLeaveTypes();
+      if (response.success && response.data) {
+        setLeaveTypes(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load leave types:', error);
+    } finally {
+      setLoadingLeaveTypes(false);
+    }
+  };
+
+  const handleCreateLeaveType = () => {
+    setEditingLeaveType(null);
+    setLeaveTypeFormData({
+      name: '',
+      description: '',
+      max_days_per_year: 0,
+      max_consecutive_days: 0,
+      is_paid: true,
+      requires_approval: true,
+      notice_period_days: 0
+    });
+    setShowLeaveTypeModal(true);
+  };
+
+  const handleEditLeaveType = (leaveType: LeaveType) => {
+    setEditingLeaveType(leaveType);
+    setLeaveTypeFormData({
+      name: leaveType.name,
+      description: leaveType.description || '',
+      max_days_per_year: leaveType.max_days_per_year || 0,
+      max_consecutive_days: leaveType.max_consecutive_days || 0,
+      is_paid: leaveType.is_paid,
+      requires_approval: leaveType.requires_approval,
+      notice_period_days: leaveType.notice_period_days || 0
+    });
+    setShowLeaveTypeModal(true);
+  };
+
+  const handleSaveLeaveType = async () => {
+    try {
+      console.log('Saving leave type:', leaveTypeFormData);
+
+      let response;
+      if (editingLeaveType) {
+        console.log('Updating leave type:', editingLeaveType.id);
+        response = await leaveApiService.updateLeaveType(editingLeaveType.id, leaveTypeFormData);
+      } else {
+        console.log('Creating new leave type');
+        response = await leaveApiService.createLeaveType(leaveTypeFormData);
+      }
+
+      console.log('Save response:', response);
+
+      if (response.success) {
+        setShowLeaveTypeModal(false);
+        loadLeaveTypes();
+        alert(editingLeaveType ? 'Leave type updated successfully!' : 'Leave type created successfully!');
+      } else {
+        alert('Failed to save leave type: ' + (response.message || 'Unknown error'));
+      }
+    } catch (error: any) {
+      console.error('Failed to save leave type:', error);
+      alert('Error: ' + (error.message || 'Failed to save leave type'));
+    }
+  };
+
+  const handleDeleteLeaveType = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this leave type?')) {
+      try {
+        await leaveApiService.deleteLeaveType(id);
+        loadLeaveTypes();
+      } catch (error) {
+        console.error('Failed to delete leave type:', error);
+      }
+    }
+  };
 
   // Set initial active section to first visible section
   // Must be before early return to maintain consistent hook order
@@ -755,6 +863,91 @@ const hhmmToMinutes = (t) => {
                 </p>
               </div>
             </div>
+
+            {/* Leave Types Management */}
+            <div className="mt-8">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-md font-medium text-gray-900 dark:text-white">Leave Types</h4>
+                <button
+                  onClick={handleCreateLeaveType}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  <Plus size={16} />
+                  Add Leave Type
+                </button>
+              </div>
+
+              {loadingLeaveTypes ? (
+                <div className="text-center py-8">Loading leave types...</div>
+              ) : (
+                <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Max Days/Year</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paid</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Requires Approval</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Notice Days</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {leaveTypes.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                            No leave types configured. Click "Add Leave Type" to create one.
+                          </td>
+                        </tr>
+                      ) : (
+                        leaveTypes.map((leaveType) => (
+                          <tr key={leaveType.id}>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">{leaveType.name}</div>
+                              {leaveType.description && (
+                                <div className="text-sm text-gray-500 dark:text-gray-400">{leaveType.description}</div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {leaveType.max_days_per_year || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                leaveType.is_paid
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                              }`}>
+                                {leaveType.is_paid ? 'Paid' : 'Unpaid'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {leaveType.requires_approval ? 'Yes' : 'No'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {leaveType.notice_period_days || 0} days
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <button
+                                onClick={() => handleEditLeaveType(leaveType)}
+                                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
+                              >
+                                <Edit size={16} className="inline" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteLeaveType(leaveType.id)}
+                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                              >
+                                <Trash2 size={16} className="inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         );
 
@@ -946,6 +1139,135 @@ const hhmmToMinutes = (t) => {
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leave Type Modal */}
+        {showLeaveTypeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4">
+              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                    {editingLeaveType ? 'Edit Leave Type' : 'Create Leave Type'}
+                  </h3>
+                  <button
+                    onClick={() => setShowLeaveTypeModal(false)}
+                    className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={leaveTypeFormData.name}
+                    onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="e.g., Annual Leave, Sick Leave"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={leaveTypeFormData.description}
+                    onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, description: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="Optional description"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Max Days per Year *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={leaveTypeFormData.max_days_per_year}
+                      onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, max_days_per_year: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Max Consecutive Days
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={leaveTypeFormData.max_consecutive_days}
+                      onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, max_consecutive_days: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Notice Period (days)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={leaveTypeFormData.notice_period_days}
+                    onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, notice_period_days: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="Minimum days notice required"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-6">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={leaveTypeFormData.is_paid}
+                      onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, is_paid: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Paid Leave</span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={leaveTypeFormData.requires_approval}
+                      onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, requires_approval: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Requires Approval</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowLeaveTypeModal(false)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveLeaveType}
+                  disabled={!leaveTypeFormData.name || leaveTypeFormData.max_days_per_year === 0}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {editingLeaveType ? 'Update' : 'Create'}
                 </button>
               </div>
             </div>

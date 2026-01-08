@@ -37,14 +37,14 @@ router.use(ensureClientAccess);
 // =============================================
 
 // GET /api/leaves/types - Get all leave types for client
-router.get('/types', 
+router.get('/types',
   checkPermission('leaves.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const clientId = req.user.clientId;
-    
+
     const [leaveTypes] = await db.execute(`
-      SELECT 
+      SELECT
         id,
         name,
         description,
@@ -55,7 +55,7 @@ router.get('/types',
         notice_period_days,
         is_active,
         created_at
-      FROM leave_types 
+      FROM leave_types
       WHERE client_id = ? AND is_active = TRUE
       ORDER BY name ASC
     `, [clientId]);
@@ -63,6 +63,210 @@ router.get('/types',
     res.json({
       success: true,
       data: leaveTypes
+    });
+  })
+);
+
+// POST /api/leaves/types - Create a new leave type
+router.post('/types',
+  checkPermission('leaves.create'),
+  [
+    body('name').trim().notEmpty().withMessage('Leave type name is required'),
+    body('max_days_per_year').isInt({ min: 0 }).withMessage('Max days per year must be a positive number'),
+    body('max_consecutive_days').optional().isInt({ min: 0 }).withMessage('Max consecutive days must be a positive number'),
+    body('is_paid').isBoolean().withMessage('is_paid must be a boolean'),
+    body('requires_approval').isBoolean().withMessage('requires_approval must be a boolean'),
+    body('notice_period_days').optional().isInt({ min: 0 }).withMessage('Notice period must be a positive number')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const {
+      name,
+      description,
+      max_days_per_year,
+      max_consecutive_days,
+      is_paid,
+      requires_approval,
+      notice_period_days
+    } = req.body;
+
+    const leaveTypeId = uuidv4();
+
+    await db.execute(`
+      INSERT INTO leave_types (
+        id,
+        client_id,
+        name,
+        description,
+        max_days_per_year,
+        max_consecutive_days,
+        is_paid,
+        requires_approval,
+        notice_period_days,
+        is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+    `, [
+      leaveTypeId,
+      clientId,
+      name,
+      description || null,
+      max_days_per_year,
+      max_consecutive_days || null,
+      is_paid,
+      requires_approval,
+      notice_period_days || null
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Leave type created successfully',
+      data: { id: leaveTypeId }
+    });
+  })
+);
+
+// PUT /api/leaves/types/:id - Update a leave type
+router.put('/types/:id',
+  checkPermission('leaves.edit'),
+  [
+    param('id').isUUID().withMessage('Valid leave type ID is required'),
+    body('name').optional().trim().notEmpty().withMessage('Leave type name cannot be empty'),
+    body('max_days_per_year').optional().isInt({ min: 0 }).withMessage('Max days per year must be a positive number'),
+    body('max_consecutive_days').optional().isInt({ min: 0 }).withMessage('Max consecutive days must be a positive number'),
+    body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
+    body('requires_approval').optional().isBoolean().withMessage('requires_approval must be a boolean'),
+    body('notice_period_days').optional().isInt({ min: 0 }).withMessage('Notice period must be a positive number')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const leaveTypeId = req.params.id;
+
+    // Check if leave type exists and belongs to client
+    const [existing] = await db.execute(`
+      SELECT id FROM leave_types WHERE id = ? AND client_id = ? AND is_active = TRUE
+    `, [leaveTypeId, clientId]);
+
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Leave type not found'
+      });
+    }
+
+    const updateFields = [];
+    const updateValues = [];
+
+    const allowedFields = [
+      'name',
+      'description',
+      'max_days_per_year',
+      'max_consecutive_days',
+      'is_paid',
+      'requires_approval',
+      'notice_period_days'
+    ];
+
+    allowedFields.forEach(field => {
+      if (req.body.hasOwnProperty(field)) {
+        updateFields.push(`${field} = ?`);
+        updateValues.push(req.body[field]);
+      }
+    });
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update'
+      });
+    }
+
+    updateValues.push(leaveTypeId, clientId);
+
+    await db.execute(`
+      UPDATE leave_types
+      SET ${updateFields.join(', ')}
+      WHERE id = ? AND client_id = ?
+    `, updateValues);
+
+    res.json({
+      success: true,
+      message: 'Leave type updated successfully'
+    });
+  })
+);
+
+// DELETE /api/leaves/types/:id - Delete (soft delete) a leave type
+router.delete('/types/:id',
+  checkPermission('leaves.delete'),
+  [
+    param('id').isUUID().withMessage('Valid leave type ID is required')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const leaveTypeId = req.params.id;
+
+    // Check if leave type exists and belongs to client
+    const [existing] = await db.execute(`
+      SELECT id FROM leave_types WHERE id = ? AND client_id = ? AND is_active = TRUE
+    `, [leaveTypeId, clientId]);
+
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Leave type not found'
+      });
+    }
+
+    // Check if there are any leave requests using this type
+    const [requests] = await db.execute(`
+      SELECT COUNT(*) as count FROM leave_requests WHERE leave_type_id = ?
+    `, [leaveTypeId]);
+
+    if (requests[0].count > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete leave type that has associated leave requests. Mark as inactive instead.'
+      });
+    }
+
+    // Soft delete
+    await db.execute(`
+      UPDATE leave_types SET is_active = FALSE WHERE id = ? AND client_id = ?
+    `, [leaveTypeId, clientId]);
+
+    res.json({
+      success: true,
+      message: 'Leave type deleted successfully'
     });
   })
 );
