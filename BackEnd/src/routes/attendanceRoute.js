@@ -232,11 +232,13 @@ router.get('/fingerprint', [
       // Calculate employee's scheduled work duration in hours
       let scheduledHours = 8; // Default to 8 hours
       let minimumWorkHours = 4; // Default to 4 hours
+      let schedOut = null; // Declare schedOut outside the block
+      let normalizedSchedEnd = null; // Declare normalizedSchedEnd outside the block
 
       // Only calculate scheduled hours if schedule times exist (not volunteer work)
       if (schedule.start_time && schedule.end_time) {
         const normalizedSchedStart = normalizeTime(schedule.start_time);
-        const normalizedSchedEnd = normalizeTime(schedule.end_time);
+        normalizedSchedEnd = normalizeTime(schedule.end_time);
 
         const log1 = `   Normalized schedule start: ${normalizedSchedStart}`;
         console.log(log1);
@@ -247,7 +249,7 @@ router.get('/fingerprint', [
         logToFile(log2);
 
         const schedIn = new Date(`2000-01-01T${normalizedSchedStart}`);
-        const schedOut = new Date(`2000-01-01T${normalizedSchedEnd}`);
+        schedOut = new Date(`2000-01-01T${normalizedSchedEnd}`);
         scheduledHours = (schedOut - schedIn) / (1000 * 60 * 60);
 
         const log3 = `   Scheduled hours: ${scheduledHours}h`;
@@ -321,8 +323,8 @@ router.get('/fingerprint', [
       logToFile(comparisonLog);
 
       // Check if current time is past scheduled end time
-      const isPastScheduledEndTime = currentDate >= schedOut;
-      const endTimeLog = `   Current time (${normalizedCurrentTime}) >= Scheduled end (${normalizedSchedEnd}) = ${isPastScheduledEndTime}`;
+      const isPastScheduledEndTime = schedOut ? currentDate >= schedOut : false;
+      const endTimeLog = `   Current time (${normalizedCurrentTime}) >= Scheduled end (${schedOut ? schedOut.toTimeString().split(' ')[0] : 'N/A'}) = ${isPastScheduledEndTime}`;
       console.log(endTimeLog);
       logToFile(endTimeLog);
 
@@ -359,7 +361,7 @@ router.get('/fingerprint', [
             hours_since_checkin: parseFloat(hoursWorked.toFixed(2)),
             minimum_hours_required: parseFloat(minimumWorkHours.toFixed(2)),
             scheduled_hours: parseFloat(scheduledHours.toFixed(2)),
-            scheduled_end_time: normalizedSchedEnd
+            scheduled_end_time: normalizedSchedEnd || 'N/A'
           }
         });
       }
