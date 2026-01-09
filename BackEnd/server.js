@@ -22,6 +22,7 @@ const departments = require('./src/routes/departmentsRoute');
 const designations = require('./src/routes/designationsRoute');
 const settingsRoutes = require('./src/routes/settingsRoute');
 const holidaysRoutes = require('./src/routes/holidaysRoute');
+const employeePortalRoutes = require('./src/routes/employeePortalRoute');
 const sessionCleanup = require('./src/services/sessionCleanup');
 
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
@@ -190,7 +191,10 @@ app.get('/health', (req, res) => {
 // Authentication routes (no /api prefix for auth)
 app.use('/auth', authRoutes);
 
-// Protected API routes
+// Employee Portal Routes (for employee-facing interface)
+app.use('/api/employee-portal', employeePortalRoutes);
+
+// Protected API routes (for admin interface)
 app.use('/api/employees', employeeRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);

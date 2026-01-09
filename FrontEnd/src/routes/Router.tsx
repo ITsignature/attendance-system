@@ -55,6 +55,15 @@ const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLog
 const ManualAttendance =Loadable(lazy(() => import('../components/Attendance/ManualAttendance')));
 const LivePayroll = Loadable(lazy(() => import('../components/LivePayrol/PayrollEmployeeRecords')));
 
+// Employee Portal
+const EmployeePortalLayout = Loadable(lazy(() => import('../views/employee-portal/EmployeePortalLayout')));
+const EmployeeDashboard = Loadable(lazy(() => import('../views/employee-portal/EmployeeDashboard')));
+const EmployeeProfile = Loadable(lazy(() => import('../views/employee-portal/EmployeeProfile')));
+const EmployeeAttendance = Loadable(lazy(() => import('../views/employee-portal/EmployeeAttendance')));
+const EmployeePayroll = Loadable(lazy(() => import('../views/employee-portal/EmployeePayroll')));
+const EmployeeLeaves = Loadable(lazy(() => import('../views/employee-portal/EmployeeLeaves')));
+const EmployeeFinancialRecords = Loadable(lazy(() => import('../views/employee-portal/EmployeeFinancialRecords')));
+
 // ==============================================
 // SINGLE AUTHENTICATION WRAPPER FOR ENTIRE APP
 // ==============================================
@@ -379,6 +388,22 @@ const Router = [
     children: [
       { path: 'login', element: <AdminLogin /> },
       { path: '*', element: <Navigate to="/admin/login" /> },
+    ],
+  },
+
+  // EMPLOYEE PORTAL ROUTES
+  {
+    path: '/employee-portal',
+    element: <EmployeePortalLayout />,
+    children: [
+      { path: '', element: <Navigate to="/employee-portal/dashboard" replace /> },
+      { path: 'dashboard', element: <EmployeeDashboard /> },
+      { path: 'profile', element: <EmployeeProfile /> },
+      { path: 'attendance', element: <EmployeeAttendance /> },
+      { path: 'payroll', element: <EmployeePayroll /> },
+      { path: 'leaves', element: <EmployeeLeaves /> },
+      { path: 'financial-records', element: <EmployeeFinancialRecords /> },
+      { path: '*', element: <Navigate to="/employee-portal/dashboard" /> },
     ],
   },
 ];
