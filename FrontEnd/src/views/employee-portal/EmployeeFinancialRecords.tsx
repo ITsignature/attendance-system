@@ -206,18 +206,18 @@ const EmployeeFinancialRecords = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${loan.loan_amount.toLocaleString()}
+                          Rs.{loan.loan_amount.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-red-600">
-                            ${loan.remaining_amount.toLocaleString()}
+                            Rs.{loan.remaining_amount.toLocaleString()}
                           </div>
                           <div className="text-xs text-gray-500">
                             {((loan.remaining_amount / loan.loan_amount) * 100).toFixed(1)}% remaining
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${loan.monthly_deduction.toLocaleString()}/month
+                          Rs.{loan.monthly_deduction.toLocaleString()}/month
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div>{new Date(loan.start_date).toLocaleDateString()}</div>
@@ -285,15 +285,15 @@ const EmployeeFinancialRecords = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${advance.amount.toLocaleString()}
+                          Rs.{advance.amount.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-red-600">
-                            ${advance.remaining_amount.toLocaleString()}
+                            Rs.{advance.remaining_amount.toLocaleString()}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${advance.deduction_per_month.toLocaleString()}
+                          Rs.{advance.deduction_per_month.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {new Date(advance.date).toLocaleDateString()}
@@ -358,7 +358,7 @@ const EmployeeFinancialRecords = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-semibold text-green-600">
-                            ${bonus.amount.toLocaleString()}
+                            Rs.{bonus.amount.toLocaleString()}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -419,7 +419,7 @@ const EmployeeFinancialRecords = () => {
             <div>
               <p className="text-sm text-gray-600">Total Bonuses</p>
               <p className="text-2xl font-bold text-gray-800">
-                ${(financialData.bonuses || [])
+                Rs.{(financialData.bonuses || [])
                   .reduce((sum, b) => sum + (b.amount || 0), 0)
                   .toLocaleString()}
               </p>
