@@ -788,9 +788,35 @@ body('is_active').optional().isBoolean()
   // Only super admins can create other super admins
   const isSuperAdmin = req.user.isSuperAdmin && req.body.is_super_admin === true;
 
+  // Auto-link employee_id if role is "Employee" and employee with same email exists
+  let employeeId = null;
+  console.log(`🔍 Checking auto-link for role: "${role.name}"`);
+
+  if (role.name === 'Employee' || role.name === 'employee') {
+    console.log(`🔍 Role is Employee, searching for employee with email: ${req.body.email}, client_id: ${clientId}`);
+
+    const [employees] = await db.execute(`
+      SELECT id, employee_code, first_name, last_name FROM employees
+      WHERE email = ? AND client_id = ?
+    `, [req.body.email, clientId]);
+
+    console.log(`🔍 Found ${employees.length} employee(s) with matching email and client_id`);
+
+    if (employees.length > 0) {
+      employeeId = employees[0].id;
+      console.log(`✅ Auto-linking employee_id: ${employeeId} (${employees[0].first_name} ${employees[0].last_name}, code: ${employees[0].employee_code})`);
+    } else {
+      console.log(`⚠️ WARNING: No employee found with email ${req.body.email} and client_id ${clientId}`);
+      console.log(`⚠️ The employee record must exist in the Employees table BEFORE creating the admin user`);
+    }
+  } else {
+    console.log(`ℹ️ Role "${role.name}" is not Employee role, skipping auto-link`);
+  }
+
   const userData = {
     id: userId,
     client_id: clientId,
+    employee_id: employeeId,
     name: req.body.name,
     email: req.body.email,
     password_hash: passwordHash,
@@ -804,17 +830,18 @@ body('is_active').optional().isBoolean()
     // Insert user
     await db.execute(`
       INSERT INTO admin_users (
-        id, client_id, name, email, password_hash, role_id, 
+        id, client_id, employee_id, name, email, password_hash, role_id,
         department, is_super_admin, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, Object.values(userData));
 
-    // Get created user with role info
+    // Get created user with role info including employee_id
     const [newUser] = await db.execute(`
-      SELECT 
+      SELECT
         au.id,
         au.name,
         au.email,
+        au.employee_id,
         au.department,
         au.is_super_admin,
         au.is_active,
@@ -823,18 +850,24 @@ body('is_active').optional().isBoolean()
         r.name as role_name,
         r.access_level,
         c.id as client_id,
-        c.name as client_name
+        c.name as client_name,
+        e.employee_code,
+        CONCAT(e.first_name, ' ', e.last_name) as employee_name
       FROM admin_users au
       JOIN roles r ON au.role_id = r.id
       LEFT JOIN clients c ON au.client_id = c.id
+      LEFT JOIN employees e ON au.employee_id = e.id
       WHERE au.id = ?
     `, [userId]);
 
     console.log('✅ Admin user created successfully');
+    console.log(`   Employee ID linked: ${newUser[0].employee_id || 'NOT LINKED'}`);
 
     res.status(201).json({
       success: true,
-      message: 'Admin user created successfully',
+      message: newUser[0].employee_id
+        ? `Admin user created and linked to employee ${newUser[0].employee_code}`
+        : 'Admin user created (no employee link - employee record may not exist)',
       data: {
         user: newUser[0]
       }
@@ -988,23 +1021,72 @@ router.put('/admin-users/:id', [
     }
   }
 
+  // Auto-link employee_id if role is/becomes "Employee" and employee exists
+  const newEmail = req.body.email || currentUser.email;
+  const newRoleId = req.body.role_id || currentUser.role_id;
+
+  // Get the role name for the new/current role
+  const [roleCheck] = await db.execute(`
+    SELECT name FROM roles WHERE id = ?
+  `, [newRoleId]);
+
+  if (roleCheck.length > 0) {
+    const roleName = roleCheck[0].name;
+    console.log(`🔍 UPDATE: Checking auto-link for role: "${roleName}"`);
+
+    if (roleName === 'Employee' || roleName === 'employee') {
+      console.log(`🔍 UPDATE: Role is Employee, searching for employee with email: ${newEmail}, client_id: ${currentUser.client_id}`);
+
+      const [employees] = await db.execute(`
+        SELECT id, employee_code, first_name, last_name FROM employees
+        WHERE email = ? AND client_id = ?
+      `, [newEmail, currentUser.client_id]);
+
+      console.log(`🔍 UPDATE: Found ${employees.length} employee(s) with matching email and client_id`);
+
+      if (employees.length > 0) {
+        const employeeId = employees[0].id;
+        console.log(`✅ UPDATE: Auto-linking employee_id: ${employeeId} (${employees[0].first_name} ${employees[0].last_name}, code: ${employees[0].employee_code})`);
+
+        // Add employee_id to update if not already in the list
+        if (!updateFields.find(f => f.startsWith('employee_id'))) {
+          updateFields.push('employee_id = ?');
+          updateValues.push(employeeId);
+        }
+      } else {
+        console.log(`⚠️ UPDATE: No employee found with email ${newEmail} and client_id ${currentUser.client_id}`);
+        // Set employee_id to NULL if no match found
+        if (!updateFields.find(f => f.startsWith('employee_id'))) {
+          updateFields.push('employee_id = NULL');
+        }
+      }
+    } else {
+      console.log(`ℹ️ UPDATE: Role "${roleName}" is not Employee role, clearing employee_id`);
+      // Clear employee_id if role is not Employee
+      if (!updateFields.find(f => f.startsWith('employee_id'))) {
+        updateFields.push('employee_id = NULL');
+      }
+    }
+  }
+
   updateFields.push('updated_at = NOW()');
   updateValues.push(userId);
 
   const updateQuery = `
-    UPDATE admin_users 
+    UPDATE admin_users
     SET ${updateFields.join(', ')}
     WHERE id = ?
   `;
 
   await db.execute(updateQuery, updateValues);
 
-  // Get updated user
+  // Get updated user including employee info
   const [updatedUser] = await db.execute(`
-    SELECT 
+    SELECT
       au.id,
       au.name,
       au.email,
+      au.employee_id,
       au.department,
       au.is_super_admin,
       au.is_active,
@@ -1014,18 +1096,24 @@ router.put('/admin-users/:id', [
       r.name as role_name,
       r.access_level,
       c.id as client_id,
-      c.name as client_name
+      c.name as client_name,
+      e.employee_code,
+      CONCAT(e.first_name, ' ', e.last_name) as employee_name
     FROM admin_users au
     JOIN roles r ON au.role_id = r.id
     LEFT JOIN clients c ON au.client_id = c.id
+    LEFT JOIN employees e ON au.employee_id = e.id
     WHERE au.id = ?
   `, [userId]);
 
   console.log('✅ Admin user updated successfully');
+  console.log(`   Employee ID linked: ${updatedUser[0].employee_id || 'NOT LINKED'}`);
 
   res.status(200).json({
     success: true,
-    message: 'Admin user updated successfully',
+    message: updatedUser[0].employee_id
+      ? `Admin user updated and linked to employee ${updatedUser[0].employee_code}`
+      : 'Admin user updated (no employee link)',
     data: {
       user: updatedUser[0]
     }

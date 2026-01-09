@@ -39,10 +39,23 @@ const AdminLogin = () => {
 
       console.log('Login success:', success);
 
-      
+
       if (success) {
-        // Redirect to dashboard on successful login
-        navigate('/dashboard');
+        // Get user data from localStorage to check role
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+
+          // Redirect based on role
+          if (user.roleName === 'Employee') {
+            navigate('/employee-portal/dashboard');
+          } else {
+            navigate('/dashboard');
+          }
+        } else {
+          // Fallback to dashboard if user data not found
+          navigate('/dashboard');
+        }
       } else {
         setError('Invalid email or password. Only admin users can access this system.');
       }
