@@ -240,13 +240,22 @@ const handleSaveUser = async () => {
   try {
     if (selectedUser) {
       // Update existing user
-      const updateData = {
+      const updateData: any = {
         name: formData.name.trim(),
         email: formData.email.trim(),
         role_id: formData.roleId,
         department: formData.department.trim() || undefined,
         is_active: formData.isActive
       };
+
+      // Only include password if it's provided
+      if (formData.password && formData.password.trim()) {
+        if (formData.password.length < 6) {
+          setFieldErrors({ password: 'Password must be at least 6 characters long' });
+          return;
+        }
+        updateData.password = formData.password;
+      }
 
       console.log('🔄 Updating admin user:', selectedUser.id, updateData);
       const response = await apiService.updateAdminUser(selectedUser.id, updateData);
@@ -818,6 +827,18 @@ const handleServerErrors = (responseData: any) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
+                <Label htmlFor="editUserPassword" value="New Password (leave blank to keep current)" />
+                <TextInput
+                  id="editUserPassword"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="Enter new password (min 6 characters)"
+                  disabled={isSubmitting}
+                  helperText="Only fill this if you want to change the password"
+                />
+              </div>
+              <div>
                 <Label htmlFor="editUserRole" value="Assign Role" />
                 <select
                   id="editUserRole"
@@ -835,16 +856,17 @@ const handleServerErrors = (responseData: any) => {
                   ))}
                 </select>
               </div>
-              <div>
-                <Label htmlFor="editUserDepartment" value="Department" />
-                <TextInput
-                  id="editUserDepartment"
-                  value={formData.department}
-                  onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                  placeholder="Enter department (optional)"
-                  disabled={isSubmitting}
-                />
-              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="editUserDepartment" value="Department" />
+              <TextInput
+                id="editUserDepartment"
+                value={formData.department}
+                onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+                placeholder="Enter department (optional)"
+                disabled={isSubmitting}
+              />
             </div>
 
             <div>

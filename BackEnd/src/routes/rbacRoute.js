@@ -697,7 +697,7 @@ router.post('/admin-users', [
   checkPermission('rbac.assign'),
   ensureClientAccess,
   body('name').trim().isLength({ min: 1 }),
-  body('email').isEmail().normalizeEmail(),
+  body('email').isEmail(),
   body('password').isLength({ min: 6 }),
   body('role_id').custom(async (value, { req }) => {
   if (!value) {
@@ -891,7 +891,8 @@ router.put('/admin-users/:id', [
   checkPermission('rbac.assign'),
   ensureClientAccess,
   body('name').optional().trim().isLength({ min: 1 }),
-  body('email').optional().isEmail().normalizeEmail(),
+  body('email').optional().isEmail(),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
   body('role_id').optional().custom(async (value, { req }) => {
   if (!value) {
     return true; // Optional field, skip validation if not provided
@@ -973,6 +974,14 @@ router.put('/admin-users/:id', [
       updateValues.push(req.body[field]);
     }
   });
+
+  // Handle password update separately (needs hashing)
+  if (req.body.password) {
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+    updateFields.push('password_hash = ?');
+    updateValues.push(hashedPassword);
+  }
 
   if (updateFields.length === 0) {
     return res.status(400).json({

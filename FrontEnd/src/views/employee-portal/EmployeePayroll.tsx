@@ -297,29 +297,29 @@ const EmployeePayroll = () => {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-gray-600">Basic Salary</span>
-                <span className="font-medium">${selectedPayroll.payroll.earnings.basic_salary.toLocaleString()}</span>
+                <span className="font-medium">Rs. {selectedPayroll.payroll.earnings.basic_salary.toLocaleString()}</span>
               </div>
               {selectedPayroll.payroll.earnings.allowances > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Allowances</span>
-                  <span className="font-medium">${selectedPayroll.payroll.earnings.allowances.toLocaleString()}</span>
+                  <span className="font-medium">Rs. {selectedPayroll.payroll.earnings.allowances.toLocaleString()}</span>
                 </div>
               )}
               {selectedPayroll.payroll.earnings.overtime > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Overtime</span>
-                  <span className="font-medium">${selectedPayroll.payroll.earnings.overtime.toLocaleString()}</span>
+                  <span className="font-medium">Rs. {selectedPayroll.payroll.earnings.overtime.toLocaleString()}</span>
                 </div>
               )}
               {selectedPayroll.payroll.earnings.bonus > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Bonus</span>
-                  <span className="font-medium">${selectedPayroll.payroll.earnings.bonus.toLocaleString()}</span>
+                  <span className="font-medium">Rs. {selectedPayroll.payroll.earnings.bonus.toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t font-semibold">
                 <span>Gross Salary</span>
-                <span>${selectedPayroll.payroll.earnings.gross_total.toLocaleString()}</span>
+                <span>Rs. {selectedPayroll.payroll.earnings.gross_total.toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -331,30 +331,30 @@ const EmployeePayroll = () => {
               {selectedPayroll.payroll.deductions.tax > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Tax</span>
-                  <span className="font-medium text-red-600">-${selectedPayroll.payroll.deductions.tax.toLocaleString()}</span>
+                  <span className="font-medium text-red-600">-Rs. {selectedPayroll.payroll.deductions.tax.toLocaleString()}</span>
                 </div>
               )}
               {selectedPayroll.payroll.deductions.provident_fund > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Provident Fund</span>
-                  <span className="font-medium text-red-600">-${selectedPayroll.payroll.deductions.provident_fund.toLocaleString()}</span>
+                  <span className="font-medium text-red-600">-Rs. {selectedPayroll.payroll.deductions.provident_fund.toLocaleString()}</span>
                 </div>
               )}
               {selectedPayroll.payroll.deductions.insurance > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Insurance</span>
-                  <span className="font-medium text-red-600">-${selectedPayroll.payroll.deductions.insurance.toLocaleString()}</span>
+                  <span className="font-medium text-red-600">-Rs. {selectedPayroll.payroll.deductions.insurance.toLocaleString()}</span>
                 </div>
               )}
               {selectedPayroll.payroll.deductions.loan > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Loan Deduction</span>
-                  <span className="font-medium text-red-600">-${selectedPayroll.payroll.deductions.loan.toLocaleString()}</span>
+                  <span className="font-medium text-red-600">-Rs. {selectedPayroll.payroll.deductions.loan.toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t font-semibold">
                 <span>Total Deductions</span>
-                <span className="text-red-600">-${selectedPayroll.payroll.deductions.total.toLocaleString()}</span>
+                <span className="text-red-600">-Rs. {selectedPayroll.payroll.deductions.total.toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -364,7 +364,7 @@ const EmployeePayroll = () => {
             <div className="flex justify-between items-center">
               <span className="text-xl font-bold text-gray-800">Net Salary</span>
               <span className="text-3xl font-bold text-blue-600">
-                ${selectedPayroll.payroll.net_salary.toLocaleString()}
+                Rs. {selectedPayroll.payroll.net_salary.toLocaleString()}
               </span>
             </div>
             <div className="mt-4 pt-4 border-t border-blue-200">
@@ -479,14 +479,14 @@ const EmployeePayroll = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${record.gross_salary?.toLocaleString() || 0}
+                          Rs. {record.gross_salary?.toLocaleString() || 0}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                          -${record.total_deductions?.toLocaleString() || 0}
+                          -Rs. {record.total_deductions?.toLocaleString() || 0}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-semibold text-green-600">
-                            ${record.net_salary?.toLocaleString() || 0}
+                            Rs. {record.net_salary?.toLocaleString() || 0}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
