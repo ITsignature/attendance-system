@@ -369,7 +369,7 @@ router.put('/:id',
     // Your existing validations - KEEP ALL OF THESE
     body('first_name').optional().trim().isLength({ min: 1 }).withMessage('First name cannot be empty'),
     body('last_name').optional().trim().isLength({ min: 1 }).withMessage('Last name cannot be empty'),
-    body('email').optional().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+    body('email').optional().isEmail().withMessage('Please enter a valid email address'),
     body('phone').optional().trim().isLength({ min: 10 }).withMessage('Phone number must be at least 10 digits'),
     body('date_of_birth').optional().isISO8601().withMessage('Please enter a valid date'),
     body('gender').optional().isIn(['male', 'female', 'other']).withMessage('Gender must be male, female, or other'),
@@ -783,7 +783,7 @@ router.post('/',
     // Personal Information Validations
     body('first_name').trim().isLength({ min: 1 }).withMessage('First name is required'),
     body('last_name').trim().isLength({ min: 1 }).withMessage('Last name is required'),
-    body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+    body('email').isEmail().withMessage('Please enter a valid email address'),
     body('phone').trim().isLength({ min: 10 }).withMessage('Phone number must be at least 10 digits'),
     body('date_of_birth').isISO8601().withMessage('Please enter a valid date of birth'),
     body('gender').isIn(['male', 'female', 'other']).withMessage('Gender must be male, female, or other'),
@@ -1217,7 +1217,7 @@ router.post('/',
   [
     // Personal Information Validations - REQUIRED
     body('first_name').trim().isLength({ min: 1 }).withMessage('First name is required'),
-    body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+    body('email').isEmail().withMessage('Please enter a valid email address'),
     body('phone').trim().isLength({ min: 10 }).withMessage('Phone number must be at least 10 digits'),
     body('employee_code').trim().isLength({ min: 1 }).withMessage('Employee code is required'),
     

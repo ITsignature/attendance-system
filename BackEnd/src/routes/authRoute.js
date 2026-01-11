@@ -13,7 +13,7 @@ const router = express.Router();
 // LOGIN ENDPOINT
 // =============================================
 router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
+  body('email').isEmail(),
   body('password').isLength({ min: 1 }).trim()
 ], asyncHandler(async (req, res) => {
   // Check validation errors
