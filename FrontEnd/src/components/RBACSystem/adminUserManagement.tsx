@@ -8,6 +8,7 @@ interface AdminUser {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   department?: string;
   is_super_admin: boolean;
   is_active: boolean;
@@ -41,6 +42,7 @@ const AdminUserManagementPage: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
     roleId: '',
     department: '',
@@ -126,6 +128,7 @@ const AdminUserManagementPage: React.FC = () => {
     setFormData({
       name: '',
       email: '',
+      phone: '',
       password: '',
       roleId: roles.length > 0 ? roles[0].id : '',
       department: '',
@@ -140,6 +143,7 @@ const AdminUserManagementPage: React.FC = () => {
     setFormData({
       name: user.name,
       email: user.email,
+      phone: user.phone || '',
       password: '', // Don't pre-fill password for security
       roleId: user.role_id,
       department: user.department || '',
@@ -184,6 +188,7 @@ const AdminUserManagementPage: React.FC = () => {
 const [fieldErrors, setFieldErrors] = useState<{
   name?: string;
   email?: string;
+  phone?: string;
   password?: string;
   role_id?: string;
 }>({});
@@ -196,13 +201,21 @@ const validateForm = () => {
     errors.name = 'Name is required';
   }
 
-  // Email validation  
+  // Email validation
   if (!formData.email.trim()) {
     errors.email = 'Email is required';
   } else {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       errors.email = 'Please enter a valid email address';
+    }
+  }
+
+  // Phone validation (optional but must be valid format if provided)
+  if (formData.phone && formData.phone.trim()) {
+    const phoneRegex = /^0\d{9}$/; // Local format: 0712345678
+    if (!phoneRegex.test(formData.phone.trim())) {
+      errors.phone = 'Please enter a valid phone number (e.g., 0712345678)';
     }
   }
 
@@ -243,6 +256,7 @@ const handleSaveUser = async () => {
       const updateData: any = {
         name: formData.name.trim(),
         email: formData.email.trim(),
+        phone: formData.phone.trim() || undefined,
         role_id: formData.roleId,
         department: formData.department.trim() || undefined,
         is_active: formData.isActive
@@ -273,6 +287,7 @@ const handleSaveUser = async () => {
       const createData = {
         name: formData.name.trim(),
         email: formData.email.trim(),
+        phone: formData.phone.trim() || undefined,
         password: formData.password,
         role_id: formData.roleId,
         department: formData.department.trim() || undefined,
@@ -296,6 +311,7 @@ const handleSaveUser = async () => {
     setFormData({
       name: '',
       email: '',
+      phone: '',
       password: '',
       roleId: roles.length > 0 ? roles[0].id : '',
       department: '',
@@ -328,7 +344,8 @@ const handleServerErrors = (responseData: any) => {
         // Map backend field names to frontend field names
         const fieldMap: { [key: string]: string } = {
           'name': 'name',
-          'email': 'email', 
+          'email': 'email',
+          'phone': 'phone',
           'password': 'password',
           'role_id': 'role_id'
         };
@@ -675,6 +692,28 @@ const handleServerErrors = (responseData: any) => {
         </div>
       </div>
 
+      {/* Phone Number Field */}
+      <div>
+        <Label htmlFor="userPhone" value="Phone Number (Optional)" />
+        <TextInput
+          id="userPhone"
+          type="tel"
+          value={formData.phone}
+          onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+          placeholder="Enter phone number (e.g., 0712345678)"
+          disabled={isSubmitting}
+          color={fieldErrors.phone ? "failure" : undefined}
+        />
+        {fieldErrors.phone && (
+          <p className="mt-1 text-sm text-red-600 dark:text-red-500">
+            {fieldErrors.phone}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-gray-500">
+          Phone can be used for login. Format: 0712345678
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Password Field with Error */}
         <div>
@@ -823,6 +862,28 @@ const handleServerErrors = (responseData: any) => {
                   disabled={isSubmitting}
                 />
               </div>
+            </div>
+
+            {/* Phone Number Field */}
+            <div>
+              <Label htmlFor="editUserPhone" value="Phone Number (Optional)" />
+              <TextInput
+                id="editUserPhone"
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="Enter phone number (e.g., 0712345678)"
+                disabled={isSubmitting}
+                color={fieldErrors.phone ? "failure" : undefined}
+              />
+              {fieldErrors.phone && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-500">
+                  {fieldErrors.phone}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Phone can be used for login. Format: 0712345678
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -4,20 +4,20 @@ import { Button, Label, TextInput, Alert } from 'flowbite-react';
 import { useDynamicRBAC } from '../../../components/RBACSystem/rbacSystem';
 
 const AuthLogin = () => {
-  const [email, setEmail] = useState(''); // REMOVE default demo email
-  const [password, setPassword] = useState(''); // REMOVE default demo password
+  const [identifier, setIdentifier] = useState(''); // Can be email or phone
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [remainingAttempts, setRemainingAttempts] = useState(null);
-  
+
   const { login } = useDynamicRBAC();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password) {
-      setError('Please enter both email and password');
+
+    if (!identifier || !password) {
+      setError('Please enter both email/phone and password');
       return;
     }
 
@@ -26,7 +26,7 @@ const AuthLogin = () => {
     setRemainingAttempts(null);
 
     try {
-      const success = await login(email, password);
+      const success = await login(identifier, password);
 
       console.log('Login success:', success);
       
@@ -34,7 +34,7 @@ const AuthLogin = () => {
         // Redirect to dashboard on successful login
         navigate('/dashboard');
       } else {
-        setError('Invalid email or password. Only admin users can access this system.');
+        setError('Invalid credentials. Only admin users can access this system.');
       }
     } catch (error: any) {
       console.error('Login error:', error);
@@ -87,18 +87,18 @@ const AuthLogin = () => {
               </Alert>
             )}
 
-            {/* Email Field */}
+            {/* Email or Phone Field */}
             <div>
-              <Label htmlFor="email" value="Email Address" />
+              <Label htmlFor="identifier" value="Email or Phone Number" />
               <TextInput
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="identifier"
+                name="identifier"
+                type="text"
+                autoComplete="username"
                 required
-                placeholder="Enter your admin email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email or phone number"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 disabled={loading}
                 className="mt-1"
               />
@@ -126,7 +126,7 @@ const AuthLogin = () => {
           <div>
             <Button
               type="submit"
-              disabled={loading || !email || !password}
+              disabled={loading || !identifier || !password}
               className="w-full"
               size="lg"
             >

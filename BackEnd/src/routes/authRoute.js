@@ -13,7 +13,10 @@ const router = express.Router();
 // LOGIN ENDPOINT
 // =============================================
 router.post('/login', [
-  body('email').isEmail(),
+  body('identifier')
+    .notEmpty()
+    .withMessage('Email or phone number is required')
+    .trim(),
   body('password').isLength({ min: 1 }).trim()
 ], asyncHandler(async (req, res) => {
   // Check validation errors
@@ -26,10 +29,15 @@ router.post('/login', [
     });
   }
 
-  const { email, password } = req.body;
+  const { identifier, password } = req.body;
   const db = getDB();
 
   try {
+    // Determine if identifier is email or phone number
+    // Simple check: if contains @, it's email; otherwise, it's phone
+    const isEmail = identifier.includes('@');
+    const searchField = isEmail ? 'email' : 'phone';
+
     // Get user with role and client info (using executeQuery with retry logic)
     const [users] = await executeQuery(`
       SELECT
@@ -41,19 +49,20 @@ router.post('/login', [
       FROM admin_users au
       JOIN roles r ON au.role_id = r.id
       LEFT JOIN clients c ON au.client_id = c.id
-      WHERE au.email = ?
-    `, [email]);
+      WHERE au.${searchField} = ?
+    `, [identifier]);
 
     console.log('🔍 Debug - Users found:', users.length);
-    console.log('🔍 Debug - Email searched:', email);
+    console.log('🔍 Debug - Search field:', searchField);
+    console.log('🔍 Debug - Identifier searched:', identifier);
     if (users.length > 0) {
-        console.log('🔍 Debug - User found:', users[0].email, users[0].name);
-    }     
+        console.log('🔍 Debug - User found:', users[0].email, users[0].name, users[0].phone);
+    }
 
     if (users.length === 0) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Invalid credentials'
       });
     }
 
@@ -114,7 +123,7 @@ router.post('/login', [
 
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password',
+        message: 'Invalid credentials',
         remainingAttempts: Math.max(0, maxAttempts - newFailedAttempts)
       });
     }
@@ -142,6 +151,7 @@ router.post('/login', [
     const tokenPayload = {
       userId: user.id,
       email: user.email,
+      phone: user.phone,
       clientId: user.client_id,
       roleId: user.role_id,
       isSuperAdmin: user.is_super_admin
@@ -172,6 +182,7 @@ console.log('🔍 Token will expire at:', new Date(Date.now() + 24 * 60 * 60 * 1
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       clientId: user.client_id,
       clientName: user.client_name,
       roleId: user.role_id,

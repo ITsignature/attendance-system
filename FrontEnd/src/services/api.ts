@@ -289,10 +289,10 @@ class ApiService {
     }
   }
 
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(identifier: string, password: string): Promise<LoginResponse> {
   const response = await this.apiCall<LoginResponse['data']>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ identifier, password }),
   });
 
   if (response.success && response.data) {
