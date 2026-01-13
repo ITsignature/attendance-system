@@ -568,10 +568,11 @@ router.get('/admin-users', [
   if (req.user.isSuperAdmin) {
     // Super admin can see users from all clients
     query = `
-      SELECT 
+      SELECT
         au.id,
         au.name,
         au.email,
+        au.phone,
         au.department,
         au.last_login_at,
         au.is_super_admin,
@@ -596,6 +597,7 @@ router.get('/admin-users', [
         au.id,
         au.name,
         au.email,
+        au.phone,
         au.department,
         au.last_login_at,
         au.is_super_admin,
@@ -641,10 +643,11 @@ router.get('/admin-users/:id', [
   const userId = req.params.id;
   
   const [users] = await db.execute(`
-    SELECT 
+    SELECT
       au.id,
       au.name,
       au.email,
+      au.phone,
       au.department,
       au.last_login_at,
       au.is_super_admin,

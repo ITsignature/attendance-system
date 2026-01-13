@@ -895,6 +895,7 @@ const handleServerErrors = (responseData: any) => {
                   value={formData.password}
                   onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                   placeholder="Enter new password (min 6 characters)"
+                  autoComplete="new-password"
                   disabled={isSubmitting}
                   helperText="Only fill this if you want to change the password"
                 />
