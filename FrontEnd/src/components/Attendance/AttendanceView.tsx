@@ -36,7 +36,8 @@ interface AttendanceRecord {
   check_out_time?: string;
   total_hours?: number;
   overtime_hours?: number;
-  break_duration?: number;
+  break_start_time?: string;
+  break_end_time?: string;
   arrival_status: 'on_time' | 'late' | 'absent';
   work_duration: 'full_day' | 'half_day' | 'short_leave' | 'on_leave';
   work_type: 'office' | 'remote' | 'hybrid';
@@ -172,6 +173,7 @@ const AttendanceView: React.FC = () => {
       const response = await apiService.apiCall('/api/employees');
       if (response.success) {
         console.log('📊 Employees:', response.data.employees);
+        console.log('📊 First employee break times:', response.data.employees[0]?.break_start_time, response.data.employees[0]?.break_end_time);
         setEmployees(response.data.employees);
 
       }
@@ -444,6 +446,8 @@ const filteredRecords = attendanceRecords.filter(record =>
                   <Table.HeadCell>Date</Table.HeadCell>
                   <Table.HeadCell>Check In</Table.HeadCell>
                   <Table.HeadCell>Check Out</Table.HeadCell>
+                  <Table.HeadCell>Break Start</Table.HeadCell>
+                  <Table.HeadCell>Break End</Table.HeadCell>
                   <Table.HeadCell>Arrival Status</Table.HeadCell>
                   <Table.HeadCell>Work Duration</Table.HeadCell>
                   <Table.HeadCell>Total Hours</Table.HeadCell>
@@ -477,9 +481,31 @@ const filteredRecords = attendanceRecords.filter(record =>
                         <div className="flex items-center text-sm">
                           <HiClock className="mr-1 h-3 w-3 text-red-500" />
                           {formatTime(record.check_out_time)}
-                        </div>  
+                        </div>
                       </Table.Cell>
-                      
+
+                      <Table.Cell>
+                        {record.break_start_time ? (
+                          <div className="flex items-center text-sm">
+                            <HiClock className="mr-1 h-3 w-3 text-blue-500" />
+                            {formatTime(record.break_start_time)}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </Table.Cell>
+
+                      <Table.Cell>
+                        {record.break_end_time ? (
+                          <div className="flex items-center text-sm">
+                            <HiClock className="mr-1 h-3 w-3 text-blue-500" />
+                            {formatTime(record.break_end_time)}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </Table.Cell>
+
                       <Table.Cell>
 
                           {/* inline lateness calc */}

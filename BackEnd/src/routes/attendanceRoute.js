@@ -1267,7 +1267,8 @@ const calculateWorkHours = async (
     body('check_out_time').optional( { values: 'falsy' } ).matches(timeRegex),
     body('arrival_status').optional().isIn(['on_time', 'late', 'absent']),
     body('work_duration').optional().isIn(['full_day', 'half_day', 'short_leave', 'on_leave']),
-    body('break_duration').optional().isFloat({ min: 0, max: 24 }),
+    body('break_start_time').optional( { values: 'falsy' } ).matches(timeRegex),
+    body('break_end_time').optional( { values: 'falsy' } ).matches(timeRegex),
     body('work_type').optional().isIn(['office', 'remote', 'hybrid']),
     body('notes').optional().isLength({ max: 500 })
   ], asyncHandler(async (req, res) => {
@@ -1310,7 +1311,7 @@ const calculateWorkHours = async (
       const { totalHours, overtimeHours, standardHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
         req.body.check_in_time,
         req.body.check_out_time,
-        req.body.break_duration,
+        0, // break_duration removed, pass 0
         req.user.clientId,
         db,
         schedule
@@ -1356,7 +1357,7 @@ const calculateWorkHours = async (
         req.body.check_out_time,
         schedule.start_time,
         schedule.end_time,
-        req.body.break_duration || 0,
+        0, // break_duration removed, pass 0
         req.body.employee_id,
         db
       );
@@ -1378,7 +1379,8 @@ const calculateWorkHours = async (
         overtime_hours: overtimeHours, // ACTUAL overtime hours without multiplier
         pre_shift_overtime_seconds: preShiftOvertimeSeconds,
         post_shift_overtime_seconds: postShiftOvertimeSeconds,
-        break_duration: req.body.break_duration || 0,
+        break_start_time: req.body.break_start_time || null,
+        break_end_time: req.body.break_end_time || null,
         arrival_status: arrivalResult.status,
         work_duration: durationResult.status,
         work_type: req.body.work_type || 'office',
@@ -1395,8 +1397,8 @@ const calculateWorkHours = async (
       const insertQuery = `
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time, total_hours,
-          overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds, break_duration, arrival_status, work_duration, work_type, notes, created_by, scheduled_in_time, scheduled_out_time, payable_duration, is_weekend
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds, break_start_time, break_end_time, arrival_status, work_duration, work_type, notes, created_by, scheduled_in_time, scheduled_out_time, payable_duration, is_weekend
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       await db.execute(insertQuery, Object.values(attendanceData));
@@ -1806,7 +1808,6 @@ router.patch('/bulk', [
   body('work_duration')
     .optional({ checkFalsy: true })
     .isIn(['full_day', 'half_day', 'short_leave', 'on_leave']),
-  body('break_duration').optional().isFloat({ min: 0, max: 24 }),
   body('work_type').optional().isIn(['office', 'remote', 'hybrid']),
   body('notes').optional().isLength({ max: 500 })
 ], asyncHandler(async (req, res) => {
@@ -1887,14 +1888,15 @@ router.patch('/bulk', [
           const eff = {
             check_in_time: req.body.check_in_time ?? current.check_in_time,
             check_out_time: req.body.check_out_time ?? current.check_out_time,
-            break_duration: req.body.break_duration ?? current.break_duration,
+            break_start_time: req.body.break_start_time ?? current.break_start_time,
+            break_end_time: req.body.break_end_time ?? current.break_end_time,
           };
 
           // Recalculate hours/overtime (now includes seconds)
           const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
             eff.check_in_time,
             eff.check_out_time,
-            eff.break_duration,
+            0, // break_duration removed, pass 0
             req.user.clientId,
             db,
             schedule
@@ -1934,7 +1936,7 @@ router.patch('/bulk', [
             eff.check_out_time,
             current.scheduled_in_time,
             current.scheduled_out_time,
-            eff.break_duration,
+            0, // break_duration removed, pass 0
             employeeId,
             db
           );
@@ -1952,7 +1954,8 @@ router.patch('/bulk', [
 
           maybePush('check_in_time', eff.check_in_time, current.check_in_time);
           maybePush('check_out_time', eff.check_out_time, current.check_out_time);
-          maybePush('break_duration', eff.break_duration, current.break_duration);
+          maybePush('break_start_time', eff.break_start_time, current.break_start_time);
+          maybePush('break_end_time', eff.break_end_time, current.break_end_time);
           maybePush('arrival_status', arrivalStatus, current.arrival_status);
           maybePush('work_duration', workDuration, current.work_duration);
           maybePush('total_hours', totalHours, current.total_hours);
@@ -2053,7 +2056,12 @@ router.patch('/:id',
       .optional({ checkFalsy: true })
       .isIn(['full_day', 'half_day', 'short_leave', 'on_leave']),
 
-    body('break_duration').optional().isFloat({ min: 0, max: 24 }),
+    body('break_start_time')
+      .optional({ checkFalsy: true })
+      .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/),
+    body('break_end_time')
+      .optional({ checkFalsy: true })
+      .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/),
     body('work_type').optional().isIn(['office', 'remote', 'hybrid']),
     body('notes').optional().isLength({ max: 500 })
   ],
@@ -2087,18 +2095,19 @@ router.patch('/:id',
     const schedule         = await getEmployeeSchedule(current.employee_id, req.user.clientId, db, current.date);
     const durationSettings = await getWorkDurationSettings(req.user.clientId, db);
 
-    /* ───────── 3. figure out the “effective” values after merge ───────── */
+    /* ───────── 3. figure out the "effective" values after merge ───────── */
     const eff = {           // effective values after patch
       check_in_time  : req.body.check_in_time  ?? current.check_in_time,
       check_out_time : req.body.check_out_time ?? current.check_out_time,
-      break_duration : req.body.break_duration ?? current.break_duration,
+      break_start_time : req.body.break_start_time ?? current.break_start_time,
+      break_end_time : req.body.break_end_time ?? current.break_end_time,
     };
 
     // recalc hours/overtime (now includes seconds)
     const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
       eff.check_in_time,
       eff.check_out_time,
-      eff.break_duration,
+      0, // break_duration removed, pass 0
       req.user.clientId,
       db,
       schedule
@@ -2156,7 +2165,7 @@ console.log('final workDuration:', workDuration);
       eff.check_out_time,
       current.scheduled_in_time,
       current.scheduled_out_time,
-      eff.break_duration,
+      0, // break_duration removed, pass 0
       current.employee_id,
       db
     );
@@ -2174,7 +2183,8 @@ console.log('final workDuration:', workDuration);
 
     maybePush('check_in_time',  eff.check_in_time,  current.check_in_time);
     maybePush('check_out_time', eff.check_out_time, current.check_out_time);
-    maybePush('break_duration', eff.break_duration, current.break_duration);
+    maybePush('break_start_time', eff.break_start_time, current.break_start_time);
+    maybePush('break_end_time', eff.break_end_time, current.break_end_time);
     maybePush('arrival_status', arrivalStatus,      current.arrival_status);
     maybePush('work_duration',  workDuration,       current.work_duration);
 

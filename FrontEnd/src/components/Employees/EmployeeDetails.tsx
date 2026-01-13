@@ -55,6 +55,8 @@ interface Employee {
   // Added work schedule fields
   in_time?: string;
   out_time?: string;
+  break_start_time?: string;
+  break_end_time?: string;
   follows_company_schedule?: boolean;
   weekend_working_config?: {
     saturday?: {
@@ -1340,6 +1342,16 @@ const EmployeeDetails: React.FC = () => {
                       <Field
                         label="Out Time"
                         value={employee.out_time ? formatTime(employee.out_time) : undefined}
+                        icon={<HiClock className="w-4 h-4 text-gray-500" />}
+                      />
+                      <Field
+                        label="Break Start Time"
+                        value={employee.break_start_time ? formatTime(employee.break_start_time) : 'Not set'}
+                        icon={<HiClock className="w-4 h-4 text-gray-500" />}
+                      />
+                      <Field
+                        label="Break End Time"
+                        value={employee.break_end_time ? formatTime(employee.break_end_time) : 'Not set'}
                         icon={<HiClock className="w-4 h-4 text-gray-500" />}
                       />
                       <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">

@@ -29,12 +29,16 @@ type Employee = {
   department_name?: string;
   // Optional: if your API provides a default location per employee
   default_work_type?: WorkType;
+  break_start_time?: string;
+  break_end_time?: string;
 };
 
 type AttendanceRow = {
   employee: Employee;
   check_in_time: string;   // "HH:MM:SS" or "HH:MM"
   check_out_time: string;  // "HH:MM:SS" or "HH:MM"
+  break_start_time: string; // "HH:MM:SS" or "HH:MM"
+  break_end_time: string;   // "HH:MM:SS" or "HH:MM"
 //   notes: string;
   work_type?: WorkType | ''; // display only (read-only)
   dirty: boolean;
@@ -118,6 +122,8 @@ const ManualAttendance: React.FC = () => {
         employee: emp,
         check_in_time: '',
         check_out_time: '',
+        break_start_time: '',
+        break_end_time: '',
         work_type: emp.default_work_type || 'office', // display only; not editable/not sent
         notes: '',
         dirty: false,
@@ -131,6 +137,8 @@ const ManualAttendance: React.FC = () => {
         employee: emp,
         check_in_time: '',
         check_out_time: '',
+        break_start_time: '',
+        break_end_time: '',
         work_type: emp.default_work_type || 'office',
         notes: '',
         dirty: false,
@@ -209,6 +217,8 @@ const ManualAttendance: React.FC = () => {
         date,
         check_in_time: padSeconds(r.check_in_time) || undefined,
         check_out_time: padSeconds(r.check_out_time) || undefined,
+        break_start_time: padSeconds(r.break_start_time) || undefined,
+        break_end_time: padSeconds(r.break_end_time) || undefined,
         // work_type NOT sent (work location is read-only here)
         // notes: r.notes || undefined,
       };
@@ -377,6 +387,8 @@ const ManualAttendance: React.FC = () => {
                 <Table.HeadCell>Work Location</Table.HeadCell>
                 <Table.HeadCell>In Time</Table.HeadCell>
                 <Table.HeadCell>Out Time</Table.HeadCell>
+                <Table.HeadCell>Break Start</Table.HeadCell>
+                <Table.HeadCell>Break End</Table.HeadCell>
                 {/* <Table.HeadCell>Notes</Table.HeadCell> */}
                 <Table.HeadCell>Status</Table.HeadCell>
                 <Table.HeadCell>Action</Table.HeadCell>
@@ -385,6 +397,10 @@ const ManualAttendance: React.FC = () => {
                 {rows.map((r, idx) => {
                   const ciOk = !r.check_in_time || isTimeValid(r.check_in_time);
                   const coOk = !r.check_out_time || isTimeValid(r.check_out_time);
+                  const bsOk = !r.break_start_time || isTimeValid(r.break_start_time);
+                  const beOk = !r.break_end_time || isTimeValid(r.break_end_time);
+                  // Check if employee has configured break times
+                  const hasBreakSchedule = r.employee.break_start_time && r.employee.break_end_time;
                   return (
                     <Table.Row key={r.employee.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
                       <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
@@ -418,6 +434,34 @@ const ManualAttendance: React.FC = () => {
                           color={coOk ? undefined : 'failure'}
                           helperText={!coOk ? 'Format HH:MM:SS' : undefined}
                         />
+                      </Table.Cell>
+                      <Table.Cell>
+                        {hasBreakSchedule ? (
+                          <TextInput
+                            type="time"
+                            step="1"
+                            value={r.break_start_time}
+                            onChange={(e) => setRowField(idx, { break_start_time: e.target.value })}
+                            color={bsOk ? undefined : 'failure'}
+                            helperText={!bsOk ? 'Format HH:MM:SS' : undefined}
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {hasBreakSchedule ? (
+                          <TextInput
+                            type="time"
+                            step="1"
+                            value={r.break_end_time}
+                            onChange={(e) => setRowField(idx, { break_end_time: e.target.value })}
+                            color={beOk ? undefined : 'failure'}
+                            helperText={!beOk ? 'Format HH:MM:SS' : undefined}
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
                       </Table.Cell>
                       {/* <Table.Cell>
                         <TextInput
