@@ -54,9 +54,9 @@ router.get('/fingerprint', [
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
+    return res.status(200).json({
       success: false,
-      message: 'Validation failed',
+      message: 'Invalid request',
       errors: errors.array(),
       status: 'error'
     });
@@ -99,9 +99,9 @@ router.get('/fingerprint', [
     const [employee] = await db.execute(query, queryParams);
 
     if (employee.length === 0) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
-        message: 'Employee not found or inactive. Fingerprint ID: ' + fingerprint_id,
+        message: 'Fingerprint not registered',
         status: 'error'
       });
     }
@@ -225,9 +225,9 @@ router.get('/fingerprint', [
         console.log(debugFooter);
         logToFile(debugFooter);
 
-        return res.status(400).json({
+        return res.status(200).json({
           success: false,
-          message: 'You have already checked out today',
+          message: 'Already checked out',
           status: 'info',
           data: {
             employee_name: emp.employee_name,
@@ -339,9 +339,9 @@ router.get('/fingerprint', [
         console.log(errorLog3);
         logToFile(errorLog3);
 
-        return res.status(400).json({
+        return res.status(200).json({
           success: false,
-          message: 'Invalid time format detected',
+          message: 'Invalid time format',
           status: 'error'
         });
       }
@@ -528,9 +528,9 @@ router.get('/fingerprint', [
 
   } catch (error) {
     console.error('❌ Fingerprint attendance error:', error);
-    return res.status(500).json({
+    return res.status(200).json({
       success: false,
-      message: error.message || 'Failed to process attendance',
+      message: 'System error',
       status: 'error',
       error: error.message
     });
