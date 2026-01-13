@@ -370,14 +370,14 @@ const initializeAuth = async () => {
 
   // ========== AUTH METHODS ==========
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (identifier: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      console.log('🔐 Attempting admin login for:', email);
-      
-      const response = await apiService.login(email, password);
+      console.log('🔐 Attempting admin login for:', identifier);
+
+      const response = await apiService.login(identifier, password);
       
       console.log('✅ Login response:', response);
       

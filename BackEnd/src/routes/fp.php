@@ -4,15 +4,19 @@ date_default_timezone_set('Asia/Colombo');
 $time = time();
 
 // Forward to new smart attendance system
-$employee_id = $_GET['finger_print_id'];
+$fingerprint_id = $_GET['finger_print_id'];
+$client_id = 'it-signature'; // Set your client ID here
+
+// Build the GET request URL with query parameters
 $newSystemURL = "https://attendance.itsignaturepvtltd.com/api/api/attendance/fingerprint";
-$postData = json_encode([
-    'fingerprint_id' => $employee_id // Optional
+$queryParams = http_build_query([
+    'client_id' => $client_id,
+    'fingerprint_id' => $fingerprint_id
 ]);
-$ch = curl_init($newSystemURL);
-curl_setopt($ch, CURLOPT_POST, 1);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+$fullURL = $newSystemURL . '?' . $queryParams;
+
+// Make GET request
+$ch = curl_init($fullURL);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_TIMEOUT, 5);
 $response = curl_exec($ch);

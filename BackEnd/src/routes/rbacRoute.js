@@ -698,6 +698,7 @@ router.post('/admin-users', [
   ensureClientAccess,
   body('name').trim().isLength({ min: 1 }),
   body('email').isEmail(),
+  body('phone').optional().matches(/^0\d{9}$/).withMessage('Phone must be in format 0712345678'),
   body('password').isLength({ min: 6 }),
   body('role_id').custom(async (value, { req }) => {
   if (!value) {
@@ -736,7 +737,7 @@ body('is_active').optional().isBoolean()
 
   const db = getDB();
   const userId = uuidv4();
-  
+
   // Check if email already exists
   const [existing] = await db.execute(`
     SELECT id FROM admin_users WHERE email = ?
@@ -747,6 +748,21 @@ body('is_active').optional().isBoolean()
       success: false,
       message: 'Email already exists'
     });
+  }
+
+  // Check if phone already exists (if phone is provided)
+  if (req.body.phone) {
+    const [phoneExists] = await db.execute(`
+      SELECT id FROM admin_users WHERE phone = ?
+    `, [req.body.phone]);
+
+    if (phoneExists.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number already exists',
+        errors: [{ param: 'phone', msg: 'Phone number already exists' }]
+      });
+    }
   }
 
   // Verify role exists and user has access to assign it
@@ -819,6 +835,7 @@ body('is_active').optional().isBoolean()
     employee_id: employeeId,
     name: req.body.name,
     email: req.body.email,
+    phone: req.body.phone || null,
     password_hash: passwordHash,
     role_id: req.body.role_id,
     department: req.body.department || null,
@@ -830,9 +847,9 @@ body('is_active').optional().isBoolean()
     // Insert user
     await db.execute(`
       INSERT INTO admin_users (
-        id, client_id, employee_id, name, email, password_hash, role_id,
+        id, client_id, employee_id, name, email, phone, password_hash, role_id,
         department, is_super_admin, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, Object.values(userData));
 
     // Get created user with role info including employee_id
@@ -841,6 +858,7 @@ body('is_active').optional().isBoolean()
         au.id,
         au.name,
         au.email,
+        au.phone,
         au.employee_id,
         au.department,
         au.is_super_admin,
@@ -892,6 +910,7 @@ router.put('/admin-users/:id', [
   ensureClientAccess,
   body('name').optional().trim().isLength({ min: 1 }),
   body('email').optional().isEmail(),
+  body('phone').optional().matches(/^0\d{9}$/).withMessage('Phone must be in format 0712345678'),
   body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
   body('role_id').optional().custom(async (value, { req }) => {
   if (!value) {
@@ -964,7 +983,7 @@ router.put('/admin-users/:id', [
   }
 
   // Build update query
-  const allowedFields = ['name', 'email', 'role_id', 'department', 'is_active'];
+  const allowedFields = ['name', 'email', 'phone', 'role_id', 'department', 'is_active'];
   const updateFields = [];
   const updateValues = [];
 
@@ -1026,6 +1045,21 @@ router.put('/admin-users/:id', [
       return res.status(400).json({
         success: false,
         message: 'Email already exists'
+      });
+    }
+  }
+
+  // Check phone uniqueness if updating phone
+  if (req.body.phone && req.body.phone !== currentUser.phone) {
+    const [phoneCheck] = await db.execute(`
+      SELECT id FROM admin_users WHERE phone = ? AND id != ?
+    `, [req.body.phone, userId]);
+
+    if (phoneCheck.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number already exists',
+        errors: [{ param: 'phone', msg: 'Phone number already exists' }]
       });
     }
   }
@@ -1095,6 +1129,7 @@ router.put('/admin-users/:id', [
       au.id,
       au.name,
       au.email,
+      au.phone,
       au.employee_id,
       au.department,
       au.is_super_admin,

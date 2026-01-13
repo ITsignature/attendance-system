@@ -1,41 +1,36 @@
+#include <SoftwareSerial.h>
 #include <Adafruit_Fingerprint.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <WiFi.h>
+#include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
-#include <HTTPClient.h>
+#include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
+#include <NTPClient.h>
 #include <WiFiClientSecure.h>
-#include <WebServer.h>
+#include <ESP8266WebServer.h>
 
-// AS608 Fingerprint Scanner using Hardware Serial for ESP32
-#define FP_SERIAL Serial2  // Use Hardware Serial2 on ESP32
-#define FP_BAUDRATE 57600
+// AS608 Fingerprint Scanner
+#define FP_TX_PIN D1     // Connect to AS608 RX
+#define FP_RX_PIN D2     // Connect to AS608 TX
+// LCD Display
+#define LED_SDA_PIN D3   // LCD SDA_PIN 
+#define LED_SCL_PIN D4   // LCD SCL_PIN
+// Buzzer
+#define BUZZER_PIN D0    // BUZZER (+) PIN
 
-// LCD Display pins for ESP32
-#define LED_SDA_PIN 21   // LCD SDA_PIN 
-#define LED_SCL_PIN 22   // LCD SCL_PIN
-
-// Buzzer pin for ESP32
-#define BUZZER_PIN 2     // BUZZER (+) PIN
-
-// AS608 pins for ESP32 (Hardware Serial2)
-// TX2 (GPIO 17) -> AS608 RX (Yellow)
-// RX2 (GPIO 16) -> AS608 TX (White)
-// VCC -> 3.3V (Red)
-// GND -> GND (Black)
-
-Adafruit_Fingerprint finger = Adafruit_Fingerprint(&FP_SERIAL);
+SoftwareSerial mySerial(FP_RX_PIN, FP_TX_PIN);
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 WiFiClientSecure client;
 HTTPClient http;
-WebServer server(80);
+ESP8266WebServer server(80);
 
-// EEPROM - Increased size for ESP32
-#define EEPROM_SIZE 1024
+// EEPROM - Increased size to accommodate BASE_URL
+#define EEPROM_SIZE 512
 #define WIFI_START_ADDR 0
-#define BASEURL_START_ADDR 400
+#define BASEURL_START_ADDR 200
 
 String stationSSID = "";
 String stationPassword = "";
@@ -74,12 +69,12 @@ OperationMode currentMode = MODE_ATTENDANCE;
 int enrollID = 0;
 int deleteID = 0;
 
-// Pre-allocated JSON document - increased for ESP32
-StaticJsonDocument<512> jsonDoc;
+// Pre-allocated JSON document
+StaticJsonDocument<256> jsonDoc;
 
 // HTML template parts
 const String HTML_HEAD = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>IT Signature</title></head>";
-const String CSS_OPTIMIZED = "<style>body{font-family:Arial;background:linear-gradient(135deg,#1E9ADA,#6BC7F0);margin:0;padding:20px;min-height:100vh;box-sizing:border-box}.container{max-width:900px;margin:0 auto}.card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,0.1);margin-bottom:15px}.logo{font-size:28px;color:#1E9ADA;font-weight:bold;text-align:center;margin-bottom:10px}.btn{background:#1E9ADA;color:#fff;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px;margin:5px}.btn:hover{background:#0A7CB8}.btn-danger{background:#f44336}.btn-success{background:#4CAF50}.btn-warning{background:#FF9800}.form-group{margin-bottom:15px}.form-group label{display:block;margin-bottom:5px;font-weight:500}.form-group input{width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;box-sizing:border-box;word-break:break-all}.status{padding:8px;border-radius:5px;margin:5px 0;word-wrap:break-word;overflow-wrap:break-word}.status-success{background:#e8f5e8;color:#4CAF50}.status-error{background:#ffe8e8;color:#f44336}.status-info{background:#f8f9fa;color:#666}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}.fingerprint-list{max-height:300px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:5px}.fp-item{padding:8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}.fp-item:last-child{border-bottom:none}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.spinner{animation:spin 2s linear infinite}</style>";
+const String CSS_OPTIMIZED = "<style>body{font-family:Arial;background:linear-gradient(135deg,#1E9ADA,#6BC7F0);margin:0;padding:20px;min-height:100vh;box-sizing:border-box}.container{max-width:900px;margin:0 auto}.card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,0.1);margin-bottom:15px}.logo{font-size:28px;color:#1E9ADA;font-weight:bold;text-align:center;margin-bottom:10px}.btn{background:#1E9ADA;color:#fff;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px;margin:5px}.btn:hover{background:#0A7CB8}.btn-danger{background:#f44336}.btn-success{background:#4CAF50}.btn-warning{background:#FF9800}.form-group{margin-bottom:15px}.form-group label{display:block;margin-bottom:5px;font-weight:500}.form-group input{width:100%;padding:8px;border:2px solid #ddd;border-radius:5px;box-sizing:border-box;word-break:break-all}.status{padding:8px;border-radius:5px;margin:5px 0;word-wrap:break-word;overflow-wrap:break-word}.status-success{background:#e8f5e8;color:#4CAF50}.status-error{background:#ffe8e8;color:#f44336}.status-info{background:#f8f9fa;color:#666}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}.fingerprint-list{max-height:300px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:5px}.fp-item{padding:8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}.fp-item:last-child{border-bottom:none}.pagination{text-align:center;margin:10px 0}.pagination .btn{margin:2px;font-size:12px;padding:5px 10px}.pagination .current{background:#FF9800;color:#fff}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.spinner{animation:spin 2s linear infinite}</style>";
 
 void setupEEPROM() {
   EEPROM.begin(EEPROM_SIZE);
@@ -195,7 +190,7 @@ void handleRoot() {
 
 String generateLoginHTML(String errorMsg = "") {
   String html = "";
-  html.reserve(2500); // Increased for ESP32
+  html.reserve(2000);
   
   html = HTML_HEAD + CSS_OPTIMIZED;
   html += "<body><div class='container'><div class='card'>";
@@ -249,53 +244,173 @@ void handleLogout() {
   server.send(302, "text/plain", "");
 }
 
-String getStoredFingerprints() {
-  String fpList = "";
-  int count = 0;
+bool fingerprintExists(uint16_t id) {
+  return (finger.loadModel(id) == FINGERPRINT_OK);
+}
+
+// Global arrays for pagination (avoiding struct issues)
+uint16_t fingerprintIDs[60];
+uint16_t fingerprintCount = 0;
+
+void getAllFingerprints() {
+  fingerprintCount = 0;
   
   if (!fingerprintSensorOK) {
-    return "<div class='status status-error'>Sensor not available</div>";
+    return;
   }
   
-  finger.getTemplateCount();
-  
-  if (finger.templateCount == 0) {
-    return "<div class='status status-info'>No fingerprints stored</div>";
-  }
-  
-  fpList += "<div class='fingerprint-list'>";
-  
-  for (int id = 1; id <= 127; id++) {
-    if (finger.loadModel(id) == FINGERPRINT_OK) {
-      count++;
-      fpList += "<div class='fp-item'>";
-      fpList += "<span>ID: " + String(id) + "</span>";
-      fpList += "<form method='POST' action='/delete-fingerprint' style='margin:0'>";
-      fpList += "<input type='hidden' name='session_token' value='" + currentSessionToken + "'>";
-      fpList += "<input type='hidden' name='delete_id' value='" + String(id) + "'>";
-      fpList += "<button type='submit' class='btn btn-danger' style='padding:5px 10px;font-size:12px' onclick='return confirm(\"Delete fingerprint ID " + String(id) + "?\")'>Delete</button>";
-      fpList += "</form></div>";
+  for (uint16_t id = 1; id <= 60 && fingerprintCount < 60; id++) {
+    yield();
+    if (fingerprintExists(id)) {
+      fingerprintIDs[fingerprintCount] = id;
+      fingerprintCount++;
     }
-    delay(10);
-    yield(); // Allow other tasks to run
+    delay(2);
   }
+}
+
+String getStoredFingerprintsWithPagination(int page = 1) {
+  if (!fingerprintSensorOK) {
+    return F("<div class='status status-error'>Sensor not available</div>");
+  }
+
+  // Get all fingerprints first
+  getAllFingerprints();
   
-  fpList += "</div>";
-  fpList += "<div class='status status-info'>Total: " + String(count) + " fingerprints</div>";
+  if (fingerprintCount == 0) {
+    return F("<div class='status status-info'>No fingerprints stored</div>");
+  }
+
+  const int itemsPerPage = 5;
+  int totalPages = (fingerprintCount + itemsPerPage - 1) / itemsPerPage;
   
+  // Validate page number
+  if (page < 1) page = 1;
+  if (page > totalPages) page = totalPages;
+  
+  int startIdx = (page - 1) * itemsPerPage;
+  int endIdx = min(startIdx + itemsPerPage, (int)fingerprintCount);
+
+  String fpList;
+  fpList.reserve(2000);
+  
+  // Pagination controls (top)
+  if (totalPages > 1) {
+    fpList += F("<div class='pagination'>");
+    
+    // Previous button
+    if (page > 1) {
+      fpList += F("<a href='/?session=");
+      fpList += currentSessionToken;
+      fpList += F("&fp_page=");
+      fpList += (page - 1);
+      fpList += F("' class='btn'>‹ Prev</a>");
+    }
+    
+    // Page numbers
+    for (int p = 1; p <= totalPages; p++) {
+      if (p == page) {
+        fpList += F("<span class='btn current'>");
+        fpList += p;
+        fpList += F("</span>");
+      } else {
+        fpList += F("<a href='/?session=");
+        fpList += currentSessionToken;
+        fpList += F("&fp_page=");
+        fpList += p;
+        fpList += F("' class='btn'>");
+        fpList += p;
+        fpList += F("</a>");
+      }
+    }
+    
+    // Next button
+    if (page < totalPages) {
+      fpList += F("<a href='/?session=");
+      fpList += currentSessionToken;
+      fpList += F("&fp_page=");
+      fpList += (page + 1);
+      fpList += F("' class='btn'>Next ›</a>");
+    }
+    
+    fpList += F("</div>");
+  }
+
+  fpList += F("<div class='fingerprint-list'>");
+
+  // Display fingerprints for current page
+  for (int i = startIdx; i < endIdx; i++) {
+    uint16_t id = fingerprintIDs[i];
+    
+    fpList += F("<div class='fp-item'><span>ID: ");
+    fpList += id;
+    fpList += F("</span>"
+                "<form method='POST' action='/delete-fingerprint' style='margin:0'>"
+                "<input type='hidden' name='session_token' value='");
+    fpList += currentSessionToken;
+    fpList += F("'>"
+                "<input type='hidden' name='delete_id' value='");
+    fpList += id;
+    fpList += F("'>"
+                "<button type='submit' class='btn btn-danger' "
+                "style='padding:5px 10px;font-size:12px' "
+                "onclick='return confirm(\"Delete fingerprint ID ");
+    fpList += id;
+    fpList += F("?\")'>Delete</button></form></div>");
+  }
+
+  fpList += F("</div>");
+  
+  // Pagination controls (bottom) and summary
+  fpList += F("<div class='status status-info'>Showing ");
+  fpList += (startIdx + 1);
+  fpList += F("-");
+  fpList += endIdx;
+  fpList += F(" of ");
+  fpList += fingerprintCount;
+  fpList += F(" fingerprints (Page ");
+  fpList += page;
+  fpList += F(" of ");
+  fpList += totalPages;
+  fpList += F(")</div>");
+  
+  if (totalPages > 1) {
+    fpList += F("<div class='pagination'>");
+    
+    // Previous button
+    if (page > 1) {
+      fpList += F("<a href='/?session=");
+      fpList += currentSessionToken;
+      fpList += F("&fp_page=");
+      fpList += (page - 1);
+      fpList += F("' class='btn'>‹ Previous</a>");
+    }
+    
+    // Next button  
+    if (page < totalPages) {
+      fpList += F("<a href='/?session=");
+      fpList += currentSessionToken;
+      fpList += F("&fp_page=");
+      fpList += (page + 1);
+      fpList += F("' class='btn'>Next ›</a>");
+    }
+    
+    fpList += F("</div>");
+  }
+
   return fpList;
 }
 
 String generateOptimizedDashboard() {
   String html = "";
-  html.reserve(6000); // Increased for ESP32
+  html.reserve(5000);
   
   html = HTML_HEAD + CSS_OPTIMIZED;
   html += "<body><div class='container'>";
   
   // Header
   html += "<div class='card'><div class='logo'>IT Signature</div>";
-  html += "<div style='text-align:center;color:#666'>Fingerprint Attendance System - ESP32</div>";
+  html += "<div style='text-align:center;color:#666'>Fingerprint Attendance System</div>";
   html += "<div style='text-align:center;margin-top:10px'>";
   html += "<button onclick='location.reload()' class='btn btn-success'>Refresh</button>";
   html += "<form method='POST' action='/logout' style='display:inline'>";
@@ -352,7 +467,6 @@ String generateOptimizedDashboard() {
     html += "<div class='status status-info'>Capacity: " + String(finger.capacity) + "</div>";
     html += "<div class='status status-info'>Templates: " + String(finger.templateCount) + "</div>";
     html += "<div class='status status-info'>Security Level: " + String(finger.security_level) + "</div>";
-    html += "<div class='status status-info'>Data Packet: " + String(finger.packet_len) + "</div>";
   } else {
     html += "<div class='status status-error'>Sensor: Disconnected</div>";
     html += "<div class='status status-error'>Check wiring and restart</div>";
@@ -363,10 +477,8 @@ String generateOptimizedDashboard() {
   html += "<div class='card'><h4>Device Status</h4><div class='grid'>";
   html += "<div class='status status-success'>AP: Active</div>";
   html += "<div class='status status-info'>IP: " + WiFi.softAPIP().toString() + "</div>";
-  html += "<div class='status status-info'>Chip: ESP32</div>";
   html += "<div class='status status-info'>Uptime: " + String(millis()/60000) + "m</div>";
   html += "<div class='status status-info'>Free Heap: " + String(ESP.getFreeHeap()) + "B</div>";
-  html += "<div class='status status-info'>CPU Freq: " + String(ESP.getCpuFreqMHz()) + "MHz</div>";
   html += "</div></div>";
   
   // WiFi Status
@@ -374,7 +486,6 @@ String generateOptimizedDashboard() {
   if (stationConnected) {
     html += "<div class='status status-success'>Connected: " + stationSSID + "</div>";
     html += "<div class='status status-info'>IP: " + WiFi.localIP().toString() + "</div>";
-    html += "<div class='status status-info'>Signal: " + String(WiFi.RSSI()) + " dBm</div>";
   } else {
     html += "<div class='status status-error'>Disconnected</div>";
     if (lastError.length() > 0) {
@@ -399,9 +510,18 @@ String generateOptimizedDashboard() {
     html += "</form>";
     html += "</div></div>";
     
-    // Stored Fingerprints List
+    // Stored Fingerprints List with Pagination
     html += "<div class='card'><h4>Stored Fingerprints</h4>";
-    html += getStoredFingerprints();
+    
+    // Get current page from URL parameter
+    int currentPage = 1;
+    String pageParam = server.arg("fp_page");
+    if (pageParam.length() > 0) {
+      currentPage = pageParam.toInt();
+      if (currentPage < 1) currentPage = 1;
+    }
+    
+    html += getStoredFingerprintsWithPagination(currentPage);
     html += "</div>";
   }
   
@@ -431,7 +551,8 @@ String generateOptimizedDashboard() {
   html += "<button type='submit' class='btn btn-warning' onclick='return confirm(\"Reboot device?\")'>Reboot</button></form>";
   html += "</div></div>";
   
-  html += "</div></body></html>";
+  html += "</div>";
+  html += "</body></html>";
   
   return html;
 }
@@ -601,6 +722,7 @@ void handleClearBaseURL() {
   server.send(302, "text/plain", "");
 }
 
+// Existing WiFi and other handlers remain the same...
 void testWiFiConnection(String newSSID, String newPassword) {
   WiFi.begin(newSSID.c_str(), newPassword.c_str());
   
@@ -666,3 +788,509 @@ void handleUpdateWiFi() {
     server.send(302, "text/plain", "");
     return;
   }
+  
+  String updatePage = HTML_HEAD + CSS_OPTIMIZED;
+  updatePage += "<body><div class='container'><div class='card'>";
+  updatePage += "<div class='logo'>IT Signature</div>";
+  updatePage += "<h3 style='text-align:center'>Updating WiFi...</h3>";
+  updatePage += "<div style='text-align:center;font-size:48px;margin:20px 0' class='spinner'>⚙️</div>";
+  updatePage += "<div class='status status-info'>Connecting to: " + newSSID + "</div>";
+  updatePage += "</div></div>";
+  updatePage += "<script>setTimeout(function(){location.href='/?session=" + currentSessionToken + "';},3000);</script>";
+  updatePage += "</body></html>";
+  
+  server.send(200, "text/html", updatePage);
+  delay(500);
+  testWiFiConnection(newSSID, newPassword);
+}
+
+void handleReconnectWiFi() {
+  if (!isAuthenticated()) {
+    server.sendHeader("Location", "/login");
+    server.send(302, "text/plain", "");
+    return;
+  }
+  
+  attemptStationConnection();
+  
+  String redirectUrl = "/?session=" + currentSessionToken;
+  server.sendHeader("Location", redirectUrl);
+  server.send(302, "text/plain", "");
+}
+
+void handleClearSettings() {
+  if (!isAuthenticated()) {
+    server.sendHeader("Location", "/login");
+    server.send(302, "text/plain", "");
+    return;
+  }
+  
+  clearEEPROM();
+  stationSSID = "";
+  stationPassword = "";
+  stationConnected = false;
+  lastError = "";
+  // Reset BASE_URL to default
+  BASE_URL = "https://attendance2.itsignaturesolutions.com/test_http.php?uid=";
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Settings Cleared");
+  activateBacklight();
+  
+  String redirectUrl = "/?session=" + currentSessionToken;
+  server.sendHeader("Location", redirectUrl);
+  server.send(302, "text/plain", "");
+}
+
+void handleReboot() {
+  if (!isAuthenticated()) {
+    server.sendHeader("Location", "/login");
+    server.send(302, "text/plain", "");
+    return;
+  }
+  
+  String rebootPage = HTML_HEAD + CSS_OPTIMIZED;
+  rebootPage += "<body><div class='container'><div class='card'>";
+  rebootPage += "<div class='logo'>IT Signature</div>";
+  rebootPage += "<h3 style='text-align:center'>Rebooting...</h3>";
+  rebootPage += "<div style='text-align:center;font-size:48px;margin:20px 0' class='spinner'>⚙️</div>";
+  rebootPage += "</div></div>";
+  rebootPage += "<script>setTimeout(function(){location.href='/login';},15000);</script>";
+  rebootPage += "</body></html>";
+  
+  server.send(200, "text/html", rebootPage);
+  delay(500);
+  ESP.restart();
+}
+
+void setupWiFi() {
+  WiFi.softAP(AP_SSID.c_str(), AP_PASSWORD.c_str());
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("AP: IT-Signature");
+  lcd.setCursor(0, 1);
+  lcd.print(WiFi.softAPIP().toString());
+  
+  delay(1000);
+  attemptStationConnection();
+}
+
+void attemptStationConnection() {
+  if (loadWiFiFromEEPROM(stationSSID, stationPassword)) {
+    WiFi.begin(stationSSID.c_str(), stationPassword.c_str());
+    
+    unsigned long startTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) {
+      delay(100);
+      yield();
+      server.handleClient();
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+      stationConnected = true;
+      lastError = "";
+      
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("WiFi Connected");
+      lcd.setCursor(0, 1);
+      lcd.print(WiFi.localIP().toString());
+    } else {
+      stationConnected = false;
+      if (WiFi.status() == WL_CONNECT_FAILED) {
+        lastError = "Wrong password";
+      } else if (WiFi.status() == WL_NO_SSID_AVAIL) {
+        lastError = "SSID not found";
+      } else {
+        lastError = "Connection failed";
+      }
+      
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("WiFi Failed");
+      lcd.setCursor(0, 1);
+      lcd.print("Use AP");
+    }
+  } else {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("No WiFi Config");
+    lcd.setCursor(0, 1);
+    lcd.print("Use AP");
+  }
+  
+  activateBacklight();
+}
+
+void setup() {
+  Wire.begin(D3, D4);
+  lcd.begin(16, 2);  // Initialize 16x2 LCD
+  lcd.noBacklight();
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+  
+  Serial.begin(115200);
+  Serial.println("\nIT Signature Fingerprint System Starting...");
+  
+  // Initialize fingerprint sensor
+  mySerial.begin(57600);
+  delay(100);
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Init Fingerprint");
+  activateBacklight();
+  
+  if (finger.verifyPassword()) {
+    Serial.println("AS608 Fingerprint sensor found!");
+    fingerprintSensorOK = true;
+    
+    finger.getParameters();
+    finger.getTemplateCount();
+    Serial.print("Capacity: "); Serial.println(finger.capacity);
+    Serial.print("Templates stored: "); Serial.println(finger.templateCount);
+    
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("FP Sensor OK");
+    lcd.setCursor(0, 1);
+    lcd.print("Templates: " + String(finger.templateCount));
+    delay(2000);
+  } else {
+    Serial.println("AS608 Fingerprint sensor NOT found!");
+    fingerprintSensorOK = false;
+    
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("FP Sensor ERROR");
+    lcd.setCursor(0, 1);
+    lcd.print("Check Wiring");
+    delay(3000);
+  }
+
+  setupEEPROM();
+  
+  // Load BASE_URL from EEPROM if available
+  String savedBaseURL;
+  if (loadBaseURLFromEEPROM(savedBaseURL)) {
+    BASE_URL = savedBaseURL;
+    Serial.println("Loaded BASE_URL from EEPROM: " + BASE_URL);
+  } else {
+    Serial.println("Using default BASE_URL: " + BASE_URL);
+  }
+  
+  randomSeed(analogRead(0));
+  setupWiFi();
+  
+  // Setup web server routes
+  server.on("/", handleRoot);
+  server.on("/login", handleLogin);
+  server.on("/logout", handleLogout);
+  server.on("/update-wifi", handleUpdateWiFi);
+  server.on("/reconnect-wifi", handleReconnectWiFi);
+  server.on("/clear-settings", handleClearSettings);
+  server.on("/reboot", handleReboot);
+  server.on("/set-attendance-mode", handleSetAttendanceMode);
+  server.on("/start-enroll", handleStartEnroll);
+  server.on("/delete-fingerprint", handleDeleteFingerprint);
+  server.on("/clear-all-fingerprints", handleClearAllFingerprints);
+  server.on("/update-baseurl", handleUpdateBaseURL);
+  server.on("/clear-baseurl", handleClearBaseURL);
+  server.begin();
+  
+  Serial.println("Web server started!");
+  Serial.println("Access Point: " + AP_SSID);
+  Serial.println("AP IP: " + WiFi.softAPIP().toString());
+  Serial.println("Current BASE_URL: " + BASE_URL);
+
+  // Configure HTTPS Client
+  client.setInsecure();
+  client.setTimeout(5000);
+  client.setBufferSizes(1024, 1024);  // Increased buffer for HTTPS
+  
+  displayWelcome();
+  activateBacklight();
+}
+
+void loop() {
+  server.handleClient();
+  
+  // Check station connection periodically
+  if (millis() - lastStationCheck > STATION_CHECK_INTERVAL) {
+    lastStationCheck = millis();
+    if (stationSSID.length() > 0) {
+      bool wasConnected = stationConnected;
+      stationConnected = (WiFi.status() == WL_CONNECTED);
+      
+      if (!stationConnected && wasConnected) {
+        attemptStationConnection();
+      }
+    }
+  }
+  
+  handleBacklight();
+  
+  // Fingerprint Processing based on current mode
+  if (fingerprintSensorOK && millis() - lastScanTime > SCAN_DEBOUNCE) {
+    if (currentMode == MODE_ATTENDANCE) {
+      handleAttendanceMode();
+    } else if (currentMode == MODE_ENROLL) {
+      handleEnrollMode();
+    }
+  }
+  
+  delay(50);
+}
+
+void handleAttendanceMode() {
+  uint8_t fingerprintID = getFingerprintID();
+  
+  if (fingerprintID != 255) {
+    lastScanTime = millis();
+    activateBacklight();
+    
+    Serial.println("Fingerprint ID: " + String(fingerprintID));
+    
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Processing...");
+    
+    if (stationConnected) {
+      sendOptimizedRequest(String(fingerprintID));
+    } else {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("No Internet");
+      lcd.setCursor(0, 1);
+      lcd.print("ID: " + String(fingerprintID));
+    }
+    
+    delay(2000);
+    displayWelcome();
+  }
+}
+
+void handleEnrollMode() {
+  static int enrollStep = 0;
+  static unsigned long enrollStepTime = 0;
+  
+  if (millis() - enrollStepTime < 500) return; // Debounce
+  
+  uint8_t p = finger.getImage();
+  
+  if (p == FINGERPRINT_OK) {
+    enrollStepTime = millis();
+    activateBacklight();
+    
+    if (enrollStep == 0) {
+      // First fingerprint image
+      p = finger.image2Tz(1);
+      if (p == FINGERPRINT_OK) {
+        enrollStep = 1;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Remove finger");
+        lcd.setCursor(0, 1);
+        lcd.print("Place again");
+        buzzerSound();
+      } else {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Image error");
+        delay(1000);
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Enroll Mode");
+        lcd.setCursor(0, 1);
+        lcd.print("ID: " + String(enrollID));
+      }
+    } else if (enrollStep == 1) {
+      // Wait for finger to be removed
+      return;
+    } else if (enrollStep == 2) {
+      // Second fingerprint image
+      p = finger.image2Tz(2);
+      if (p == FINGERPRINT_OK) {
+        // Create model
+        p = finger.createModel();
+        if (p == FINGERPRINT_OK) {
+          // Store model
+          p = finger.storeModel(enrollID);
+          if (p == FINGERPRINT_OK) {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Enrolled!");
+            lcd.setCursor(0, 1);
+            lcd.print("ID: " + String(enrollID));
+            buzzerSound();
+            delay(2000);
+            
+            currentMode = MODE_ATTENDANCE;
+            displayWelcome();
+            enrollStep = 0;
+          } else {
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Store error");
+            delay(1000);
+            enrollStep = 0;
+          }
+        } else {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("No match");
+          delay(1000);
+          enrollStep = 0;
+        }
+      } else {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Image error");
+        delay(1000);
+        enrollStep = 0;
+      }
+    }
+  } else if (p == FINGERPRINT_NOFINGER && enrollStep == 1) {
+    // Finger removed, ready for second scan
+    enrollStep = 2;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Place same");
+    lcd.setCursor(0, 1);
+    lcd.print("finger again");
+  }
+}
+
+uint8_t getFingerprintID() {
+  uint8_t p = finger.getImage();
+  if (p != FINGERPRINT_OK) return 255;
+  
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK) return 255;
+  
+  p = finger.fingerFastSearch();
+  if (p != FINGERPRINT_OK) {
+    if (p == FINGERPRINT_NOTFOUND) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Not Registered");
+      activateBacklight();
+      delay(2000);
+      displayWelcome();
+    }
+    return 255;
+  }
+  
+  return finger.fingerID;
+}
+
+void displayWelcome() {
+  lcd.clear();
+  if (currentMode == MODE_ATTENDANCE) {
+    lcd.setCursor(0, 0);
+    lcd.print("Place Finger");
+    lcd.setCursor(0, 1);
+    lcd.print("IT Signature");
+  } else if (currentMode == MODE_ENROLL) {
+    lcd.setCursor(0, 0);
+    lcd.print("Enroll Mode");
+    lcd.setCursor(0, 1);
+    lcd.print("ID: " + String(enrollID));
+  }
+}
+
+void handleBacklight() {
+  if (backlightActive && (millis() - backlightOnTime > BACKLIGHT_DURATION)) {
+    lcd.noBacklight();
+    backlightActive = false;
+  }
+}
+
+void activateBacklight() {
+  if (!backlightActive) {
+    lcd.backlight();
+    backlightActive = true;
+  }
+  backlightOnTime = millis();
+}
+
+void sendOptimizedRequest(String fingerprintID) {
+  if (!stationConnected) {
+    displayError("No WiFi");
+    return;
+  }
+  
+  String fullUrl = BASE_URL + fingerprintID;
+  http.begin(client, fullUrl);
+  http.setTimeout(8000);  // Increased timeout for cURL processing
+  http.addHeader("Connection", "close");
+  http.addHeader("User-Agent", "ESP8266");
+  http.setReuse(false);
+
+  int httpCode = http.GET();
+
+  // Debug logging
+  Serial.print("Connecting to: ");
+  Serial.println(fullUrl);
+  Serial.print("HTTP Response Code: ");
+  Serial.println(httpCode);
+  if (httpCode <= 0) {
+    Serial.print("Connection Error: ");
+    Serial.println(http.errorToString(httpCode));
+  }
+  
+  if (httpCode > 0) {
+    if (httpCode == HTTP_CODE_OK) {
+      String payload = http.getString();
+      processResponse(payload);
+    } else {
+      displayError("HTTP " + String(httpCode));
+    }
+  } else {
+    displayError("Request Failed");
+  }
+  
+  http.end();
+}
+
+void processResponse(String payload) {
+  jsonDoc.clear();
+  DeserializationError error = deserializeJson(jsonDoc, payload);
+  
+  if (!error) {
+    String message = jsonDoc["message"].as<String>();
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    
+    if (message.length() > 16) {
+      lcd.print(message.substring(0, 16));
+      lcd.setCursor(0, 1);
+      lcd.print(message.substring(16, message.length() > 32 ? 32 : message.length()));
+    } else {
+      lcd.print(message);
+    }
+    
+    if (message != "Fingerprint not registered") {
+      buzzerSound();
+    }
+  } else {
+    displayError("JSON Error");
+  }
+}
+
+void displayError(String error) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Error:");
+  lcd.setCursor(0, 1);
+  lcd.print(error);
+  activateBacklight();
+}
+
+void buzzerSound() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(300);
+  digitalWrite(BUZZER_PIN, LOW);
+}
