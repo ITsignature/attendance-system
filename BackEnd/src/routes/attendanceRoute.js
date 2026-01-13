@@ -189,7 +189,7 @@ router.get('/fingerprint', [
         });
       }
 
-      return res.status(201).json({
+      return res.status(200).json({
         success: true,
         message: `Welcome ${emp.employee_name}!`,
         status: 'success',
