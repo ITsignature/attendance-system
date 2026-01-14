@@ -412,7 +412,8 @@ router.get('/fingerprint', [
       const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
         record.check_in_time,
         currentTime,
-        0, // no break for fingerprint attendance
+        null, // no break start time for fingerprint attendance
+        null, // no break end time for fingerprint attendance
         clientId,
         db,
         schedule
@@ -635,7 +636,7 @@ router.post('/manual-sync', [
       let postShiftOvertimeSeconds = 0;
 
       if (check_out_time) {
-        const calculated = await calculateWorkHours(check_in_time, check_out_time, 0, clientId, db, schedule);
+        const calculated = await calculateWorkHours(check_in_time, check_out_time, null, null, clientId, db, schedule);
         totalHours = calculated.totalHours;
         overtimeHours = calculated.overtimeHours;  // Actual OT without multiplier
         preShiftOvertimeSeconds = calculated.preShiftOvertimeSeconds;
@@ -697,7 +698,7 @@ router.post('/manual-sync', [
 
       const record = existing[0];
       const schedule = await getEmployeeSchedule(employeeId, clientId, db, date);
-      const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(record.check_in_time, check_out_time, 0, clientId, db, schedule);
+      const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(record.check_in_time, check_out_time, null, null, clientId, db, schedule);
 
       const [employeeInfo] = await db.execute(`SELECT department_id FROM employees WHERE id = ?`, [employeeId]);
       const departmentId = employeeInfo[0]?.department_id || null;
@@ -1122,14 +1123,15 @@ const determineWorkDuration = (
   /**
    *  Calculate worked / overtime hours.
    *  - Accepts HH:MM or HH:MM:SS strings
-   *  - Uses the employee’s own schedule if available, otherwise the company default
-   *  - Break duration is **hours** (decimal, e.g. 1.5 = 90 min)
+   *  - Uses the employee's own schedule if available, otherwise the company default
+   *  - Break times are HH:MM:SS format (e.g. '12:00:00', '13:00:00'), duration calculated automatically
    *  - Everything returned as *numbers*, rounded to 2 dp.
    */
 const calculateWorkHours = async (
   checkInTime,
   checkOutTime,
-  breakDuration = 0,
+  breakStartTime = null,
+  breakEndTime = null,
   clientId,
   db,
   employeeSchedule = null   // { start_time:'HH:MM:SS', end_time:'HH:MM:SS' } or null
@@ -1170,20 +1172,36 @@ const calculateWorkHours = async (
     };
   }
 
+  /* Calculate break duration from break times if provided */
+  let breakSeconds = 0;
+  if (breakStartTime && breakEndTime) {
+    const breakStartNorm = normalise(breakStartTime);
+    const breakEndNorm = normalise(breakEndTime);
+
+    if (breakStartNorm && breakEndNorm) {
+      const breakStart = new Date(`2000-01-01T${breakStartNorm}`);
+      const breakEnd = new Date(`2000-01-01T${breakEndNorm}`);
+
+      if (!isNaN(breakStart) && !isNaN(breakEnd) && breakEnd > breakStart) {
+        breakSeconds = (breakEnd - breakStart) / 1000;  // ms to seconds
+      }
+    }
+  }
+
   /* Calculate total worked time in seconds */
   const rawSeconds = (outDate - inDate) / 1000;  // ms to seconds
-  const breakSeconds = (breakDuration || 0) * 3600;  // hours to seconds
   const workedSeconds = Math.max(0, rawSeconds - breakSeconds);
   const workedHours = workedSeconds / 3600;  // seconds to hours
 
   /* what counts as "standard" today? */
   let standardHours = null;
+  const breakHours = breakSeconds / 3600;  // Convert break seconds to hours
 
   if (employeeSchedule?.start_time && employeeSchedule?.end_time) {
     const sIn  = new Date(`2000-01-01T${normalise(employeeSchedule.start_time)}`);
     const sOut = new Date(`2000-01-01T${normalise(employeeSchedule.end_time)}`);
     if (!isNaN(sIn) && !isNaN(sOut) && sOut > sIn) {
-      standardHours = (sOut - sIn) / 3600000 - (breakDuration || 0); // ms to hours, subtract break
+      standardHours = (sOut - sIn) / 3600000 - breakHours; // ms to hours, subtract break
     }
   } else if (employeeSchedule?.is_non_working_day) {
     // Volunteer work on non-working day: all hours are overtime
@@ -1311,7 +1329,8 @@ const calculateWorkHours = async (
       const { totalHours, overtimeHours, standardHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
         req.body.check_in_time,
         req.body.check_out_time,
-        0, // break_duration removed, pass 0
+        req.body.break_start_time || null,
+        req.body.break_end_time || null,
         req.user.clientId,
         db,
         schedule
@@ -1896,7 +1915,8 @@ router.patch('/bulk', [
           const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
             eff.check_in_time,
             eff.check_out_time,
-            0, // break_duration removed, pass 0
+            eff.break_start_time || null,
+            eff.break_end_time || null,
             req.user.clientId,
             db,
             schedule
@@ -2107,7 +2127,8 @@ router.patch('/:id',
     const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
       eff.check_in_time,
       eff.check_out_time,
-      0, // break_duration removed, pass 0
+      eff.break_start_time || null,
+      eff.break_end_time || null,
       req.user.clientId,
       db,
       schedule
@@ -2374,7 +2395,8 @@ router.post('/bulk-update-status', [
           const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
             record.check_in_time,
             record.check_out_time,
-            record.break_duration,
+            record.break_start_time || null,
+            record.break_end_time || null,
             req.user.clientId,
             db,
             schedule

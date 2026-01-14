@@ -100,10 +100,12 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   const selectedEmployee = employees.find(emp => emp.id === formData.employee_id);
   const hasBreakSchedule = selectedEmployee?.break_start_time && selectedEmployee?.break_end_time;
 
+  console.log('🔍 FORM EMPLOYEE ID:', formData.employee_id);
   console.log('🔍 SELECTED EMPLOYEE:', selectedEmployee);
   console.log('🔍 HAS BREAK SCHEDULE:', hasBreakSchedule);
   console.log('🔍 BREAK START TIME:', selectedEmployee?.break_start_time);
   console.log('🔍 BREAK END TIME:', selectedEmployee?.break_end_time);
+  console.log('🔍 ALL EMPLOYEES COUNT:', employees.length);
 
   useEffect(() => {
     if (editingRecord) {
