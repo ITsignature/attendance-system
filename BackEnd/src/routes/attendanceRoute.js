@@ -148,10 +148,10 @@ router.get('/fingerprint', [
       await db.execute(`
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time,
-          total_hours, overtime_hours, break_duration,
+          total_hours, overtime_hours,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend
-        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, ?, NULL, 'office', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 'office', ?, ?, ?)
       `, [
         attendanceId,
         employeeId,
@@ -655,10 +655,10 @@ router.post('/manual-sync', [
       await db.execute(`
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time,
-          total_hours, overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds, break_duration,
+          total_hours, overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'office', ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'office', ?, ?, ?, ?)
       `, [
         attendanceId, employeeId, date, check_in_time, check_out_time,
         totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds, arrivalResult.status,
