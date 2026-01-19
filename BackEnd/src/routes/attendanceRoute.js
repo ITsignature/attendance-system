@@ -55,10 +55,7 @@ router.get('/fingerprint', [
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(200).json({
-      success: false,
-      message: 'Invalid request',
-      errors: errors.array(),
-      status: 'error'
+      message: 'Invalid request'
     });
   }
 
@@ -100,9 +97,7 @@ router.get('/fingerprint', [
 
     if (employee.length === 0) {
       return res.status(200).json({
-        success: false,
-        message: 'Fingerprint not registered',
-        status: 'error'
+        message: 'Fingerprint not registered'
       });
     }
 
@@ -190,18 +185,7 @@ router.get('/fingerprint', [
       }
 
       return res.status(200).json({
-        success: true,
-        message: `Welcome ${emp.employee_name}!`,
-        status: 'success',
-        action: 'check_in',
-        data: {
-          employee_name: emp.employee_name,
-          employee_code: emp.employee_code,
-          check_in_time: currentTime,
-          scheduled_in_time: schedule.start_time,
-          arrival_status: arrivalStatus,
-          date: today
-        }
+        message: `Welcome ${emp.employee_name}!`
       });
 
     } else {
@@ -226,14 +210,7 @@ router.get('/fingerprint', [
         logToFile(debugFooter);
 
         return res.status(200).json({
-          success: false,
-          message: 'Already checked out',
-          status: 'info',
-          data: {
-            employee_name: emp.employee_name,
-            check_in_time: record.check_in_time,
-            check_out_time: record.check_out_time
-          }
+          message: 'Already checked out'
         });
       }
 
@@ -340,9 +317,7 @@ router.get('/fingerprint', [
         logToFile(errorLog3);
 
         return res.status(200).json({
-          success: false,
-          message: 'Invalid time format',
-          status: 'error'
+          message: 'Invalid time format'
         });
       }
 
@@ -378,19 +353,7 @@ router.get('/fingerprint', [
         console.log(earlyLog5);
         logToFile(earlyLog5);
         return res.status(200).json({
-          success: false,
-          message: 'Already marked attendance for today',
-          status: 'info',
-          data: {
-            employee_name: emp.employee_name,
-            employee_code: emp.employee_code,
-            check_in_time: record.check_in_time,
-            current_time: currentTime,
-            hours_since_checkin: parseFloat(hoursWorked.toFixed(2)),
-            minimum_hours_required: parseFloat(minimumWorkHours.toFixed(2)),
-            scheduled_hours: parseFloat(scheduledHours.toFixed(2)),
-            scheduled_end_time: normalizedSchedEnd || 'N/A'
-          }
+          message: 'Already marked attendance for today'
         });
       }
 
@@ -507,33 +470,14 @@ router.get('/fingerprint', [
       }
 
       return res.status(200).json({
-        success: true,
-        message: `Goodbye ${emp.employee_name}!`,
-        status: 'success',
-        action: 'check_out',
-        data: {
-          employee_name: emp.employee_name,
-          employee_code: emp.employee_code,
-          check_in_time: record.check_in_time,
-          check_out_time: currentTime,
-          total_hours: totalHours,
-          overtime_hours: overtimeHours,
-          pre_shift_overtime_seconds: preShiftOvertimeSeconds,
-          post_shift_overtime_seconds: postShiftOvertimeSeconds,
-          arrival_status: arrivalResult.status,
-          work_duration: durationResult.status,
-          date: today
-        }
+        message: `Goodbye ${emp.employee_name}!`
       });
     }
 
   } catch (error) {
     console.error('❌ Fingerprint attendance error:', error);
     return res.status(200).json({
-      success: false,
-      message: 'System error',
-      status: 'error',
-      error: error.message
+      message: 'System error'
     });
   }
 }));
