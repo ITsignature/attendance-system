@@ -219,17 +219,35 @@ useEffect(() => {
       }
     } catch (error: any) {
       console.error('Failed to save leave type:', error);
-      alert('Error: ' + (error.message || 'Failed to save leave type'));
+      // Check if it's a permission error
+      const errorMessage = error.message || error.toString();
+      if (errorMessage.includes('Access denied') || errorMessage.includes('permission') || errorMessage.includes('403')) {
+        alert(`You do not have permission to ${editingLeaveType ? 'edit' : 'create'} leave types.`);
+      } else {
+        alert('Error: ' + (error.message || 'Failed to save leave type'));
+      }
     }
   };
 
   const handleDeleteLeaveType = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this leave type?')) {
       try {
-        await leaveApiService.deleteLeaveType(id);
-        loadLeaveTypes();
-      } catch (error) {
+        const response = await leaveApiService.deleteLeaveType(id);
+        if (response.success) {
+          alert('Leave type deleted successfully!');
+          loadLeaveTypes();
+        } else {
+          alert('Failed to delete leave type: ' + (response.message || 'Unknown error'));
+        }
+      } catch (error: any) {
         console.error('Failed to delete leave type:', error);
+        // Check if it's a permission error
+        const errorMessage = error.message || error.toString();
+        if (errorMessage.includes('Access denied') || errorMessage.includes('permission') || errorMessage.includes('403')) {
+          alert('You do not have permission to delete leave types.');
+        } else {
+          alert('Error: ' + errorMessage);
+        }
       }
     }
   };
@@ -868,13 +886,15 @@ const hhmmToMinutes = (t) => {
             <div className="mt-8">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white">Leave Types</h4>
-                <button
-                  onClick={handleCreateLeaveType}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  <Plus size={16} />
-                  Add Leave Type
-                </button>
+                {hasPermission('leave_types.create') && (
+                  <button
+                    onClick={handleCreateLeaveType}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    <Plus size={16} />
+                    Add Leave Type
+                  </button>
+                )}
               </div>
 
               {loadingLeaveTypes ? (
@@ -927,18 +947,22 @@ const hhmmToMinutes = (t) => {
                               {leaveType.notice_period_days || 0} days
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                onClick={() => handleEditLeaveType(leaveType)}
-                                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
-                              >
-                                <Edit size={16} className="inline" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteLeaveType(leaveType.id)}
-                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                              >
-                                <Trash2 size={16} className="inline" />
-                              </button>
+                              {hasPermission('leave_types.edit') && (
+                                <button
+                                  onClick={() => handleEditLeaveType(leaveType)}
+                                  className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
+                                >
+                                  <Edit size={16} className="inline" />
+                                </button>
+                              )}
+                              {hasPermission('leave_types.delete') && (
+                                <button
+                                  onClick={() => handleDeleteLeaveType(leaveType.id)}
+                                  className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                >
+                                  <Trash2 size={16} className="inline" />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))

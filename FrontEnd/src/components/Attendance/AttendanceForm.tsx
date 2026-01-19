@@ -27,7 +27,8 @@ interface AttendanceRecord {
   check_out_time?: string;
   total_hours?: number;
   overtime_hours?: number;
-  break_duration?: number;
+  break_start_time?: string;
+  break_end_time?: string;
   arrival_status: 'on_time' | 'late' | 'absent';
   work_duration: 'full_day' | 'half_day' | 'short_leave' | 'on_leave';
   work_type: 'office' | 'remote' | 'hybrid';
@@ -47,7 +48,8 @@ interface AttendanceFormData {
   check_out_time?: string;
   arrival_status?: 'on_time' | 'late' | 'absent';
   work_duration?: 'full_day' | 'half_day' | 'short_leave' | 'on_leave';
-  break_duration?: number;
+  break_start_time?: string;
+  break_end_time?: string;
   work_type: 'office' | 'remote' | 'hybrid';
   notes?: string;
 }
@@ -92,6 +94,18 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   const [error, setError] = useState('');
   const [calculationInfo, setCalculationInfo] = useState<CalculationInfo | null>(null);
   const [autoCalculateEnabled, setAutoCalculateEnabled] = useState(true);
+  const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+
+  // Get the selected employee to check if they have configured break times
+  const selectedEmployee = employees.find(emp => emp.id === formData.employee_id);
+  const hasBreakSchedule = selectedEmployee?.break_start_time && selectedEmployee?.break_end_time;
+
+  console.log('🔍 FORM EMPLOYEE ID:', formData.employee_id);
+  console.log('🔍 SELECTED EMPLOYEE:', selectedEmployee);
+  console.log('🔍 HAS BREAK SCHEDULE:', hasBreakSchedule);
+  console.log('🔍 BREAK START TIME:', selectedEmployee?.break_start_time);
+  console.log('🔍 BREAK END TIME:', selectedEmployee?.break_end_time);
+  console.log('🔍 ALL EMPLOYEES COUNT:', employees.length);
 
   useEffect(() => {
     if (editingRecord) {
@@ -102,7 +116,8 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
         check_out_time: editingRecord.check_out_time || '',
         arrival_status: editingRecord.arrival_status,
         work_duration: editingRecord.work_duration,
-        break_duration: editingRecord.break_duration || 0,
+        break_start_time: editingRecord.break_start_time || '',
+        break_end_time: editingRecord.break_end_time || '',
         work_type: editingRecord.work_type,
         notes: editingRecord.notes || ''
       });
@@ -120,7 +135,6 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     setCalculationInfo(null);
   }, [editingRecord, isOpen]);
 
-
   console.log('🔍 FORM DATA:', formData);
   
   const handleInputChange = (field: keyof AttendanceFormData, value: any) => {
@@ -129,25 +143,58 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
       [field]: value
     }));
 
+    // Clear validation error for this field
+    if (validationErrors[field]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+
     // Clear auto-calculated fields if manual values are provided
     if ((field === 'arrival_status' || field === 'work_duration') && value) {
       setAutoCalculateEnabled(false);
     }
   };
 
+  const validateForm = (): boolean => {
+    const errors: {[key: string]: string} = {};
+
+    // Validate break times if both are provided
+    if (formData.break_start_time && formData.break_end_time) {
+      const breakStart = new Date(`2000-01-01T${formData.break_start_time}`);
+      const breakEnd = new Date(`2000-01-01T${formData.break_end_time}`);
+
+      if (breakEnd <= breakStart) {
+        errors.break_end_time = 'Break end time must be after break start time';
+      }
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const calculateHours = () => {
     if (!formData.check_in_time || !formData.check_out_time) return 0;
-    
+
     const checkIn = new Date(`2000-01-01T${formData.check_in_time}`);
     const checkOut = new Date(`2000-01-01T${formData.check_out_time}`);
     const diffMs = checkOut.getTime() - checkIn.getTime();
     const hours = diffMs / (1000 * 60 * 60);
-    
-    return Math.max(0, hours - (formData.break_duration || 0));
+
+    return Math.max(0, hours);
   };
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
+
+  // Validate form before submission
+  if (!validateForm()) {
+    setError('Please fix the validation errors before submitting');
+    return;
+  }
+
   setLoading(true);
   setError('');
 
@@ -167,7 +214,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       let v = formData[key];
 
       /* strip seconds + empty strings for time fields */
-      if (k === 'check_in_time' || k === 'check_out_time') v = padSeconds(v as string);
+      if (k === 'check_in_time' || k === 'check_out_time' || k === 'break_start_time' || k === 'break_end_time') v = padSeconds(v as string);
       v = stripEmpty(v as string);
 
       /* include key only if value changed vs original */
@@ -269,7 +316,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               Time Information
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="check_in_time" value="Check In Time" />
                 <TextInput
@@ -291,20 +338,48 @@ const handleSubmit = async (e: React.FormEvent) => {
                   onChange={(e) => handleInputChange('check_out_time', e.target.value)}
                 />
               </div>
-
-              <div>
-                <Label htmlFor="break_duration" value="Break Duration (hours)" />
-                <TextInput
-                  id="break_duration"
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="8"
-                  value={formData.break_duration || 0}
-                  onChange={(e) => handleInputChange('break_duration', parseFloat(e.target.value) || 0)}
-                />
-              </div>
             </div>
+
+            {/* Break Time Fields - Only shown for employees with configured break schedules */}
+            {hasBreakSchedule && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <Label htmlFor="break_start_time" value="Break Start Time" />
+                  <TextInput
+                    id="break_start_time"
+                    type="time"
+                    step="1"
+                    value={formData.break_start_time || ''}
+                    onChange={(e) => handleInputChange('break_start_time', e.target.value)}
+                    color={validationErrors.break_start_time ? 'failure' : undefined}
+                  />
+                  {validationErrors.break_start_time && (
+                    <p className="text-red-600 text-sm mt-1">{validationErrors.break_start_time}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Scheduled: {selectedEmployee.break_start_time}
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="break_end_time" value="Break End Time" />
+                  <TextInput
+                    id="break_end_time"
+                    type="time"
+                    step="1"
+                    value={formData.break_end_time || ''}
+                    onChange={(e) => handleInputChange('break_end_time', e.target.value)}
+                    color={validationErrors.break_end_time ? 'failure' : undefined}
+                  />
+                  {validationErrors.break_end_time && (
+                    <p className="text-red-600 text-sm mt-1">{validationErrors.break_end_time}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Scheduled: {selectedEmployee.break_end_time}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Hours Calculation Display */}
             {totalHours > 0 && (

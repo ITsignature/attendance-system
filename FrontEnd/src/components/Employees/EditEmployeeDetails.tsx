@@ -81,6 +81,8 @@ interface Employee {
   emergency_contact_relation: string;
   in_time?: string;
   out_time?: string;
+  break_start_time?: string;
+  break_end_time?: string;
   follows_company_schedule?: boolean;
   weekend_working_config?: {
     saturday?: {
@@ -569,9 +571,19 @@ const EditEmployeeDetails: React.FC = () => {
     if (formData.in_time && formData.out_time) {
       const inTime = new Date(`2000-01-01T${formData.in_time}`);
       const outTime = new Date(`2000-01-01T${formData.out_time}`);
-      
+
       if (outTime <= inTime) {
         errors.out_time = 'Out time must be after in time';
+      }
+    }
+
+    // Validate that break end time is after break start time
+    if (formData.break_start_time && formData.break_end_time) {
+      const breakStart = new Date(`2000-01-01T${formData.break_start_time}`);
+      const breakEnd = new Date(`2000-01-01T${formData.break_end_time}`);
+
+      if (breakEnd <= breakStart) {
+        errors.break_end_time = 'Break end time must be after break start time';
       }
     }
 
@@ -1338,6 +1350,41 @@ const EditEmployeeDetails: React.FC = () => {
               {validationErrors.out_time && (
                 <p className="text-red-600 text-sm mt-1">{validationErrors.out_time}</p>
               )}
+            </div>
+
+            {/* Break Time Fields */}
+            <div>
+              <Label htmlFor="break_start_time" value="Break Start Time (Optional)" />
+              <TextInput
+                id="break_start_time"
+                type="time"
+                value={formData.break_start_time || ''}
+                onChange={(e) => handleChange('break_start_time', e.target.value)}
+                color={validationErrors.break_start_time ? 'failure' : undefined}
+              />
+              {validationErrors.break_start_time && (
+                <p className="text-red-600 text-sm mt-1">{validationErrors.break_start_time}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                When does the break start?
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="break_end_time" value="Break End Time (Optional)" />
+              <TextInput
+                id="break_end_time"
+                type="time"
+                value={formData.break_end_time || ''}
+                onChange={(e) => handleChange('break_end_time', e.target.value)}
+                color={validationErrors.break_end_time ? 'failure' : undefined}
+              />
+              {validationErrors.break_end_time && (
+                <p className="text-red-600 text-sm mt-1">{validationErrors.break_end_time}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                When does the break end?
+              </p>
             </div>
 
             {!formData.follows_company_schedule && (

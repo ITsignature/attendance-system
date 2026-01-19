@@ -580,7 +580,7 @@ router.put('/:id',
       'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
 
       // Work Schedule - NEW FIELDS
-      'in_time', 'out_time', 'follows_company_schedule',
+      'in_time', 'out_time', 'break_start_time', 'break_end_time', 'follows_company_schedule',
 
       // Salary Calculation Settings
       'attendance_affects_salary',
@@ -605,7 +605,7 @@ router.put('/:id',
         let value = req.body[field];
         
         // 🔥 FIX: Clean time values if they have quotes
-        if ((field === 'in_time' || field === 'out_time') && typeof value === 'string') {
+        if ((field === 'in_time' || field === 'out_time' || field === 'break_start_time' || field === 'break_end_time') && typeof value === 'string') {
           // Remove quotes if present: "08:00" -> 08:00
           value = value.replace(/^["']|["']$/g, '');
         }
@@ -1098,6 +1098,10 @@ router.post('/',
       
       console.log('🔍 Generated employee UUID:', employeeUuid);
 
+      // Extract break times from request body
+      const break_start_time = req.body.break_start_time || null;
+      const break_end_time = req.body.break_end_time || null;
+
       // Insert employee with work schedule fields - UPDATED QUERY
       console.log('💾 Inserting employee into database...');
       await db.execute(`
@@ -1107,19 +1111,19 @@ router.post('/',
           hire_date, department_id, designation_id, manager_id, employee_type,
           employment_status, base_salary, attendance_affects_salary,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-          in_time, out_time, follows_company_schedule, weekend_working_config,
+          in_time, out_time, break_start_time, break_end_time, follows_company_schedule, weekend_working_config,
           overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
           weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,
           payable_hours_policy,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, fingerprint_id || null, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
         nationality || null, marital_status || null, hire_date, department_id, designation_id,
         manager_id || null, employee_type, employment_status, base_salary || null, attendance_affects_salary,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
-        finalInTime, finalOutTime, follows_company_schedule,
+        finalInTime, finalOutTime, break_start_time, break_end_time, follows_company_schedule,
         weekend_working_config ? JSON.stringify(weekend_working_config) : null,
         overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
         weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,

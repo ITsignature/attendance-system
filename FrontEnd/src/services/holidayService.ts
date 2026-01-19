@@ -285,36 +285,79 @@ class HolidayService {
   
   /**
    * Generate Sri Lankan holiday list for a specific year
+   * Note: Dates for lunar-based holidays (Poya Days, Islamic holidays, Hindu festivals)
+   * are approximate and should be verified with official sources each year
    */
   private generateSriLankanHolidayList(year: number): Omit<Holiday, 'id'>[] {
-    return [
-      { name: "New Year's Day", date: `${year}-01-01`, is_optional: false },
-      { name: "Duruthu Full Moon Poya Day", date: `${year}-01-13`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Tamil Thai Pongal Day", date: `${year}-01-14`, is_optional: false },
-      { name: "Independence Day", date: `${year}-02-04`, is_optional: false },
-      { name: "Navam Full Moon Poya Day", date: `${year}-02-12`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Mahasivarathri Day", date: `${year}-02-26`, is_optional: false },
-      { name: "Medin Full Moon Poya Day", date: `${year}-03-13`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Id-Ul-Fitr (Ramazan Festival Day)", date: `${year}-03-31`, is_optional: false },
-      { name: "Bak Full Moon Poya Day", date: `${year}-04-12`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Day prior to Sinhala & Tamil New Year", date: `${year}-04-13`, is_optional: false },
-      { name: "Sinhala & Tamil New Year Day", date: `${year}-04-14`, is_optional: false },
-      { name: "Good Friday", date: `${year}-04-18`, is_optional: false },
-      { name: "May Day (International Workers' Day)", date: `${year}-05-01`, is_optional: false },
-      { name: "Vesak Full Moon Poya Day", date: `${year}-05-12`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Day following Vesak Full Moon Poya Day", date: `${year}-05-13`, is_optional: false },
-      { name: "Id-Ul-Alha (Hadji Festival Day)", date: `${year}-06-07`, is_optional: false },
-      { name: "Poson Full Moon Poya Day", date: `${year}-06-10`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Esala Full Moon Poya Day", date: `${year}-07-10`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Nikini Full Moon Poya Day", date: `${year}-08-08`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Milad-Un-Nabi (Holy Prophet's Birthday)", date: `${year}-09-05`, is_optional: false },
-      { name: "Binara Full Moon Poya Day", date: `${year}-09-07`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Vap Full Moon Poya Day", date: `${year}-10-06`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Deepavali Festival Day", date: `${year}-10-20`, is_optional: false },
-      { name: "Ill Full Moon Poya Day", date: `${year}-11-05`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Unduvap Full Moon Poya Day", date: `${year}-12-04`, is_optional: false, description: "Full Moon Poya Day" },
-      { name: "Christmas Day", date: `${year}-12-25`, is_optional: false }
-    ];
+    // Year-specific holiday dates (based on lunar/solar calendars)
+    const holidaysByYear: { [key: number]: Omit<Holiday, 'id'>[] } = {
+      2026: [
+        { name: "New Year's Day", date: "2026-01-01", is_optional: false },
+        { name: "Duruthu Full Moon Poya Day", date: "2026-01-03", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Tamil Thai Pongal Day", date: "2026-01-15", is_optional: false },
+        { name: "Nawam Full Moon Poya Day", date: "2026-02-01", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Independence Day", date: "2026-02-04", is_optional: false },
+        { name: "Maha Sivarathri Day", date: "2026-02-15", is_optional: false },
+        { name: "Medin Full Moon Poya Day", date: "2026-03-02", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Id-Ul-Fitr (Ramazan Festival Day)", date: "2026-03-21", is_optional: false },
+        { name: "Bak Full Moon Poya Day", date: "2026-04-01", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Good Friday", date: "2026-04-03", is_optional: false },
+        { name: "Day Prior to Sinhala and Tamil New Year Day", date: "2026-04-13", is_optional: false },
+        { name: "Sinhala and Tamil New Year Day", date: "2026-04-14", is_optional: false },
+        { name: "Vesak Full Moon Poya Day", date: "2026-05-01", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "May Day (International Workers' Day)", date: "2026-05-01", is_optional: false },
+        { name: "Day Following Vesak Full Moon Poya Day", date: "2026-05-02", is_optional: false },
+        { name: "Id-Ul-Alha (Hadji Festival Day)", date: "2026-05-28", is_optional: false },
+        { name: "Adhi Poson Full Moon Poya Day", date: "2026-05-30", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Poson Full Moon Poya Day", date: "2026-06-29", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Esala Full Moon Poya Day", date: "2026-07-29", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Milad-Un-Nabi (Holy Prophet's Birthday)", date: "2026-08-26", is_optional: false },
+        { name: "Nikini Full Moon Poya Day", date: "2026-08-27", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Binara Full Moon Poya Day", date: "2026-09-26", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Vap Full Moon Poya Day", date: "2026-10-25", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Deepavali Festival Day", date: "2026-11-08", is_optional: false },
+        { name: "Il Full Moon Poya Day", date: "2026-11-24", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Unduvap Full Moon Poya Day", date: "2026-12-23", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Christmas Day", date: "2026-12-25", is_optional: false }
+      ],
+      2027: [
+        { name: "New Year's Day", date: "2027-01-01", is_optional: false },
+        { name: "Tamil Thai Pongal Day", date: "2027-01-15", is_optional: false },
+        { name: "Duruthu Full Moon Poya Day", date: "2027-01-21", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Independence Day", date: "2027-02-04", is_optional: false },
+        { name: "Navam Full Moon Poya Day", date: "2027-02-19", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Mahasivarathri Day", date: "2027-02-26", is_optional: false },
+        { name: "Id-Ul-Fitr (Ramazan Festival Day)", date: "2027-03-10", is_optional: false },
+        { name: "Medin Full Moon Poya Day", date: "2027-03-21", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Good Friday", date: "2027-03-26", is_optional: false },
+        { name: "Day prior to Sinhala & Tamil New Year", date: "2027-04-13", is_optional: false },
+        { name: "Sinhala & Tamil New Year Day", date: "2027-04-14", is_optional: false },
+        { name: "Bak Full Moon Poya Day", date: "2027-04-19", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "May Day (International Workers' Day)", date: "2027-05-01", is_optional: false },
+        { name: "Id-Ul-Alha (Hadji Festival Day)", date: "2027-05-17", is_optional: false },
+        { name: "Vesak Full Moon Poya Day", date: "2027-05-19", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Day following Vesak Full Moon Poya Day", date: "2027-05-20", is_optional: false },
+        { name: "Poson Full Moon Poya Day", date: "2027-06-17", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Esala Full Moon Poya Day", date: "2027-07-17", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Milad-Un-Nabi (Holy Prophet's Birthday)", date: "2027-07-26", is_optional: false },
+        { name: "Nikini Full Moon Poya Day", date: "2027-08-15", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Binara Full Moon Poya Day", date: "2027-09-14", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Vap Full Moon Poya Day", date: "2027-10-13", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Deepavali Festival Day", date: "2027-10-18", is_optional: false },
+        { name: "Ill Full Moon Poya Day", date: "2027-11-12", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Unduvap Full Moon Poya Day", date: "2027-12-11", is_optional: false, description: "Full Moon Poya Day" },
+        { name: "Christmas Day", date: "2027-12-25", is_optional: false }
+      ]
+    };
+
+    // Return holidays for the requested year, or show warning if not available
+    if (holidaysByYear[year]) {
+      return holidaysByYear[year];
+    } else {
+      console.warn(`Sri Lankan holidays for year ${year} are not available. Please add them to the holiday list or contact support.`);
+      alert(`Holiday dates for ${year} are not yet configured. Please contact your system administrator or add holidays manually.`);
+      return [];
+    }
   }
 }
 

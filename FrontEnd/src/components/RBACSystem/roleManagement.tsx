@@ -278,7 +278,8 @@ const RoleManagementPage: React.FC = () => {
         'payroll': 'Payroll Settings',
         'payroll_components': 'Payroll Components',
         'employee_allowances': 'Employee Allowances',
-        'employee_deductions': 'Employee Deductions'
+        'employee_deductions': 'Employee Deductions',
+        'leave_types': 'Leave Types'
       };
       return nameMap[subCategory] || subCategory.charAt(0).toUpperCase() + subCategory.slice(1);
     };
@@ -296,10 +297,16 @@ const RoleManagementPage: React.FC = () => {
         groupedBySubCategory[subCategory].push(permission);
       });
 
+      // Add leave_types permissions to the grouping (include all permissions)
+      const leaveTypesPermissions = availablePermissions['leave_types'] || [];
+      if (Array.isArray(leaveTypesPermissions) && leaveTypesPermissions.length > 0) {
+        groupedBySubCategory['leave_types'] = leaveTypesPermissions;
+      }
+
       // Organize sub-categories into main categories
       const mainCategories: { [key: string]: { [key: string]: any[] } } = {
         'Attendance Settings': { 'attendance': [] },
-        'Leave Settings': { 'leaves': [] },
+        'Leave Settings': { 'leaves': [], 'leave_types': [] },
         'Payroll Settings': { 'payroll': [] },
         'Payroll Component Configuration': {
           'payroll_components': [],
@@ -314,6 +321,8 @@ const RoleManagementPage: React.FC = () => {
           mainCategories['Attendance Settings']['attendance'] = perms;
         } else if (subCategory === 'leaves') {
           mainCategories['Leave Settings']['leaves'] = perms;
+        } else if (subCategory === 'leave_types') {
+          mainCategories['Leave Settings']['leave_types'] = perms;
         } else if (subCategory === 'payroll') {
           mainCategories['Payroll Settings']['payroll'] = perms;
         } else if (['payroll_components', 'employee_allowances', 'employee_deductions'].includes(subCategory)) {
@@ -374,6 +383,11 @@ const RoleManagementPage: React.FC = () => {
     // Use API permissions if available, otherwise fall back to MODULES
     if (Object.keys(availablePermissions).length > 0) {
       return Object.entries(availablePermissions).map(([moduleName, permissions]: [string, any]) => {
+        // Skip leave_types module as it will be merged into settings section under Leave Settings
+        if (moduleName.toLowerCase() === 'leave_types') {
+          return null;
+        }
+
         // Special handling for Settings module
         if (moduleName.toLowerCase() === 'settings') {
           return (
