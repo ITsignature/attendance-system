@@ -31,6 +31,10 @@ type Employee = {
   default_work_type?: WorkType;
   break_start_time?: string;
   break_end_time?: string;
+  // Employee-specific schedule fields
+  in_time?: string;
+  out_time?: string;
+  follows_company_schedule?: boolean;
 };
 
 type AttendanceRow = {
@@ -274,7 +278,7 @@ const ManualAttendance: React.FC = () => {
     setRows(prev => prev.map(r => {
       // Get employee-specific times or fall back to company default
       const employeeTimes = getEmployeeDefaultTimes(r.employee);
-      
+
       return {
         ...r,
         check_in_time: cleanTimeValue(employeeTimes.start_time),
@@ -286,32 +290,25 @@ const ManualAttendance: React.FC = () => {
   };
 
   const getEmployeeDefaultTimes = (employee: Employee) => {
-    // For now, we'll use a simple mapping based on employee characteristics
-    // This can be extended to use database-stored employee schedules
-    
-    // Example: Different schedules based on department or employee type
-    const customSchedules: { [key: string]: { start_time: string; end_time: string } } = {
-      // Department-based schedules
-      'IT': { start_time: '09:30:00', end_time: '18:30:00' },
-      'Security': { start_time: '08:00:00', end_time: '20:00:00' },
-      'Management': { start_time: '10:00:00', end_time: '19:00:00' },
-      
-      // You can also add employee-specific schedules by employee code
-      'EMP001': { start_time: '07:00:00', end_time: '15:00:00' }, // Early shift
-      'EMP002': { start_time: '14:00:00', end_time: '22:00:00' }, // Late shift
-    };
-
-    // Check if employee has a specific schedule by employee code
-    if (employee.employee_code && customSchedules[employee.employee_code]) {
-      return customSchedules[employee.employee_code];
+    // Priority 1: Check if employee has custom schedule (follows_company_schedule = false)
+    // and has their own in_time/out_time configured
+    if (employee.follows_company_schedule === false && employee.in_time && employee.out_time) {
+      return {
+        start_time: employee.in_time,
+        end_time: employee.out_time
+      };
     }
 
-    // Check if department has a specific schedule
-    if (employee.department_name && customSchedules[employee.department_name]) {
-      return customSchedules[employee.department_name];
+    // Priority 2: Check if employee has schedule times regardless of follows_company_schedule flag
+    // (This handles cases where employee has custom times set)
+    if (employee.in_time && employee.out_time && !employee.follows_company_schedule) {
+      return {
+        start_time: employee.in_time,
+        end_time: employee.out_time
+      };
     }
 
-    // Fall back to company default
+    // Priority 3: Fall back to company default schedule
     return {
       start_time: workingHours.start_time,
       end_time: workingHours.end_time
@@ -357,8 +354,11 @@ const ManualAttendance: React.FC = () => {
       <Card className="mb-4">
         <div className="flex flex-wrap gap-2 items-center">
           <Button size="sm" onClick={() => fillWithDefaultTimes()}>
-            Fill with Default Time: {cleanTimeValue(workingHours.start_time)}–{cleanTimeValue(workingHours.end_time)}
+            Fill Default Times (Employee Schedules)
           </Button>
+          <span className="text-xs text-gray-500">
+            Company default: {cleanTimeValue(workingHours.start_time)}–{cleanTimeValue(workingHours.end_time)}
+          </span>
           <Button size="sm" color="gray" onClick={() => quickFillTimes('', '')}>
             Clear All Times
           </Button>
@@ -409,6 +409,11 @@ const ManualAttendance: React.FC = () => {
                         </div>
                         <div className="text-xs text-gray-500">
                           {r.employee.employee_code || '—'} {r.employee.department_name ? `• ${r.employee.department_name}` : ''}
+                          {r.employee.follows_company_schedule === false && r.employee.in_time && r.employee.out_time && (
+                            <span className="ml-2 text-blue-600 font-medium">
+                              • Custom: {cleanTimeValue(r.employee.in_time)}–{cleanTimeValue(r.employee.out_time)}
+                            </span>
+                          )}
                         </div>
                       </Table.Cell>
                       <Table.Cell>
