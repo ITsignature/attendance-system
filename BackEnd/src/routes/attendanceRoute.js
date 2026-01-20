@@ -109,6 +109,7 @@ router.get('/fingerprint', [
     console.log(`   Fingerprint ID: ${fingerprint_id}`);
     console.log(`   Date: ${today}`);
     console.log(`   Time: ${currentTime}`);
+    console.log(`   Time: ${currentTime}`);
 
     // Check if attendance already exists for today
     const [existing] = await db.execute(`
