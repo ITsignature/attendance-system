@@ -1,7 +1,7 @@
 const { getDB } = require('../config/database');
 
 /**
- * PayrollCycleService
+ * 
  *
  * Handles employee-specific payroll cycle calculations.
  * Supports custom payroll cycles where employees can have salaries
