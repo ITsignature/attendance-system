@@ -1899,6 +1899,158 @@ router.use((error, req, res, next) => {
 });
 
 // =============================================
+// PAYROLL CYCLE CONFIGURATION ENDPOINTS
+// =============================================
+
+/**
+ * GET /api/employees/:id/payroll-cycle
+ * Get employee's payroll cycle configuration
+ * Requires: employees.view permission
+ */
+router.get('/:id/payroll-cycle',
+    checkPermission('employees.view'),
+    asyncHandler(async (req, res) => {
+    const db = getDB();
+    const { id } = req.params;
+
+    // Ensure clientId exists
+    if (!req.user || !req.user.clientId) {
+        return res.status(401).json({
+            success: false,
+            message: 'User authentication error: clientId not found'
+        });
+    }
+
+    const clientId = req.user.clientId;
+
+    // Check if employee exists and user has access
+    const [employees] = await db.execute(`
+        SELECT payroll_cycle_override, payroll_cycle_day,
+               payroll_cycle_effective_from,
+               first_name, last_name, employee_code
+        FROM employees
+        WHERE id = ? AND client_id = ?
+    `, [id, clientId]);
+
+    if (!employees || employees.length === 0) {
+        return res.status(404).json({
+            success: false,
+            message: 'Employee not found'
+        });
+    }
+
+    const employee = employees[0];
+
+    res.json({
+        success: true,
+        data: {
+            employeeId: id,
+            employeeCode: employee.employee_code,
+            employeeName: `${employee.first_name} ${employee.last_name}`,
+            payrollCycleOverride: employee.payroll_cycle_override,
+            payrollCycleDay: employee.payroll_cycle_day,
+            payrollCycleEffectiveFrom: employee.payroll_cycle_effective_from
+        }
+    });
+}));
+
+/**
+ * PUT /api/employees/:id/payroll-cycle
+ * Update employee's payroll cycle configuration
+ * Requires: employees.edit permission
+ */
+router.put('/:id/payroll-cycle',
+    checkPermission('employees.edit'),
+    [
+        body('cycleType').isIn(['default', 'custom']).withMessage('Cycle type must be "default" or "custom"'),
+        body('cycleDay').optional().isInt({ min: 1, max: 31 }).withMessage('Cycle day must be between 1 and 31'),
+        body('effectiveFrom').optional().isISO8601().withMessage('Effective from must be a valid date')
+    ],
+    asyncHandler(async (req, res) => {
+        const db = getDB();
+        const { id } = req.params;
+        const { cycleType, cycleDay, effectiveFrom } = req.body;
+
+        // Validate request
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                errors: errors.array()
+            });
+        }
+
+        // Ensure clientId exists
+        if (!req.user || !req.user.clientId) {
+            return res.status(401).json({
+                success: false,
+                message: 'User authentication error: clientId not found'
+            });
+        }
+
+        const clientId = req.user.clientId;
+
+        // Check if employee exists
+        const [employees] = await db.execute(`
+            SELECT id, first_name, last_name FROM employees
+            WHERE id = ? AND client_id = ?
+        `, [id, clientId]);
+
+        if (!employees || employees.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Employee not found'
+            });
+        }
+
+        // Validation for custom cycle
+        if (cycleType === 'custom') {
+            if (!cycleDay || cycleDay < 1 || cycleDay > 31) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cycle day is required and must be between 1 and 31 for custom cycle'
+                });
+            }
+
+            if (!effectiveFrom) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Effective from date is required for custom cycle'
+                });
+            }
+        }
+
+        // Update employee payroll cycle configuration
+        await db.execute(`
+            UPDATE employees
+            SET payroll_cycle_override = ?,
+                payroll_cycle_day = ?,
+                payroll_cycle_effective_from = ?,
+                updated_at = NOW()
+            WHERE id = ? AND client_id = ?
+        `, [
+            cycleType,
+            cycleType === 'custom' ? (cycleDay || null) : null,
+            cycleType === 'custom' ? (effectiveFrom || null) : null,
+            id,
+            clientId
+        ]);
+
+        const employee = employees[0];
+
+        res.json({
+            success: true,
+            message: `Payroll cycle configuration updated successfully for ${employee.first_name} ${employee.last_name}`,
+            data: {
+                cycleType,
+                cycleDay: cycleType === 'custom' ? cycleDay : null,
+                effectiveFrom: cycleType === 'custom' ? effectiveFrom : null
+            }
+        });
+    })
+);
+
+// =============================================
 // UTILITY FUNCTION FOR ATTENDANCE SYSTEM
 // =============================================
 
@@ -1906,16 +2058,16 @@ router.use((error, req, res, next) => {
 const getEmployeeWorkHours = async (employeeId, clientId, db) => {
   const [employee] = await db.execute(`
     SELECT in_time, out_time, follows_company_schedule
-    FROM employees 
+    FROM employees
     WHERE id = ? AND client_id = ?
   `, [employeeId, clientId]);
-  
+
   if (employee.length === 0) {
     throw new Error('Employee not found');
   }
-  
+
   const emp = employee[0];
-  
+
   // Always return the stored times (which are already resolved)
   return {
     start_time: emp.in_time,

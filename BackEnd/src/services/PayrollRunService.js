@@ -127,7 +127,16 @@ class PayrollRunService {
 
             // Get all records in this run
             const [records] = await db.execute(`
-                SELECT pr.*, e.base_salary, e.employee_type, e.department_id, e.designation_id, e.client_id
+                SELECT
+                    pr.*,
+                    pr.weekday_hourly_rate,
+                    pr.saturday_hourly_rate,
+                    pr.sunday_hourly_rate,
+                    e.base_salary as employee_base_salary,
+                    e.employee_type,
+                    e.department_id,
+                    e.designation_id,
+                    e.client_id
                 FROM payroll_records pr
                 JOIN employees e ON pr.employee_id = e.id
                 WHERE pr.run_id = ? AND pr.calculation_status = 'pending'
@@ -442,6 +451,17 @@ class PayrollRunService {
         const period = periodInfo[0];
         const clientId = period.client_id;
 
+        // Calculate employee-specific period dates (supports custom payroll cycles)
+        const PayrollCycleService = require('./PayrollCycleService');
+        const employeePeriod = await PayrollCycleService.calculateEmployeePeriod(
+            employee.id,
+            period.period_start_date,
+            period.period_end_date
+        );
+
+        const periodStart = employeePeriod.startDate;
+        const periodEnd = employeePeriod.endDate;
+
         // Get default working hours from system settings
         let defaultHoursPerDay = 8;
         try {
@@ -453,12 +473,12 @@ class PayrollRunService {
             console.log('Error loading working hours from system settings, using default 8 hours:', error.message);
         }
 
-        // Calculate working days for this employee for the payroll period
+        // Calculate working days for this employee using their specific period
         const HolidayService = require('./HolidayService');
         const workingDaysCalc = await HolidayService.calculateWorkingDays(
             clientId,
-            period.period_start_date,
-            period.period_end_date,
+            periodStart,
+            periodEnd,
             employee.department_id,
             false, // includeOptionalHolidays
             employee.id // employeeId for individual weekend config
@@ -473,24 +493,24 @@ class PayrollRunService {
         const weekdayDailyHours = await this.getEmployeeDailyHoursForDayType(
             employee.id,
             defaultHoursPerDay,
-            period.period_start_date,
-            period.period_end_date,
+            periodStart,
+            periodEnd,
             'weekday'
         );
 
         const saturdayDailyHours = await this.getEmployeeDailyHoursForDayType(
             employee.id,
             defaultHoursPerDay,
-            period.period_start_date,
-            period.period_end_date,
+            periodStart,
+            periodEnd,
             'saturday'
         );
 
         const sundayDailyHours = await this.getEmployeeDailyHoursForDayType(
             employee.id,
             defaultHoursPerDay,
-            period.period_start_date,
-            period.period_end_date,
+            periodStart,
+            periodEnd,
             'sunday'
         );
 
@@ -506,7 +526,12 @@ class PayrollRunService {
         const saturdayHourlyRate = saturdayDailyHours > 0 ? dailySalary / saturdayDailyHours : 0;
         const sundayHourlyRate = sundayDailyHours > 0 ? dailySalary / sundayDailyHours : 0;
 
+        // Format dates as YYYY-MM-DD strings in local time to avoid timezone conversion issues
+        const periodStartStr = PayrollCycleService.formatDate(periodStart);
+        const periodEndStr = PayrollCycleService.formatDate(periodEnd);
+
         console.log(`📊 Pre-calculated values for ${employee.first_name} ${employee.last_name}:`);
+        console.log(`   Period: ${periodStartStr} to ${periodEndStr} ${employeePeriod.usesCustomCycle ? '(Custom Cycle)' : '(Default)'}`);
         console.log(`   Working Days - Weekdays: ${weekdayWorkingDays}, Saturdays: ${workingSaturdays}, Sundays: ${workingSundays}, Total: ${totalWorkingDays}`);
         console.log(`   Daily Hours - Weekdays: ${weekdayDailyHours}h, Saturday: ${saturdayDailyHours}h, Sunday: ${sundayDailyHours}h`);
         console.log(`   Base Salary: Rs. ${baseSalary.toLocaleString()}`);
@@ -518,15 +543,17 @@ class PayrollRunService {
                 id, run_id, employee_id, employee_code, employee_name,
                 department_name, designation_name, calculation_status,
                 base_salary, attendance_affects_salary,
+                employee_period_start_date, employee_period_end_date, uses_custom_cycle,
                 weekday_working_days, working_saturdays, working_sundays,
                 weekday_daily_hours, saturday_daily_hours, sunday_daily_hours,
                 daily_salary, weekday_hourly_rate, saturday_hourly_rate, sunday_hourly_rate
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             recordId, runId, employee.id, employee.employee_code,
             `${employee.first_name} ${employee.last_name}`,
             employee.department_name, employee.designation_name,
             baseSalary, employee.attendance_affects_salary ? 1 : 0,
+            periodStartStr, periodEndStr, employeePeriod.usesCustomCycle ? 1 : 0,
             weekdayWorkingDays, workingSaturdays, workingSundays,
             weekdayDailyHours, saturdayDailyHours, sundayDailyHours,
             dailySalary, weekdayHourlyRate, saturdayHourlyRate, sundayHourlyRate
@@ -1235,20 +1262,25 @@ class PayrollRunService {
         const employeeName = employeeInfo[0] ? `${employeeInfo[0].first_name} ${employeeInfo[0].last_name}` : 'Unknown';
         const employeeCode = employeeInfo[0]?.employee_code || employeeId;
 
-        // Get payroll period info and client info
-        const [periodInfo] = await db.execute(`
-            SELECT pp.period_start_date, pp.period_end_date, pr.client_id
-            FROM payroll_runs pr
-            JOIN payroll_periods pp ON pr.period_id = pp.id
-            WHERE pr.id = ?
-        `, [runId]);
+        // Get employee-specific period dates from payroll_records (supports custom cycles)
+        const [recordInfo] = await db.execute(`
+            SELECT pr.employee_period_start_date, pr.employee_period_end_date,
+                   pr.uses_custom_cycle, prun.client_id
+            FROM payroll_records pr
+            JOIN payroll_runs prun ON pr.run_id = prun.id
+            WHERE pr.run_id = ? AND pr.employee_id = ?
+        `, [runId, employeeId]);
 
-        if (periodInfo.length === 0) {
-            throw new Error('Period information not found');
+        if (recordInfo.length === 0) {
+            throw new Error('Payroll record not found for employee');
         }
 
-        const period = periodInfo[0];
-        const clientId = period.client_id;
+        const period = {
+            period_start_date: recordInfo[0].employee_period_start_date,
+            period_end_date: recordInfo[0].employee_period_end_date
+        };
+        const clientId = recordInfo[0].client_id;
+        const usesCustomCycle = recordInfo[0].uses_custom_cycle === 1;
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -1277,7 +1309,7 @@ class PayrollRunService {
 
         console.log(`\n💰 CALCULATING ATTENDANCE DEDUCTION ${includeLiveSession ? '(LIVE PREVIEW - Real-time)' : '(FINAL CALCULATION - Completed sessions only)'}`);
         console.log(`   👤 Employee: ${employeeName} (${employeeCode})`);
-        console.log(`   📅 Full Period: ${period.period_start_date} to ${period.period_end_date}`);
+        console.log(`   📅 Full Period: ${period.period_start_date} to ${period.period_end_date} ${usesCustomCycle ? '(Custom Cycle)' : '(Default)'}`);
         console.log(`   📅 Calculation Until: ${getLocalDateString(calculationEndDate)} ${isPartialPeriod ? '(PARTIAL - Until Today)' : '(FULL PERIOD)'}`);
         console.log(`   Base Salary (Full Month): Rs.${baseSalary.toFixed(2)}`);
         console.log(`   Mode: ${includeLiveSession ? '⚡ REAL-TIME (includes ongoing session)' : '✅ FINAL (completed sessions only)'}`);
@@ -1931,9 +1963,9 @@ class PayrollRunService {
                 expectedDailyHours = sundayDailyHours;
             }
 
-            // payable_duration is stored in MINUTES, convert to hours
-            const actualMinutes = parseFloat(record.payable_duration) || 0;
-            const actualHours = actualMinutes / 60;
+            // payable_duration is stored in SECONDS, convert to hours
+            const actualSeconds = parseFloat(record.payable_duration) || 0;
+            const actualHours = actualSeconds / 3600;
             const shortfall = Math.max(0, expectedDailyHours - actualHours);
 
             if (record.is_weekend >= 2 && record.is_weekend <= 6) {
@@ -2471,13 +2503,13 @@ class PayrollRunService {
                     SUM(a.overtime_hours) OVER() as total_overtime_hours
                 FROM attendance a
                 JOIN payroll_runs pr ON pr.id = ?
-                JOIN payroll_periods pp ON pr.period_id = pp.id
+                JOIN payroll_records prec ON prec.run_id = pr.id AND prec.employee_id = ?
                 JOIN employees e ON a.employee_id = e.id
                 WHERE a.employee_id = ?
-                  AND DATE(a.date) BETWEEN pp.period_start_date AND pp.period_end_date
+                  AND DATE(a.date) BETWEEN prec.employee_period_start_date AND prec.employee_period_end_date
                   AND a.overtime_hours > 0
                 ORDER BY a.date
-            `, [runId, employeeId]);
+            `, [runId, employeeId, employeeId]);
             
             // Check if employee has overtime enabled (first record has employee settings)
             const employeeOvertimeEnabled = overtime[0]?.overtime_enabled || false;
@@ -2534,25 +2566,18 @@ class PayrollRunService {
                                 dayType = 'weekday';
                             }
 
-                            // Calculate pre-shift and post-shift overtime separately
+                            // Store raw seconds and enable flags for calculation later
                             const preShiftSeconds = parseInt(record.pre_shift_overtime_seconds) || 0;
                             const postShiftSeconds = parseInt(record.post_shift_overtime_seconds) || 0;
-                            const preShiftHours = preShiftSeconds / 3600;
-                            const postShiftHours = postShiftSeconds / 3600;
-
-                            // Respect pre/post shift overtime flags
                             const preShiftEnabled = record.pre_shift_overtime_enabled || false;
                             const postShiftEnabled = record.post_shift_overtime_enabled || false;
 
-                            const applicablePreShiftHours = preShiftEnabled ? preShiftHours : 0;
-                            const applicablePostShiftHours = postShiftEnabled ? postShiftHours : 0;
-                            const applicableOvertimeHours = applicablePreShiftHours + applicablePostShiftHours;
-
                             overtimeDetails.push({
                                 date: dateStr,
-                                hours: applicableOvertimeHours,
-                                pre_shift_hours: applicablePreShiftHours,
-                                post_shift_hours: applicablePostShiftHours,
+                                pre_shift_overtime_seconds: preShiftSeconds,
+                                post_shift_overtime_seconds: postShiftSeconds,
+                                pre_shift_overtime_enabled: preShiftEnabled,
+                                post_shift_overtime_enabled: postShiftEnabled,
                                 multiplier: multiplier,
                                 day_type: dayType,
                                 is_holiday: !!isHoliday
@@ -2840,47 +2865,99 @@ class PayrollRunService {
         // Add overtime (this is an addition) - with EMPLOYEE-LEVEL configuration
         // Overtime is already filtered by employee's overtime_enabled flag in getEmployeeData
         if (employeeData.overtimeHours > 0) {
-            // Get employee-specific daily hours for accurate hourly rate
-            const employeeDailyHours = await this.getEmployeeDailyHours(record.employee_id, 8, record.period_start_date, record.period_end_date);
-            const workingDaysInMonth = await this.calculateWorkingDaysInPeriod(
-                record.period_start_date || '2024-01-01',
-                record.period_end_date || '2024-01-31',
-                record.client_id,
-                record.department_id
-            );
-            const hourlyRate = baseSalary / (workingDaysInMonth * employeeDailyHours);
             let overtimeAmount = 0;
 
-            console.log(`⏰ OVERTIME CALCULATION: Employee ${record.employee_id}`);
+            console.log(`⏰ OVERTIME CALCULATION: Employee ${record.employee_code}`);
             console.log(`   Base Salary: ${baseSalary}`);
-            console.log(`   Working Days: ${workingDaysInMonth}`);
-            console.log(`   Employee Daily Hours: ${employeeDailyHours}h`);
-            console.log(`   Hourly Rate: ${hourlyRate.toFixed(2)} (${baseSalary} ÷ (${workingDaysInMonth} × ${employeeDailyHours}))`);
+            console.log(`   Pre-calculated rates from payroll_records:`);
+            console.log(`     Weekday: ${record.weekday_hourly_rate}/hr`);
+            console.log(`     Saturday: ${record.saturday_hourly_rate}/hr`);
+            console.log(`     Sunday: ${record.sunday_hourly_rate}/hr`);
 
-            // Calculate overtime with EMPLOYEE-SPECIFIC multipliers
+            // Calculate overtime with pre-calculated hourly rates and per-second calculation
             if (employeeData.overtimeDetails && Array.isArray(employeeData.overtimeDetails) && employeeData.overtimeDetails.length > 0) {
-                // Detailed overtime with employee-specific day-based multipliers
                 console.log(`   Processing ${employeeData.overtimeDetails.length} overtime records:`);
 
-                for (const overtime of employeeData.overtimeDetails) {
-                    const dayAmount = (overtime.hours || 0) * hourlyRate * (overtime.multiplier || 1.0);
-                    overtimeAmount += dayAmount;
+                // Check enable/disable flags ONCE (applies to all days)
+                const preShiftEnabled = employeeData.overtimeDetails[0]?.pre_shift_overtime_enabled || false;
+                const postShiftEnabled = employeeData.overtimeDetails[0]?.post_shift_overtime_enabled || false;
 
-                    console.log(`     ${overtime.date} (${overtime.day_type}): ${overtime.hours.toFixed(2)}h × ${hourlyRate.toFixed(2)} × ${overtime.multiplier}x = ${dayAmount.toFixed(2)}`);
-                    if (overtime.pre_shift_hours > 0) {
-                        console.log(`       Pre-shift: ${overtime.pre_shift_hours.toFixed(2)}h`);
+                console.log(`   Pre-shift OT enabled: ${preShiftEnabled}`);
+                console.log(`   Post-shift OT enabled: ${postShiftEnabled}`);
+
+                for (const otRecord of employeeData.overtimeDetails) {
+                    const dateStr = otRecord.date;
+                    const dayOfWeek = new Date(dateStr).getDay(); // 0=Sunday, 6=Saturday
+
+                    // Skip holiday overtime calculation (to be implemented)
+                    if (otRecord.is_holiday) {
+                        console.log(`     ${dateStr} (holiday): ⚠️  Holiday overtime calculation - TO BE IMPLEMENTED`);
+                        continue;
                     }
-                    if (overtime.post_shift_hours > 0) {
-                        console.log(`       Post-shift: ${overtime.post_shift_hours.toFixed(2)}h`);
+
+                    // Determine applicable overtime seconds based on enable flags
+                    const preShiftSeconds = parseInt(otRecord.pre_shift_overtime_seconds) || 0;
+                    const postShiftSeconds = parseInt(otRecord.post_shift_overtime_seconds) || 0;
+
+                    let totalOvertimeSeconds = 0;
+                    if (preShiftEnabled && postShiftEnabled) {
+                        totalOvertimeSeconds = preShiftSeconds + postShiftSeconds;
+                    } else if (preShiftEnabled) {
+                        totalOvertimeSeconds = preShiftSeconds;
+                    } else if (postShiftEnabled) {
+                        totalOvertimeSeconds = postShiftSeconds;
                     }
+
+                    if (totalOvertimeSeconds === 0) continue;
+
+                    // Get the correct hourly rate based on day of week
+                    let hourlyRate = 0;
+                    let dayType = 'weekday';
+
+                    if (dayOfWeek === 0) {
+                        // Sunday
+                        hourlyRate = parseFloat(record.sunday_hourly_rate) || 0;
+                        dayType = 'sunday';
+                    } else if (dayOfWeek === 6) {
+                        // Saturday
+                        hourlyRate = parseFloat(record.saturday_hourly_rate) || 0;
+                        dayType = 'saturday';
+                    } else {
+                        // Weekday (Monday-Friday)
+                        hourlyRate = parseFloat(record.weekday_hourly_rate) || 0;
+                        dayType = 'weekday';
+                    }
+
+                    // Calculate per-second rate
+                    const perSecondRate = hourlyRate / 3600;
+
+                    // Get multiplier for this day type
+                    const multiplier = parseFloat(otRecord.multiplier) || 1.0;
+
+                    // Calculate overtime payment for this day
+                    const dayOvertimeAmount = totalOvertimeSeconds * perSecondRate * multiplier;
+                    overtimeAmount += dayOvertimeAmount;
+
+                    const totalMinutes = Math.round(totalOvertimeSeconds / 60);
+                    const preShiftMinutes = Math.round(preShiftSeconds / 60);
+                    const postShiftMinutes = Math.round(postShiftSeconds / 60);
+
+                    console.log(`     ${dateStr} (${dayType}):`);
+                    console.log(`       Total OT: ${totalMinutes}min (${(totalOvertimeSeconds/3600).toFixed(2)}h)`);
+                    if (preShiftEnabled && preShiftSeconds > 0) {
+                        console.log(`         Pre-shift: ${preShiftMinutes}min`);
+                    }
+                    if (postShiftEnabled && postShiftSeconds > 0) {
+                        console.log(`         Post-shift: ${postShiftMinutes}min`);
+                    }
+                    console.log(`       Calculation: ${totalOvertimeSeconds}sec × ${perSecondRate.toFixed(6)}/sec × ${multiplier}x = ${dayOvertimeAmount.toFixed(2)}`);
                 }
             } else {
-                // No overtime details available (should not happen with new system)
+                // No overtime details available
                 console.log(`   ⚠️  No overtime details available for calculation`);
                 overtimeAmount = 0;
             }
 
-            console.log(`   Total Overtime Hours: ${employeeData.overtimeHours}h`);
             console.log(`   Total Overtime Amount: ${overtimeAmount.toFixed(2)}`);
             console.log('');
 
@@ -3603,7 +3680,7 @@ class PayrollRunService {
             today.setHours(23, 59, 59, 999);
             const calculationEndDate = today < new Date(period.period_end_date) ? today : new Date(period.period_end_date);
 
-            // Get all employees in this payroll run
+            // Get all employees in this payroll run WITH their employee-specific period dates
             const [employees] = await db.execute(`
                 SELECT
                     pr.id as record_id,
@@ -3613,6 +3690,12 @@ class PayrollRunService {
                     pr.department_name,
                     pr.designation_name,
                     pr.attendance_affects_salary,
+                    pr.employee_period_start_date,
+                    pr.employee_period_end_date,
+                    pr.uses_custom_cycle,
+                    pr.weekday_hourly_rate,
+                    pr.saturday_hourly_rate,
+                    pr.sunday_hourly_rate,
                     e.base_salary,
                     e.department_id
                 FROM payroll_records pr
@@ -3693,7 +3776,25 @@ class PayrollRunService {
             // ========================================
             const FinancialRecordsIntegration = require('./FinancialRecordsIntegration');
 
-            // Fetch loans - match based on start_date falling in the period
+            // Calculate min/max period dates across all employees (to handle custom cycles)
+            const allPeriodDates = employees.map(e => ({
+                start: e.employee_period_start_date,
+                end: e.employee_period_end_date
+            }));
+
+            const minPeriodStart = allPeriodDates.reduce((min, pd) =>
+                new Date(pd.start) < new Date(min) ? pd.start : min,
+                allPeriodDates[0].start
+            );
+
+            const maxPeriodEnd = allPeriodDates.reduce((max, pd) =>
+                new Date(pd.end) > new Date(max) ? pd.end : max,
+                allPeriodDates[0].end
+            );
+
+            console.log(`📅 Fetching financial records for expanded period: ${minPeriodStart} to ${maxPeriodEnd} (covers all employee cycles)`);
+
+            // Fetch loans - match based on start_date falling in ANY employee's period
             const [allLoans] = await db.execute(`
                 SELECT
                     employee_id,
@@ -3709,12 +3810,12 @@ class PayrollRunService {
                 WHERE employee_id IN (${employeeIds.map(() => '?').join(',')})
                   AND status = 'active'
                   AND start_date BETWEEN ? AND ?
-            `, [...employeeIds, period.period_start_date, period.period_end_date]);
+            `, [...employeeIds, minPeriodStart, maxPeriodEnd]);
 
             console.log(`📊 Found ${allLoans.length} active loans...`);
             console.log('Loans are ${allLoans.map(l => l.id).join(', ')}');
 
-            // Fetch advances - match based on required_date falling in the period
+            // Fetch advances - match based on required_date falling in ANY employee's period
             const [allAdvances] = await db.execute(`
                 SELECT
                     employee_id,
@@ -3732,7 +3833,7 @@ class PayrollRunService {
                   AND status IN ('approved', 'paid')
                   AND required_date BETWEEN ? AND ?
                   AND remaining_amount > 0
-            `, [...employeeIds, period.period_start_date, period.period_end_date]);
+            `, [...employeeIds, minPeriodStart, maxPeriodEnd]);
 
             // In PayrollRunService.js → getLivePayrollData()
                 console.log(`📅 Fetching advances for period: ${period.period_start_date} to ${period.period_end_date}`);
@@ -3746,7 +3847,7 @@ class PayrollRunService {
                     remaining_amount: a.remaining_amount
                 })));
 
-            // Fetch bonuses
+            // Fetch bonuses - match based on effective_date falling in ANY employee's period
             const [allBonuses] = await db.execute(`
                 SELECT
                     employee_id,
@@ -3761,7 +3862,7 @@ class PayrollRunService {
                   AND status = 'approved'
                   AND effective_date BETWEEN ? AND ?
                   AND payment_method = 'next_payroll'
-            `, [...employeeIds, period.period_start_date, period.period_end_date]);
+            `, [...employeeIds, minPeriodStart, maxPeriodEnd]);
 
             console.log(`📊 Found ${allBonuses.length} active bonuses...`);
 
@@ -3788,9 +3889,19 @@ class PayrollRunService {
                   AND DATE(a.date) BETWEEN ? AND ?
                   AND a.overtime_hours > 0
                 ORDER BY a.employee_id, a.date
-            `, [...employeeIds, period.period_start_date, period.period_end_date]);
+            `, [...employeeIds, minPeriodStart, maxPeriodEnd]);
 
             console.log(`📊 Found ${allOvertime.length} overtime records...`);
+
+            // Create employee period map for filtering financial records
+            const employeePeriodMap = {};
+            employees.forEach(emp => {
+                employeePeriodMap[emp.employee_id] = {
+                    start: emp.employee_period_start_date,
+                    end: emp.employee_period_end_date,
+                    usesCustomCycle: emp.uses_custom_cycle === 1
+                };
+            });
 
             // Group data by employee_id for fast lookup
             const allowancesByEmployee = {};
@@ -3812,10 +3923,11 @@ class PayrollRunService {
 
             allLoans.forEach(l => {
                 if (!loansByEmployee[l.employee_id]) loansByEmployee[l.employee_id] = [];
-                // Only include if should deduct in this period
+                // Use employee-specific period for filtering (supports custom cycles)
+                const empPeriod = employeePeriodMap[l.employee_id] || { start: period.period_start_date, end: period.period_end_date };
                 const shouldDeduct = FinancialRecordsIntegration.shouldDeductInPeriod(
                     l.start_date,
-                    { start: period.period_start_date, end: period.period_end_date }
+                    { start: empPeriod.start, end: empPeriod.end }
                 );
                 if (shouldDeduct && l.remaining_amount > 0) {
                     const deductionAmount = Math.min(l.monthly_deduction, l.remaining_amount);
@@ -3825,9 +3937,11 @@ class PayrollRunService {
 
             allAdvances.forEach(a => {
                 if (!advancesByEmployee[a.employee_id]) advancesByEmployee[a.employee_id] = [];
+                // Use employee-specific period for filtering (supports custom cycles)
+                const empPeriod = employeePeriodMap[a.employee_id] || { start: period.period_start_date, end: period.period_end_date };
                 const shouldDeduct = FinancialRecordsIntegration.shouldDeductInPeriod(
                     a.required_date,
-                    { start: period.period_start_date, end: period.period_end_date }
+                    { start: empPeriod.start, end: empPeriod.end }
                 );
                 if (shouldDeduct && a.remaining_amount > 0) {
                     const deductionAmount = Math.min(a.monthly_deduction, a.remaining_amount);
@@ -3837,11 +3951,21 @@ class PayrollRunService {
 
             allBonuses.forEach(b => {
                 if (!bonusesByEmployee[b.employee_id]) bonusesByEmployee[b.employee_id] = [];
-                bonusesByEmployee[b.employee_id].push({ ...b, addition_amount: b.bonus_amount });
+                // Use employee-specific period for filtering (supports custom cycles)
+                const empPeriod = employeePeriodMap[b.employee_id] || { start: period.period_start_date, end: period.period_end_date };
+                const bonusDate = new Date(b.effective_date);
+                const periodStart = new Date(empPeriod.start);
+                const periodEnd = new Date(empPeriod.end);
+
+                // Only include bonus if effective_date is within employee's period
+                if (bonusDate >= periodStart && bonusDate <= periodEnd) {
+                    bonusesByEmployee[b.employee_id].push({ ...b, addition_amount: b.bonus_amount });
+                }
             });
 
             allOvertime.forEach(ot => {
                 if (!overtimeByEmployee[ot.employee_id]) overtimeByEmployee[ot.employee_id] = [];
+                // Overtime will be filtered by period in the calculation logic already
                 overtimeByEmployee[ot.employee_id].push(ot);
             });
 
@@ -3944,6 +4068,122 @@ class PayrollRunService {
                 console.log(`💸 Calculated deductions for employee ${emp.employee_code}:`, combinedDeductions);
                 console.log(`💰 Calculated allowances for employee ${emp.employee_code}:`, combinedAllowances);
 
+                // ========================================
+                // Calculate Overtime Payment
+                // ========================================
+                let overtimeAmount = 0;
+                const overtimeDetailsWithAmount = [];
+
+                if (employeeOvertime.length > 0) {
+                    console.log(`⏰ OVERTIME CALCULATION: Employee ${emp.employee_code}`);
+                    console.log(`   Pre-calculated hourly rates from payroll_records:`);
+                    console.log(`     Weekday: ${emp.weekday_hourly_rate}/hr`);
+                    console.log(`     Saturday: ${emp.saturday_hourly_rate}/hr`);
+                    console.log(`     Sunday: ${emp.sunday_hourly_rate}/hr`);
+
+                    // Check enable/disable flags ONCE (applies to all days)
+                    const preShiftEnabled = employeeOvertime[0]?.pre_shift_overtime_enabled || false;
+                    const postShiftEnabled = employeeOvertime[0]?.post_shift_overtime_enabled || false;
+
+                    console.log(`   Pre-shift OT enabled: ${preShiftEnabled}`);
+                    console.log(`   Post-shift OT enabled: ${postShiftEnabled}`);
+
+                    for (const otRecord of employeeOvertime) {
+                        const dateStr = typeof otRecord.date === 'string' ? otRecord.date : otRecord.date.toISOString().split('T')[0];
+
+                        // Filter overtime records to only include dates within employee's custom period
+                        if (dateStr < emp.employee_period_start_date || dateStr > emp.employee_period_end_date) {
+                            continue; // Skip overtime records outside employee's period
+                        }
+
+                        const dayOfWeek = new Date(dateStr).getDay(); // 0=Sunday, 6=Saturday
+
+                        // Get pre/post shift seconds
+                        const preShiftSeconds = parseInt(otRecord.pre_shift_overtime_seconds) || 0;
+                        const postShiftSeconds = parseInt(otRecord.post_shift_overtime_seconds) || 0;
+
+                        // Determine applicable overtime seconds based on enable flags
+                        let totalOvertimeSeconds = 0;
+                        if (preShiftEnabled && postShiftEnabled) {
+                            totalOvertimeSeconds = preShiftSeconds + postShiftSeconds;
+                        } else if (preShiftEnabled) {
+                            totalOvertimeSeconds = preShiftSeconds;
+                        } else if (postShiftEnabled) {
+                            totalOvertimeSeconds = postShiftSeconds;
+                        }
+
+                        if (totalOvertimeSeconds === 0) continue;
+
+                        // TODO: Holiday overtime calculation to be implemented
+                        // For now, skip holiday overtime
+                        // Future: Need to determine holiday-specific hourly rate and multiplier
+                        const isHoliday = false; // Placeholder - holiday check to be added
+                        if (isHoliday) {
+                            console.log(`     ${dateStr} (holiday): ⚠️  Holiday overtime calculation - TO BE IMPLEMENTED`);
+                            continue;
+                        }
+
+                        // Get the correct hourly rate based on day of week (from payroll_records)
+                        let hourlyRate = 0;
+                        let dayType = 'weekday';
+                        let multiplier = 1.0;
+
+                        if (dayOfWeek === 0) {
+                            // Sunday
+                            hourlyRate = parseFloat(emp.sunday_hourly_rate) || 0;
+                            multiplier = parseFloat(otRecord.sunday_ot_multiplier) || 1.0;
+                            dayType = 'sunday';
+                        } else if (dayOfWeek === 6) {
+                            // Saturday
+                            hourlyRate = parseFloat(emp.saturday_hourly_rate) || 0;
+                            multiplier = parseFloat(otRecord.saturday_ot_multiplier) || 1.0;
+                            dayType = 'saturday';
+                        } else {
+                            // Weekday (Monday-Friday)
+                            hourlyRate = parseFloat(emp.weekday_hourly_rate) || 0;
+                            multiplier = parseFloat(otRecord.weekday_ot_multiplier) || 1.0;
+                            dayType = 'weekday';
+                        }
+
+                        // Calculate per-second rate
+                        const perSecondRate = hourlyRate / 3600;
+
+                        // Calculate overtime payment for this day
+                        const dayOvertimeAmount = totalOvertimeSeconds * perSecondRate * multiplier;
+                        overtimeAmount += dayOvertimeAmount;
+
+                        const totalMinutes = Math.round(totalOvertimeSeconds / 60);
+                        const preShiftMinutes = Math.round(preShiftSeconds / 60);
+                        const postShiftMinutes = Math.round(postShiftSeconds / 60);
+
+                        console.log(`     ${dateStr} (${dayType}):`);
+                        console.log(`       Total OT: ${totalMinutes}min (${(totalOvertimeSeconds/3600).toFixed(2)}h)`);
+                        if (preShiftEnabled && preShiftSeconds > 0) {
+                            console.log(`         Pre-shift: ${preShiftMinutes}min`);
+                        }
+                        if (postShiftEnabled && postShiftSeconds > 0) {
+                            console.log(`         Post-shift: ${postShiftMinutes}min`);
+                        }
+                        console.log(`       Calculation: ${totalOvertimeSeconds}sec × ${perSecondRate.toFixed(6)}/sec × ${multiplier}x = ${dayOvertimeAmount.toFixed(2)}`);
+
+                        // Store detailed overtime info for frontend
+                        overtimeDetailsWithAmount.push({
+                            date: dateStr,
+                            day_type: dayType,
+                            total_minutes: totalMinutes,
+                            pre_shift_minutes: preShiftMinutes,
+                            post_shift_minutes: postShiftMinutes,
+                            pre_shift_enabled: preShiftEnabled,
+                            post_shift_enabled: postShiftEnabled,
+                            hourly_rate: hourlyRate,
+                            multiplier: multiplier,
+                            amount: dayOvertimeAmount
+                        });
+                    }
+
+                    console.log(`   Total Overtime Amount: ${overtimeAmount.toFixed(2)}`);
+                }
+
                 return {
                     ...emp,
                     attendance: {
@@ -3965,7 +4205,8 @@ class PayrollRunService {
                         bonusRecords: employeeBonuses
                     },
                     overtime: {
-                        records: employeeOvertime
+                        total_amount: overtimeAmount,
+                        records: overtimeDetailsWithAmount
                     }
                 };
             });
@@ -4164,25 +4405,8 @@ class PayrollRunService {
         console.log(`📊 Fetching daily work details for employee: ${employeeId} in run: ${runId}`);
 
         try {
-            // Get payroll period info
-            const [periodInfo] = await db.execute(`
-                SELECT
-                    pp.period_start_date,
-                    pp.period_end_date,
-                    pr.id as run_id,
-                    pr.client_id
-                FROM payroll_runs pr
-                JOIN payroll_periods pp ON pr.period_id = pp.id
-                WHERE pr.id = ? AND pr.client_id = ?
-            `, [runId, clientId]);
-
-            if (periodInfo.length === 0) {
-                throw new Error('Payroll run not found');
-            }
-
-            const period = periodInfo[0];
-
-            // Get employee details and hourly rates from payroll_records
+            // Get employee-specific period dates and hourly rates from payroll_records
+            // This supports custom payroll cycles (e.g., 19th to 19th, 23rd to 23rd)
             const [employeeInfo] = await db.execute(`
                 SELECT
                     pr.employee_code,
@@ -4191,12 +4415,17 @@ class PayrollRunService {
                     pr.weekday_hourly_rate,
                     pr.saturday_hourly_rate,
                     pr.sunday_hourly_rate,
+                    pr.employee_period_start_date,
+                    pr.employee_period_end_date,
+                    pr.uses_custom_cycle,
                     e.in_time as weekday_in_time,
                     e.out_time as weekday_out_time
                 FROM payroll_records pr
                 JOIN employees e ON pr.employee_id = e.id
-                WHERE pr.run_id = ? AND pr.employee_id = ?
-            `, [runId, employeeId]);
+                WHERE pr.run_id = ? AND pr.employee_id = ? AND pr.run_id IN (
+                    SELECT id FROM payroll_runs WHERE id = ? AND client_id = ?
+                )
+            `, [runId, employeeId, runId, clientId]);
 
             if (employeeInfo.length === 0) {
                 throw new Error('Employee not found in this payroll run');
@@ -4207,7 +4436,35 @@ class PayrollRunService {
             const saturdayHourlyRate = parseFloat(employee.saturday_hourly_rate) || 0;
             const sundayHourlyRate = parseFloat(employee.sunday_hourly_rate) || 0;
 
-            // Get daily attendance records for the period
+            // Use employee-specific period dates (supports custom cycles)
+            const periodStartDate = employee.employee_period_start_date;
+            const periodEndDate = employee.employee_period_end_date;
+            const usesCustomCycle = employee.uses_custom_cycle === 1;
+
+            console.log(`   Period for ${employee.employee_name}: ${periodStartDate} to ${periodEndDate} ${usesCustomCycle ? '(Custom Cycle)' : '(Default)'}`);
+
+            // Get employee's overtime enable flags
+            const [empSettings] = await db.execute(`
+                SELECT
+                    overtime_enabled,
+                    pre_shift_overtime_enabled,
+                    post_shift_overtime_enabled,
+                    weekday_ot_multiplier,
+                    saturday_ot_multiplier,
+                    sunday_ot_multiplier,
+                    holiday_ot_multiplier
+                FROM employees
+                WHERE id = ?
+            `, [employeeId]);
+
+            const overtimeEnabled = empSettings[0]?.overtime_enabled || false;
+            const preShiftOTEnabled = empSettings[0]?.pre_shift_overtime_enabled || false;
+            const postShiftOTEnabled = empSettings[0]?.post_shift_overtime_enabled || false;
+            const weekdayOTMultiplier = parseFloat(empSettings[0]?.weekday_ot_multiplier) || 1.0;
+            const saturdayOTMultiplier = parseFloat(empSettings[0]?.saturday_ot_multiplier) || 1.0;
+            const sundayOTMultiplier = parseFloat(empSettings[0]?.sunday_ot_multiplier) || 1.0;
+
+            // Get daily attendance records for the employee-specific period
             const [attendanceRecords] = await db.execute(`
                 SELECT
                     DATE(a.date) as work_date,
@@ -4215,6 +4472,8 @@ class PayrollRunService {
                     a.check_out_time,
                     COALESCE(a.payable_duration, 0) as payable_duration,
                     COALESCE(a.total_hours, 0) as total_hours,
+                    COALESCE(a.pre_shift_overtime_seconds, 0) as pre_shift_overtime_seconds,
+                    COALESCE(a.post_shift_overtime_seconds, 0) as post_shift_overtime_seconds,
                     a.status,
                     a.is_weekend,
                     DAYOFWEEK(a.date) as day_of_week
@@ -4222,7 +4481,9 @@ class PayrollRunService {
                 WHERE a.employee_id = ?
                   AND DATE(a.date) BETWEEN ? AND ?
                 ORDER BY a.date ASC
-            `, [employeeId, period.period_start_date, period.period_end_date]);
+            `, [employeeId, periodStartDate, periodEndDate]);
+
+            console.log(`   Found ${attendanceRecords.length} attendance records for ${employee.employee_name}`);
 
             // Calculate daily salary based on hours worked and day type
             const dailyDetails = attendanceRecords.map(record => {
@@ -4236,18 +4497,50 @@ class PayrollRunService {
                 // Determine hourly rate based on day type
                 let hourlyRate = weekdayHourlyRate;
                 let dayType = 'Weekday';
+                let otMultiplier = weekdayOTMultiplier;
 
                 // is_weekend: 1 = Sunday, 7 = Saturday, 0 or null = Weekday
                 if (record.is_weekend === 1) {
                     hourlyRate = sundayHourlyRate;
+                    otMultiplier = sundayOTMultiplier;
                     dayType = 'Sunday';
                 } else if (record.is_weekend === 7) {
                     hourlyRate = saturdayHourlyRate;
+                    otMultiplier = saturdayOTMultiplier;
                     dayType = 'Saturday';
                 }
 
-                // Calculate daily salary
+                // Calculate daily salary from regular hours
                 const dailySalary = totalHours * hourlyRate;
+
+                // Calculate overtime if enabled
+                let overtimeMinutes = 0;
+                let overtimeAmount = 0;
+
+                if (overtimeEnabled) {
+                    const preShiftSeconds = parseInt(record.pre_shift_overtime_seconds) || 0;
+                    const postShiftSeconds = parseInt(record.post_shift_overtime_seconds) || 0;
+
+                    // Determine applicable overtime seconds based on enable flags
+                    let totalOvertimeSeconds = 0;
+                    if (preShiftOTEnabled && postShiftOTEnabled) {
+                        totalOvertimeSeconds = preShiftSeconds + postShiftSeconds;
+                    } else if (preShiftOTEnabled) {
+                        totalOvertimeSeconds = preShiftSeconds;
+                    } else if (postShiftOTEnabled) {
+                        totalOvertimeSeconds = postShiftSeconds;
+                    }
+
+                    if (totalOvertimeSeconds > 0) {
+                        overtimeMinutes = Math.round(totalOvertimeSeconds / 60);
+
+                        // Calculate per-second rate
+                        const perSecondRate = hourlyRate / 3600;
+
+                        // Calculate overtime amount (TODO: Skip holidays for now)
+                        overtimeAmount = totalOvertimeSeconds * perSecondRate * otMultiplier;
+                    }
+                }
 
                 return {
                     date: record.work_date,
@@ -4256,6 +4549,8 @@ class PayrollRunService {
                     check_out: record.check_out_time,
                     working_minutes: totalMinutes,
                     working_hours: parseFloat(totalHours.toFixed(2)),
+                    overtime_minutes: overtimeMinutes,
+                    overtime_amount: parseFloat(overtimeAmount.toFixed(2)),
                     hourly_rate: parseFloat(hourlyRate.toFixed(2)),
                     daily_salary: parseFloat(dailySalary.toFixed(2)),
                     status: record.status
@@ -4274,8 +4569,9 @@ class PayrollRunService {
                     base_salary: parseFloat(employee.base_salary)
                 },
                 period: {
-                    start_date: period.period_start_date,
-                    end_date: period.period_end_date
+                    start_date: periodStartDate,
+                    end_date: periodEndDate,
+                    uses_custom_cycle: usesCustomCycle
                 },
                 daily_records: dailyDetails,
                 summary: {

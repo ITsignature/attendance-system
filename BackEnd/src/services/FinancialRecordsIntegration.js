@@ -346,13 +346,24 @@ class FinancialRecordsIntegration {
 
     /**
      * Check if deduction should happen in the given payroll period
+     *
+     * For loans/advances to be included in a payroll period, their start_date/required_date
+     * must be BEFORE OR ON the period end date AND AFTER OR ON the period start date.
+     *
+     * Example with custom cycle (19th Dec 2025 to 18th Jan 2026):
+     * - Advance on 10th Dec 2025: Should NOT be included (before period start)
+     * - Advance on 19th Dec 2025: Should be included (on period start)
+     * - Advance on 25th Dec 2025: Should be included (within period)
+     * - Advance on 18th Jan 2026: Should be included (on period end)
+     * - Advance on 20th Jan 2026: Should NOT be included (after period end)
      */
     shouldDeductInPeriod(startDate, payrollPeriod) {
         const start = new Date(startDate);
         const periodStart = new Date(payrollPeriod.start);
         const periodEnd = new Date(payrollPeriod.end);
 
-        return start <= periodEnd;
+        // Financial record must be within the period boundaries
+        return start >= periodStart && start <= periodEnd;
     }
 
     /**

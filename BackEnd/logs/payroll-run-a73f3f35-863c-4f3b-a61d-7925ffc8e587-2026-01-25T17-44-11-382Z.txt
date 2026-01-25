@@ -1,0 +1,723 @@
+[2026-01-25T17:44:11.383Z] [INFO] 🚀 Payroll calculation logging started for run: a73f3f35-863c-4f3b-a61d-7925ffc8e587
+[2026-01-25T17:44:11.383Z] [INFO] 📁 Log file: E:\smart_attendance_system\backend\logs\payroll-run-a73f3f35-863c-4f3b-a61d-7925ffc8e587-2026-01-25T17-44-11-382Z.txt
+[2026-01-25T17:44:11.383Z] [INFO] ⏰ Started at: 2026-01-25T17:44:11.383Z
+[2026-01-25T17:44:11.383Z] [INFO] ================================================================================
+[2026-01-25T17:44:11.383Z] [LOG] 📊 [OPTIMIZED] Fetching live payroll data for run: a73f3f35-863c-4f3b-a61d-7925ffc8e587
+[2026-01-25T17:44:11.389Z] [LOG] GET /api/rbac/roles - 304 - 923ms
+[2026-01-25T17:44:11.580Z] [LOG] session eka meka {
+  "id": "ab516867-f9b0-11f0-8e31-0050565d0e2b",
+  "admin_user_id": "16cc33d0-7de8-44ef-a36f-3053e8045302",
+  "client_id": "617f36df-e92a-4f7e-bd19-31df35173926",
+  "token_jti": "3c1fbcac-cabe-415e-b287-d1f47f053d6c",
+  "ip_address": "::1",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0",
+  "expires_at": "2026-02-01 05:42:42",
+  "is_active": 1,
+  "created_at": "2026-01-25 11:12:43",
+  "user_active": 1
+}
+[2026-01-25T17:44:11.722Z] [LOG] 📅 Payroll period: 2025-12-01 to 2025-12-31
+[2026-01-25T17:44:12.065Z] [LOG] 👥 Processing 6 employees...
+[2026-01-25T17:44:12.123Z] [LOG] GET /api/rbac/roles - 304 - 729ms
+[2026-01-25T17:44:12.407Z] [LOG] allowances:  []
+[2026-01-25T17:44:12.743Z] [LOG] deductions:  []
+[2026-01-25T17:44:13.080Z] [LOG] 📅 Fetching financial records for expanded period: 2025-12-01 to 2026-01-18 (covers all employee cycles)
+[2026-01-25T17:44:13.420Z] [LOG] 📊 Found 1 active loans...
+[2026-01-25T17:44:13.420Z] [LOG] Loans are ${allLoans.map(l => l.id).join( )}
+[2026-01-25T17:44:13.759Z] [LOG] 📅 Fetching advances for period: 2025-12-01 to 2025-12-31
+[2026-01-25T17:44:13.760Z] [LOG] 📊 Found 1 advances
+[2026-01-25T17:44:13.761Z] [LOG] Advances data: [
+  {
+    "id": "a3903cf4-69a9-4a46-89b3-8bb19ea55121",
+    "employee_id": "23e6b484-41f3-401e-9caf-17edf9a2aeb0",
+    "required_date": "2026-01-01",
+    "deduction_start_date": "2026-01-08",
+    "remaining_amount": 1000
+  }
+]
+[2026-01-25T17:44:14.107Z] [LOG] 📊 Found 0 active bonuses...
+[2026-01-25T17:44:14.448Z] [LOG] 📊 Found 19 overtime records...
+[2026-01-25T17:44:15.149Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2026-01-25T17:44:15.149Z] [LOG]       Today: 2026-01-25 (2026-01-24T18:30:00.000Z)
+[2026-01-25T17:44:15.150Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:15.151Z] [LOG]       Comparison (today < periodEndDateFull): false
+[2026-01-25T17:44:15.151Z] [LOG]       Calculation End Date: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:15.151Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (FINAL CALCULATION - Completed sessions only)
+[2026-01-25T17:44:15.151Z] [LOG]    👤 Employee: Keerthina Eduzone (EMP 2)
+[2026-01-25T17:44:15.152Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31 (Default)
+[2026-01-25T17:44:15.152Z] [LOG]    📅 Calculation Until: 2025-12-31 (FULL PERIOD)
+[2026-01-25T17:44:15.153Z] [LOG]    Base Salary (Full Month): Rs.45000.00
+[2026-01-25T17:44:15.153Z] [LOG]    Mode: ✅ FINAL (completed sessions only)
+[2026-01-25T17:44:15.190Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2026-01-25T17:44:15.191Z] [LOG]       Today: 2026-01-25 (2026-01-24T18:30:00.000Z)
+[2026-01-25T17:44:15.192Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:15.193Z] [LOG]       Comparison (today < periodEndDateFull): false
+[2026-01-25T17:44:15.194Z] [LOG]       Calculation End Date: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:15.194Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (FINAL CALCULATION - Completed sessions only)
+[2026-01-25T17:44:15.195Z] [LOG]    👤 Employee: Hilmy Sir (EMP1)
+[2026-01-25T17:44:15.195Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31 (Default)
+[2026-01-25T17:44:15.196Z] [LOG]    📅 Calculation Until: 2025-12-31 (FULL PERIOD)
+[2026-01-25T17:44:15.198Z] [LOG]    Base Salary (Full Month): Rs.90000.00
+[2026-01-25T17:44:15.200Z] [LOG]    Mode: ✅ FINAL (completed sessions only)
+[2026-01-25T17:44:15.492Z] [LOG] 
+   💵 Pre-calculated Rates for Keerthina Eduzone (EMP 2):
+[2026-01-25T17:44:15.493Z] [LOG]       Daily Salary: Rs.1451.61
+[2026-01-25T17:44:15.493Z] [LOG]       Weekday Hourly Rate: Rs.161.29
+[2026-01-25T17:44:15.493Z] [LOG]       Saturday Hourly Rate: Rs.161.29
+[2026-01-25T17:44:15.494Z] [LOG]       Sunday Hourly Rate: Rs.161.29
+[2026-01-25T17:44:15.494Z] [LOG] 
+   📊 Full Period Working Days for Keerthina Eduzone (EMP 2):
+[2026-01-25T17:44:15.494Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:15.495Z] [LOG] 
+   📊 Working Days for Expected Calculation for Keerthina Eduzone (EMP 2):
+[2026-01-25T17:44:15.495Z] [LOG]       Up to: 2026-01-25 (including today)
+[2026-01-25T17:44:15.496Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:15.562Z] [LOG] 
+   💵 Pre-calculated Rates for Hilmy Sir (EMP1):
+[2026-01-25T17:44:15.563Z] [LOG]       Daily Salary: Rs.3913.04
+[2026-01-25T17:44:15.563Z] [LOG]       Weekday Hourly Rate: Rs.434.78
+[2026-01-25T17:44:15.564Z] [LOG]       Saturday Hourly Rate: Rs.0.00
+[2026-01-25T17:44:15.564Z] [LOG]       Sunday Hourly Rate: Rs.0.00
+[2026-01-25T17:44:15.565Z] [LOG] 
+   📊 Full Period Working Days for Hilmy Sir (EMP1):
+[2026-01-25T17:44:15.565Z] [LOG]       Weekdays: 23, Saturdays: 0, Sundays: 0
+[2026-01-25T17:44:15.565Z] [LOG] 
+   📊 Working Days for Expected Calculation for Hilmy Sir (EMP1):
+[2026-01-25T17:44:15.565Z] [LOG]       Up to: 2026-01-25 (including today)
+[2026-01-25T17:44:15.566Z] [LOG]       Weekdays: 23, Saturdays: 0, Sundays: 0
+[2026-01-25T17:44:15.832Z] [LOG] 
+   ⏰ Calculating Completed Hours for Keerthina Eduzone (EMP 2) - All completed sessions:
+[2026-01-25T17:44:15.833Z] [LOG]       Period: 2025-12-01 to 2025-12-31
+[2026-01-25T17:44:15.833Z] [LOG]       Total completed sessions found: 0
+[2026-01-25T17:44:15.920Z] [LOG] 
+   ⏰ Calculating Completed Hours for Hilmy Sir (EMP1) - All completed sessions:
+[2026-01-25T17:44:15.921Z] [LOG]       Period: 2025-12-01 to 2025-12-31
+[2026-01-25T17:44:15.921Z] [LOG]       Total completed sessions found: 0
+[2026-01-25T17:44:16.173Z] [LOG] 
+      📊 Attendance Hours for Keerthina Eduzone (EMP 2):
+[2026-01-25T17:44:16.174Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:16.174Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:16.174Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:16.277Z] [LOG] 
+      📊 Attendance Hours for Hilmy Sir (EMP1):
+[2026-01-25T17:44:16.277Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:16.278Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:16.278Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:16.524Z] [LOG]           Keerthina Eduzone - Leave period: 2025-12-01 to 2025-12-31, Attendance period: 2025-12-01 to 2025-12-31,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2026-01-25T17:44:16.525Z] [LOG] 
+      📅 Total Leave Hours for Keerthina Eduzone (EMP 2):
+[2026-01-25T17:44:16.525Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:16.525Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:16.526Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:16.526Z] [LOG] 
+      📊 Total Actual Earned Hours for Keerthina Eduzone (EMP 2):
+[2026-01-25T17:44:16.526Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:16.526Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:16.527Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:16.527Z] [LOG] 
+   ⏰ Live session calculation SKIPPED (final calculation mode)
+[2026-01-25T17:44:16.528Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Keerthina Eduzone (EMP 2) - completed sessions only:
+[2026-01-25T17:44:16.528Z] [LOG]       Weekday: 207.00h
+[2026-01-25T17:44:16.529Z] [LOG]       Saturday: 36.00h
+[2026-01-25T17:44:16.530Z] [LOG]       Sunday: 36.00h
+[2026-01-25T17:44:16.532Z] [LOG]       Total Expected: 279.00h
+[2026-01-25T17:44:16.533Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Keerthina Eduzone (EMP 2) - completed sessions only:
+[2026-01-25T17:44:16.533Z] [LOG]       Weekday: 0.00h
+[2026-01-25T17:44:16.534Z] [LOG]       Saturday: 0.00h
+[2026-01-25T17:44:16.535Z] [LOG]       Sunday: 0.00h
+[2026-01-25T17:44:16.537Z] [LOG]       Total Actual: 0.00h
+[2026-01-25T17:44:16.540Z] [LOG] 
+   💵 EXPECTED Earned Salary for Keerthina Eduzone (EMP 2) - until NOW:
+[2026-01-25T17:44:16.542Z] [LOG]       Weekday: 207.00h × Rs.161.29 = Rs.33387.03
+[2026-01-25T17:44:16.542Z] [LOG]       Saturday: 36.00h × Rs.161.29 = Rs.5806.44
+[2026-01-25T17:44:16.542Z] [LOG]       Sunday: 36.00h × Rs.161.29 = Rs.5806.44
+[2026-01-25T17:44:16.543Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:16.543Z] [LOG]       Total Expected Earned: Rs.44999.91
+[2026-01-25T17:44:16.544Z] [LOG] 
+   💵 ACTUAL Earned Salary for Keerthina Eduzone (EMP 2) - including live session:
+[2026-01-25T17:44:16.545Z] [LOG]       Weekday: 0.00h × Rs.161.29 = Rs.0.00
+[2026-01-25T17:44:16.546Z] [LOG]       Saturday: 0.00h × Rs.161.29 = Rs.0.00
+[2026-01-25T17:44:16.546Z] [LOG]       Sunday: 0.00h × Rs.161.29 = Rs.0.00
+[2026-01-25T17:44:16.547Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:16.547Z] [LOG]       Total Actual Earned: Rs.0.00
+[2026-01-25T17:44:16.549Z] [LOG] 
+   📊 FINAL CALCULATION for Keerthina Eduzone (EMP 2):
+[2026-01-25T17:44:16.549Z] [LOG]       Calculated At: Jan 25, 2026, 23:14:16
+[2026-01-25T17:44:16.550Z] [LOG]       Expected Earned: Rs.44999.91
+[2026-01-25T17:44:16.550Z] [LOG]       Actual Earned: Rs.0.00
+[2026-01-25T17:44:16.552Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:16.552Z] [LOG]       Attendance Deduction: Rs.44999.91
+[2026-01-25T17:44:16.553Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2026-01-25T17:44:16.554Z] [LOG]       📉 Shortfall for Keerthina Eduzone: 279.00 hours (100.00% of expected)
+[2026-01-25T17:44:16.554Z] [LOG] 
+   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).
+[2026-01-25T17:44:16.640Z] [LOG]           Hilmy Sir - Leave period: 2025-12-01 to 2025-12-31, Attendance period: 2025-12-01 to 2025-12-31,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2026-01-25T17:44:16.641Z] [LOG] 
+      📅 Total Leave Hours for Hilmy Sir (EMP1):
+[2026-01-25T17:44:16.641Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:16.642Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:16.643Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:16.643Z] [LOG] 
+      📊 Total Actual Earned Hours for Hilmy Sir (EMP1):
+[2026-01-25T17:44:16.643Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:16.644Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:16.644Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:16.645Z] [LOG] 
+   ⏰ Live session calculation SKIPPED (final calculation mode)
+[2026-01-25T17:44:16.646Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Hilmy Sir (EMP1) - completed sessions only:
+[2026-01-25T17:44:16.647Z] [LOG]       Weekday: 207.00h
+[2026-01-25T17:44:16.648Z] [LOG]       Saturday: 0.00h
+[2026-01-25T17:44:16.649Z] [LOG]       Sunday: 0.00h
+[2026-01-25T17:44:16.652Z] [LOG]       Total Expected: 207.00h
+[2026-01-25T17:44:16.653Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Hilmy Sir (EMP1) - completed sessions only:
+[2026-01-25T17:44:16.655Z] [LOG]       Weekday: 0.00h
+[2026-01-25T17:44:16.656Z] [LOG]       Saturday: 0.00h
+[2026-01-25T17:44:16.657Z] [LOG]       Sunday: 0.00h
+[2026-01-25T17:44:16.657Z] [LOG]       Total Actual: 0.00h
+[2026-01-25T17:44:16.658Z] [LOG] 
+   💵 EXPECTED Earned Salary for Hilmy Sir (EMP1) - until NOW:
+[2026-01-25T17:44:16.658Z] [LOG]       Weekday: 207.00h × Rs.434.78 = Rs.89999.46
+[2026-01-25T17:44:16.659Z] [LOG]       Saturday: 0.00h × Rs.0.00 = Rs.0.00
+[2026-01-25T17:44:16.659Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2026-01-25T17:44:16.660Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:16.660Z] [LOG]       Total Expected Earned: Rs.89999.46
+[2026-01-25T17:44:16.661Z] [LOG] 
+   💵 ACTUAL Earned Salary for Hilmy Sir (EMP1) - including live session:
+[2026-01-25T17:44:16.662Z] [LOG]       Weekday: 0.00h × Rs.434.78 = Rs.0.00
+[2026-01-25T17:44:16.663Z] [LOG]       Saturday: 0.00h × Rs.0.00 = Rs.0.00
+[2026-01-25T17:44:16.663Z] [LOG]       Sunday: 0.00h × Rs.0.00 = Rs.0.00
+[2026-01-25T17:44:16.663Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:16.664Z] [LOG]       Total Actual Earned: Rs.0.00
+[2026-01-25T17:44:16.666Z] [LOG] 
+   📊 FINAL CALCULATION for Hilmy Sir (EMP1):
+[2026-01-25T17:44:16.666Z] [LOG]       Calculated At: Jan 25, 2026, 23:14:16
+[2026-01-25T17:44:16.667Z] [LOG]       Expected Earned: Rs.89999.46
+[2026-01-25T17:44:16.669Z] [LOG]       Actual Earned: Rs.0.00
+[2026-01-25T17:44:16.669Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:16.673Z] [LOG]       Attendance Deduction: Rs.89999.46
+[2026-01-25T17:44:16.674Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2026-01-25T17:44:16.675Z] [LOG]       📉 Shortfall for Hilmy Sir: 207.00 hours (100.00% of expected)
+[2026-01-25T17:44:16.676Z] [LOG] 
+   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).
+[2026-01-25T17:44:16.679Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2026-01-25T17:44:16.680Z] [LOG]       Today: 2026-01-25 (2026-01-24T18:30:00.000Z)
+[2026-01-25T17:44:16.680Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:16.680Z] [LOG]       Comparison (today < periodEndDateFull): false
+[2026-01-25T17:44:16.680Z] [LOG]       Calculation End Date: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:16.680Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (FINAL CALCULATION - Completed sessions only)
+[2026-01-25T17:44:16.681Z] [LOG]    👤 Employee: Madhu Eduzone (EMP877568163)
+[2026-01-25T17:44:16.681Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31 (Default)
+[2026-01-25T17:44:16.681Z] [LOG]    📅 Calculation Until: 2025-12-31 (FULL PERIOD)
+[2026-01-25T17:44:16.681Z] [LOG]    Base Salary (Full Month): Rs.30000.00
+[2026-01-25T17:44:16.682Z] [LOG]    Mode: ✅ FINAL (completed sessions only)
+[2026-01-25T17:44:16.683Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2026-01-25T17:44:16.684Z] [LOG]       Today: 2026-01-25 (2026-01-24T18:30:00.000Z)
+[2026-01-25T17:44:16.688Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:16.690Z] [LOG]       Comparison (today < periodEndDateFull): false
+[2026-01-25T17:44:16.692Z] [LOG]       Calculation End Date: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:16.692Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (FINAL CALCULATION - Completed sessions only)
+[2026-01-25T17:44:16.693Z] [LOG]    👤 Employee: Zeinab Eduzone (EMP581593605)
+[2026-01-25T17:44:16.694Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31 (Default)
+[2026-01-25T17:44:16.694Z] [LOG]    📅 Calculation Until: 2025-12-31 (FULL PERIOD)
+[2026-01-25T17:44:16.694Z] [LOG]    Base Salary (Full Month): Rs.35000.00
+[2026-01-25T17:44:16.695Z] [LOG]    Mode: ✅ FINAL (completed sessions only)
+[2026-01-25T17:44:16.722Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2026-01-25T17:44:16.723Z] [LOG]       Today: 2026-01-25 (2026-01-24T18:30:00.000Z)
+[2026-01-25T17:44:16.724Z] [LOG]       Period End Date Full: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:16.725Z] [LOG]       Comparison (today < periodEndDateFull): false
+[2026-01-25T17:44:16.725Z] [LOG]       Calculation End Date: 2025-12-31 (2025-12-30T18:30:00.000Z)
+[2026-01-25T17:44:16.725Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (FINAL CALCULATION - Completed sessions only)
+[2026-01-25T17:44:16.726Z] [LOG]    👤 Employee: Mithra Eduzone (EMP877730925)
+[2026-01-25T17:44:16.726Z] [LOG]    📅 Full Period: 2025-12-01 to 2025-12-31 (Default)
+[2026-01-25T17:44:16.726Z] [LOG]    📅 Calculation Until: 2025-12-31 (FULL PERIOD)
+[2026-01-25T17:44:16.727Z] [LOG]    Base Salary (Full Month): Rs.45000.00
+[2026-01-25T17:44:16.727Z] [LOG]    Mode: ✅ FINAL (completed sessions only)
+[2026-01-25T17:44:16.730Z] [LOG]    🔍 DEBUG - Date Calculation:
+[2026-01-25T17:44:16.730Z] [LOG]       Today: 2026-01-25 (2026-01-24T18:30:00.000Z)
+[2026-01-25T17:44:16.730Z] [LOG]       Period End Date Full: 2026-01-18 (2026-01-17T18:30:00.000Z)
+[2026-01-25T17:44:16.731Z] [LOG]       Comparison (today < periodEndDateFull): false
+[2026-01-25T17:44:16.731Z] [LOG]       Calculation End Date: 2026-01-18 (2026-01-17T18:30:00.000Z)
+[2026-01-25T17:44:16.732Z] [LOG] 
+💰 CALCULATING ATTENDANCE DEDUCTION (FINAL CALCULATION - Completed sessions only)
+[2026-01-25T17:44:16.733Z] [LOG]    👤 Employee: Safara Eduzone (EMP284679311)
+[2026-01-25T17:44:16.733Z] [LOG]    📅 Full Period: 2025-12-19 to 2026-01-18 (Custom Cycle)
+[2026-01-25T17:44:16.733Z] [LOG]    📅 Calculation Until: 2026-01-18 (FULL PERIOD)
+[2026-01-25T17:44:16.735Z] [LOG]    Base Salary (Full Month): Rs.45000.00
+[2026-01-25T17:44:16.735Z] [LOG]    Mode: ✅ FINAL (completed sessions only)
+[2026-01-25T17:44:16.895Z] [LOG] 
+      📅 Unpaid Leave Deduction for Keerthina Eduzone (EMP 2): Rs.0.00
+[2026-01-25T17:44:17.021Z] [LOG] 
+   💵 Pre-calculated Rates for Madhu Eduzone (EMP877568163):
+[2026-01-25T17:44:17.022Z] [LOG]       Daily Salary: Rs.967.74
+[2026-01-25T17:44:17.023Z] [LOG]       Weekday Hourly Rate: Rs.175.95
+[2026-01-25T17:44:17.024Z] [LOG]       Saturday Hourly Rate: Rs.77.42
+[2026-01-25T17:44:17.024Z] [LOG]       Sunday Hourly Rate: Rs.107.53
+[2026-01-25T17:44:17.024Z] [LOG] 
+   📊 Full Period Working Days for Madhu Eduzone (EMP877568163):
+[2026-01-25T17:44:17.025Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:17.025Z] [LOG] 
+   📊 Working Days for Expected Calculation for Madhu Eduzone (EMP877568163):
+[2026-01-25T17:44:17.026Z] [LOG]       Up to: 2026-01-25 (including today)
+[2026-01-25T17:44:17.027Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:17.032Z] [LOG] 
+      📅 Unpaid Leave Deduction for Hilmy Sir (EMP1): Rs.0.00
+[2026-01-25T17:44:17.036Z] [LOG] 
+   💵 Pre-calculated Rates for Zeinab Eduzone (EMP581593605):
+[2026-01-25T17:44:17.037Z] [LOG]       Daily Salary: Rs.1129.03
+[2026-01-25T17:44:17.037Z] [LOG]       Weekday Hourly Rate: Rs.141.13
+[2026-01-25T17:44:17.038Z] [LOG]       Saturday Hourly Rate: Rs.125.45
+[2026-01-25T17:44:17.039Z] [LOG]       Sunday Hourly Rate: Rs.125.45
+[2026-01-25T17:44:17.039Z] [LOG] 
+   📊 Full Period Working Days for Zeinab Eduzone (EMP581593605):
+[2026-01-25T17:44:17.040Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:17.041Z] [LOG] 
+   📊 Working Days for Expected Calculation for Zeinab Eduzone (EMP581593605):
+[2026-01-25T17:44:17.042Z] [LOG]       Up to: 2026-01-25 (including today)
+[2026-01-25T17:44:17.043Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:17.062Z] [LOG] 
+   💵 Pre-calculated Rates for Mithra Eduzone (EMP877730925):
+[2026-01-25T17:44:17.062Z] [LOG]       Daily Salary: Rs.1451.61
+[2026-01-25T17:44:17.063Z] [LOG]       Weekday Hourly Rate: Rs.161.29
+[2026-01-25T17:44:17.064Z] [LOG]       Saturday Hourly Rate: Rs.90.73
+[2026-01-25T17:44:17.064Z] [LOG]       Sunday Hourly Rate: Rs.161.29
+[2026-01-25T17:44:17.065Z] [LOG] 
+   📊 Full Period Working Days for Mithra Eduzone (EMP877730925):
+[2026-01-25T17:44:17.065Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:17.066Z] [LOG] 
+   📊 Working Days for Expected Calculation for Mithra Eduzone (EMP877730925):
+[2026-01-25T17:44:17.067Z] [LOG]       Up to: 2026-01-25 (including today)
+[2026-01-25T17:44:17.068Z] [LOG]       Weekdays: 23, Saturdays: 4, Sundays: 4
+[2026-01-25T17:44:17.072Z] [LOG] 
+   💵 Pre-calculated Rates for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:17.073Z] [LOG]       Daily Salary: Rs.1451.61
+[2026-01-25T17:44:17.074Z] [LOG]       Weekday Hourly Rate: Rs.181.45
+[2026-01-25T17:44:17.075Z] [LOG]       Saturday Hourly Rate: Rs.161.29
+[2026-01-25T17:44:17.075Z] [LOG]       Sunday Hourly Rate: Rs.161.29
+[2026-01-25T17:44:17.076Z] [LOG] 
+   📊 Full Period Working Days for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:17.076Z] [LOG]       Weekdays: 21, Saturdays: 5, Sundays: 5
+[2026-01-25T17:44:17.077Z] [LOG] 
+   📊 Working Days for Expected Calculation for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:17.078Z] [LOG]       Up to: 2026-01-25 (including today)
+[2026-01-25T17:44:17.080Z] [LOG]       Weekdays: 21, Saturdays: 5, Sundays: 5
+[2026-01-25T17:44:17.247Z] [LOG] 
+      ⏰ Time Variance Deduction for Keerthina Eduzone (EMP 2): Rs.0.00
+[2026-01-25T17:44:17.248Z] [LOG] 
+      ❌ Absent Days Deduction for Keerthina Eduzone (EMP 2): Rs.44999.91
+[2026-01-25T17:44:17.248Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (44999.91) = 44999.91
+[2026-01-25T17:44:17.250Z] [LOG] 💸 Calculated employee deductions for employee EMP 2: []
+[2026-01-25T17:44:17.251Z] [LOG] 💸 Calculated deductions for employee EMP 2: []
+[2026-01-25T17:44:17.252Z] [LOG] 💰 Calculated allowances for employee EMP 2: []
+[2026-01-25T17:44:17.367Z] [LOG] 
+   ⏰ Calculating Completed Hours for Madhu Eduzone (EMP877568163) - All completed sessions:
+[2026-01-25T17:44:17.368Z] [LOG]       Period: 2025-12-01 to 2025-12-31
+[2026-01-25T17:44:17.369Z] [LOG]       Total completed sessions found: 0
+[2026-01-25T17:44:17.381Z] [LOG] 
+   ⏰ Calculating Completed Hours for Zeinab Eduzone (EMP581593605) - All completed sessions:
+[2026-01-25T17:44:17.382Z] [LOG]       Period: 2025-12-01 to 2025-12-31
+[2026-01-25T17:44:17.383Z] [LOG]       Total completed sessions found: 0
+[2026-01-25T17:44:17.385Z] [LOG] 
+      ⏰ Time Variance Deduction for Hilmy Sir (EMP1): Rs.0.00
+[2026-01-25T17:44:17.386Z] [LOG] 
+      ❌ Absent Days Deduction for Hilmy Sir (EMP1): Rs.89999.46
+[2026-01-25T17:44:17.387Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (89999.46) = 89999.46
+[2026-01-25T17:44:17.389Z] [LOG] 💸 Calculated employee deductions for employee EMP1: []
+[2026-01-25T17:44:17.390Z] [LOG] 💸 Calculated deductions for employee EMP1: []
+[2026-01-25T17:44:17.392Z] [LOG] 💰 Calculated allowances for employee EMP1: []
+[2026-01-25T17:44:17.421Z] [LOG] 
+   ⏰ Calculating Completed Hours for Mithra Eduzone (EMP877730925) - All completed sessions:
+[2026-01-25T17:44:17.422Z] [LOG]       Period: 2025-12-01 to 2025-12-31
+[2026-01-25T17:44:17.423Z] [LOG]       Total completed sessions found: 0
+[2026-01-25T17:44:17.429Z] [LOG] 
+   ⏰ Calculating Completed Hours for Safara Eduzone (EMP284679311) - All completed sessions:
+[2026-01-25T17:44:17.430Z] [LOG]       Period: 2025-12-19 to 2026-01-18
+[2026-01-25T17:44:17.430Z] [LOG]       Total completed sessions found: 21
+[2026-01-25T17:44:17.431Z] [LOG] 
+      📋 Attendance Breakdown for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:17.431Z] [LOG]          1. 2025-12-19 (Weekday): 26460 sec (7.35h)
+[2026-01-25T17:44:17.432Z] [LOG]          2. 2025-12-20 (Saturday): 32400 sec (9.00h)
+[2026-01-25T17:44:17.432Z] [LOG]          3. 2025-12-22 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.433Z] [LOG]          4. 2025-12-23 (Weekday): 28500 sec (7.92h)
+[2026-01-25T17:44:17.433Z] [LOG]          5. 2025-12-24 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.434Z] [LOG]          6. 2025-12-26 (Weekday): 26100 sec (7.25h)
+[2026-01-25T17:44:17.435Z] [LOG]          7. 2025-12-27 (Saturday): 32400 sec (9.00h)
+[2026-01-25T17:44:17.436Z] [LOG]          8. 2025-12-29 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.438Z] [LOG]          9. 2026-01-02 (Weekday): 26400 sec (7.33h)
+[2026-01-25T17:44:17.439Z] [LOG]          10. 2026-01-03 (Saturday): 32400 sec (9.00h)
+[2026-01-25T17:44:17.440Z] [LOG]          11. 2026-01-05 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.442Z] [LOG]          12. 2026-01-06 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.443Z] [LOG]          13. 2026-01-07 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.444Z] [LOG]          14. 2026-01-08 (Weekday): 27900 sec (7.75h)
+[2026-01-25T17:44:17.444Z] [LOG]          15. 2026-01-09 (Weekday): 28680 sec (7.97h)
+[2026-01-25T17:44:17.445Z] [LOG]          16. 2026-01-10 (Saturday): 32400 sec (9.00h)
+[2026-01-25T17:44:17.445Z] [LOG]          17. 2026-01-12 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.446Z] [LOG]          18. 2026-01-13 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.447Z] [LOG]          19. 2026-01-14 (Weekday): 28800 sec (8.00h)
+[2026-01-25T17:44:17.447Z] [LOG]          20. 2026-01-15 (Weekday): 20880 sec (5.80h)
+[2026-01-25T17:44:17.447Z] [LOG]          21. 2026-01-17 (Saturday): 32400 sec (9.00h)
+[2026-01-25T17:44:17.706Z] [LOG] 
+      📊 Attendance Hours for Madhu Eduzone (EMP877568163):
+[2026-01-25T17:44:17.707Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:17.707Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:17.707Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:17.722Z] [LOG] 
+      📊 Attendance Hours for Zeinab Eduzone (EMP581593605):
+[2026-01-25T17:44:17.722Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:17.723Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:17.723Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:17.770Z] [LOG] 
+      📊 Attendance Hours for Mithra Eduzone (EMP877730925):
+[2026-01-25T17:44:17.771Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:17.771Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:17.772Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:17.790Z] [LOG] 
+      📊 Attendance Hours for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:17.790Z] [LOG]          Weekday: 123.37h
+[2026-01-25T17:44:17.791Z] [LOG]          Saturday: 45.00h
+[2026-01-25T17:44:17.791Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:18.053Z] [LOG]           Madhu Eduzone - Leave period: 2025-12-01 to 2025-12-31, Attendance period: 2025-12-01 to 2025-12-31,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2026-01-25T17:44:18.054Z] [LOG] 
+      📅 Total Leave Hours for Madhu Eduzone (EMP877568163):
+[2026-01-25T17:44:18.054Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:18.054Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:18.055Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:18.055Z] [LOG] 
+      📊 Total Actual Earned Hours for Madhu Eduzone (EMP877568163):
+[2026-01-25T17:44:18.056Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.056Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.057Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.058Z] [LOG] 
+   ⏰ Live session calculation SKIPPED (final calculation mode)
+[2026-01-25T17:44:18.058Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Madhu Eduzone (EMP877568163) - completed sessions only:
+[2026-01-25T17:44:18.059Z] [LOG]       Weekday: 126.50h
+[2026-01-25T17:44:18.060Z] [LOG]       Saturday: 50.00h
+[2026-01-25T17:44:18.061Z] [LOG]       Sunday: 36.00h
+[2026-01-25T17:44:18.063Z] [LOG]       Total Expected: 212.50h
+[2026-01-25T17:44:18.063Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Madhu Eduzone (EMP877568163) - completed sessions only:
+[2026-01-25T17:44:18.065Z] [LOG]       Weekday: 0.00h
+[2026-01-25T17:44:18.066Z] [LOG]       Saturday: 0.00h
+[2026-01-25T17:44:18.070Z] [LOG]       Sunday: 0.00h
+[2026-01-25T17:44:18.071Z] [LOG]       Total Actual: 0.00h
+[2026-01-25T17:44:18.071Z] [LOG] 
+   💵 EXPECTED Earned Salary for Madhu Eduzone (EMP877568163) - until NOW:
+[2026-01-25T17:44:18.072Z] [LOG]       Weekday: 126.50h × Rs.175.95 = Rs.22257.67
+[2026-01-25T17:44:18.073Z] [LOG]       Saturday: 50.00h × Rs.77.42 = Rs.3871.00
+[2026-01-25T17:44:18.073Z] [LOG]       Sunday: 36.00h × Rs.107.53 = Rs.3871.08
+[2026-01-25T17:44:18.074Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.075Z] [LOG]       Total Expected Earned: Rs.29999.75
+[2026-01-25T17:44:18.078Z] [LOG] 
+   💵 ACTUAL Earned Salary for Madhu Eduzone (EMP877568163) - including live session:
+[2026-01-25T17:44:18.079Z] [LOG]       Weekday: 0.00h × Rs.175.95 = Rs.0.00
+[2026-01-25T17:44:18.079Z] [LOG]       Saturday: 0.00h × Rs.77.42 = Rs.0.00
+[2026-01-25T17:44:18.081Z] [LOG]       Sunday: 0.00h × Rs.107.53 = Rs.0.00
+[2026-01-25T17:44:18.081Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.082Z] [LOG]       Total Actual Earned: Rs.0.00
+[2026-01-25T17:44:18.085Z] [LOG] 
+   📊 FINAL CALCULATION for Madhu Eduzone (EMP877568163):
+[2026-01-25T17:44:18.086Z] [LOG]       Calculated At: Jan 25, 2026, 23:14:18
+[2026-01-25T17:44:18.086Z] [LOG]       Expected Earned: Rs.29999.75
+[2026-01-25T17:44:18.086Z] [LOG]       Actual Earned: Rs.0.00
+[2026-01-25T17:44:18.087Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.088Z] [LOG]       Attendance Deduction: Rs.29999.75
+[2026-01-25T17:44:18.088Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2026-01-25T17:44:18.089Z] [LOG]       📉 Shortfall for Madhu Eduzone: 212.50 hours (100.00% of expected)
+[2026-01-25T17:44:18.090Z] [LOG] 
+   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).
+[2026-01-25T17:44:18.094Z] [LOG]           Zeinab Eduzone - Leave period: 2025-12-01 to 2025-12-31, Attendance period: 2025-12-01 to 2025-12-31,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2026-01-25T17:44:18.094Z] [LOG] 
+      📅 Total Leave Hours for Zeinab Eduzone (EMP581593605):
+[2026-01-25T17:44:18.095Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:18.095Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:18.095Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:18.096Z] [LOG] 
+      📊 Total Actual Earned Hours for Zeinab Eduzone (EMP581593605):
+[2026-01-25T17:44:18.096Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.097Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.098Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.098Z] [LOG] 
+   ⏰ Live session calculation SKIPPED (final calculation mode)
+[2026-01-25T17:44:18.100Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Zeinab Eduzone (EMP581593605) - completed sessions only:
+[2026-01-25T17:44:18.100Z] [LOG]       Weekday: 184.00h
+[2026-01-25T17:44:18.103Z] [LOG]       Saturday: 36.00h
+[2026-01-25T17:44:18.103Z] [LOG]       Sunday: 36.00h
+[2026-01-25T17:44:18.104Z] [LOG]       Total Expected: 256.00h
+[2026-01-25T17:44:18.105Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Zeinab Eduzone (EMP581593605) - completed sessions only:
+[2026-01-25T17:44:18.106Z] [LOG]       Weekday: 0.00h
+[2026-01-25T17:44:18.107Z] [LOG]       Saturday: 0.00h
+[2026-01-25T17:44:18.107Z] [LOG]       Sunday: 0.00h
+[2026-01-25T17:44:18.109Z] [LOG]       Total Actual: 0.00h
+[2026-01-25T17:44:18.109Z] [LOG] 
+   💵 EXPECTED Earned Salary for Zeinab Eduzone (EMP581593605) - until NOW:
+[2026-01-25T17:44:18.111Z] [LOG]       Weekday: 184.00h × Rs.141.13 = Rs.25967.92
+[2026-01-25T17:44:18.111Z] [LOG]       Saturday: 36.00h × Rs.125.45 = Rs.4516.20
+[2026-01-25T17:44:18.112Z] [LOG]       Sunday: 36.00h × Rs.125.45 = Rs.4516.20
+[2026-01-25T17:44:18.112Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.113Z] [LOG]       Total Expected Earned: Rs.35000.32
+[2026-01-25T17:44:18.113Z] [LOG] 
+   💵 ACTUAL Earned Salary for Zeinab Eduzone (EMP581593605) - including live session:
+[2026-01-25T17:44:18.114Z] [LOG]       Weekday: 0.00h × Rs.141.13 = Rs.0.00
+[2026-01-25T17:44:18.115Z] [LOG]       Saturday: 0.00h × Rs.125.45 = Rs.0.00
+[2026-01-25T17:44:18.116Z] [LOG]       Sunday: 0.00h × Rs.125.45 = Rs.0.00
+[2026-01-25T17:44:18.116Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.117Z] [LOG]       Total Actual Earned: Rs.0.00
+[2026-01-25T17:44:18.119Z] [LOG] 
+   📊 FINAL CALCULATION for Zeinab Eduzone (EMP581593605):
+[2026-01-25T17:44:18.119Z] [LOG]       Calculated At: Jan 25, 2026, 23:14:18
+[2026-01-25T17:44:18.120Z] [LOG]       Expected Earned: Rs.35000.32
+[2026-01-25T17:44:18.120Z] [LOG]       Actual Earned: Rs.0.00
+[2026-01-25T17:44:18.121Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.121Z] [LOG]       Attendance Deduction: Rs.35000.32
+[2026-01-25T17:44:18.122Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2026-01-25T17:44:18.123Z] [LOG]       📉 Shortfall for Zeinab Eduzone: 256.00 hours (100.00% of expected)
+[2026-01-25T17:44:18.123Z] [LOG] 
+   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).
+[2026-01-25T17:44:18.167Z] [LOG]           Mithra Eduzone - Leave period: 2025-12-01 to 2025-12-31, Attendance period: 2025-12-01 to 2025-12-31,
+            leave requeest length: 0, period end date full: Wed Dec 31 2025 00:00:00 GMT+0530 (India Standard Time)
+[2026-01-25T17:44:18.169Z] [LOG] 
+      📅 Total Leave Hours for Mithra Eduzone (EMP877730925):
+[2026-01-25T17:44:18.170Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:18.170Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:18.171Z] [LOG]          Sunday: 0.00h
+[2026-01-25T17:44:18.171Z] [LOG] 
+      📊 Total Actual Earned Hours for Mithra Eduzone (EMP877730925):
+[2026-01-25T17:44:18.172Z] [LOG]          Weekday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.173Z] [LOG]          Saturday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.174Z] [LOG]          Sunday: 0.00h (Attendance: 0.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.174Z] [LOG] 
+   ⏰ Live session calculation SKIPPED (final calculation mode)
+[2026-01-25T17:44:18.175Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Mithra Eduzone (EMP877730925) - completed sessions only:
+[2026-01-25T17:44:18.175Z] [LOG]       Weekday: 207.00h
+[2026-01-25T17:44:18.176Z] [LOG]       Saturday: 64.00h
+[2026-01-25T17:44:18.176Z] [LOG]       Sunday: 36.00h
+[2026-01-25T17:44:18.177Z] [LOG]       Total Expected: 307.00h
+[2026-01-25T17:44:18.178Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Mithra Eduzone (EMP877730925) - completed sessions only:
+[2026-01-25T17:44:18.178Z] [LOG]       Weekday: 0.00h
+[2026-01-25T17:44:18.178Z] [LOG]       Saturday: 0.00h
+[2026-01-25T17:44:18.179Z] [LOG]       Sunday: 0.00h
+[2026-01-25T17:44:18.179Z] [LOG]       Total Actual: 0.00h
+[2026-01-25T17:44:18.180Z] [LOG] 
+   💵 EXPECTED Earned Salary for Mithra Eduzone (EMP877730925) - until NOW:
+[2026-01-25T17:44:18.180Z] [LOG]       Weekday: 207.00h × Rs.161.29 = Rs.33387.03
+[2026-01-25T17:44:18.181Z] [LOG]       Saturday: 64.00h × Rs.90.73 = Rs.5806.72
+[2026-01-25T17:44:18.181Z] [LOG]       Sunday: 36.00h × Rs.161.29 = Rs.5806.44
+[2026-01-25T17:44:18.181Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.182Z] [LOG]       Total Expected Earned: Rs.45000.19
+[2026-01-25T17:44:18.182Z] [LOG] 
+   💵 ACTUAL Earned Salary for Mithra Eduzone (EMP877730925) - including live session:
+[2026-01-25T17:44:18.182Z] [LOG]       Weekday: 0.00h × Rs.161.29 = Rs.0.00
+[2026-01-25T17:44:18.183Z] [LOG]       Saturday: 0.00h × Rs.90.73 = Rs.0.00
+[2026-01-25T17:44:18.184Z] [LOG]       Sunday: 0.00h × Rs.161.29 = Rs.0.00
+[2026-01-25T17:44:18.185Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.186Z] [LOG]       Total Actual Earned: Rs.0.00
+[2026-01-25T17:44:18.187Z] [LOG] 
+   📊 FINAL CALCULATION for Mithra Eduzone (EMP877730925):
+[2026-01-25T17:44:18.188Z] [LOG]       Calculated At: Jan 25, 2026, 23:14:18
+[2026-01-25T17:44:18.188Z] [LOG]       Expected Earned: Rs.45000.19
+[2026-01-25T17:44:18.189Z] [LOG]       Actual Earned: Rs.0.00
+[2026-01-25T17:44:18.189Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.190Z] [LOG]       Attendance Deduction: Rs.45000.19
+[2026-01-25T17:44:18.190Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2026-01-25T17:44:18.191Z] [LOG]       📉 Shortfall for Mithra Eduzone: 307.00 hours (100.00% of expected)
+[2026-01-25T17:44:18.191Z] [LOG] 
+   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).
+[2026-01-25T17:44:18.195Z] [LOG]           Safara Eduzone - Leave period: 2025-12-19 to 2026-01-18, Attendance period: 2025-12-19 to 2026-01-18,
+            leave requeest length: 5, period end date full: Sun Jan 18 2026 00:00:00 GMT+0530 (India Standard Time)
+[2026-01-25T17:44:18.196Z] [LOG] 
+      📅 Processing 5 approved paid leave request(s) for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:18.428Z] [LOG] 
+      📅 Unpaid Leave Deduction for Madhu Eduzone (EMP877568163): Rs.0.00
+[2026-01-25T17:44:18.459Z] [LOG] 
+      📅 Unpaid Leave Deduction for Zeinab Eduzone (EMP581593605): Rs.0.00
+[2026-01-25T17:44:18.524Z] [LOG] 
+      📅 Unpaid Leave Deduction for Mithra Eduzone (EMP877730925): Rs.0.00
+[2026-01-25T17:44:18.532Z] [LOG]          Leave: 2026-01-18 to 2026-01-18 (full_day)
+[2026-01-25T17:44:18.538Z] [LOG]          Overlap: 2026-01-18 to 2026-01-18
+[2026-01-25T17:44:18.557Z] [LOG]          Hours in period: Weekday=0.00h, Saturday=0.00h, Sunday=9.00h
+[2026-01-25T17:44:18.562Z] [LOG]          Leave: 2026-01-11 to 2026-01-11 (full_day)
+[2026-01-25T17:44:18.564Z] [LOG]          Overlap: 2026-01-11 to 2026-01-11
+[2026-01-25T17:44:18.573Z] [LOG]          Hours in period: Weekday=0.00h, Saturday=0.00h, Sunday=9.00h
+[2026-01-25T17:44:18.581Z] [LOG]          Leave: 2025-12-28 to 2025-12-28 (full_day)
+[2026-01-25T17:44:18.588Z] [LOG]          Overlap: 2025-12-28 to 2025-12-28
+[2026-01-25T17:44:18.598Z] [LOG]          Hours in period: Weekday=0.00h, Saturday=0.00h, Sunday=9.00h
+[2026-01-25T17:44:18.608Z] [LOG]          Leave: 2025-12-21 to 2025-12-21 (full_day)
+[2026-01-25T17:44:18.620Z] [LOG]          Overlap: 2025-12-21 to 2025-12-21
+[2026-01-25T17:44:18.632Z] [LOG]          Hours in period: Weekday=0.00h, Saturday=0.00h, Sunday=9.00h
+[2026-01-25T17:44:18.645Z] [LOG]          Leave: 2026-01-04 to 2026-01-04 (full_day)
+[2026-01-25T17:44:18.653Z] [LOG]          Overlap: 2026-01-04 to 2026-01-04
+[2026-01-25T17:44:18.655Z] [LOG]          Hours in period: Weekday=0.00h, Saturday=0.00h, Sunday=9.00h
+[2026-01-25T17:44:18.656Z] [LOG] 
+      📅 Total Leave Hours for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:18.659Z] [LOG]          Weekday: 0.00h
+[2026-01-25T17:44:18.662Z] [LOG]          Saturday: 0.00h
+[2026-01-25T17:44:18.664Z] [LOG]          Sunday: 45.00h
+[2026-01-25T17:44:18.666Z] [LOG] 
+      📊 Total Actual Earned Hours for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:18.667Z] [LOG]          Weekday: 123.37h (Attendance: 123.37h + Leave: 0.00h)
+[2026-01-25T17:44:18.670Z] [LOG]          Saturday: 45.00h (Attendance: 45.00h + Leave: 0.00h)
+[2026-01-25T17:44:18.670Z] [LOG]          Sunday: 45.00h (Attendance: 0.00h + Leave: 45.00h)
+[2026-01-25T17:44:18.671Z] [LOG] 
+   ⏰ Live session calculation SKIPPED (final calculation mode)
+[2026-01-25T17:44:18.672Z] [LOG] 
+   ⏰ TOTAL EXPECTED Hours for Safara Eduzone (EMP284679311) - completed sessions only:
+[2026-01-25T17:44:18.672Z] [LOG]       Weekday: 168.00h
+[2026-01-25T17:44:18.673Z] [LOG]       Saturday: 45.00h
+[2026-01-25T17:44:18.673Z] [LOG]       Sunday: 45.00h
+[2026-01-25T17:44:18.673Z] [LOG]       Total Expected: 258.00h
+[2026-01-25T17:44:18.674Z] [LOG] 
+   ⏰ TOTAL ACTUAL Hours for Safara Eduzone (EMP284679311) - completed sessions only:
+[2026-01-25T17:44:18.674Z] [LOG]       Weekday: 123.37h
+[2026-01-25T17:44:18.675Z] [LOG]       Saturday: 45.00h
+[2026-01-25T17:44:18.676Z] [LOG]       Sunday: 45.00h
+[2026-01-25T17:44:18.677Z] [LOG]       Total Actual: 213.37h
+[2026-01-25T17:44:18.677Z] [LOG] 
+   💵 EXPECTED Earned Salary for Safara Eduzone (EMP284679311) - until NOW:
+[2026-01-25T17:44:18.677Z] [LOG]       Weekday: 168.00h × Rs.181.45 = Rs.30483.60
+[2026-01-25T17:44:18.678Z] [LOG]       Saturday: 45.00h × Rs.161.29 = Rs.7258.05
+[2026-01-25T17:44:18.678Z] [LOG]       Sunday: 45.00h × Rs.161.29 = Rs.7258.05
+[2026-01-25T17:44:18.679Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.680Z] [LOG]       Total Expected Earned: Rs.44999.70
+[2026-01-25T17:44:18.680Z] [LOG] 
+   💵 ACTUAL Earned Salary for Safara Eduzone (EMP284679311) - including live session:
+[2026-01-25T17:44:18.680Z] [LOG]       Weekday: 123.37h × Rs.181.45 = Rs.22384.88
+[2026-01-25T17:44:18.681Z] [LOG]       Saturday: 45.00h × Rs.161.29 = Rs.7258.05
+[2026-01-25T17:44:18.682Z] [LOG]       Sunday: 45.00h × Rs.161.29 = Rs.7258.05
+[2026-01-25T17:44:18.682Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.683Z] [LOG]       Total Actual Earned: Rs.36900.98
+[2026-01-25T17:44:18.684Z] [LOG] 
+   📊 FINAL CALCULATION for Safara Eduzone (EMP284679311):
+[2026-01-25T17:44:18.685Z] [LOG]       Calculated At: Jan 25, 2026, 23:14:18
+[2026-01-25T17:44:18.686Z] [LOG]       Expected Earned: Rs.44999.70
+[2026-01-25T17:44:18.687Z] [LOG]       Actual Earned: Rs.36900.98
+[2026-01-25T17:44:18.687Z] [LOG]       ─────────────────────────────────────────────────────
+[2026-01-25T17:44:18.687Z] [LOG]       Attendance Deduction: Rs.8098.72
+[2026-01-25T17:44:18.688Z] [LOG]       (Formula: Expected - Actual, NOT Base Salary - Actual)
+[2026-01-25T17:44:18.688Z] [LOG]       📉 Shortfall for Safara Eduzone: 44.63 hours (18.00% of expected)
+[2026-01-25T17:44:18.688Z] [LOG] 
+   ✅ FINAL MODE: Only completed sessions counted (today's ongoing session excluded).
+[2026-01-25T17:44:18.862Z] [LOG] 
+      ⏰ Time Variance Deduction for Madhu Eduzone (EMP877568163): Rs.0.00
+[2026-01-25T17:44:18.864Z] [LOG] 
+      ❌ Absent Days Deduction for Madhu Eduzone (EMP877568163): Rs.29999.75
+[2026-01-25T17:44:18.865Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (29999.75) = 29999.75
+[2026-01-25T17:44:18.866Z] [LOG] 💸 Calculated employee deductions for employee EMP877568163: []
+[2026-01-25T17:44:18.866Z] [LOG] 💸 Calculated deductions for employee EMP877568163: []
+[2026-01-25T17:44:18.867Z] [LOG] 💰 Calculated allowances for employee EMP877568163: []
+[2026-01-25T17:44:18.870Z] [LOG] 
+      ⏰ Time Variance Deduction for Zeinab Eduzone (EMP581593605): Rs.0.00
+[2026-01-25T17:44:18.870Z] [LOG] 
+      ❌ Absent Days Deduction for Zeinab Eduzone (EMP581593605): Rs.35000.32
+[2026-01-25T17:44:18.871Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (35000.32) = 35000.32
+[2026-01-25T17:44:18.871Z] [LOG] 💸 Calculated employee deductions for employee EMP581593605: []
+[2026-01-25T17:44:18.873Z] [LOG] 💸 Calculated deductions for employee EMP581593605: []
+[2026-01-25T17:44:18.874Z] [LOG] 💰 Calculated allowances for employee EMP581593605: []
+[2026-01-25T17:44:18.876Z] [LOG] 
+      ⏰ Time Variance Deduction for Mithra Eduzone (EMP877730925): Rs.0.00
+[2026-01-25T17:44:18.879Z] [LOG] 
+      ❌ Absent Days Deduction for Mithra Eduzone (EMP877730925): Rs.45000.19
+[2026-01-25T17:44:18.881Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (45000.19) = 45000.19
+[2026-01-25T17:44:18.882Z] [LOG] 💸 Calculated employee deductions for employee EMP877730925: []
+[2026-01-25T17:44:18.883Z] [LOG] 💸 Calculated deductions for employee EMP877730925: []
+[2026-01-25T17:44:18.885Z] [LOG] 💰 Calculated allowances for employee EMP877730925: []
+[2026-01-25T17:44:18.887Z] [LOG] ⏰ OVERTIME CALCULATION: Employee EMP877730925
+[2026-01-25T17:44:18.887Z] [LOG]    Pre-calculated hourly rates from payroll_records:
+[2026-01-25T17:44:18.890Z] [LOG]      Weekday: 161.29/hr
+[2026-01-25T17:44:18.891Z] [LOG]      Saturday: 90.73/hr
+[2026-01-25T17:44:18.892Z] [LOG]      Sunday: 161.29/hr
+[2026-01-25T17:44:18.892Z] [LOG]    Pre-shift OT enabled: 1
+[2026-01-25T17:44:18.894Z] [LOG]    Post-shift OT enabled: 1
+[2026-01-25T17:44:18.895Z] [LOG]    Total Overtime Amount: 0.00
+[2026-01-25T17:44:19.027Z] [LOG] 
+      📅 Unpaid Leave Deduction for Safara Eduzone (EMP284679311): Rs.0.00
+[2026-01-25T17:44:19.363Z] [LOG] 
+      ⏰ Time Variance Deduction for Safara Eduzone (EMP284679311): Rs.0.00
+[2026-01-25T17:44:19.364Z] [LOG] 
+      ❌ Absent Days Deduction for Safara Eduzone (EMP284679311): Rs.8098.72
+[2026-01-25T17:44:19.364Z] [LOG]       Total Shortfall Breakdown: Unpaid Leaves (0.00) + Time Variance (0.00) + Absent Days (8098.72) = 8098.72
+[2026-01-25T17:44:19.365Z] [LOG] 💸 Calculated employee deductions for employee EMP284679311: []
+[2026-01-25T17:44:19.366Z] [LOG] 💸 Calculated deductions for employee EMP284679311: []
+[2026-01-25T17:44:19.366Z] [LOG] 💰 Calculated allowances for employee EMP284679311: []
+[2026-01-25T17:44:19.368Z] [LOG] ⏰ OVERTIME CALCULATION: Employee EMP284679311
+[2026-01-25T17:44:19.368Z] [LOG]    Pre-calculated hourly rates from payroll_records:
+[2026-01-25T17:44:19.370Z] [LOG]      Weekday: 181.45/hr
+[2026-01-25T17:44:19.371Z] [LOG]      Saturday: 161.29/hr
+[2026-01-25T17:44:19.372Z] [LOG]      Sunday: 161.29/hr
+[2026-01-25T17:44:19.373Z] [LOG]    Pre-shift OT enabled: 1
+[2026-01-25T17:44:19.373Z] [LOG]    Post-shift OT enabled: 1
+[2026-01-25T17:44:19.374Z] [LOG]      2025-12-20 (saturday):
+[2026-01-25T17:44:19.375Z] [LOG]        Total OT: 68min (1.13h)
+[2026-01-25T17:44:19.376Z] [LOG]          Post-shift: 68min
+[2026-01-25T17:44:19.377Z] [LOG]        Calculation: 4080sec × 0.044803/sec × 1x = 182.80
+[2026-01-25T17:44:19.378Z] [LOG]      2025-12-22 (weekday):
+[2026-01-25T17:44:19.379Z] [LOG]        Total OT: 55min (0.92h)
+[2026-01-25T17:44:19.380Z] [LOG]          Post-shift: 55min
+[2026-01-25T17:44:19.381Z] [LOG]        Calculation: 3300sec × 0.050403/sec × 1x = 166.33
+[2026-01-25T17:44:19.382Z] [LOG]      2025-12-24 (weekday):
+[2026-01-25T17:44:19.382Z] [LOG]        Total OT: 60min (1.00h)
+[2026-01-25T17:44:19.383Z] [LOG]          Post-shift: 60min
+[2026-01-25T17:44:19.383Z] [LOG]        Calculation: 3600sec × 0.050403/sec × 1x = 181.45
+[2026-01-25T17:44:19.385Z] [LOG]      2025-12-27 (saturday):
+[2026-01-25T17:44:19.386Z] [LOG]        Total OT: 195min (3.25h)
+[2026-01-25T17:44:19.386Z] [LOG]          Post-shift: 195min
+[2026-01-25T17:44:19.386Z] [LOG]        Calculation: 11700sec × 0.044803/sec × 1x = 524.19
+[2026-01-25T17:44:19.388Z] [LOG]      2025-12-29 (weekday):
+[2026-01-25T17:44:19.390Z] [LOG]        Total OT: 135min (2.25h)
+[2026-01-25T17:44:19.391Z] [LOG]          Pre-shift: 120min
+[2026-01-25T17:44:19.391Z] [LOG]          Post-shift: 15min
+[2026-01-25T17:44:19.394Z] [LOG]        Calculation: 8100sec × 0.050403/sec × 1x = 408.26
+[2026-01-25T17:44:19.394Z] [LOG]      2026-01-05 (weekday):
+[2026-01-25T17:44:19.395Z] [LOG]        Total OT: 30min (0.50h)
+[2026-01-25T17:44:19.396Z] [LOG]          Post-shift: 30min
+[2026-01-25T17:44:19.396Z] [LOG]        Calculation: 1800sec × 0.050403/sec × 1x = 90.72
+[2026-01-25T17:44:19.397Z] [LOG]      2026-01-06 (weekday):
+[2026-01-25T17:44:19.397Z] [LOG]        Total OT: 48min (0.80h)
+[2026-01-25T17:44:19.399Z] [LOG]          Post-shift: 48min
+[2026-01-25T17:44:19.400Z] [LOG]        Calculation: 2880sec × 0.050403/sec × 1x = 145.16
+[2026-01-25T17:44:19.401Z] [LOG]      2026-01-07 (weekday):
+[2026-01-25T17:44:19.402Z] [LOG]        Total OT: 65min (1.08h)
+[2026-01-25T17:44:19.402Z] [LOG]          Post-shift: 65min
+[2026-01-25T17:44:19.403Z] [LOG]        Calculation: 3900sec × 0.050403/sec × 1x = 196.57
+[2026-01-25T17:44:19.403Z] [LOG]      2026-01-10 (saturday):
+[2026-01-25T17:44:19.404Z] [LOG]        Total OT: 113min (1.88h)
+[2026-01-25T17:44:19.406Z] [LOG]          Post-shift: 113min
+[2026-01-25T17:44:19.406Z] [LOG]        Calculation: 6780sec × 0.044803/sec × 1x = 303.76
+[2026-01-25T17:44:19.407Z] [LOG]      2026-01-12 (weekday):
+[2026-01-25T17:44:19.408Z] [LOG]        Total OT: 24min (0.40h)
+[2026-01-25T17:44:19.409Z] [LOG]          Post-shift: 24min
+[2026-01-25T17:44:19.410Z] [LOG]        Calculation: 1440sec × 0.050403/sec × 1x = 72.58
+[2026-01-25T17:44:19.411Z] [LOG]      2026-01-13 (weekday):
+[2026-01-25T17:44:19.411Z] [LOG]        Total OT: 58min (0.97h)
+[2026-01-25T17:44:19.412Z] [LOG]          Post-shift: 58min
+[2026-01-25T17:44:19.412Z] [LOG]        Calculation: 3480sec × 0.050403/sec × 1x = 175.40
+[2026-01-25T17:44:19.413Z] [LOG]      2026-01-14 (weekday):
+[2026-01-25T17:44:19.413Z] [LOG]        Total OT: 133min (2.22h)
+[2026-01-25T17:44:19.414Z] [LOG]          Post-shift: 133min
+[2026-01-25T17:44:19.414Z] [LOG]        Calculation: 7980sec × 0.050403/sec × 1x = 402.21
+[2026-01-25T17:44:19.415Z] [LOG]      2026-01-17 (saturday):
+[2026-01-25T17:44:19.415Z] [LOG]        Total OT: 11min (0.18h)
+[2026-01-25T17:44:19.416Z] [LOG]          Post-shift: 11min
+[2026-01-25T17:44:19.417Z] [LOG]        Calculation: 660sec × 0.044803/sec × 1x = 29.57
+[2026-01-25T17:44:19.418Z] [LOG]    Total Overtime Amount: 2879.01
+[2026-01-25T17:44:19.419Z] [LOG] 
+⚡ PERFORMANCE: Loaded 6 employees in 8041ms (1340ms per employee)
+[2026-01-25T17:44:19.420Z] [INFO] ================================================================================
+[2026-01-25T17:44:19.420Z] [INFO] ⏰ Completed at: 2026-01-25T17:44:19.420Z
+[2026-01-25T17:44:19.420Z] [INFO] 📊 Total log entries: 586

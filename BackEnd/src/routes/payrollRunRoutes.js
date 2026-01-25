@@ -1822,4 +1822,55 @@ router.get("/live/all",
   })
 );
 
+// =============================================
+// PAYROLL CYCLE REPORTING ENDPOINTS
+// =============================================
+
+/**
+ * GET /api/payroll-runs/:id/period-groups
+ * Get unique period groups in a payroll run
+ * Shows which employees have custom cycles vs default cycles
+ */
+router.get('/:id/period-groups',
+  checkPermission('payroll.view'),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const PayrollCycleService = require('../services/PayrollCycleService');
+
+    // Verify run exists and user has access
+    const db = getDB();
+    const [runs] = await db.execute(`
+      SELECT id FROM payroll_runs
+      WHERE id = ? AND client_id = ?
+    `, [id, req.user.client_id]);
+
+    if (!runs || runs.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payroll run not found'
+      });
+    }
+
+    // Get period groups
+    const periodGroups = await PayrollCycleService.getUniquePeriodGroups(id);
+
+    // Get summary statistics
+    const summary = await PayrollCycleService.getRunCycleSummary(id);
+
+    res.json({
+      success: true,
+      data: {
+        periodGroups,
+        summary: {
+          totalEmployees: summary.total_employees,
+          customCycleCount: summary.custom_cycle_count,
+          defaultCycleCount: summary.default_cycle_count,
+          uniqueStartDates: summary.unique_start_dates,
+          uniqueEndDates: summary.unique_end_dates
+        }
+      }
+    });
+  })
+);
+
 module.exports = router;
