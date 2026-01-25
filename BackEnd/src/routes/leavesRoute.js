@@ -38,7 +38,7 @@ router.use(ensureClientAccess);
 
 // GET /api/leaves/types - Get all leave types for client
 router.get('/types',
-  checkPermission('leaves.view'),
+  checkPermission('leave_types.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();
     const clientId = req.user.clientId;
@@ -69,7 +69,7 @@ router.get('/types',
 
 // POST /api/leaves/types - Create a new leave type
 router.post('/types',
-  checkPermission('leaves.create'),
+  checkPermission('leave_types.create'),
   [
     body('name').trim().notEmpty().withMessage('Leave type name is required'),
     body('max_days_per_year').isInt({ min: 0 }).withMessage('Max days per year must be a positive number'),
@@ -137,7 +137,7 @@ router.post('/types',
 
 // PUT /api/leaves/types/:id - Update a leave type
 router.put('/types/:id',
-  checkPermission('leaves.edit'),
+  checkPermission('leave_types.edit'),
   [
     param('id').isUUID().withMessage('Valid leave type ID is required'),
     body('name').optional().trim().notEmpty().withMessage('Leave type name cannot be empty'),
@@ -217,7 +217,7 @@ router.put('/types/:id',
 
 // DELETE /api/leaves/types/:id - Delete (soft delete) a leave type
 router.delete('/types/:id',
-  checkPermission('leaves.delete'),
+  checkPermission('leave_types.delete'),
   [
     param('id').isUUID().withMessage('Valid leave type ID is required')
   ],

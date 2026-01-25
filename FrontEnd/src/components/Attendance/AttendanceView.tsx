@@ -170,9 +170,10 @@ const AttendanceView: React.FC = () => {
 
   const loadEmployees = async () => {
     try {
-      const response = await apiService.apiCall('/api/employees');
+      // Load all employees without pagination limit for the attendance form
+      const response = await apiService.apiCall('/api/employees?limit=1000');
       if (response.success) {
-        console.log('📊 Employees:', response.data.employees);
+        console.log('📊 Employees loaded:', response.data.employees.length);
         console.log('📊 First employee break times:', response.data.employees[0]?.break_start_time, response.data.employees[0]?.break_end_time);
         setEmployees(response.data.employees);
 

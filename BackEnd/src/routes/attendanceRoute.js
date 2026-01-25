@@ -55,10 +55,7 @@ router.get('/fingerprint', [
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(200).json({
-      success: false,
-      message: 'Invalid request',
-      errors: errors.array(),
-      status: 'error'
+      message: 'Invalid request'
     });
   }
 
@@ -100,9 +97,7 @@ router.get('/fingerprint', [
 
     if (employee.length === 0) {
       return res.status(200).json({
-        success: false,
-        message: 'Fingerprint not registered',
-        status: 'error'
+        message: 'Fingerprint not registered'
       });
     }
 
@@ -148,10 +143,10 @@ router.get('/fingerprint', [
       await db.execute(`
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time,
-          total_hours, overtime_hours, break_duration,
+          total_hours, overtime_hours,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend
-        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, 0, ?, NULL, 'office', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 'office', ?, ?, ?)
       `, [
         attendanceId,
         employeeId,
@@ -190,18 +185,7 @@ router.get('/fingerprint', [
       }
 
       return res.status(200).json({
-        success: true,
-        message: `Welcome ${emp.employee_name}!`,
-        status: 'success',
-        action: 'check_in',
-        data: {
-          employee_name: emp.employee_name,
-          employee_code: emp.employee_code,
-          check_in_time: currentTime,
-          scheduled_in_time: schedule.start_time,
-          arrival_status: arrivalStatus,
-          date: today
-        }
+        message: `Welcome ${emp.employee_name}!`
       });
 
     } else {
@@ -226,14 +210,7 @@ router.get('/fingerprint', [
         logToFile(debugFooter);
 
         return res.status(200).json({
-          success: false,
-          message: 'Already checked out',
-          status: 'info',
-          data: {
-            employee_name: emp.employee_name,
-            check_in_time: record.check_in_time,
-            check_out_time: record.check_out_time
-          }
+          message: 'Already checked out'
         });
       }
 
@@ -340,9 +317,7 @@ router.get('/fingerprint', [
         logToFile(errorLog3);
 
         return res.status(200).json({
-          success: false,
-          message: 'Invalid time format',
-          status: 'error'
+          message: 'Invalid time format'
         });
       }
 
@@ -378,19 +353,7 @@ router.get('/fingerprint', [
         console.log(earlyLog5);
         logToFile(earlyLog5);
         return res.status(200).json({
-          success: false,
-          message: 'Already marked attendance for today',
-          status: 'info',
-          data: {
-            employee_name: emp.employee_name,
-            employee_code: emp.employee_code,
-            check_in_time: record.check_in_time,
-            current_time: currentTime,
-            hours_since_checkin: parseFloat(hoursWorked.toFixed(2)),
-            minimum_hours_required: parseFloat(minimumWorkHours.toFixed(2)),
-            scheduled_hours: parseFloat(scheduledHours.toFixed(2)),
-            scheduled_end_time: normalizedSchedEnd || 'N/A'
-          }
+          message: 'Already marked attendance for today'
         });
       }
 
@@ -412,7 +375,8 @@ router.get('/fingerprint', [
       const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
         record.check_in_time,
         currentTime,
-        0, // no break for fingerprint attendance
+        null, // no break start time for fingerprint attendance
+        null, // no break end time for fingerprint attendance
         clientId,
         db,
         schedule
@@ -506,33 +470,14 @@ router.get('/fingerprint', [
       }
 
       return res.status(200).json({
-        success: true,
-        message: `Goodbye ${emp.employee_name}!`,
-        status: 'success',
-        action: 'check_out',
-        data: {
-          employee_name: emp.employee_name,
-          employee_code: emp.employee_code,
-          check_in_time: record.check_in_time,
-          check_out_time: currentTime,
-          total_hours: totalHours,
-          overtime_hours: overtimeHours,
-          pre_shift_overtime_seconds: preShiftOvertimeSeconds,
-          post_shift_overtime_seconds: postShiftOvertimeSeconds,
-          arrival_status: arrivalResult.status,
-          work_duration: durationResult.status,
-          date: today
-        }
+        message: `Goodbye ${emp.employee_name}!`
       });
     }
 
   } catch (error) {
     console.error('❌ Fingerprint attendance error:', error);
     return res.status(200).json({
-      success: false,
-      message: 'System error',
-      status: 'error',
-      error: error.message
+      message: 'System error'
     });
   }
 }));
@@ -635,7 +580,7 @@ router.post('/manual-sync', [
       let postShiftOvertimeSeconds = 0;
 
       if (check_out_time) {
-        const calculated = await calculateWorkHours(check_in_time, check_out_time, 0, clientId, db, schedule);
+        const calculated = await calculateWorkHours(check_in_time, check_out_time, null, null, clientId, db, schedule);
         totalHours = calculated.totalHours;
         overtimeHours = calculated.overtimeHours;  // Actual OT without multiplier
         preShiftOvertimeSeconds = calculated.preShiftOvertimeSeconds;
@@ -654,10 +599,10 @@ router.post('/manual-sync', [
       await db.execute(`
         INSERT INTO attendance (
           id, employee_id, date, check_in_time, check_out_time,
-          total_hours, overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds, break_duration,
+          total_hours, overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'office', ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'office', ?, ?, ?, ?)
       `, [
         attendanceId, employeeId, date, check_in_time, check_out_time,
         totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds, arrivalResult.status,
@@ -697,7 +642,7 @@ router.post('/manual-sync', [
 
       const record = existing[0];
       const schedule = await getEmployeeSchedule(employeeId, clientId, db, date);
-      const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(record.check_in_time, check_out_time, 0, clientId, db, schedule);
+      const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(record.check_in_time, check_out_time, null, null, clientId, db, schedule);
 
       const [employeeInfo] = await db.execute(`SELECT department_id FROM employees WHERE id = ?`, [employeeId]);
       const departmentId = employeeInfo[0]?.department_id || null;
@@ -1122,14 +1067,15 @@ const determineWorkDuration = (
   /**
    *  Calculate worked / overtime hours.
    *  - Accepts HH:MM or HH:MM:SS strings
-   *  - Uses the employee’s own schedule if available, otherwise the company default
-   *  - Break duration is **hours** (decimal, e.g. 1.5 = 90 min)
+   *  - Uses the employee's own schedule if available, otherwise the company default
+   *  - Break times are HH:MM:SS format (e.g. '12:00:00', '13:00:00'), duration calculated automatically
    *  - Everything returned as *numbers*, rounded to 2 dp.
    */
 const calculateWorkHours = async (
   checkInTime,
   checkOutTime,
-  breakDuration = 0,
+  breakStartTime = null,
+  breakEndTime = null,
   clientId,
   db,
   employeeSchedule = null   // { start_time:'HH:MM:SS', end_time:'HH:MM:SS' } or null
@@ -1170,20 +1116,36 @@ const calculateWorkHours = async (
     };
   }
 
+  /* Calculate break duration from break times if provided */
+  let breakSeconds = 0;
+  if (breakStartTime && breakEndTime) {
+    const breakStartNorm = normalise(breakStartTime);
+    const breakEndNorm = normalise(breakEndTime);
+
+    if (breakStartNorm && breakEndNorm) {
+      const breakStart = new Date(`2000-01-01T${breakStartNorm}`);
+      const breakEnd = new Date(`2000-01-01T${breakEndNorm}`);
+
+      if (!isNaN(breakStart) && !isNaN(breakEnd) && breakEnd > breakStart) {
+        breakSeconds = (breakEnd - breakStart) / 1000;  // ms to seconds
+      }
+    }
+  }
+
   /* Calculate total worked time in seconds */
   const rawSeconds = (outDate - inDate) / 1000;  // ms to seconds
-  const breakSeconds = (breakDuration || 0) * 3600;  // hours to seconds
   const workedSeconds = Math.max(0, rawSeconds - breakSeconds);
   const workedHours = workedSeconds / 3600;  // seconds to hours
 
   /* what counts as "standard" today? */
   let standardHours = null;
+  const breakHours = breakSeconds / 3600;  // Convert break seconds to hours
 
   if (employeeSchedule?.start_time && employeeSchedule?.end_time) {
     const sIn  = new Date(`2000-01-01T${normalise(employeeSchedule.start_time)}`);
     const sOut = new Date(`2000-01-01T${normalise(employeeSchedule.end_time)}`);
     if (!isNaN(sIn) && !isNaN(sOut) && sOut > sIn) {
-      standardHours = (sOut - sIn) / 3600000 - (breakDuration || 0); // ms to hours, subtract break
+      standardHours = (sOut - sIn) / 3600000 - breakHours; // ms to hours, subtract break
     }
   } else if (employeeSchedule?.is_non_working_day) {
     // Volunteer work on non-working day: all hours are overtime
@@ -1311,7 +1273,8 @@ const calculateWorkHours = async (
       const { totalHours, overtimeHours, standardHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
         req.body.check_in_time,
         req.body.check_out_time,
-        0, // break_duration removed, pass 0
+        req.body.break_start_time || null,
+        req.body.break_end_time || null,
         req.user.clientId,
         db,
         schedule
@@ -1896,7 +1859,8 @@ router.patch('/bulk', [
           const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
             eff.check_in_time,
             eff.check_out_time,
-            0, // break_duration removed, pass 0
+            eff.break_start_time || null,
+            eff.break_end_time || null,
             req.user.clientId,
             db,
             schedule
@@ -2107,7 +2071,8 @@ router.patch('/:id',
     const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
       eff.check_in_time,
       eff.check_out_time,
-      0, // break_duration removed, pass 0
+      eff.break_start_time || null,
+      eff.break_end_time || null,
       req.user.clientId,
       db,
       schedule
@@ -2374,7 +2339,8 @@ router.post('/bulk-update-status', [
           const { totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds } = await calculateWorkHours(
             record.check_in_time,
             record.check_out_time,
-            record.break_duration,
+            record.break_start_time || null,
+            record.break_end_time || null,
             req.user.clientId,
             db,
             schedule
