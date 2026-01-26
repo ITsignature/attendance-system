@@ -2031,6 +2031,7 @@ class PayrollRunService {
                 attendance: {
                     hours: attendanceWeekdayHours + attendanceSaturdayHours + attendanceSundayHours,
                     earned: totalAttendanceEarned,
+                    sessions_count: detailedAttendance.length,
                     breakdown: {
                         weekday: { hours: attendanceWeekdayHours, earned: attendanceWeekdayEarned },
                         saturday: { hours: attendanceSaturdayHours, earned: attendanceSaturdayEarned },
@@ -3696,6 +3697,12 @@ class PayrollRunService {
                     pr.weekday_hourly_rate,
                     pr.saturday_hourly_rate,
                     pr.sunday_hourly_rate,
+                    pr.weekday_working_days,
+                    pr.working_saturdays,
+                    pr.working_sundays,
+                    pr.weekday_daily_hours,
+                    pr.saturday_daily_hours,
+                    pr.sunday_daily_hours,
                     e.base_salary,
                     e.department_id
                 FROM payroll_records pr
