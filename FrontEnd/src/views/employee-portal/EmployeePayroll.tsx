@@ -148,17 +148,12 @@ const EmployeePayroll = () => {
     const paidLeaveHours = earningsBySource.paid_leaves?.hours || 0;
     const liveSessionHours = earningsBySource.live_session?.hours || 0;
 
-    // Calculate unpaid leave days (hours / 8)
-    const unpaidLeaveHours = shortfallByCause.unpaid_time_off?.hours || 0;
-    const unpaidLeaveDays = unpaidLeaveHours > 0 ? (unpaidLeaveHours / 8).toFixed(1) : 0;
+    // Get leave days from backend (calculated based on actual daily hours)
+    const paidLeaveDays = record.paid_leave_days || 0;
+    const unpaidLeaveDays = record.unpaid_leave_days || 0;
 
-    // Calculate paid leave days
-    const paidLeaveDays = paidLeaveHours > 0 ? (paidLeaveHours / 8).toFixed(1) : 0;
-
-    // Calculate total working days (expected days in the period)
-    const expectedSalary = record.expected_salary || 0;
-    const baseSalary = record.base_salary || 0;
-    const totalWorkingDays = baseSalary > 0 ? Math.round((expectedSalary / baseSalary) * 30) : 0;
+    // Get total working days from backend (accounts for custom cycles)
+    const totalWorkingDays = record.total_working_days || 0;
 
     return (
       <div className="space-y-6">
@@ -175,6 +170,9 @@ const EmployeePayroll = () => {
             <h1 className="text-3xl font-bold text-gray-800">Live Payroll Preview</h1>
             <p className="text-gray-600 mt-2">
               {record.run_name} ({new Date(record.period_start_date).toLocaleDateString()} - {new Date(record.period_end_date).toLocaleDateString()})
+              {record.uses_custom_cycle && (
+                <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">Custom Cycle</span>
+              )}
             </p>
             <span className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-medium capitalize ${getRunStatusColor(record.run_status)}`}>
               {record.run_status}
@@ -223,24 +221,19 @@ const EmployeePayroll = () => {
             </div>
           </div>
 
-          {/* Earnings */}
+{/* Earnings Calculation */}
           <div className="mb-6">
-            <h3 className="font-semibold text-gray-700 mb-3 pb-2 border-b">Earnings</h3>
-            <div className="space-y-2">
+            <h3 className="font-semibold text-gray-700 mb-3 pb-2 border-b">Salary Calculation</h3>
+            <div className="space-y-3">
               {/* Base Salary (Total) */}
               <div className="flex justify-between">
                 <span className="text-gray-600 font-medium">Base Salary (Full Month)</span>
                 <span className="font-medium">Rs. {(record.base_salary || 0).toLocaleString()}</span>
               </div>
 
-              {/* Base Salary Earned with Breakdown */}
-              <div className="ml-4 bg-blue-50 p-3 rounded">
-                <div className="flex justify-between font-medium text-blue-800 mb-2">
-                  <span>Base Salary Earned</span>
-                  <span>Rs. {(record.earned_salary || 0).toLocaleString()}</span>
-                </div>
-
-                {/* Breakdown */}
+              {/* Earnings Breakdown */}
+              <div className="ml-4 bg-green-50 p-3 rounded">
+                <div className="font-medium text-green-800 mb-2">Earnings from Work</div>
                 <div className="ml-4 space-y-1 text-sm">
                   {earningsBySource.attendance && (
                     <div className="flex justify-between text-gray-700">
@@ -260,15 +253,6 @@ const EmployeePayroll = () => {
                       <span>Rs. {(earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
                     </div>
                   )}
-                  {earningsBySource.overtime && earningsBySource.overtime.earned > 0 && (
-                    <div className="flex justify-between text-gray-700">
-                      <span className="flex items-center">
-                        <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-                        Overtime ({(earningsBySource.overtime.minutes / 60).toFixed(2)}h)
-                      </span>
-                      <span>Rs. {(earningsBySource.overtime.earned || 0).toLocaleString()}</span>
-                    </div>
-                  )}
                   {liveSessionHours > 0 && (
                     <div className="flex justify-between text-gray-700">
                       <span className="flex items-center">
@@ -281,34 +265,10 @@ const EmployeePayroll = () => {
                 </div>
               </div>
 
-              {/* Other Earnings */}
-              {earnings.filter((e: any) => e.component_name !== 'Base Salary (Earned)').map((earning: any) => (
-                <div key={earning.component_name} className="flex justify-between">
-                  <span className="text-gray-600">{earning.component_name}</span>
-                  <span className="font-medium">Rs. {(earning.amount || 0).toLocaleString()}</span>
-                </div>
-              ))}
-
-              <div className="flex justify-between pt-2 border-t font-semibold text-lg">
-                <span>Gross Salary</span>
-                <span className="text-blue-600">Rs. {(record.gross_salary || 0).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Deductions */}
-          <div className="mb-6">
-            <h3 className="font-semibold text-gray-700 mb-3 pb-2 border-b">Deductions</h3>
-            <div className="space-y-2">
-              {/* Shortfall with Breakdown */}
+              {/* Attendance Shortfall - Why salary is less than base */}
               {attendance_details && attendance_details.total > 0 && (
-                <div className="ml-0 bg-red-50 p-3 rounded">
-                  <div className="flex justify-between font-medium text-red-800 mb-2">
-                    <span>Attendance Shortfall</span>
-                    <span>-Rs. {(attendance_details.total || 0).toLocaleString()}</span>
-                  </div>
-
-                  {/* Breakdown */}
+                <div className="ml-4 bg-orange-50 p-3 rounded border border-orange-200">
+                  <div className="font-medium text-orange-800 mb-2">Salary Reduction (Shortfall)</div>
                   <div className="ml-4 space-y-1 text-sm">
                     {shortfallByCause.unpaid_time_off && shortfallByCause.unpaid_time_off.deduction > 0 && (
                       <div className="flex justify-between text-gray-700">
@@ -316,7 +276,7 @@ const EmployeePayroll = () => {
                           <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
                           Unpaid Leaves ({shortfallByCause.unpaid_time_off.hours.toFixed(2)}h)
                         </span>
-                        <span>-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
                       </div>
                     )}
                     {shortfallByCause.time_variance && shortfallByCause.time_variance.deduction > 0 && (
@@ -325,7 +285,7 @@ const EmployeePayroll = () => {
                           <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
                           Time Variance ({shortfallByCause.time_variance.hours.toFixed(2)}h)
                         </span>
-                        <span>-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
                       </div>
                     )}
                     {shortfallByCause.absent_days && shortfallByCause.absent_days.deduction > 0 && (
@@ -334,25 +294,98 @@ const EmployeePayroll = () => {
                           <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
                           Absent Days
                         </span>
-                        <span>-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
                       </div>
                     )}
+                    <div className="flex justify-between pt-1 border-t border-orange-300 font-medium text-orange-800">
+                      <span>Total Shortfall</span>
+                      <span>-Rs. {(attendance_details.total || 0).toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Other Deductions */}
-              {deductions.map((deduction: any) => (
-                <div key={deduction.component_name} className="flex justify-between">
-                  <span className="text-gray-600">{deduction.component_name}</span>
-                  <span className="font-medium text-red-600">-Rs. {(deduction.amount || 0).toLocaleString()}</span>
+              {/* Attendance Shortfall - Why salary is less than base */}
+              {attendance_details && attendance_details.total > 0 && (
+                <div className="ml-4 bg-orange-50 p-3 rounded border border-orange-200">
+                  <div className="font-medium text-orange-800 mb-2">Salary Reduction (Shortfall)</div>
+                  <div className="ml-4 space-y-1 text-sm">
+                    {shortfallByCause.unpaid_time_off && shortfallByCause.unpaid_time_off.deduction > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
+                          Unpaid Leaves ({shortfallByCause.unpaid_time_off.hours.toFixed(2)}h)
+                        </span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {shortfallByCause.time_variance && shortfallByCause.time_variance.deduction > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+                          Time Variance ({shortfallByCause.time_variance.hours.toFixed(2)}h)
+                        </span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {shortfallByCause.absent_days && shortfallByCause.absent_days.deduction > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                          Absent Days
+                        </span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-1 border-t border-orange-300 font-medium text-orange-800">
+                      <span>Total Shortfall</span>
+                      <span>-Rs. {(attendance_details.total || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Base Salary Earned */}
+              <div className="flex justify-between bg-blue-50 p-2 rounded">
+                <span className="font-medium text-blue-800">Base Salary Earned</span>
+                <span className="font-medium text-blue-800">Rs. {(record.earned_salary || 0).toLocaleString()}</span>
+              </div>
+
+              {/* Additional Earnings (Overtime, etc.) */}
+              {earnings.filter((e: any) => e.component_name !== 'Base Salary (Earned)').map((earning: any) => (
+                <div key={earning.component_name} className="flex justify-between">
+                  <span className="text-gray-600">{earning.component_name}</span>
+                  <span className="font-medium text-green-600">+Rs. {(earning.amount || 0).toLocaleString()}</span>
                 </div>
               ))}
 
-              <div className="flex justify-between pt-2 border-t font-semibold">
-                <span>Total Deductions</span>
-                <span className="text-red-600">-Rs. {(record.total_deductions || 0).toLocaleString()}</span>
+              <div className="flex justify-between pt-2 border-t-2 border-blue-600 font-semibold text-lg">
+                <span>Gross Salary</span>
+                <span className="text-blue-600">Rs. {(record.gross_salary || 0).toLocaleString()}</span>
               </div>
+            </div>
+          </div>
+
+          {/* Deductions */}
+          <div className="mb-6">
+            <h3 className="font-semibold text-gray-700 mb-3 pb-2 border-b">Deductions (from Gross Salary)</h3>
+            <div className="space-y-2">
+              {deductions.length > 0 ? (
+                <>
+                  {deductions.map((deduction: any) => (
+                    <div key={deduction.component_name} className="flex justify-between">
+                      <span className="text-gray-600">{deduction.component_name}</span>
+                      <span className="font-medium text-red-600">-Rs. {(deduction.amount || 0).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 border-t font-semibold">
+                    <span>Total Deductions</span>
+                    <span className="text-red-600">-Rs. {(record.total_deductions || 0).toLocaleString()}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500 italic">No deductions</div>
+              )}
             </div>
           </div>
 
