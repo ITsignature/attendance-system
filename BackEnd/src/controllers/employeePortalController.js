@@ -540,18 +540,45 @@ const applyForLeave = asyncHandler(async (req, res) => {
 
   const employee = employees[0];
 
+  // Calculate day-of-week breakdown
+  // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
+  // JavaScript getDay: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+  const dayOfWeekCounts = {
+    "1": 0, // Sunday
+    "2": 0, // Monday
+    "3": 0, // Tuesday
+    "4": 0, // Wednesday
+    "5": 0, // Thursday
+    "6": 0, // Friday
+    "7": 0  // Saturday
+  };
+
+  let currentDate = new Date(start_date);
+  const leaveEndDate = new Date(end_date);
+
+  while (currentDate <= leaveEndDate) {
+    const jsDayOfWeek = currentDate.getDay(); // JavaScript day (0-6)
+    const mysqlDayOfWeek = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1; // Convert to MySQL DAYOFWEEK (1-7)
+    dayOfWeekCounts[mysqlDayOfWeek.toString()]++;
+
+    // Move to next day
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  console.log(`📅 Day-of-week breakdown for leave (${start_date} to ${end_date}):`, dayOfWeekCounts);
+
   // Create leave request
   const leaveRequestId = require('uuid').v4();
   await db.execute(`
     INSERT INTO leave_requests (
       id, employee_id, leave_type_id, start_date, end_date,
       leave_duration, start_time, end_time, days_requested,
-      reason, status, applied_at, supporting_documents
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), ?)
+      reason, status, applied_at, supporting_documents, dayofweek, is_paid
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), ?, ?, ?)
   `, [
     leaveRequestId, employeeId, leave_type_id, start_date, end_date,
     leave_duration, start_time || null, end_time || null, days_requested,
-    reason, supporting_documents || null
+    reason, supporting_documents || null, JSON.stringify(dayOfWeekCounts), leaveType.is_paid
   ]);
 
   res.status(201).json({
