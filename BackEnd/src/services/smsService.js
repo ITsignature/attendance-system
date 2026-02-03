@@ -53,12 +53,16 @@ class SMSService {
         timeout: 10000 // 10 second timeout
       });
      
-      //validate SMS gateway response
-      const responseData = typeof response.data === 'String' ? response.data.trim() : response.data;
-      
-      //Check for authentication/configuration errors
-      if(responseData.includes('INVALID')||responseData.includes('ERROR')||responseData.includes('FAIL')||responseData.includes('UNAUTHORIZED')||responseData.includes('OK')) {
-        console.log('❌ SMS gateway error:', responseData);
+      // Validate SMS gateway response
+      const responseData = typeof response.data === 'string' ? response.data.trim() : response.data;
+
+      // Check for authentication/configuration errors
+      if (responseData.includes('INVALID') ||
+          responseData.includes('ERROR') ||
+          responseData.includes('FAIL') ||
+          responseData.includes('UNAUTHORIZED') ||
+          !responseData.includes('OK')) {
+        console.error('❌ SMS gateway error:', responseData);
         return {
           success: false,
           error: `SMS gateway rejected: ${responseData}`,
