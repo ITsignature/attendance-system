@@ -47,14 +47,16 @@ class SMSService {
       const smsURL = `${this.baseURL}/?id=${this.accountId}&pw=${this.password}&to=${cleanPhone}&text=${cleanedMessage}&eco=Y`;
 
       console.log('📱 Sending SMS to:', cleanPhone);
+      console.log('🔧 SMS Gateway URL:', smsURL.replace(this.password, '****')); // Log URL with masked password
 
       // Send SMS via GET request
       const response = await axios.get(smsURL, {
         timeout: 10000 // 10 second timeout
       });
-     
+
       // Validate SMS gateway response
       const responseData = typeof response.data === 'string' ? response.data.trim() : response.data;
+      console.log('📥 Gateway Response:', responseData);
 
       // Check for authentication/configuration errors
       if (responseData.includes('INVALID') ||
