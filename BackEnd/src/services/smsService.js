@@ -12,7 +12,7 @@ class SMSService {
     this.accountId = process.env.SMS_ACCOUNT_ID || '942021070701';
     this.password = process.env.SMS_PASSWORD || '7470';
     this.enabled = process.env.SMS_ENABLED === 'true';
-
+  
     // Notification configuration for specific clients
     this.clientNotifications = {
       '617f36df-e92a-4f7e-bd19-31df35173926': '0775554262' // Eduzon client notification number
