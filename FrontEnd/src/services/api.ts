@@ -444,8 +444,9 @@ private async queueRefresh(): Promise<void> {
     const requiredFields = [
       'first_name', 'last_name', 'email', 'phone', 'date_of_birth',
       'gender', 'employee_code', 'department_id', 'designation_id',
-      'hire_date', 'employee_type', 'emergency_contact_name',
-      'emergency_contact_phone', 'emergency_contact_relation'
+      'hire_date', 'employee_type'
+      // 'emergency_contact_name',
+      // 'emergency_contact_phone', 'emergency_contact_relation'
     ];
     for (const field of requiredFields) {
       if (!employeeData[field] || employeeData[field].toString().trim() === '') {
