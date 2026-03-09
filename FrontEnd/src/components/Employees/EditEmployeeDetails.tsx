@@ -556,17 +556,17 @@ const EditEmployeeDetails: React.FC = () => {
       errors.designation_id = 'Designation is required';
     }
 
-    if (!formData.emergency_contact_name?.trim()) {
-      errors.emergency_contact_name = 'Emergency contact name is required';
-    }
+    // if (!formData.emergency_contact_name?.trim()) {
+    //   errors.emergency_contact_name = 'Emergency contact name is required';
+    // }
 
-    if (!formData.emergency_contact_phone?.trim()) {
-      errors.emergency_contact_phone = 'Emergency contact phone is required';
-    }
+    // if (!formData.emergency_contact_phone?.trim()) {
+    //   errors.emergency_contact_phone = 'Emergency contact phone is required';
+    // }
 
-    if (!formData.emergency_contact_relation?.trim()) {
-      errors.emergency_contact_relation = 'Emergency contact relation is required';
-    }
+    // if (!formData.emergency_contact_relation?.trim()) {
+    //   errors.emergency_contact_relation = 'Emergency contact relation is required';
+    // }
 
     if (formData.in_time && formData.out_time) {
       const inTime = new Date(`2000-01-01T${formData.in_time}`);
