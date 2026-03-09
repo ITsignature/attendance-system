@@ -296,7 +296,7 @@ router.get('/managers',
         managers
       }
     });
-    console.log(managers)
+    console.log(`managers`,managers)
   })
 );
 
