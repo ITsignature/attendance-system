@@ -954,7 +954,33 @@ router.put('/requests/:id/approve',
             dayOfWeekCounts = JSON.parse(dayOfWeekCounts);
           } catch (e) {
             console.error('Failed to parse dayofweek JSON:', e);
-            dayOfWeekCounts = {};
+            dayOfWeekCounts = null;
+          }
+        }
+
+        // If dayofweek is missing or null, calculate it now (for old leave requests or employee portal requests)
+        if (!dayOfWeekCounts) {
+          console.log(`   ⚠️  dayofweek field is missing, calculating now...`);
+          dayOfWeekCounts = {
+            "1": 0, // Sunday
+            "2": 0, // Monday
+            "3": 0, // Tuesday
+            "4": 0, // Wednesday
+            "5": 0, // Thursday
+            "6": 0, // Friday
+            "7": 0  // Saturday
+          };
+
+          let currentDate = new Date(request[0].start_date);
+          const leaveEndDate = new Date(request[0].end_date);
+
+          while (currentDate <= leaveEndDate) {
+            const jsDayOfWeek = currentDate.getDay(); // JavaScript day (0-6)
+            const mysqlDayOfWeek = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1; // Convert to MySQL DAYOFWEEK (1-7)
+            dayOfWeekCounts[mysqlDayOfWeek.toString()]++;
+
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
           }
         }
 
