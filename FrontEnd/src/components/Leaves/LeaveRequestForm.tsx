@@ -631,7 +631,7 @@ const employeeOptions = employees
                 id="start_date"
                 type="date"
                 value={formData.start_date}
-                min={getTodayDate()}
+                min=""
                 onChange={(e) => handleInputChange('start_date', e.target.value)}
                 className={errors.start_date ? 'border-red-500' : ''}
                 icon={FaCalendarAlt}
@@ -648,7 +648,7 @@ const employeeOptions = employees
                 id="end_date"
                 type="date"
                 value={formData.end_date}
-                min={formData.start_date || getTodayDate()}
+                min={formData.start_date}
                 onChange={(e) => handleInputChange('end_date', e.target.value)}
                 className={errors.end_date ? 'border-red-500' : ''}
                 icon={FaCalendarAlt}

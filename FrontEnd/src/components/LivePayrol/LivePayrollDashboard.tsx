@@ -394,6 +394,12 @@ const LivePayrollDashboard: React.FC = () => {
                                     <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.live_session.earned)}</span>
                                   </div>
                                 )}
+                                {result.earnings_by_source.overtime && result.earnings_by_source.overtime.earned > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Overtime ({result.earnings_by_source.overtime.minutes}min):</span>
+                                    <span className="font-medium text-red-600">{formatCurrency(result.earnings_by_source.overtime.earned)}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -761,9 +767,19 @@ const LivePayrollDashboard: React.FC = () => {
                             <div className="text-xs text-gray-500">
                               ({record.working_hours} hrs)
                             </div>
+                            {record.overtime_minutes > 0 && (
+                              <div className="text-xs text-red-600 font-medium">
+                                +{record.overtime_minutes} OT mins
+                              </div>
+                            )}
                           </Table.Cell>
                           <Table.Cell className="text-green-600 font-bold">
                             {formatCurrency(record.daily_salary)}
+                            {record.overtime_amount > 0 && (
+                              <div className="text-xs text-red-600 font-medium">
+                                +{formatCurrency(record.overtime_amount)} OT
+                              </div>
+                            )}
                           </Table.Cell>
                           <Table.Cell>
                             <Badge
@@ -791,10 +807,13 @@ const LivePayrollDashboard: React.FC = () => {
 
               {/* Period Info */}
               <div className="text-sm text-gray-600 border-t pt-4">
-                <p>
+                <p className="flex items-center gap-2">
                   <strong>Payroll Period:</strong>{' '}
                   {new Date(dailyDetailsModal.data.period.start_date).toLocaleDateString()} -{' '}
                   {new Date(dailyDetailsModal.data.period.end_date).toLocaleDateString()}
+                  {dailyDetailsModal.data.period.uses_custom_cycle && (
+                    <Badge color="warning" size="sm">Custom Cycle</Badge>
+                  )}
                 </p>
                 <p className="mt-1">
                   <strong>Base Salary:</strong> {formatCurrency(dailyDetailsModal.data.employee.base_salary)}

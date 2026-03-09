@@ -8,6 +8,7 @@ import { DynamicProtectedComponent } from "../RBACSystem/rbacSystem";
 import apiService from '../../services/api';
 import leaveApiService from '../../services/leaveApi';
 import payrollApiService, { PayrollRecord } from '../../services/payrollService';
+import PayrollCycleConfig from './PayrollCycleConfig';
 
 // Types
 interface Employee {
@@ -264,7 +265,8 @@ const EmployeeDetails: React.FC = () => {
     { id: "Profile", label: "Profile", icon: HiUser },
     { id: "Attendance", label: "Attendance", icon: HiClock },
     { id: "Leave", label: "Leave", icon: HiCalendar },
-    { id: "Financial Records", label: "Financial", icon: HiCash }
+    { id: "Payroll", label: "Payroll Cycle", icon: HiCash },
+    { id: "Financial Records", label: "Financial", icon: HiDocumentText }
   ];
 
   // Load employee data on mount
@@ -2065,6 +2067,19 @@ const EmployeeDetails: React.FC = () => {
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Payroll Cycle Tab */}
+            {activeSidebarTab === "Payroll" && (
+              <div className="space-y-6">
+                <DynamicProtectedComponent permission="employees.view">
+                  <PayrollCycleConfig
+                    employeeId={employee!.id}
+                    employeeName={`${employee!.first_name} ${employee!.last_name}`}
+                    canEdit={true}
+                  />
+                </DynamicProtectedComponent>
               </div>
             )}
           </div>

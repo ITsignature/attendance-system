@@ -540,18 +540,45 @@ const applyForLeave = asyncHandler(async (req, res) => {
 
   const employee = employees[0];
 
+  // Calculate day-of-week breakdown
+  // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
+  // JavaScript getDay: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+  const dayOfWeekCounts = {
+    "1": 0, // Sunday
+    "2": 0, // Monday
+    "3": 0, // Tuesday
+    "4": 0, // Wednesday
+    "5": 0, // Thursday
+    "6": 0, // Friday
+    "7": 0  // Saturday
+  };
+
+  let currentDate = new Date(start_date);
+  const leaveEndDate = new Date(end_date);
+
+  while (currentDate <= leaveEndDate) {
+    const jsDayOfWeek = currentDate.getDay(); // JavaScript day (0-6)
+    const mysqlDayOfWeek = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1; // Convert to MySQL DAYOFWEEK (1-7)
+    dayOfWeekCounts[mysqlDayOfWeek.toString()]++;
+
+    // Move to next day
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  console.log(`📅 Day-of-week breakdown for leave (${start_date} to ${end_date}):`, dayOfWeekCounts);
+
   // Create leave request
   const leaveRequestId = require('uuid').v4();
   await db.execute(`
     INSERT INTO leave_requests (
       id, employee_id, leave_type_id, start_date, end_date,
       leave_duration, start_time, end_time, days_requested,
-      reason, status, applied_at, supporting_documents
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), ?)
+      reason, status, applied_at, supporting_documents, dayofweek, is_paid
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), ?, ?, ?)
   `, [
     leaveRequestId, employeeId, leave_type_id, start_date, end_date,
     leave_duration, start_time || null, end_time || null, days_requested,
-    reason, supporting_documents || null
+    reason, supporting_documents || null, JSON.stringify(dayOfWeekCounts), leaveType.is_paid
   ]);
 
   res.status(201).json({
@@ -769,6 +796,11 @@ const getMyLivePayrollPreview = asyncHandler(async (req, res) => {
  * @route GET /api/employee-portal/payroll/live-preview/:runId
  * This calculates payroll in real-time based on current data
  */
+/**
+ * Get employee's live payroll details for a specific run
+ * @route GET /api/employee-portal/payroll/live-preview/:runId
+ * This calculates payroll in real-time based on current data
+ */
 const getMyLivePayrollDetails = asyncHandler(async (req, res) => {
   const db = getDB();
   const employeeId = req.employeeId;
@@ -812,7 +844,7 @@ const getMyLivePayrollDetails = asyncHandler(async (req, res) => {
     const earnings = [];
     const deductions = [];
 
-    // Base Salary
+    // Base Salary Earned (already has attendance shortfall applied)
     const earnedSalary = myEmployeeData.attendance?.earned_salary || 0;
     earnings.push({
       component_name: 'Base Salary (Earned)',
@@ -846,10 +878,23 @@ const getMyLivePayrollDetails = asyncHandler(async (req, res) => {
       });
     });
 
-    // Calculate gross salary
+    // Overtime
+    const overtimeAmount = myEmployeeData.overtime?.total_amount || 0;
+    if (overtimeAmount > 0) {
+      earnings.push({
+        component_name: 'Overtime',
+        component_type: 'earning',
+        amount: overtimeAmount,
+        calculation_method: 'overtime'
+      });
+    }
+
+    // Calculate gross salary (sum of all earnings)
     const grossSalary = earnings.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
 
-    // Deductions
+    // ACTUAL DEDUCTIONS (from gross salary) - NOT including attendance shortfall
+    
+    // Deduction Components (tax, PF, insurance, etc.)
     (myEmployeeData.deductions || []).forEach(deduction => {
       const deductionAmount = deduction.calculation_type === 'percentage'
         ? (grossSalary * parseFloat(deduction.calculation_value)) / 100
@@ -883,28 +928,58 @@ const getMyLivePayrollDetails = asyncHandler(async (req, res) => {
       });
     });
 
-    // Calculate net salary
+    // NOTE: Attendance shortfall is NOT added to deductions
+    // It's already accounted for in earnedSalary calculation
+    // Shortfall data is available in attendance_details for display only
+
+    // Calculate total deductions and net salary
     const totalDeductions = deductions.reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
     const netSalary = grossSalary - totalDeductions;
 
-    // Calculate work summary from attendance data
+    // Extract attendance data for work summary
     const attendanceData = myEmployeeData.attendance || {};
     const earningsBySource = attendanceData.earnings_by_source || {};
+    const shortfallByCause = attendanceData.shortfall_by_cause || {};
 
     // Calculate total worked hours (attendance + paid leaves)
     const attendanceHours = earningsBySource.attendance?.hours || 0;
     const paidLeaveHours = earningsBySource.paid_leaves?.hours || 0;
     const workedHours = attendanceHours + paidLeaveHours;
 
-    // Calculate worked days (approximate from hours, assuming 8 hours per day)
-    const workedDays = workedHours > 0 ? (workedHours / 8).toFixed(1) : 0;
+    // Get employee's daily hours configuration
+    const weekdayDailyHours = parseFloat(myEmployeeData.weekday_daily_hours) || 8;
+    const saturdayDailyHours = parseFloat(myEmployeeData.saturday_daily_hours) || 8;
+    const sundayDailyHours = parseFloat(myEmployeeData.sunday_daily_hours) || 8;
+
+    // Get total working days from employee's payroll record
+    const weekdayWorkingDays = parseInt(myEmployeeData.weekday_working_days) || 0;
+    const workingSaturdays = parseInt(myEmployeeData.working_saturdays) || 0;
+    const workingSundays = parseInt(myEmployeeData.working_sundays) || 0;
+    const totalWorkingDays = weekdayWorkingDays + workingSaturdays + workingSundays;
+
+    // Get worked days from attendance data
+    const workedDays = earningsBySource.attendance?.sessions_count || 0;
 
     // Get overtime hours from overtime records
     const overtimeRecords = myEmployeeData.overtime?.records || [];
-    const overtimeHours = overtimeRecords.reduce((sum, ot) => sum + (parseFloat(ot.overtime_hours) || 0), 0);
+    const overtimeHours = overtimeRecords.reduce((sum, ot) => sum + ((parseFloat(ot.total_minutes) || 0) / 60), 0);
 
-    // Calculate leave days from paid leave hours
-    const leaveDays = paidLeaveHours > 0 ? (paidLeaveHours / 8).toFixed(1) : 0;
+    // Calculate paid leave days from breakdown
+    let paidLeaveDays = 0;
+    if (earningsBySource.paid_leaves?.breakdown) {
+      const breakdown = earningsBySource.paid_leaves.breakdown;
+      const weekdayDays = (breakdown.weekday?.hours || 0) / weekdayDailyHours;
+      const saturdayDays = (breakdown.saturday?.hours || 0) / saturdayDailyHours;
+      const sundayDays = (breakdown.sunday?.hours || 0) / sundayDailyHours;
+      paidLeaveDays = weekdayDays + saturdayDays + sundayDays;
+    }
+
+    // Calculate unpaid leave days from shortfall
+    let unpaidLeaveDays = 0;
+    const unpaidLeaveHours = shortfallByCause.unpaid_time_off?.hours || 0;
+    if (unpaidLeaveHours > 0) {
+      unpaidLeaveDays = unpaidLeaveHours / weekdayDailyHours;
+    }
 
     // Build comprehensive record object
     const record = {
@@ -912,17 +987,24 @@ const getMyLivePayrollDetails = asyncHandler(async (req, res) => {
       employee_name: myEmployeeData.employee_name,
       department_name: myEmployeeData.department_name,
       designation_name: myEmployeeData.designation_name,
-      period_start_date: liveData.period.start_date,
-      period_end_date: liveData.period.end_date,
+
+      // Use employee-specific period dates (for custom cycles)
+      period_start_date: myEmployeeData.employee_period_start_date || liveData.period.start_date,
+      period_end_date: myEmployeeData.employee_period_end_date || liveData.period.end_date,
+      uses_custom_cycle: myEmployeeData.uses_custom_cycle || false,
+
       pay_date: liveData.period.pay_date,
       run_name: liveData.run.name,
       run_number: liveData.run.number,
+      run_status: liveData.run.status,
 
       // Work summary
+      total_working_days: totalWorkingDays,
       worked_days: workedDays,
       worked_hours: workedHours.toFixed(2),
       overtime_hours: overtimeHours.toFixed(2),
-      leave_days: leaveDays,
+      paid_leave_days: paidLeaveDays.toFixed(1),
+      unpaid_leave_days: unpaidLeaveDays.toFixed(1),
 
       // Salary breakdown
       base_salary: myEmployeeData.base_salary,

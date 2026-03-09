@@ -17,6 +17,10 @@ interface EarningsBySource {
     hours: number;
     earned: number;
   };
+  overtime?: {
+    minutes: number;
+    earned: number;
+  };
 }
 
 interface ShortfallByCause {
@@ -73,6 +77,21 @@ interface EmployeeData {
     advanceRecords: any[];
     bonusRecords: any[];
   };
+  overtime: {
+    total_amount: number;
+    records: Array<{
+      date: string;
+      day_type: string;
+      total_minutes: number;
+      pre_shift_minutes: number;
+      post_shift_minutes: number;
+      pre_shift_enabled: boolean;
+      post_shift_enabled: boolean;
+      hourly_rate: number;
+      multiplier: number;
+      amount: number;
+    }>;
+  };
 }
 
 interface AllowanceBreakdown {
@@ -104,6 +123,7 @@ interface CalculatedPayroll {
   expected_base_salary: number;
   actual_earned_base: number;
   attendance_shortfall: number;
+  overtime_amount: number;
   allowances_total: number;
   allowances_breakdown: AllowanceBreakdown[];
   bonuses_total: number;
@@ -240,8 +260,25 @@ class LivePayrollCalculationService {
   calculateEmployee(employee: EmployeeData): CalculatedPayroll {
     // Step 1: Get attendance-based salary
     const expected_base_salary = employee.attendance.expected_salary;
-    const actual_earned_base = employee.attendance.earned_salary;
+    let actual_earned_base = employee.attendance.earned_salary;
     const attendance_shortfall = employee.attendance.shortfall;
+
+    // Step 1.5: Add overtime to actual earned base
+    const overtime_amount = employee.overtime?.total_amount || 0;
+    actual_earned_base += overtime_amount;
+
+    // Add overtime to earnings_by_source if it exists
+    let earnings_by_source = employee.attendance.earnings_by_source;
+    if (overtime_amount > 0 && earnings_by_source) {
+      const total_overtime_minutes = (employee.overtime?.records || []).reduce((sum, rec) => sum + rec.total_minutes, 0);
+      earnings_by_source = {
+        ...earnings_by_source,
+        overtime: {
+          minutes: total_overtime_minutes,
+          earned: overtime_amount
+        }
+      };
+    }
 
     // Step 2: Calculate allowances (full amount, not prorated)
     const allowancesResult = this.calculateAllowances(employee);
@@ -254,7 +291,7 @@ class LivePayrollCalculationService {
       amount: parseFloat(record.bonus_amount || record.addition_amount) || 0
     }));
 
-    // Step 4: Calculate statutory deductions (EPF/ETF on actual earned base only)
+    // Step 4: Calculate statutory deductions (EPF/ETF on actual earned base INCLUDING overtime)
     const statutoryDeductions = this.calculateStatutoryDeductions(actual_earned_base, employee);
 
     // Step 5: Calculate financial deductions with breakdown
@@ -287,6 +324,7 @@ class LivePayrollCalculationService {
       expected_base_salary: Math.round(expected_base_salary * 100) / 100,
       actual_earned_base: Math.round(actual_earned_base * 100) / 100,
       attendance_shortfall: Math.round(attendance_shortfall * 100) / 100,
+      overtime_amount: Math.round(overtime_amount * 100) / 100,
       allowances_total: Math.round(allowancesResult.total * 100) / 100,
       allowances_breakdown: allowancesResult.breakdown,
       bonuses_total: Math.round(bonuses_total * 100) / 100,
@@ -299,7 +337,7 @@ class LivePayrollCalculationService {
       deductions_breakdown: statutoryDeductions.breakdown,
       financial_deductions_breakdown: financial_deductions_breakdown,
       net_salary: Math.round(net_salary * 100) / 100,
-      earnings_by_source: employee.attendance.earnings_by_source || null,
+      earnings_by_source: earnings_by_source || null,
       shortfall_by_cause: employee.attendance.shortfall_by_cause || null
     };
   }
