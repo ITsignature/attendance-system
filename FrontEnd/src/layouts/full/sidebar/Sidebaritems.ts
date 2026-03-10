@@ -15,7 +15,7 @@ const SidebarContent = [
   {
     navlabel: true,
     subheader: 'Home',
-    heading: 'Dashboard',
+    // heading: 'Dashboard',
     children: [
       {
         id: uniqueId(),

@@ -232,7 +232,7 @@ const AttendanceOverview = () => {
       <div className="flex justify-between items-center mb-4">
         <div>
           <h5 className="card-title text-xl font-semibold">Employee Attendance Overview</h5>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">This Week's Attendance Status</p>
+          {/* <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">This Week's Attendance Status</p> */}
         </div>
       </div>
 

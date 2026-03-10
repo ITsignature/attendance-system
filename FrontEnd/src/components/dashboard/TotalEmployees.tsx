@@ -38,7 +38,7 @@ const TotalEmployees = () => {
           <div className="bg-lightprimary text-primary p-3 rounded-md">
             <Icon icon="solar:users-group-rounded-linear" height={24} />
           </div>
-          <p className="text-base font-semibold text-dark dark:text-white">Total Employees</p>
+          <p className="text-base font-semibold text-dark dark:text-white">Active Employees</p>
         </div>
         <div className="flex flex-col">
           <div className="flex-1">
@@ -49,11 +49,11 @@ const TotalEmployees = () => {
             ) : (
               <>
                 <p className="text-3xl text-dark dark:text-white font-semibold mb-2">
-                  {totalEmployees}
+                  {activeEmployees}
                 </p>
                 <div className="flex items-center gap-2">
                   <Badge className="bg-lightsuccess text-success inline-flex">
-                    {activeEmployees} Active
+                    {totalEmployees} Total
                   </Badge>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
                     ({activePercentage}%)

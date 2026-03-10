@@ -62,7 +62,7 @@ router.get('/fingerprint', [
   const db = getDB();
   const { fingerprint_id, client_id } = req.query;
   const today = new Date().toISOString().split('T')[0];
-  const currentTime = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
+  const currentTime = '12:02:39'; // TEST: hardcoded check-in time
 
   try {
     // Map fingerprint ID to employee in new system
@@ -390,7 +390,7 @@ router.get('/fingerprint', [
         schedule.start_time,
         schedule.end_time,
         0,
-        record.employee_id,
+        employeeId,
         db
       );
 
