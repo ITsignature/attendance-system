@@ -441,15 +441,15 @@ const AddEmployees: React.FC = () => {
         if (!formData.date_of_birth) errors.date_of_birth = 'Date of birth is required';
         if (!formData.gender) errors.gender = 'gender is required';
         // Emergency contact validation
-        if (!formData.emergency_contact_name.trim()) {
-          errors.emergency_contact_name = 'Emergency contact name is required';
-        }
-        if (!formData.emergency_contact_phone.trim()) {
-          errors.emergency_contact_phone = 'Emergency contact phone is required';
-        }
-        if (!formData.emergency_contact_relation.trim()) {
-          errors.emergency_contact_relation = 'Emergency contact relation is required';
-        }
+        // if (!formData.emergency_contact_name.trim()) {
+        //   errors.emergency_contact_name = 'Emergency contact name is required';
+        // }
+        // if (!formData.emergency_contact_phone.trim()) {
+        //   errors.emergency_contact_phone = 'Emergency contact phone is required';
+        // }
+        // if (!formData.emergency_contact_relation.trim()) {
+        //   errors.emergency_contact_relation = 'Emergency contact relation is required';
+        // }
         
         break;
 
@@ -462,9 +462,9 @@ const AddEmployees: React.FC = () => {
         if (!formData.employee_type) errors.employee_type = 'Employment type is required';
         
         // MAKE BASE SALARY REQUIRED
-        if (!formData.salary || formData.salary === '' || Number(formData.salary) <= 0) {
-          errors.salary = 'Base salary is required and must be greater than 0';
-        }
+        // if (!formData.salary || formData.salary === '' || Number(formData.salary) <= 0) {
+        //   errors.salary = 'Base salary is required and must be greater than 0';
+        // }
         
         // Work Schedule Validation
         if (!formData.in_time) {
@@ -1020,8 +1020,8 @@ const debugAuth = () => {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <RequiredLabel htmlFor="emergency_contact_name" value="Emergency Contact Name" />
-                      <RequiredTextInput
+                      <Label htmlFor="emergency_contact_name" value="Emergency Contact Name" />
+                      <TextInput
                         id="emergency_contact_name"
                         value={formData.emergency_contact_name}
                         onChange={(e) => handleInputChange('emergency_contact_name', e.target.value)}
@@ -1034,8 +1034,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <RequiredLabel htmlFor="emergency_contact_phone" value="Emergency Contact Phone" />
-                      <RequiredTextInput
+                      <Label htmlFor="emergency_contact_phone" value="Emergency Contact Phone" />
+                      <TextInput
                         id="emergency_contact_phone"
                         value={formData.emergency_contact_phone}
                         onChange={(e) => handleInputChange('emergency_contact_phone', e.target.value)}
@@ -1048,8 +1048,8 @@ const debugAuth = () => {
                     </div>
 
                     <div>
-                      <RequiredLabel htmlFor="emergency_contact_relation" value="Relationship" />
-                      <RequiredTextInput
+                      <Label htmlFor="emergency_contact_relation" value="Relationship" />
+                      <TextInput
                         id="emergency_contact_relation"
                         value={formData.emergency_contact_relation}
                         onChange={(e) => handleInputChange('emergency_contact_relation', e.target.value)}
@@ -1223,8 +1223,8 @@ const debugAuth = () => {
                   </div>
 
                   <div>
-                    <RequiredLabel htmlFor="salary" value="Base Salary" />
-                    <RequiredTextInput
+                    <Label htmlFor="salary" value="Base Salary" />
+                    <TextInput
                       id="salary"
                       type="text"
                       inputMode="numeric"

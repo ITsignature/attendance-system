@@ -296,7 +296,7 @@ router.get('/managers',
         managers
       }
     });
-    console.log(managers)
+    console.log(`managers`,managers)
   })
 );
 
@@ -800,9 +800,9 @@ router.post('/',
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
     
     // Emergency Contact Validations
-    body('emergency_contact_name').trim().isLength({ min: 1 }).withMessage('Emergency contact name is required'),  
-    body('emergency_contact_phone').trim().isLength({ min: 10 }).withMessage('Emergency contact phone is required'),
-    body('emergency_contact_relation').trim().isLength({ min: 1 }).withMessage('Emergency contact relation is required'),
+    body('emergency_contact_name').optional({values: 'falsy'}).trim().isLength({ min: 1 }).withMessage('Emergency contact name cannot be empty if provided'),  
+    body('emergency_contact_phone').optional({values: 'falsy'}).trim().isLength({ min: 10 }).withMessage('Emergency contact phone must be at least 10 digits if provided'),
+    body('emergency_contact_relation').optional({values: 'falsy'}).trim().isLength({ min: 1 }).withMessage('Emergency contact relation cannot be empty if provided'),
     
     // Work Schedule Validations - NEW
     body('in_time')
