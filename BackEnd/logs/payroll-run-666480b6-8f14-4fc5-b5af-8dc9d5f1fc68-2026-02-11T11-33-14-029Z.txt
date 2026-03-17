@@ -1,0 +1,30 @@
+[2026-02-11T11:33:14.029Z] [INFO] 🚀 Payroll calculation logging started for run: 666480b6-8f14-4fc5-b5af-8dc9d5f1fc68
+[2026-02-11T11:33:14.029Z] [INFO] 📁 Log file: E:\smart_attendance_system\backend\logs\payroll-run-666480b6-8f14-4fc5-b5af-8dc9d5f1fc68-2026-02-11T11-33-14-029Z.txt
+[2026-02-11T11:33:14.029Z] [INFO] ⏰ Started at: 2026-02-11T11:33:14.029Z
+[2026-02-11T11:33:14.029Z] [INFO] ================================================================================
+[2026-02-11T11:33:14.029Z] [LOG] 📊 [OPTIMIZED] Fetching live payroll data for run: 666480b6-8f14-4fc5-b5af-8dc9d5f1fc68
+[2026-02-11T11:33:14.032Z] [LOG] session eka meka {
+  "id": "4e9fc459-0723-11f1-a5e0-0050565d0e2b",
+  "admin_user_id": "16cc33d0-7de8-44ef-a36f-3053e8045302",
+  "client_id": "617f36df-e92a-4f7e-bd19-31df35173926",
+  "token_jti": "4cc1ecde-207e-46eb-8f77-118e99a25af7",
+  "ip_address": "::1",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0",
+  "expires_at": "2026-02-18 08:26:04",
+  "is_active": 1,
+  "created_at": "2026-02-11 13:56:04",
+  "user_active": 1
+}
+[2026-02-11T11:33:14.436Z] [LOG] 📅 Payroll period: 2026-01-01 to 2026-01-31
+[2026-02-11T11:33:14.688Z] [LOG] GET /api/rbac/roles - 304 - 896ms
+[2026-02-11T11:33:14.892Z] [LOG] 👥 Processing 7 employees...
+[2026-02-11T11:33:15.756Z] [LOG] allowances:  []
+[2026-02-11T11:33:16.186Z] [LOG] deductions:  []
+[2026-02-11T11:49:01.546Z] [ERROR] ❌ Live payroll data fetch failed: {
+  "message": "read ECONNRESET",
+  "code": "ECONNRESET",
+  "errno": -4077
+}
+[2026-02-11T11:49:01.568Z] [INFO] ================================================================================
+[2026-02-11T11:49:01.568Z] [INFO] ⏰ Completed at: 2026-02-11T11:49:01.568Z
+[2026-02-11T11:49:01.568Z] [INFO] 📊 Total log entries: 14

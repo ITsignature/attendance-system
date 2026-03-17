@@ -1,0 +1,21 @@
+[2026-02-12T05:05:18.847Z] [INFO] 🚀 Payroll calculation logging started for run: 666480b6-8f14-4fc5-b5af-8dc9d5f1fc68
+[2026-02-12T05:05:18.847Z] [INFO] 📁 Log file: E:\smart_attendance_system\backend\logs\payroll-run-666480b6-8f14-4fc5-b5af-8dc9d5f1fc68-2026-02-12T05-05-18-847Z.txt
+[2026-02-12T05:05:18.847Z] [INFO] ⏰ Started at: 2026-02-12T05:05:18.847Z
+[2026-02-12T05:05:18.847Z] [INFO] ================================================================================
+[2026-02-12T05:05:18.847Z] [LOG] 📊 [OPTIMIZED] Fetching live payroll data for run: 666480b6-8f14-4fc5-b5af-8dc9d5f1fc68
+[2026-02-12T05:05:18.908Z] [LOG] session eka meka {
+  "id": "4e9fc459-0723-11f1-a5e0-0050565d0e2b",
+  "admin_user_id": "16cc33d0-7de8-44ef-a36f-3053e8045302",
+  "client_id": "617f36df-e92a-4f7e-bd19-31df35173926",
+  "token_jti": "4cc1ecde-207e-46eb-8f77-118e99a25af7",
+  "ip_address": "::1",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0",
+  "expires_at": "2026-02-18 08:26:04",
+  "is_active": 1,
+  "created_at": "2026-02-11 13:56:04",
+  "user_active": 1
+}
+[2026-02-12T05:05:19.261Z] [ERROR] ❌ Live payroll data fetch failed: {}
+[2026-02-12T05:05:19.265Z] [INFO] ================================================================================
+[2026-02-12T05:05:19.265Z] [INFO] ⏰ Completed at: 2026-02-12T05:05:19.265Z
+[2026-02-12T05:05:19.265Z] [INFO] 📊 Total log entries: 9

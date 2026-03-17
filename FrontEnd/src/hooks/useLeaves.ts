@@ -14,7 +14,7 @@ import leaveApiService, {
 
 interface UseLeavesReturn {
   // Data
-  leaveTypes: LeaveType[];
+  leaveTypes: LeaveType[]; 
   leaveRequests: LeaveRequest[];
   dashboard: LeaveDashboard | null;
   

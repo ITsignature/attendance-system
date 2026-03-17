@@ -46,10 +46,12 @@ const SettingsWithBackend = () => {
   const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false);
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
   const [editingLeaveType, setEditingLeaveType] = useState<LeaveType | null>(null);
-  const [leaveTypeFormData, setLeaveTypeFormData] = useState<CreateLeaveTypeData>({
+  const [leaveTypeFormData,   setLeaveTypeFormData] = useState<CreateLeaveTypeData>({
     name: '',
     description: '',
+    tracking_period: 'Yearly',
     max_days_per_year: 0,
+    max_days_per_month: 0,
     max_consecutive_days: 0,
     is_paid: true,
     requires_approval: true,
@@ -172,7 +174,9 @@ useEffect(() => {
     setLeaveTypeFormData({
       name: '',
       description: '',
+      tracking_period: 'Yearly',
       max_days_per_year: 0,
+      max_days_per_month: 0,
       max_consecutive_days: 0,
       is_paid: true,
       requires_approval: true,
@@ -186,7 +190,9 @@ useEffect(() => {
     setLeaveTypeFormData({
       name: leaveType.name,
       description: leaveType.description || '',
+      tracking_period: leaveType.tracking_period || 'Yearly',
       max_days_per_year: leaveType.max_days_per_year || 0,
+      max_days_per_month: leaveType.max_days_per_month || 0,
       max_consecutive_days: leaveType.max_consecutive_days || 0,
       is_paid: leaveType.is_paid,
       requires_approval: leaveType.requires_approval,
@@ -863,7 +869,7 @@ const hhmmToMinutes = (t) => {
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">Leave Settings</h3>
 
-            <div className="grid grid-cols-1 gap-6">
+            {/* <div className="grid grid-cols-1 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Number of Paid Leaves (per month)
@@ -880,7 +886,7 @@ const hhmmToMinutes = (t) => {
                   Total number of paid leave days allowed per employee per month
                 </p>
               </div>
-            </div>
+            </div> */}
 
             {/* Leave Types Management */}
             <div className="mt-8">
@@ -905,7 +911,7 @@ const hhmmToMinutes = (t) => {
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Max Days/Year</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tracking/Limit</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paid</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Requires Approval</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Notice Days</th>
@@ -929,7 +935,15 @@ const hhmmToMinutes = (t) => {
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                              {leaveType.max_days_per_year || 'N/A'}
+                              <div className="text-sm font-medium">
+                                {leaveType.tracking_period === 'Monthly'
+                                  ? `${leaveType.max_days_per_month || 0} days/month`
+                                  : `${leaveType.max_days_per_year || 0} days/year`
+                                }
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                ({leaveType.tracking_period})
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -1214,17 +1228,50 @@ const hhmmToMinutes = (t) => {
                   />
                 </div>
 
+                {/* Tracking Period Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Tracking Period *
+                  </label>
+                  <select
+                    value={leaveTypeFormData.tracking_period}
+                    onChange={(e) => setLeaveTypeFormData({
+                      ...leaveTypeFormData,
+                      tracking_period: e.target.value as 'Monthly' | 'Yearly',
+                      // Reset the other field when switching
+                      max_days_per_year: e.target.value === 'Yearly' ? leaveTypeFormData.max_days_per_year : 0,
+                      max_days_per_month: e.target.value === 'Monthly' ? leaveTypeFormData.max_days_per_month : 0
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="Yearly">Yearly</option>
+                    <option value="Monthly">Monthly</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {leaveTypeFormData.tracking_period === 'Monthly'
+                      ? 'Limits will be tracked per month'
+                      : 'Limits will be tracked per year'}
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
+                  {/* Conditional field based on tracking period */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Max Days per Year *
+                      {leaveTypeFormData.tracking_period === 'Monthly' ? 'Max Days per Month *' : 'Max Days per Year *'}
                     </label>
                     <input
                       type="number"
                       min="0"
-                      value={leaveTypeFormData.max_days_per_year}
-                      onChange={(e) => setLeaveTypeFormData({ ...leaveTypeFormData, max_days_per_year: parseInt(e.target.value) || 0 })}
+                      value={leaveTypeFormData.tracking_period === 'Monthly'
+                        ? leaveTypeFormData.max_days_per_month
+                        : leaveTypeFormData.max_days_per_year}
+                      onChange={(e) => setLeaveTypeFormData({
+                        ...leaveTypeFormData,
+                        [leaveTypeFormData.tracking_period === 'Monthly' ? 'max_days_per_month' : 'max_days_per_year']: parseInt(e.target.value) || 0
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder={leaveTypeFormData.tracking_period === 'Monthly' ? 'e.g., 2' : 'e.g., 24'}
                     />
                   </div>
 
@@ -1288,7 +1335,11 @@ const hhmmToMinutes = (t) => {
                 </button>
                 <button
                   onClick={handleSaveLeaveType}
-                  disabled={!leaveTypeFormData.name || leaveTypeFormData.max_days_per_year === 0}
+                  disabled={
+                    !leaveTypeFormData.name ||
+                    (leaveTypeFormData.tracking_period === 'Yearly' && leaveTypeFormData.max_days_per_year === 0) ||
+                    (leaveTypeFormData.tracking_period === 'Monthly' && leaveTypeFormData.max_days_per_month === 0)
+                  }
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editingLeaveType ? 'Update' : 'Create'}
