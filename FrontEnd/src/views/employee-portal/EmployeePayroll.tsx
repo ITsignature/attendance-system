@@ -47,22 +47,23 @@ const EmployeePayroll = () => {
   const [dailyDetailsModal, setDailyDetailsModal] = useState<{
       show: boolean;
       loading: boolean;
-      employeeId: string | null;
-      employeeName: string | null;
       data: any | null;
-    }>({ show: false, loading: false, employeeId: null, employeeName: null, data: null });
+    }>({ show: false, loading: false, data: null });
 
   useEffect(() => {
     fetchPayrollHistory();
     fetchLivePayrollRuns();
   }, []);
 
-  const openDailyDetailsModal = async (employeeId: string, employeeName: string) => {
-      setDailyDetailsModal({ show: true, loading: true, employeeId, employeeName, data: null });
+  const openDailyDetailsModal = async (record: string) => {
+      setDailyDetailsModal({ show: true, loading: true,data : null });
   
       try {
-        if (!runId) return;
-        const response = await payrollRunApiService.getEmployeeDailyDetails(runId, employeeId);
+        if (!record) return;
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get(`${API_BASE}/api/employee-portal/daily-details`,{
+        headers: { Authorization: `Bearer ${token}`}  
+        });
   
         if (response.success && response.data) {
           setDailyDetailsModal(prev => ({ ...prev, loading: false, data: response.data }));
@@ -80,7 +81,7 @@ const EmployeePayroll = () => {
   const fetchPayrollHistory = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await axios.get(`${API_BASE}/api/employee-portal/payroll/history`, {
+      const response =  await axios.get(`${API_BASE}/api/employee-portal/payroll/history`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { limit: 12 }
       });
@@ -302,7 +303,7 @@ const EmployeePayroll = () => {
                   <span></span>
                   <span> 
                     <button
-                      //onClick={}
+                      onClick={() => openDailyDetailsModal(record)}
                       className="px-6 py-2 bg-purple-100 text-purple-800 border border-purple-800 rounded-lg hover:bg-purple-100 transition-colors mr-2"
                     >
                      View Daily Salary
