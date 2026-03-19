@@ -4421,7 +4421,7 @@ class PayrollRunService {
                     pr.base_salary,
                     pr.weekday_hourly_rate,
                     pr.saturday_hourly_rate,
-                    pr.sunday_hourly_rate,
+                    pr.sunday_hourly_rate,     
                     pr.employee_period_start_date,
                     pr.employee_period_end_date,
                     pr.uses_custom_cycle,

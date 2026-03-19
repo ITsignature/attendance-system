@@ -36,11 +36,19 @@ const AttendanceOverview = () => {
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    const day = d.getDate();
+    const month = d.toLocaleString("en-US", { month: "short"});
+    return `${day} ${month}`;
+  }
+
   // Prepare data for chart - calculate percentages
   const calculatePercentages = () => {
     if (weeklyData.length === 0) {
       return {
-        categories: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        categories: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(d =>[d,""]),
         onTimeData: [0, 0, 0, 0, 0, 0, 0],
         lateData: [0, 0, 0, 0, 0, 0, 0],
         absentData: [0, 0, 0, 0, 0, 0, 0],
@@ -50,12 +58,14 @@ const AttendanceOverview = () => {
     const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const dataMap = new Map(weeklyData.map(d => [d.day_name, d]));
 
+    const categories: String[][] = [];
     const onTimeData: number[] = [];
     const lateData: number[] = [];
     const absentData: number[] = [];
 
     dayOrder.forEach(day => {
       const dayData = dataMap.get(day);
+      categories.push([day,dayData? formatDate(dayData.date):""]);
       if (dayData && dayData.total_records > 0) {
         const onTimePercent = Math.round((dayData.present_count / dayData.total_records) * 100);
         const latePercent = Math.round((dayData.late_count / dayData.total_records) * 100);
@@ -72,7 +82,7 @@ const AttendanceOverview = () => {
     });
 
     return {
-      categories: dayOrder,
+      categories: categories,
       onTimeData,
       lateData,
       absentData,
@@ -203,6 +213,12 @@ const AttendanceOverview = () => {
     },
     tooltip: {
       theme: "dark",
+      x:{
+        formatter: function (_val:number, { dataPointIndex}: {dataPointIndex: number}){
+          const cat = categories[dataPointIndex];
+          return Array.isArray(cat) ?  `${cat[0]}<br/>${cat[1]}` : String(cat);
+        },
+      },
       y: {
         formatter: function (val: number) {
           return val + "%";

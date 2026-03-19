@@ -1690,7 +1690,7 @@ router.get('/:runId/employee/:employeeId/daily-details',
 
             res.json({
                 success: true,
-                data: dailyDetails
+                data: dailyDetaisl
             });
         } catch (error) {
             console.error('Error fetching employee daily details:', error);

@@ -19,7 +19,8 @@ const {
   getMyLeaveBalance,
   getMyFinancialRecords,
   getMyLivePayrollPreview,
-  getMyLivePayrollDetails
+  getMyLivePayrollDetails,
+  getMyLivePayrollDailyDetails
 } = require('../controllers/employeePortalController');
 
 // All routes require authentication
@@ -85,40 +86,6 @@ router.post('/leaves/apply', ensureOwnLeaves, applyForLeave);
 // Get my financial records (loans, advances, bonuses)
 router.get('/financial-records', ensureOwnFinancialRecords, getMyFinancialRecords);
 
-router.get('/daily-details',
-    checkPermission('payroll.view'),
-    [
-        param('runId').isUUID().withMessage('Valid run ID is required'),
-        param('employeeId').isUUID().withMessage('Valid employee ID is required')
-    ],
-    asyncHandler(async (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                success: false,
-                message: 'Validation failed',
-                errors: errors.array()
-            });
-        }
-
-        const { runId, employeeId } = req.params;
-        const clientId = req.user.clientId;
-
-        try {
-            const dailyDetails = await PayrollRunService.getEmployeeDailyWorkDetails(runId, employeeId, clientId);
-
-            res.json({
-                success: true,
-                data: dailyDetails
-            });
-        } catch (error) {
-            console.error('Error fetching employee daily details:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message || 'Failed to fetch employee daily work details'
-            });
-        }
-    })
-);
+router.get('/daily-details',ensureOwnPayroll, getMyLivePayrollDailyDetails);
 
 module.exports = router;
