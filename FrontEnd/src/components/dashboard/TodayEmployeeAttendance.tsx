@@ -12,7 +12,7 @@ interface AttendanceRecord {
   check_in_time: string | null;
   scheduled_in_time: string | null;
   check_out_time: string | null;
-  scheduled_out_time: String | null;
+  scheduled_out_time: string | null;
   status: string;
   total_hours: number | null;
   work_location: string;
@@ -191,7 +191,7 @@ const TodayEmployeeAttendance = () => {
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="relative group me-5 cursor-default">
+                        <div className="relative group me-5 cursor-pointer">
                           <p className="text-sm text-gray-900 dark:text-white font-medium">
                             {formatTime(record.check_in_time)}
                           </p>
@@ -204,10 +204,16 @@ const TodayEmployeeAttendance = () => {
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="me-5">
+                        <div className="relative group me-5 cursor-pointer">
                           <p className="text-sm text-gray-900 dark:text-white font-medium">
                             {formatTime(record.check_out_time)}
                           </p>
+                            {record.scheduled_out_time &&(
+                              <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-10
+                                  bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                                    Scheduled : {formatTime(record.scheduled_out_time)}
+                              </div>
+                            )}
                         </div>
                       </Table.Cell>
                       <Table.Cell>

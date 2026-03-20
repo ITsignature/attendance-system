@@ -17,6 +17,8 @@ interface Client {
   updated_at: string;
   admin_count?: number;
   employee_count?: number;
+  logo_url?: string;
+  sms_enabled: boolean;
 }
 
 interface AdminUser {
