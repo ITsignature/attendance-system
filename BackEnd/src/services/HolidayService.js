@@ -129,11 +129,30 @@ class HolidayService {
 
                 if (employeeWeekendConfig) {
                     // Use employee-specific weekend configuration
+                    // monthly_schedule keys are "YYYY-MM"; nth = Math.ceil(date/7) gives 1st/2nd/3rd/4th/5th occurrence
+                    const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+                    const nth = Math.ceil(currentDate.getDate() / 7);
+
                     if (dayOfWeek === 6 && employeeWeekendConfig.saturday?.working) {
-                        isWeekendWorking = true;
+                        const monthlySchedule = employeeWeekendConfig.saturday.monthly_schedule;
+                        if (monthlySchedule) {
+                            // Per-month config: only count if this month is configured and nth occurrence is in it
+                            const monthPattern = monthlySchedule[yearMonth];
+                            isWeekendWorking = Array.isArray(monthPattern) && monthPattern.includes(nth);
+                        } else {
+                            // No monthly_schedule = backward compat: all Saturdays working
+                            isWeekendWorking = true;
+                        }
                         isFullDaySalary = employeeWeekendConfig.saturday.full_day_salary || false;
                     } else if (dayOfWeek === 0 && employeeWeekendConfig.sunday?.working) {
-                        isWeekendWorking = true;
+                        const monthlySchedule = employeeWeekendConfig.sunday.monthly_schedule;
+                        if (monthlySchedule) {
+                            const monthPattern = monthlySchedule[yearMonth];
+                            isWeekendWorking = Array.isArray(monthPattern) && monthPattern.includes(nth);
+                        } else {
+                            // No monthly_schedule = backward compat: all Sundays working
+                            isWeekendWorking = true;
+                        }
                         isFullDaySalary = employeeWeekendConfig.sunday.full_day_salary || false;
                     }
                 } else {

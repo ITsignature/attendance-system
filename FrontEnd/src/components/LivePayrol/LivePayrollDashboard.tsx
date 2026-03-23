@@ -9,7 +9,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Table, Card, Alert, Spinner, Button, Badge, Modal } from "flowbite-react";
 import { payrollRunApiService } from '../../services/payrollRunService';
 import { livePayrollCalculationService, type CalculatedPayroll, type EmployeeData } from '../../services/livePayrollCalculationService';
-import { HiRefresh, HiClock, HiUsers, HiArrowLeft } from 'react-icons/hi';
+import { HiRefresh, HiClock, HiUsers, HiArrowLeft, HiDownload } from 'react-icons/hi';
+import { exportLivePayrollToExcel } from '../../services/payrollExcelExport';
 
 const LivePayrollDashboard: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
@@ -36,6 +37,15 @@ const LivePayrollDashboard: React.FC = () => {
     employeeName: string | null;
     data: any | null;
   }>({ show: false, loading: false, employeeId: null, employeeName: null, data: null });
+
+  const handleExportExcel = () => {
+    if (!rawData || calculatedResults.length === 0) return;
+    exportLivePayrollToExcel(
+      calculatedResults,
+      rawData.employees,
+      { start_date: rawData.period.start_date, end_date: rawData.period.end_date }
+    );
+  };
 
   const openModal = (employee: CalculatedPayroll, type: 'allowances' | 'deductions') => {
     setModalData({ show: true, employee, type });
@@ -258,6 +268,15 @@ const LivePayrollDashboard: React.FC = () => {
             onClick={loadAndCalculate}
           >
             Refresh Data
+          </Button>
+          <Button
+            color="green"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={!rawData || calculatedResults.length === 0}
+          >
+            <HiDownload className="w-4 h-4 mr-2" />
+            Export Excel
           </Button>
         </div>
       </div>

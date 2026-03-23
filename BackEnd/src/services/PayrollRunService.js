@@ -3704,7 +3704,12 @@ class PayrollRunService {
                     pr.saturday_daily_hours,
                     pr.sunday_daily_hours,
                     e.base_salary,
-                    e.department_id
+                    e.department_id,
+                    e.hire_date,
+                    e.weekday_ot_multiplier,
+                    e.saturday_ot_multiplier,
+                    e.sunday_ot_multiplier,
+                    e.holiday_ot_multiplier
                 FROM payroll_records pr
                 JOIN employees e ON pr.employee_id = e.id
                 WHERE pr.run_id = ?

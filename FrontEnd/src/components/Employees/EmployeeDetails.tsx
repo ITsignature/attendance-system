@@ -62,12 +62,14 @@ interface Employee {
   weekend_working_config?: {
     saturday?: {
       working: boolean;
+      monthly_schedule?: Record<string, number[]>;
       in_time: string;
       out_time: string;
       full_day_salary: boolean;
     };
     sunday?: {
       working: boolean;
+      monthly_schedule?: Record<string, number[]>;
       in_time: string;
       out_time: string;
       full_day_salary: boolean;
@@ -1430,6 +1432,27 @@ const EmployeeDetails: React.FC = () => {
                             <div className="mt-2 text-sm text-green-700 dark:text-green-300">
                               <span className="font-medium">Salary Type:</span> {employee.weekend_working_config.saturday.full_day_salary ? 'Full weekday salary weight' : 'Proportional to hours worked'}
                             </div>
+                            <div className="mt-3">
+                              <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Monthly Saturday Schedule</p>
+                              {(() => {
+                                const schedule = employee.weekend_working_config.saturday.monthly_schedule;
+                                if (!schedule || Object.keys(schedule).length === 0) {
+                                  return <p className="text-sm text-green-700 dark:text-green-300">All Saturdays (no per-month schedule configured)</p>;
+                                }
+                                const ordinals = ['1st', '2nd', '3rd', '4th', '5th'];
+                                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                return (
+                                  <div className="space-y-1">
+                                    {Object.entries(schedule).sort(([a], [b]) => a.localeCompare(b)).map(([ym, pattern]) => {
+                                      const [y, m] = ym.split('-').map(Number);
+                                      const label = `${monthNames[m - 1]} ${y}`;
+                                      const desc = pattern.length === 0 ? 'No working Saturdays' : pattern.map(n => ordinals[n - 1]).join(', ');
+                                      return <p key={ym} className="text-sm text-green-700 dark:text-green-300"><span className="font-medium">{label}:</span> {desc}</p>;
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
                         )}
 
@@ -1456,6 +1479,27 @@ const EmployeeDetails: React.FC = () => {
                             </div>
                             <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
                               <span className="font-medium">Salary Type:</span> {employee.weekend_working_config.sunday.full_day_salary ? 'Full weekday salary weight' : 'Proportional to hours worked'}
+                            </div>
+                            <div className="mt-3">
+                              <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Monthly Sunday Schedule</p>
+                              {(() => {
+                                const schedule = employee.weekend_working_config.sunday.monthly_schedule;
+                                if (!schedule || Object.keys(schedule).length === 0) {
+                                  return <p className="text-sm text-blue-700 dark:text-blue-300">All Sundays (no per-month schedule configured)</p>;
+                                }
+                                const ordinals = ['1st', '2nd', '3rd', '4th', '5th'];
+                                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                return (
+                                  <div className="space-y-1">
+                                    {Object.entries(schedule).sort(([a], [b]) => a.localeCompare(b)).map(([ym, pattern]) => {
+                                      const [y, m] = ym.split('-').map(Number);
+                                      const label = `${monthNames[m - 1]} ${y}`;
+                                      const desc = pattern.length === 0 ? 'No working Sundays' : pattern.map(n => ordinals[n - 1]).join(', ');
+                                      return <p key={ym} className="text-sm text-blue-700 dark:text-blue-300"><span className="font-medium">{label}:</span> {desc}</p>;
+                                    })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         )}
