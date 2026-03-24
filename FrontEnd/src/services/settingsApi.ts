@@ -90,6 +90,17 @@ class SettingsApiService {
     return apiService.apiCall(`/api/settings/public/all?client_id=${clientId}`);
   }
 
+  async getCompanyWeekendDefaults(): Promise<any> {
+    return apiService.apiCall('/api/settings/weekend-defaults');
+  }
+
+  async updateCompanyWeekendDefaults(config: any): Promise<any> {
+    return apiService.apiCall('/api/settings/weekend-defaults', {
+      method: 'PUT',
+      body: JSON.stringify({ config }),
+    });
+  }
+
   // Helper methods for specific setting groups
   async getWorkingHours(): Promise<{
   start_time: string;

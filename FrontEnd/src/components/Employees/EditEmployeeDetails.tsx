@@ -87,14 +87,14 @@ interface Employee {
   weekend_working_config?: {
     saturday?: {
       working: boolean;
-      monthly_schedule: Record<string, number[]>;
+      monthly_schedule: Record<string, number[]> | null; // null = use company default
       in_time: string;
       out_time: string;
       full_day_salary: boolean;
     };
     sunday?: {
       working: boolean;
-      monthly_schedule: Record<string, number[]>;
+      monthly_schedule: Record<string, number[]> | null; // null = use company default
       in_time: string;
       out_time: string;
       full_day_salary: boolean;
@@ -1434,7 +1434,7 @@ const EditEmployeeDetails: React.FC = () => {
                         ...prev!.weekend_working_config,
                         saturday: working ? {
                           working: true,
-                          monthly_schedule: {},
+                          monthly_schedule: null,
                           in_time: '09:00',
                           out_time: '17:00',
                           full_day_salary: false
@@ -1517,8 +1517,52 @@ const EditEmployeeDetails: React.FC = () => {
                     </label>
                   </div>
 
-                  {/* Monthly Saturday Schedule */}
-                  {(() => {
+                  {/* Saturday Schedule Mode Toggle */}
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule source</p>
+                    <div className="flex gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sat_schedule_mode"
+                          checked={formData.weekend_working_config!.saturday!.monthly_schedule === null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              saturday: { ...prev!.weekend_working_config!.saturday!, monthly_schedule: null }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Use company default</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sat_schedule_mode"
+                          checked={formData.weekend_working_config!.saturday!.monthly_schedule !== null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              saturday: { ...prev!.weekend_working_config!.saturday!, monthly_schedule: {} }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Custom schedule</span>
+                      </label>
+                    </div>
+                    {formData.weekend_working_config!.saturday!.monthly_schedule === null && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        This employee will follow the company default Saturday schedule set in Payroll Settings.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Monthly Saturday Schedule — shown only for custom */}
+                  {formData.weekend_working_config!.saturday!.monthly_schedule !== null && (() => {
                     const yearMonth = `${satViewYear}-${String(satViewMonth + 1).padStart(2, '0')}`;
                     const saturdays: { date: Date; nth: number }[] = [];
                     const d = new Date(satViewYear, satViewMonth, 1);
@@ -1529,7 +1573,7 @@ const EditEmployeeDetails: React.FC = () => {
                     }
                     const ordinals = ['1st', '2nd', '3rd', '4th', '5th'];
                     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    const schedule = formData.weekend_working_config!.saturday!.monthly_schedule || {};
+                    const schedule = formData.weekend_working_config!.saturday!.monthly_schedule as Record<string, number[]>;
                     const currentPattern: number[] = schedule[yearMonth] || [];
                     return (
                       <div>
@@ -1557,7 +1601,7 @@ const EditEmployeeDetails: React.FC = () => {
                                         ...prev!.weekend_working_config,
                                         saturday: {
                                           ...prev!.weekend_working_config!.saturday!,
-                                          monthly_schedule: { ...prev!.weekend_working_config!.saturday!.monthly_schedule, [yearMonth]: updated }
+                                          monthly_schedule: { ...(prev!.weekend_working_config!.saturday!.monthly_schedule as Record<string, number[]>), [yearMonth]: updated }
                                         }
                                       }
                                     }));
@@ -1596,7 +1640,7 @@ const EditEmployeeDetails: React.FC = () => {
                         ...prev!.weekend_working_config,
                         sunday: working ? {
                           working: true,
-                          monthly_schedule: {},
+                          monthly_schedule: null,
                           in_time: '09:00',
                           out_time: '17:00',
                           full_day_salary: false
@@ -1679,8 +1723,52 @@ const EditEmployeeDetails: React.FC = () => {
                     </label>
                   </div>
 
-                  {/* Monthly Sunday Schedule */}
-                  {(() => {
+                  {/* Sunday Schedule Mode Toggle */}
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule source</p>
+                    <div className="flex gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sun_schedule_mode"
+                          checked={formData.weekend_working_config!.sunday!.monthly_schedule === null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              sunday: { ...prev!.weekend_working_config!.sunday!, monthly_schedule: null }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Use company default</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sun_schedule_mode"
+                          checked={formData.weekend_working_config!.sunday!.monthly_schedule !== null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              sunday: { ...prev!.weekend_working_config!.sunday!, monthly_schedule: {} }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Custom schedule</span>
+                      </label>
+                    </div>
+                    {formData.weekend_working_config!.sunday!.monthly_schedule === null && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        This employee will follow the company default Sunday schedule set in Payroll Settings.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Monthly Sunday Schedule — shown only for custom */}
+                  {formData.weekend_working_config!.sunday!.monthly_schedule !== null && (() => {
                     const yearMonth = `${sunViewYear}-${String(sunViewMonth + 1).padStart(2, '0')}`;
                     const sundays: { date: Date; nth: number }[] = [];
                     const d = new Date(sunViewYear, sunViewMonth, 1);
@@ -1691,7 +1779,7 @@ const EditEmployeeDetails: React.FC = () => {
                     }
                     const ordinals = ['1st', '2nd', '3rd', '4th', '5th'];
                     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    const schedule = formData.weekend_working_config!.sunday!.monthly_schedule || {};
+                    const schedule = formData.weekend_working_config!.sunday!.monthly_schedule as Record<string, number[]>;
                     const currentPattern: number[] = schedule[yearMonth] || [];
                     return (
                       <div>
@@ -1719,7 +1807,7 @@ const EditEmployeeDetails: React.FC = () => {
                                         ...prev!.weekend_working_config,
                                         sunday: {
                                           ...prev!.weekend_working_config!.sunday!,
-                                          monthly_schedule: { ...prev!.weekend_working_config!.sunday!.monthly_schedule, [yearMonth]: updated }
+                                          monthly_schedule: { ...(prev!.weekend_working_config!.sunday!.monthly_schedule as Record<string, number[]>), [yearMonth]: updated }
                                         }
                                       }
                                     }));

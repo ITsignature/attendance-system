@@ -3905,6 +3905,26 @@ class PayrollRunService {
 
             console.log(`📊 Found ${allOvertime.length} overtime records...`);
 
+            // ========================================
+            // BULK FETCH #5: Actual Attended Days
+            // ========================================
+            const calculationEndDateStr = calculationEndDate.toISOString().split('T')[0];
+            const [allAttendedDays] = await db.execute(`
+                SELECT
+                    a.employee_id,
+                    COUNT(DISTINCT DATE(a.date)) as attended_days
+                FROM attendance a
+                WHERE a.employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND DATE(a.date) BETWEEN ? AND ?
+                  AND a.check_in IS NOT NULL
+                GROUP BY a.employee_id
+            `, [...employeeIds, minPeriodStart, calculationEndDateStr]);
+
+            const attendedDaysByEmployee = {};
+            allAttendedDays.forEach(row => {
+                attendedDaysByEmployee[row.employee_id] = row.attended_days;
+            });
+
             // Create employee period map for filtering financial records
             const employeePeriodMap = {};
             employees.forEach(emp => {
@@ -4198,6 +4218,7 @@ class PayrollRunService {
 
                 return {
                     ...emp,
+                    actual_worked_days: attendedDaysByEmployee[emp.employee_id] || 0,
                     attendance: {
                         expected_salary: attendanceData.expected_salary || 0,
                         earned_salary: attendanceData.earned_salary || 0,

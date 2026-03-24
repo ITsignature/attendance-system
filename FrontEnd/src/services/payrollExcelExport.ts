@@ -11,19 +11,16 @@ export function exportLivePayrollToExcel(
   rawEmployees: any[],
   periodInfo: PeriodInfo
 ): void {
-  // Map raw employee data by employee_id for quick lookup
   const rawByEmpId = new Map<string, any>(rawEmployees.map(e => [e.employee_id, e]));
 
   // =========================================
   // Collect all unique dynamic column labels
   // =========================================
 
-  // Allowance names (from calculated breakdown)
   const allowanceNames = [
     ...new Set(calculatedResults.flatMap(r => (r.allowances_breakdown || []).map(a => a.name)))
   ].sort();
 
-  // Advance types (from raw financial records)
   const advanceTypes = [
     ...new Set(
       rawEmployees.flatMap(e =>
@@ -32,7 +29,6 @@ export function exportLivePayrollToExcel(
     )
   ].sort();
 
-  // Loan types (from raw financial records)
   const loanTypes = [
     ...new Set(
       rawEmployees.flatMap(e =>
@@ -41,20 +37,39 @@ export function exportLivePayrollToExcel(
     )
   ].sort();
 
-  // Deduction names (from calculated breakdown — statutory / payroll components)
   const deductionNames = [
     ...new Set(calculatedResults.flatMap(r => (r.deductions_breakdown || []).map(d => d.name)))
   ].sort();
 
   // =========================================
-  // Calculate column positions
+  // Column position map
+  // Fixed cols 0-7:
+  //   0: Emp. Code
+  //   1: Name
+  //   2: Designation
+  //   3: DOJ
+  //   4: Work Month
+  //   5: Expected Base Salary
+  //   6: No. of Working Days
+  //   7: Normal Hourly Rate
+  // OT group: 8-12 (5 sub-cols)
+  // Allowances: 13 ... 13+N-1
+  // Bonus: 13+N
+  // Gross Salary: 13+N+1
+  // Unpaid (Hr): 13+N+2
+  // Unpaid: 13+N+3
+  // Advances: 13+N+4 ... 13+N+3+M
+  // Loans: 13+N+4+M ... 13+N+3+M+K
+  // Deductions: 13+N+4+M+K ... 13+N+3+M+K+D
+  // Total Deductions: 13+N+4+M+K+D
+  // Ajt: +1, Net Salary: +2, Remarks: +3, Round Up: +4
   // =========================================
 
-  // Fixed columns 0-6
-  const OT_START = 7;      // 5 OT sub-columns: 7-11
-  const ALLOW_START = 12;
+  const OT_START    = 8;
+  const ALLOW_START = 13;
   const BONUS_COL   = ALLOW_START + allowanceNames.length;
-  const UNPAID_HR   = BONUS_COL + 1;
+  const GROSS_SAL   = BONUS_COL + 1;
+  const UNPAID_HR   = GROSS_SAL + 1;
   const UNPAID_AMT  = UNPAID_HR + 1;
   const ADV_START   = UNPAID_AMT + 1;
   const LOAN_START  = ADV_START + advanceTypes.length;
@@ -74,9 +89,8 @@ export function exportLivePayrollToExcel(
   const row2: any[] = new Array(TOTAL_COLS).fill('');
   const merges: XLSX.Range[] = [];
 
-  const mergeRows = (col: number) => {
+  const mergeRows = (col: number) =>
     merges.push({ s: { r: 0, c: col }, e: { r: 1, c: col } });
-  };
 
   const mergeGroup = (startCol: number, endCol: number) => {
     if (endCol > startCol) {
@@ -86,17 +100,14 @@ export function exportLivePayrollToExcel(
     }
   };
 
-  // Fixed single-cell headers (merge both rows)
+  // Fixed single-cell headers (span both rows)
   const fixedHeaders = [
     'Emp. Code', 'Name', 'Designation', 'DOJ', 'Work Month',
-    'No. of Working Days', 'Normal Hourly Rate'
+    'Expected Base Salary', 'No. of Working Days', 'Normal Hourly Rate'
   ];
-  fixedHeaders.forEach((label, i) => {
-    row1[i] = label;
-    mergeRows(i);
-  });
+  fixedHeaders.forEach((label, i) => { row1[i] = label; mergeRows(i); });
 
-  // OT group
+  // OT group (cols 8-12)
   row1[OT_START] = 'OT';
   mergeGroup(OT_START, OT_START + 4);
   row2[OT_START]     = 'Weekday OT Rate';
@@ -116,11 +127,15 @@ export function exportLivePayrollToExcel(
   row1[BONUS_COL] = 'Bonus';
   mergeRows(BONUS_COL);
 
+  // Gross Salary
+  row1[GROSS_SAL] = 'Gross Salary';
+  mergeRows(GROSS_SAL);
+
   // Unpaid (Hr)
   row1[UNPAID_HR] = 'Unpaid (Hr)';
   mergeRows(UNPAID_HR);
 
-  // Unpaid amount
+  // Unpaid
   row1[UNPAID_AMT] = 'Unpaid';
   mergeRows(UNPAID_AMT);
 
@@ -149,21 +164,11 @@ export function exportLivePayrollToExcel(
   row1[TOTAL_DED] = 'Total Deductions';
   mergeRows(TOTAL_DED);
 
-  // Ajt.
-  row1[AJT_COL] = 'Ajt.';
-  mergeRows(AJT_COL);
-
-  // Net Salary
-  row1[NET_SAL] = 'Net Salary';
-  mergeRows(NET_SAL);
-
-  // Remarks
-  row1[REMARKS] = 'Remarks';
-  mergeRows(REMARKS);
-
-  // Round Up
-  row1[ROUND_UP] = 'Round Up';
-  mergeRows(ROUND_UP);
+  // Ajt. / Net Salary / Remarks / Round Up
+  row1[AJT_COL]  = 'Ajt.';     mergeRows(AJT_COL);
+  row1[NET_SAL]  = 'Net Salary'; mergeRows(NET_SAL);
+  row1[REMARKS]  = 'Remarks';   mergeRows(REMARKS);
+  row1[ROUND_UP] = 'Round Up';  mergeRows(ROUND_UP);
 
   // =========================================
   // Build data rows
@@ -184,7 +189,7 @@ export function exportLivePayrollToExcel(
       row[3] = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     }
 
-    // Work Month (number of months from hire date to period end, inclusive)
+    // Work Month (months from hire date to period end, inclusive)
     if (raw.hire_date && periodInfo.end_date) {
       const hire = new Date(raw.hire_date);
       const periodEnd = new Date(periodInfo.end_date);
@@ -194,26 +199,29 @@ export function exportLivePayrollToExcel(
       row[4] = Math.max(1, months);
     }
 
-    // No. of Working Days
-    const weekdayDays   = parseFloat(raw.weekday_working_days) || 0;
-    const saturdayDays  = parseFloat(raw.working_saturdays)    || 0;
-    const sundayDays    = parseFloat(raw.working_sundays)      || 0;
-    row[5] = weekdayDays + saturdayDays + sundayDays;
+    // Expected Base Salary
+    row[5] = result.expected_base_salary || 0;
+
+    // No. of Working Days — actual days attended (check_in exists), including today if checked in
+    row[6] = raw.actual_worked_days || 0;
 
     // Normal Hourly Rate
-    row[6] = parseFloat(raw.weekday_hourly_rate) || 0;
+    const weekdayHourlyRate = parseFloat(raw.weekday_hourly_rate) || 0;
+    row[7] = weekdayHourlyRate;
 
     // --- OT columns ---
-    const weekdayHourlyRate = parseFloat(raw.weekday_hourly_rate) || 0;
-    const sundayHourlyRate  = parseFloat(raw.sunday_hourly_rate)  || 0;
-    const weekdayOTMult     = parseFloat(raw.weekday_ot_multiplier) || 1;
-    const sundayOTMult      = parseFloat(raw.sunday_ot_multiplier)  || 1;
+    const weekdayOTMult  = parseFloat(raw.weekday_ot_multiplier) || 1;
+    const sundayOTMult   = parseFloat(raw.sunday_ot_multiplier)  || 1;
+    const weekdayOTRate  = round2(weekdayHourlyRate * weekdayOTMult);
 
-    const weekdayOTRate = round2(weekdayHourlyRate * weekdayOTMult);
-    const sundayOTRate  = round2(sundayHourlyRate  * sundayOTMult);
+    // Sunday OT Rate: prefer sunday_hourly_rate from payroll_records;
+    // if zero (sunday not a scheduled working day), fall back to weekday_hourly_rate × sunday multiplier
+    const sundayHourlyRateRaw = parseFloat(raw.sunday_hourly_rate) || 0;
+    const sundayBaseRate = sundayHourlyRateRaw > 0 ? sundayHourlyRateRaw : weekdayHourlyRate;
+    const sundayOTRate   = round2(sundayBaseRate * sundayOTMult);
 
     const otRecords: any[] = raw.overtime?.records || [];
-    const weekdaySatHolOTMinutes = otRecords
+    const weekdaySatHolMinutes = otRecords
       .filter((r: any) => r.day_type !== 'sunday')
       .reduce((sum: number, r: any) => sum + (r.total_minutes || 0), 0);
     const sundayOTMinutes = otRecords
@@ -221,7 +229,7 @@ export function exportLivePayrollToExcel(
       .reduce((sum: number, r: any) => sum + (r.total_minutes || 0), 0);
 
     row[OT_START]     = weekdayOTRate;
-    row[OT_START + 1] = round2(weekdaySatHolOTMinutes / 60);
+    row[OT_START + 1] = round2(weekdaySatHolMinutes / 60);
     row[OT_START + 2] = sundayOTRate;
     row[OT_START + 3] = round2(sundayOTMinutes / 60);
     row[OT_START + 4] = result.overtime_amount || 0;
@@ -238,20 +246,26 @@ export function exportLivePayrollToExcel(
     // --- Bonus ---
     row[BONUS_COL] = result.bonuses_total || 0;
 
+    // --- Gross Salary = Expected Base + OT Amount + All Allowances ---
+    row[GROSS_SAL] = round2(
+      (result.expected_base_salary || 0) +
+      (result.overtime_amount || 0) +
+      (result.allowances_total || 0)
+    );
+
     // --- Unpaid (Hr) ---
     const sc = result.shortfall_by_cause;
     let unpaidHours = 0;
     if (sc) {
       unpaidHours += sc.time_variance?.hours || 0;
       unpaidHours += sc.unpaid_time_off?.hours || 0;
-      // Absent days: convert deduction back to hours using hourly rate
       if (weekdayHourlyRate > 0 && sc.absent_days?.deduction) {
         unpaidHours += sc.absent_days.deduction / weekdayHourlyRate;
       }
     }
     row[UNPAID_HR] = round2(unpaidHours);
 
-    // --- Unpaid amount (shortfall) ---
+    // --- Unpaid amount (attendance shortfall) ---
     row[UNPAID_AMT] = result.attendance_shortfall || 0;
 
     // --- Advances (by type) ---
@@ -260,9 +274,7 @@ export function exportLivePayrollToExcel(
       const type = a.advance_type || 'Salary Advance';
       advMap[type] = (advMap[type] || 0) + (parseFloat(a.deduction_amount) || 0);
     });
-    advanceTypes.forEach((type, i) => {
-      row[ADV_START + i] = advMap[type] || 0;
-    });
+    advanceTypes.forEach((type, i) => { row[ADV_START + i] = advMap[type] || 0; });
 
     // --- Loans (by type) ---
     const loanMap: Record<string, number> = {};
@@ -270,24 +282,18 @@ export function exportLivePayrollToExcel(
       const type = l.loan_type || 'General Loan';
       loanMap[type] = (loanMap[type] || 0) + (parseFloat(l.deduction_amount) || 0);
     });
-    loanTypes.forEach((type, i) => {
-      row[LOAN_START + i] = loanMap[type] || 0;
-    });
+    loanTypes.forEach((type, i) => { row[LOAN_START + i] = loanMap[type] || 0; });
 
-    // --- Deductions (statutory / payroll components) ---
+    // --- Deductions (EPF, stamp duty, etc.) ---
     const dedMap: Record<string, number> = {};
     (result.deductions_breakdown || []).forEach(d => {
       dedMap[d.name] = (dedMap[d.name] || 0) + d.amount;
     });
-    deductionNames.forEach((name, i) => {
-      row[DED_START + i] = dedMap[name] || 0;
-    });
+    deductionNames.forEach((name, i) => { row[DED_START + i] = dedMap[name] || 0; });
 
-    // --- Total Deductions = advances + loans + statutory deductions ---
-    const advancesTotal  = parseFloat(raw.financial?.advances) || 0;
-    const loansTotal     = parseFloat(raw.financial?.loans)    || 0;
+    // --- Total Deductions = deduction components (EPF etc.) + unpaid amount ---
     const statutoryTotal = (result.deductions_breakdown || []).reduce((s, d) => s + d.amount, 0);
-    row[TOTAL_DED] = round2(advancesTotal + loansTotal + statutoryTotal);
+    row[TOTAL_DED] = round2(statutoryTotal + (result.attendance_shortfall || 0));
 
     // --- Ajt. (empty) ---
     row[AJT_COL] = '';
@@ -313,10 +319,10 @@ export function exportLivePayrollToExcel(
   const ws = XLSX.utils.aoa_to_sheet(allRows);
   ws['!merges'] = merges;
 
-  // Column widths: widen certain columns
   ws['!cols'] = Array.from({ length: TOTAL_COLS }, (_, i) => {
-    if (i === 1) return { wch: 22 }; // Name
-    if (i === 2) return { wch: 18 }; // Designation
+    if (i === 1) return { wch: 22 };
+    if (i === 2) return { wch: 18 };
+    if (i === 5 || i === GROSS_SAL || i === NET_SAL) return { wch: 18 };
     return { wch: 14 };
   });
 

@@ -184,6 +184,65 @@ function isValidJson(str) {
 }
 
 // =============================================
+// COMPANY DEFAULT WEEKEND WORKING CONFIG
+// (must be before GET /:key and PUT /:key to avoid param capture)
+// =============================================
+
+// GET company default weekend schedule
+router.get('/weekend-defaults',
+  checkAnyPermission(['settings.attendance.view', 'settings.payroll.view']),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const [setting] = await db.execute(`
+      SELECT setting_value FROM system_settings
+      WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
+      LIMIT 1
+    `, [req.user.clientId]);
+
+    let config = null;
+    if (setting.length > 0 && setting[0].setting_value) {
+      try { config = JSON.parse(setting[0].setting_value); } catch (e) {}
+    }
+
+    res.status(200).json({ success: true, data: config });
+  })
+);
+
+// PUT company default weekend schedule
+router.put('/weekend-defaults',
+  checkAnyPermission(['settings.attendance.edit', 'settings.payroll.edit']),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const config = req.body.config;
+
+    if (config !== null && (typeof config !== 'object' || Array.isArray(config))) {
+      return res.status(400).json({ success: false, message: 'Invalid config format' });
+    }
+
+    const value = config === null ? null : JSON.stringify(config);
+
+    const [existing] = await db.execute(`
+      SELECT id FROM system_settings WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
+    `, [req.user.clientId]);
+
+    if (existing.length > 0) {
+      await db.execute(`
+        UPDATE system_settings SET setting_value = ?, updated_at = NOW()
+        WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
+      `, [value, req.user.clientId]);
+    } else {
+      const { v4: uuidv4 } = require('uuid');
+      await db.execute(`
+        INSERT INTO system_settings (id, client_id, setting_key, setting_value, setting_type, is_public, created_at, updated_at)
+        VALUES (?, ?, 'default_weekend_working_config', ?, 'object', FALSE, NOW(), NOW())
+      `, [uuidv4(), req.user.clientId, value]);
+    }
+
+    res.status(200).json({ success: true, message: 'Company weekend defaults updated', data: config });
+  })
+);
+
+// =============================================
 // GET SPECIFIC SETTING
 // =============================================
 router.get('/:key',
