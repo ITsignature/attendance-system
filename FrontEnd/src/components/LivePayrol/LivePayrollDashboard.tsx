@@ -38,12 +38,13 @@ const LivePayrollDashboard: React.FC = () => {
     data: any | null;
   }>({ show: false, loading: false, employeeId: null, employeeName: null, data: null });
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!rawData || calculatedResults.length === 0) return;
-    exportLivePayrollToExcel(
+    await exportLivePayrollToExcel(
       calculatedResults,
       rawData.employees,
-      { start_date: rawData.period.start_date, end_date: rawData.period.end_date }
+      { start_date: rawData.period.start_date, end_date: rawData.period.end_date },
+      rawData.company || { name: '', address: '' }
     );
   };
 
@@ -157,7 +158,6 @@ const LivePayrollDashboard: React.FC = () => {
   // =============================================
   // LIFECYCLE
   // =============================================
-
   // Load data on mount
   useEffect(() => {
     loadAndCalculate();

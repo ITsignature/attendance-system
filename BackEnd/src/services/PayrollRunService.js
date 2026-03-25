@@ -3659,15 +3659,18 @@ class PayrollRunService {
             const [runInfo] = await db.execute(`
                 SELECT
                     pr.id as run_id,
-                    pr.run_name, 
+                    pr.run_name,
                     pr.run_number,
                     pr.calculation_method,
                     pp.id as period_id,
                     pp.period_start_date,
                     pp.period_end_date,
-                    pp.pay_date
+                    pp.pay_date,
+                    c.name as company_name,
+                    c.address as company_address
                 FROM payroll_runs pr
                 JOIN payroll_periods pp ON pr.period_id = pp.id
+                JOIN clients c ON pr.client_id = c.id
                 WHERE pr.id = ? AND pr.client_id = ?
             `, [runId, clientId]);
 
@@ -3916,7 +3919,7 @@ class PayrollRunService {
                 FROM attendance a
                 WHERE a.employee_id IN (${employeeIds.map(() => '?').join(',')})
                   AND DATE(a.date) BETWEEN ? AND ?
-                  AND a.check_in IS NOT NULL
+                  AND a.check_in_time IS NOT NULL
                 GROUP BY a.employee_id
             `, [...employeeIds, minPeriodStart, calculationEndDateStr]);
 
@@ -4250,6 +4253,10 @@ class PayrollRunService {
             console.log(`\n⚡ PERFORMANCE: Loaded ${enrichedEmployees.length} employees in ${totalTime}ms (${(totalTime / enrichedEmployees.length).toFixed(0)}ms per employee)`);
 
             const result = {
+                company: {
+                    name: runInfo[0].company_name || '',
+                    address: runInfo[0].company_address || ''
+                },
                 period: {
                     start_date: period.period_start_date,
                     end_date: period.period_end_date,
