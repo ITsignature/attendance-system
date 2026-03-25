@@ -47,7 +47,7 @@ const EmployeeSidebar = () => {
       {/* Footer */}
       <div className="p-4 border-t border-gray-200">
         <p className="text-xs text-gray-500 text-center">
-          © 2024 HRMS System
+          © 2026 HRMS System
         </p>
       </div>
     </div>

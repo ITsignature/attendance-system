@@ -19,7 +19,8 @@ const {
   getMyLeaveBalance,
   getMyFinancialRecords,
   getMyLivePayrollPreview,
-  getMyLivePayrollDetails
+  getMyLivePayrollDetails,
+  getMyLivePayrollDailyDetails
 } = require('../controllers/employeePortalController');
 
 // All routes require authentication
@@ -84,5 +85,7 @@ router.post('/leaves/apply', ensureOwnLeaves, applyForLeave);
 
 // Get my financial records (loans, advances, bonuses)
 router.get('/financial-records', ensureOwnFinancialRecords, getMyFinancialRecords);
+
+router.get('/daily-details',ensureOwnPayroll, getMyLivePayrollDailyDetails);
 
 module.exports = router;

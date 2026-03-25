@@ -70,6 +70,7 @@ class HolidayService {
 
         // Get employee weekend working configuration if employeeId provided
         let employeeWeekendConfig = null;
+        let companyWeekendConfig = null;
         if (employeeId) {
             const [employeeData] = await db.execute(`
                 SELECT weekend_working_config FROM employees WHERE id = ?
@@ -81,6 +82,18 @@ class HolidayService {
                 } catch (e) {
                     console.warn(`Invalid weekend_working_config JSON for employee ${employeeId}:`, e);
                 }
+            }
+
+            // Fetch company default weekend config (used when employee monthly_schedule === null)
+            const [companySetting] = await db.execute(`
+                SELECT setting_value FROM system_settings
+                WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
+                LIMIT 1
+            `, [clientId]);
+            if (companySetting.length > 0 && companySetting[0].setting_value) {
+                try {
+                    companyWeekendConfig = JSON.parse(companySetting[0].setting_value);
+                } catch (e) {}
             }
         }
 
@@ -129,11 +142,39 @@ class HolidayService {
 
                 if (employeeWeekendConfig) {
                     // Use employee-specific weekend configuration
+                    // monthly_schedule keys are "YYYY-MM"; nth = Math.ceil(date/7) gives 1st/2nd/3rd/4th/5th occurrence
+                    const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+                    const nth = Math.ceil(currentDate.getDate() / 7);
+
                     if (dayOfWeek === 6 && employeeWeekendConfig.saturday?.working) {
-                        isWeekendWorking = true;
+                        const monthlySchedule = employeeWeekendConfig.saturday.monthly_schedule;
+                        if (monthlySchedule === undefined) {
+                            // Old employee with no monthly_schedule key: backward compat — all Saturdays working
+                            isWeekendWorking = true;
+                        } else if (monthlySchedule === null) {
+                            // Explicitly null: use company default schedule
+                            const companyPattern = companyWeekendConfig?.saturday?.monthly_schedule?.[yearMonth];
+                            isWeekendWorking = Array.isArray(companyPattern) && companyPattern.includes(nth);
+                        } else {
+                            // Custom per-employee schedule (including empty {} = no working days)
+                            const monthPattern = monthlySchedule[yearMonth];
+                            isWeekendWorking = Array.isArray(monthPattern) && monthPattern.includes(nth);
+                        }
                         isFullDaySalary = employeeWeekendConfig.saturday.full_day_salary || false;
                     } else if (dayOfWeek === 0 && employeeWeekendConfig.sunday?.working) {
-                        isWeekendWorking = true;
+                        const monthlySchedule = employeeWeekendConfig.sunday.monthly_schedule;
+                        if (monthlySchedule === undefined) {
+                            // Old employee with no monthly_schedule key: backward compat — all Sundays working
+                            isWeekendWorking = true;
+                        } else if (monthlySchedule === null) {
+                            // Explicitly null: use company default schedule
+                            const companyPattern = companyWeekendConfig?.sunday?.monthly_schedule?.[yearMonth];
+                            isWeekendWorking = Array.isArray(companyPattern) && companyPattern.includes(nth);
+                        } else {
+                            // Custom per-employee schedule (including empty {} = no working days)
+                            const monthPattern = monthlySchedule[yearMonth];
+                            isWeekendWorking = Array.isArray(monthPattern) && monthPattern.includes(nth);
+                        }
                         isFullDaySalary = employeeWeekendConfig.sunday.full_day_salary || false;
                     }
                 } else {

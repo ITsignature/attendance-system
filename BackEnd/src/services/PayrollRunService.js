@@ -3659,15 +3659,18 @@ class PayrollRunService {
             const [runInfo] = await db.execute(`
                 SELECT
                     pr.id as run_id,
-                    pr.run_name, 
+                    pr.run_name,
                     pr.run_number,
                     pr.calculation_method,
                     pp.id as period_id,
                     pp.period_start_date,
                     pp.period_end_date,
-                    pp.pay_date
+                    pp.pay_date,
+                    c.name as company_name,
+                    c.address as company_address
                 FROM payroll_runs pr
                 JOIN payroll_periods pp ON pr.period_id = pp.id
+                JOIN clients c ON pr.client_id = c.id
                 WHERE pr.id = ? AND pr.client_id = ?
             `, [runId, clientId]);
 
@@ -3704,7 +3707,12 @@ class PayrollRunService {
                     pr.saturday_daily_hours,
                     pr.sunday_daily_hours,
                     e.base_salary,
-                    e.department_id
+                    e.department_id,
+                    e.hire_date,
+                    e.weekday_ot_multiplier,
+                    e.saturday_ot_multiplier,
+                    e.sunday_ot_multiplier,
+                    e.holiday_ot_multiplier
                 FROM payroll_records pr
                 JOIN employees e ON pr.employee_id = e.id
                 WHERE pr.run_id = ?
@@ -3899,6 +3907,26 @@ class PayrollRunService {
             `, [...employeeIds, minPeriodStart, maxPeriodEnd]);
 
             console.log(`📊 Found ${allOvertime.length} overtime records...`);
+
+            // ========================================
+            // BULK FETCH #5: Actual Attended Days
+            // ========================================
+            const calculationEndDateStr = calculationEndDate.toISOString().split('T')[0];
+            const [allAttendedDays] = await db.execute(`
+                SELECT
+                    a.employee_id,
+                    COUNT(DISTINCT DATE(a.date)) as attended_days
+                FROM attendance a
+                WHERE a.employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND DATE(a.date) BETWEEN ? AND ?
+                  AND a.check_in_time IS NOT NULL
+                GROUP BY a.employee_id
+            `, [...employeeIds, minPeriodStart, calculationEndDateStr]);
+
+            const attendedDaysByEmployee = {};
+            allAttendedDays.forEach(row => {
+                attendedDaysByEmployee[row.employee_id] = row.attended_days;
+            });
 
             // Create employee period map for filtering financial records
             const employeePeriodMap = {};
@@ -4193,6 +4221,7 @@ class PayrollRunService {
 
                 return {
                     ...emp,
+                    actual_worked_days: attendedDaysByEmployee[emp.employee_id] || 0,
                     attendance: {
                         expected_salary: attendanceData.expected_salary || 0,
                         earned_salary: attendanceData.earned_salary || 0,
@@ -4224,6 +4253,10 @@ class PayrollRunService {
             console.log(`\n⚡ PERFORMANCE: Loaded ${enrichedEmployees.length} employees in ${totalTime}ms (${(totalTime / enrichedEmployees.length).toFixed(0)}ms per employee)`);
 
             const result = {
+                company: {
+                    name: runInfo[0].company_name || '',
+                    address: runInfo[0].company_address || ''
+                },
                 period: {
                     start_date: period.period_start_date,
                     end_date: period.period_end_date,
@@ -4421,7 +4454,7 @@ class PayrollRunService {
                     pr.base_salary,
                     pr.weekday_hourly_rate,
                     pr.saturday_hourly_rate,
-                    pr.sunday_hourly_rate,
+                    pr.sunday_hourly_rate,     
                     pr.employee_period_start_date,
                     pr.employee_period_end_date,
                     pr.uses_custom_cycle,

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { CurrencyDollarIcon, DocumentTextIcon, CalendarIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { payrollRunApiService } from '../../services/payrollRunService';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -43,16 +44,44 @@ const EmployeePayroll = () => {
   const [showPayslip, setShowPayslip] = useState(false);
   const [showLivePreview, setShowLivePreview] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dailyDetailsModal, setDailyDetailsModal] = useState<{
+      show: boolean;
+      loading: boolean;
+      data: any | null;
+    }>({ show: false, loading: false, data: null });
 
   useEffect(() => {
     fetchPayrollHistory();
     fetchLivePayrollRuns();
   }, []);
 
+  const openDailyDetailsModal = async (record: string) => {
+      setDailyDetailsModal({ show: true, loading: true,data : null });
+  
+      try {
+        if (!record) return;
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get(`${API_BASE}/api/employee-portal/daily-details`,{
+        headers: { Authorization: `Bearer ${token}`}  
+        });
+  
+        if (response.success && response.data) {
+          setDailyDetailsModal(prev => ({ ...prev, loading: false, data: response.data }));
+        } else {
+          setDailyDetailsModal(prev => ({ ...prev, loading: false }));
+          setError(response.message || 'Failed to load daily details');
+        }
+      } catch (err: any) {
+        console.error('Error loading daily details:', err);
+        setDailyDetailsModal(prev => ({ ...prev, loading: false }));
+        setError(err.message || 'Failed to load daily details');
+      }
+    };
+
   const fetchPayrollHistory = async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await axios.get(`${API_BASE}/api/employee-portal/payroll/history`, {
+      const response =  await axios.get(`${API_BASE}/api/employee-portal/payroll/history`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { limit: 12 }
       });
@@ -143,6 +172,8 @@ const EmployeePayroll = () => {
     const earningsBySource = attendance_details?.earnings_by_source || {};
     const shortfallByCause = attendance_details?.shortfall_by_cause || {};
 
+    
+
     // Calculate total expected days/hours
     const attendanceHours = earningsBySource.attendance?.hours || 0;
     const paidLeaveHours = earningsBySource.paid_leaves?.hours || 0;
@@ -228,14 +259,65 @@ const EmployeePayroll = () => {
               {/* Base Salary (Total) */}
               <div className="flex justify-between">
                 <span className="text-gray-600 font-medium">Base Salary (Full Month)</span>
-                <span className="font-medium">Rs. {(record.base_salary || 0).toLocaleString()}</span>
+                <span className="font-medium text-gray-600">Rs. {(record.base_salary || 0).toLocaleString()}</span>
               </div>
+
+              {/* Attendance Shortfall - Why salary is less than base */}
+              {attendance_details && (shortfallByCause.unpaid_time_off?.deduction > 0 || shortfallByCause.time_variance?.deduction > 0 || shortfallByCause.absent_days?.deduction > 0) && (
+                <div className="ml-4 bg-orange-50 p-3 rounded border border-orange-200">
+                  <div className="font-medium text-orange-800 mb-2">Salary Reduction (Shortfall)</div>
+                  <div className="ml-4 space-y-1 text-sm">
+                    {shortfallByCause.unpaid_time_off && shortfallByCause.unpaid_time_off.deduction > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
+                          Unpaid Leaves ({shortfallByCause.unpaid_time_off.hours.toFixed(2)}h)
+                        </span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {shortfallByCause.time_variance && shortfallByCause.time_variance.deduction > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+                          Late Arrivals and Early Departures ({shortfallByCause.time_variance.hours.toFixed(2)}h)
+                        </span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {shortfallByCause.absent_days && shortfallByCause.absent_days.deduction > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span className="flex items-center">
+                          <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                          Absent Days
+                        </span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction + earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    </div>
+                </div>
+              )}
+
+              {earningsBySource.attendance && (  
+              <div className="flex justify-between pt-1 border-t font-medium text-gray-600">
+                  <span></span>
+                  <span> 
+                    <button
+                      onClick={() => openDailyDetailsModal(record)}
+                      className="px-6 py-2 bg-purple-100 text-purple-800 border border-purple-800 rounded-lg hover:bg-purple-100 transition-colors mr-2"
+                    >
+                     View Daily Salary
+                    </button>
+                    Rs. {(earningsBySource.attendance.earned || 0).toLocaleString()}
+                    </span>
+                </div>  
+              )}    
 
               {/* Earnings Breakdown */}
               <div className="ml-4 bg-green-50 p-3 rounded">
                 <div className="font-medium text-green-800 mb-2">Earnings from Work</div>
                 <div className="ml-4 space-y-1 text-sm">
-                  {earningsBySource.attendance && (
+                  {/* {earningsBySource.attendance && (
                     <div className="flex justify-between text-gray-700">
                       <span className="flex items-center">
                         <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
@@ -243,14 +325,14 @@ const EmployeePayroll = () => {
                       </span>
                       <span>Rs. {(earningsBySource.attendance.earned || 0).toLocaleString()}</span>
                     </div>
-                  )}
+                  )}  */}
                   {earningsBySource.paid_leaves && earningsBySource.paid_leaves.earned > 0 && (
                     <div className="flex justify-between text-gray-700">
                       <span className="flex items-center">
                         <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
                         Paid Leaves ({paidLeaveHours.toFixed(2)}h)
                       </span>
-                      <span>Rs. {(earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
+                      <span>+Rs. {(earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
                     </div>
                   )}
                   {liveSessionHours > 0 && (
@@ -264,86 +346,6 @@ const EmployeePayroll = () => {
                   )}
                 </div>
               </div>
-
-              {/* Attendance Shortfall - Why salary is less than base */}
-              {attendance_details && attendance_details.total > 0 && (
-                <div className="ml-4 bg-orange-50 p-3 rounded border border-orange-200">
-                  <div className="font-medium text-orange-800 mb-2">Salary Reduction (Shortfall)</div>
-                  <div className="ml-4 space-y-1 text-sm">
-                    {shortfallByCause.unpaid_time_off && shortfallByCause.unpaid_time_off.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
-                          Unpaid Leaves ({shortfallByCause.unpaid_time_off.hours.toFixed(2)}h)
-                        </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {shortfallByCause.time_variance && shortfallByCause.time_variance.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                          Time Variance ({shortfallByCause.time_variance.hours.toFixed(2)}h)
-                        </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {shortfallByCause.absent_days && shortfallByCause.absent_days.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                          Absent Days
-                        </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between pt-1 border-t border-orange-300 font-medium text-orange-800">
-                      <span>Total Shortfall</span>
-                      <span>-Rs. {(attendance_details.total || 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Attendance Shortfall - Why salary is less than base */}
-              {attendance_details && attendance_details.total > 0 && (
-                <div className="ml-4 bg-orange-50 p-3 rounded border border-orange-200">
-                  <div className="font-medium text-orange-800 mb-2">Salary Reduction (Shortfall)</div>
-                  <div className="ml-4 space-y-1 text-sm">
-                    {shortfallByCause.unpaid_time_off && shortfallByCause.unpaid_time_off.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
-                          Unpaid Leaves ({shortfallByCause.unpaid_time_off.hours.toFixed(2)}h)
-                        </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {shortfallByCause.time_variance && shortfallByCause.time_variance.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                          Time Variance ({shortfallByCause.time_variance.hours.toFixed(2)}h)
-                        </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {shortfallByCause.absent_days && shortfallByCause.absent_days.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                          Absent Days
-                        </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between pt-1 border-t border-orange-300 font-medium text-orange-800">
-                      <span>Total Shortfall</span>
-                      <span>-Rs. {(attendance_details.total || 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Base Salary Earned */}
               <div className="flex justify-between bg-blue-50 p-2 rounded">

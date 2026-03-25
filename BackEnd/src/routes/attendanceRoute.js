@@ -62,7 +62,7 @@ router.get('/fingerprint', [
   const db = getDB();
   const { fingerprint_id, client_id } = req.query;
   const today = new Date().toISOString().split('T')[0];
-  const currentTime = '12:02:39'; // TEST: hardcoded check-in time
+  const currentTime = new Date().toTimeString().split(' ')[0];  
 
   try {
     // Map fingerprint ID to employee in new system
@@ -113,7 +113,7 @@ router.get('/fingerprint', [
 
     // Check if attendance already exists for today
     const [existing] = await db.execute(`
-      SELECT id, check_in_time, check_out_time
+      SELECT id, check_in_time, check_out_time 
       FROM attendance
       WHERE employee_id = ? AND date = ?
     `, [employeeId, today]);

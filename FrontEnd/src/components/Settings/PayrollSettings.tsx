@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Minus, Calculator, Plus } from 'lucide-react';
+import { Settings, Minus, Calculator, Plus, Calendar } from 'lucide-react';
 import PayrollComponents from './PayrollTabs/PayrollComponents';
 import EmployeeAllowances from './PayrollTabs/EmployeeAllowances';
 import EmployeeDeductions from './PayrollTabs/EmployeeDeductions';
+import CompanyWeekendDefaults from './PayrollTabs/CompanyWeekendDefaults';
 import { useDynamicRBAC } from '../RBACSystem/rbacSystem';
 
-type PayrollTab = 'components' | 'allowances' | 'deductions';
+type PayrollTab = 'components' | 'allowances' | 'deductions' | 'weekend_defaults';
 
 const PayrollSettings: React.FC = () => {
   const { hasPermission } = useDynamicRBAC();
@@ -32,6 +33,13 @@ const PayrollSettings: React.FC = () => {
       icon: Minus,
       description: 'Manage employee-specific deductions',
       permission: 'settings.employee_deductions.view'
+    },
+    {
+      id: 'weekend_defaults' as PayrollTab,
+      name: 'Weekend Defaults',
+      icon: Calendar,
+      description: 'Set the company-wide default working Saturday/Sunday schedule. Employees set to "Use company default" will follow this.',
+      permission: 'settings.attendance.view'
     }
   ];
 
@@ -53,6 +61,8 @@ const PayrollSettings: React.FC = () => {
         return <EmployeeAllowances />;
       case 'deductions':
         return <EmployeeDeductions />;
+      case 'weekend_defaults':
+        return <CompanyWeekendDefaults />;
       default:
         return <PayrollComponents />;
     }
