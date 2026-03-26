@@ -65,6 +65,33 @@ const EmployeeLeaves = Loadable(lazy(() => import('../views/employee-portal/Empl
 const EmployeeFinancialRecords = Loadable(lazy(() => import('../views/employee-portal/EmployeeFinancialRecords')));
 
 // ==============================================
+// SUPER ADMIN ROUTE GUARD
+// ==============================================
+const SuperAdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { currentUser } = useDynamicRBAC();
+  if (!currentUser?.isSuperAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <p className="text-gray-600">Super admin access required.</p>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
+};
+
+// Redirects super admins to client management, others to dashboard
+const RootRedirect = () => {
+  const { currentUser } = useDynamicRBAC();
+  if (currentUser?.isSuperAdmin) {
+    return <Navigate to="/clientmanagement" replace />;
+  }
+  return <Navigate to="/dashboard" replace />;
+};
+
+// ==============================================
 // SINGLE AUTHENTICATION WRAPPER FOR ENTIRE APP
 // ==============================================
 const AuthenticatedApp = ({ children }: { children: React.ReactNode }) => {
@@ -128,10 +155,10 @@ const Router = [
     ),
     
     children: [
-      { 
-        path: '/', 
-        exact: true, 
-        element: <Navigate to="/dashboard" replace /> 
+      {
+        path: '/',
+        exact: true,
+        element: <RootRedirect />
       },
       
       // Dashboard - Basic access required
@@ -343,7 +370,11 @@ const Router = [
       {
         path: '/clientmanagement',
         exact: true,
-        element: <ClientManagement />
+        element: (
+          <SuperAdminRoute>
+            <ClientManagement />
+          </SuperAdminRoute>
+        )
       },
       // {
       //   path: '/rbacexamples',

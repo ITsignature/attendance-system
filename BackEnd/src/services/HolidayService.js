@@ -8,14 +8,6 @@ class HolidayService {
     // HOLIDAY CALCULATION UTILITIES
     // =============================================
     
-    /**
-     * Get holidays for a specific date range and client
-     * @param {string} clientId - Client ID
-     * @param {string} startDate - Start date (YYYY-MM-DD)
-     * @param {string} endDate - End date (YYYY-MM-DD)
-     * @param {string} departmentId - Optional department ID filter
-     * @returns {Promise<Array>} Array of holidays
-     */
     async getHolidaysInPeriod(clientId, startDate, endDate, departmentId = null) {
         const db = getDB();
         
