@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const { getDB } = require('../config/database');
 const { authenticate, requireSuperAdmin } = require('../middleware/authMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
+const smsService = require('../services/smsService');
 
 const router = express.Router();
 
@@ -361,6 +362,72 @@ router.post('/:clientId/admin-users',
       message: 'Admin user created successfully',
       data: newUser[0]
     });
+  })
+);
+
+// =============================================
+// GET SMS CONFIG FOR CLIENT
+// =============================================
+router.get('/:id/sms-config',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const db = getDB();
+
+    const [clients] = await db.execute('SELECT id FROM clients WHERE id = ?', [id]);
+    if (clients.length === 0) {
+      return res.status(404).json({ success: false, message: 'Client not found' });
+    }
+
+    const config = await smsService.getClientConfig(id);
+
+    res.status(200).json({
+      success: true,
+      data: config || { account_id: '', password: '', base_url: '', enabled: false, notification_number: '' }
+    });
+  })
+);
+
+// =============================================
+// SAVE SMS CONFIG FOR CLIENT
+// =============================================
+router.put('/:id/sms-config',
+  [
+    body('account_id').trim().notEmpty().withMessage('Account ID is required'),
+    body('password').trim().notEmpty().withMessage('Password is required'),
+    body('enabled').isBoolean().withMessage('enabled must be a boolean'),
+    body('base_url').optional().trim(),
+    body('notification_number').optional().trim()
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const db = getDB();
+
+    const [clients] = await db.execute('SELECT id FROM clients WHERE id = ?', [id]);
+    if (clients.length === 0) {
+      return res.status(404).json({ success: false, message: 'Client not found' });
+    }
+
+    const { account_id, password, enabled, base_url, notification_number } = req.body;
+
+    const config = {
+      account_id,
+      password,
+      enabled: Boolean(enabled),
+      base_url: base_url || 'https://www.textit.biz/sendmsg',
+      notification_number: notification_number || ''
+    };
+
+    await smsService.saveClientConfig(id, config);
+
+    // Also update the sms_enabled flag on the client record for display
+    await db.execute('UPDATE clients SET sms_enabled = ? WHERE id = ?', [enabled ? 1 : 0, id]);
+
+    res.status(200).json({ success: true, message: 'SMS configuration saved', data: config });
   })
 );
 

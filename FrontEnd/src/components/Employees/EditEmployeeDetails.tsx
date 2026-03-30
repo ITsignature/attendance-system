@@ -1562,7 +1562,7 @@ const EditEmployeeDetails: React.FC = () => {
                   </div>
 
                   {/* Monthly Saturday Schedule — shown only for custom */}
-                  {formData.weekend_working_config!.saturday!.monthly_schedule !== null && (() => {
+                  {formData.weekend_working_config!.saturday!.monthly_schedule != null && (() => {
                     const yearMonth = `${satViewYear}-${String(satViewMonth + 1).padStart(2, '0')}`;
                     const saturdays: { date: Date; nth: number }[] = [];
                     const d = new Date(satViewYear, satViewMonth, 1);
@@ -1768,7 +1768,7 @@ const EditEmployeeDetails: React.FC = () => {
                   </div>
 
                   {/* Monthly Sunday Schedule — shown only for custom */}
-                  {formData.weekend_working_config!.sunday!.monthly_schedule !== null && (() => {
+                  {formData.weekend_working_config!.sunday!.monthly_schedule != null && (() => {
                     const yearMonth = `${sunViewYear}-${String(sunViewMonth + 1).padStart(2, '0')}`;
                     const sundays: { date: Date; nth: number }[] = [];
                     const d = new Date(sunViewYear, sunViewMonth, 1);
