@@ -87,12 +87,14 @@ interface Employee {
   weekend_working_config?: {
     saturday?: {
       working: boolean;
+      monthly_schedule: Record<string, number[]> | null; // null = use company default
       in_time: string;
       out_time: string;
       full_day_salary: boolean;
     };
     sunday?: {
       working: boolean;
+      monthly_schedule: Record<string, number[]> | null; // null = use company default
       in_time: string;
       out_time: string;
       full_day_salary: boolean;
@@ -152,6 +154,11 @@ const EditEmployeeDetails: React.FC = () => {
   const [documents, setDocuments] = useState<{[key: string]: EmployeeDocument[]}>({});
   const [pendingDocuments, setPendingDocuments] = useState<PendingDocument[]>([]);
   const [documentUploading, setDocumentUploading] = useState(false);
+  const now = new Date();
+  const [satViewYear, setSatViewYear] = useState(now.getFullYear());
+  const [satViewMonth, setSatViewMonth] = useState(now.getMonth());
+  const [sunViewYear, setSunViewYear] = useState(now.getFullYear());
+  const [sunViewMonth, setSunViewMonth] = useState(now.getMonth());
 
   // Helper functions for loading overlay
   const showLoading = (message: string, submessage?: string) => {
@@ -1427,6 +1434,7 @@ const EditEmployeeDetails: React.FC = () => {
                         ...prev!.weekend_working_config,
                         saturday: working ? {
                           working: true,
+                          monthly_schedule: null,
                           in_time: '09:00',
                           out_time: '17:00',
                           full_day_salary: false
@@ -1508,6 +1516,111 @@ const EditEmployeeDetails: React.FC = () => {
                       Saturday Full Day Salary (same weight as weekday)
                     </label>
                   </div>
+
+                  {/* Saturday Schedule Mode Toggle */}
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule source</p>
+                    <div className="flex gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sat_schedule_mode"
+                          checked={formData.weekend_working_config!.saturday!.monthly_schedule === null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              saturday: { ...prev!.weekend_working_config!.saturday!, monthly_schedule: null }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Use company default</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sat_schedule_mode"
+                          checked={formData.weekend_working_config!.saturday!.monthly_schedule !== null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              saturday: { ...prev!.weekend_working_config!.saturday!, monthly_schedule: {} }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Custom schedule</span>
+                      </label>
+                    </div>
+                    {formData.weekend_working_config!.saturday!.monthly_schedule === null && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        This employee will follow the company default Saturday schedule set in Payroll Settings.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Monthly Saturday Schedule — shown only for custom */}
+                  {formData.weekend_working_config!.saturday!.monthly_schedule != null && (() => {
+                    const yearMonth = `${satViewYear}-${String(satViewMonth + 1).padStart(2, '0')}`;
+                    const saturdays: { date: Date; nth: number }[] = [];
+                    const d = new Date(satViewYear, satViewMonth, 1);
+                    let nth = 0;
+                    while (d.getMonth() === satViewMonth) {
+                      if (d.getDay() === 6) { nth++; saturdays.push({ date: new Date(d), nth }); }
+                      d.setDate(d.getDate() + 1);
+                    }
+                    const ordinals = ['1st', '2nd', '3rd', '4th', '5th'];
+                    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const schedule = formData.weekend_working_config!.saturday!.monthly_schedule as Record<string, number[]>;
+                    const currentPattern: number[] = schedule[yearMonth] || [];
+                    return (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Working Saturdays per month
+                        </p>
+                        <div className="flex items-center gap-2 mb-3">
+                          <button type="button" onClick={() => { const d = new Date(satViewYear, satViewMonth - 1); setSatViewYear(d.getFullYear()); setSatViewMonth(d.getMonth()); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400">&#8592;</button>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[80px] text-center">{monthNames[satViewMonth]} {satViewYear}</span>
+                          <button type="button" onClick={() => { const d = new Date(satViewYear, satViewMonth + 1); setSatViewYear(d.getFullYear()); setSatViewMonth(d.getMonth()); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400">&#8594;</button>
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          {saturdays.map(({ date, nth }) => {
+                            const checked = currentPattern.includes(nth);
+                            return (
+                              <label key={nth} className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    const updated = checked ? currentPattern.filter(n => n !== nth) : [...currentPattern, nth].sort((a, b) => a - b);
+                                    setFormData(prev => ({
+                                      ...prev!,
+                                      weekend_working_config: {
+                                        ...prev!.weekend_working_config,
+                                        saturday: {
+                                          ...prev!.weekend_working_config!.saturday!,
+                                          monthly_schedule: { ...(prev!.weekend_working_config!.saturday!.monthly_schedule as Record<string, number[]>), [yearMonth]: updated }
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                  {ordinals[nth - 1]} ({date.getDate()}/{date.getMonth() + 1})
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Configure each month separately. Use arrows to switch months.
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -1527,6 +1640,7 @@ const EditEmployeeDetails: React.FC = () => {
                         ...prev!.weekend_working_config,
                         sunday: working ? {
                           working: true,
+                          monthly_schedule: null,
                           in_time: '09:00',
                           out_time: '17:00',
                           full_day_salary: false
@@ -1608,6 +1722,111 @@ const EditEmployeeDetails: React.FC = () => {
                       Sunday Full Day Salary (same weight as weekday)
                     </label>
                   </div>
+
+                  {/* Sunday Schedule Mode Toggle */}
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule source</p>
+                    <div className="flex gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sun_schedule_mode"
+                          checked={formData.weekend_working_config!.sunday!.monthly_schedule === null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              sunday: { ...prev!.weekend_working_config!.sunday!, monthly_schedule: null }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Use company default</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sun_schedule_mode"
+                          checked={formData.weekend_working_config!.sunday!.monthly_schedule !== null}
+                          onChange={() => setFormData(prev => ({
+                            ...prev!,
+                            weekend_working_config: {
+                              ...prev!.weekend_working_config,
+                              sunday: { ...prev!.weekend_working_config!.sunday!, monthly_schedule: {} }
+                            }
+                          }))}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Custom schedule</span>
+                      </label>
+                    </div>
+                    {formData.weekend_working_config!.sunday!.monthly_schedule === null && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        This employee will follow the company default Sunday schedule set in Payroll Settings.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Monthly Sunday Schedule — shown only for custom */}
+                  {formData.weekend_working_config!.sunday!.monthly_schedule != null && (() => {
+                    const yearMonth = `${sunViewYear}-${String(sunViewMonth + 1).padStart(2, '0')}`;
+                    const sundays: { date: Date; nth: number }[] = [];
+                    const d = new Date(sunViewYear, sunViewMonth, 1);
+                    let nth = 0;
+                    while (d.getMonth() === sunViewMonth) {
+                      if (d.getDay() === 0) { nth++; sundays.push({ date: new Date(d), nth }); }
+                      d.setDate(d.getDate() + 1);
+                    }
+                    const ordinals = ['1st', '2nd', '3rd', '4th', '5th'];
+                    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const schedule = formData.weekend_working_config!.sunday!.monthly_schedule as Record<string, number[]>;
+                    const currentPattern: number[] = schedule[yearMonth] || [];
+                    return (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Working Sundays per month
+                        </p>
+                        <div className="flex items-center gap-2 mb-3">
+                          <button type="button" onClick={() => { const d = new Date(sunViewYear, sunViewMonth - 1); setSunViewYear(d.getFullYear()); setSunViewMonth(d.getMonth()); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400">&#8592;</button>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[80px] text-center">{monthNames[sunViewMonth]} {sunViewYear}</span>
+                          <button type="button" onClick={() => { const d = new Date(sunViewYear, sunViewMonth + 1); setSunViewYear(d.getFullYear()); setSunViewMonth(d.getMonth()); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400">&#8594;</button>
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          {sundays.map(({ date, nth }) => {
+                            const checked = currentPattern.includes(nth);
+                            return (
+                              <label key={nth} className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    const updated = checked ? currentPattern.filter(n => n !== nth) : [...currentPattern, nth].sort((a, b) => a - b);
+                                    setFormData(prev => ({
+                                      ...prev!,
+                                      weekend_working_config: {
+                                        ...prev!.weekend_working_config,
+                                        sunday: {
+                                          ...prev!.weekend_working_config!.sunday!,
+                                          monthly_schedule: { ...(prev!.weekend_working_config!.sunday!.monthly_schedule as Record<string, number[]>), [yearMonth]: updated }
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                  {ordinals[nth - 1]} ({date.getDate()}/{date.getMonth() + 1})
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Configure each month separately. Use arrows to switch months.
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

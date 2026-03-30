@@ -60,35 +60,47 @@ include('database.php');
                         if ($currentHour >= 13) {
                             $in_time = $attendance_data['in_time'];
                             $out_time = date('H:i:s');
-                            $employee_id = $_GET['finger_print_id'];
+                            $attendance_id = $attendance_data['id'];
                             $employee_name = $employee_data['name'];
                             $employee_number = $employee_data['username'];
 
-                            // Now calculate hours worked
+                            // Calculate working hours from check-in to now
                             $inTimestamp = strtotime($in_time);
                             $outTimestamp = strtotime($out_time);
-
                             $workedSeconds = $outTimestamp - $inTimestamp;
-                            $workedHours = floor($workedSeconds / 3600);
-                            $workedMinutes = floor(($workedSeconds % 3600) / 60);
-                            $hours_worked_text = "{$workedHours} hours {$workedMinutes} minutes";
-                            $workedTime = gmdate("H:i:s", $workedSeconds); // "gmdate" avoids timezone issues
-                            $update_my_leave = "UPDATE attendance SET out_time = '$out_time', working_hours = '$workedTime' WHERE userID = '$employee_id' AND att_date = '$today' AND active = 1 ORDER BY id DESC LIMIT 1";
-                            $res = mysqli_query($connect, $update_my_leave);
-                            if($res){
-                                if ($currentHour >= 17) {
-                                    $message = 'Good Bye ' . $employee_data['name'] . '!';
+                            $workedTime = gmdate("H:i:s", $workedSeconds);
+
+                            // Always update out_time — last scan of the day becomes the final checkout
+                            $update_att = "UPDATE attendance SET out_time = '$out_time', working_hours = '$workedTime' WHERE id = '$attendance_id' AND active = 1";
+                            $res = mysqli_query($connect, $update_att);
+
+                            if ($res) {
+                                // Check for an open break (employee left but hasn't returned yet)
+                                $open_break = mysqli_query($connect, "SELECT * FROM attendance_breaks WHERE attendance_id = '$attendance_id' AND break_in IS NULL ORDER BY id DESC LIMIT 1");
+
+                                if (mysqli_num_rows($open_break) > 0) {
+                                    // Employee returning from break — close the open break record, no SMS
+                                    $break_row = mysqli_fetch_assoc($open_break);
+                                    mysqli_query($connect, "UPDATE attendance_breaks SET break_in = '$out_time' WHERE id = '{$break_row['id']}'");
+                                    $message = 'Welcome back ' . $employee_name . '!';
                                 } else {
-                                    $message = 'You are half-day off ' . $employee_data['name'] . '!';
+                                    // Employee leaving (break or checkout) — send SMS
+                                    mysqli_query($connect, "INSERT INTO attendance_breaks (attendance_id, break_out) VALUES ('$attendance_id', '$out_time')");
+                                    if ($currentHour >= 17) {
+                                        $message = 'Good Bye ' . $employee_name . '!';
+                                        $smsText = "$employee_name left IT Signature on $today at $out_time. Working Hours: $workedTime";
+                                    } else {
+                                        $message = 'You are checked out ' . $employee_name . '!';
+                                        $smsText = "$employee_name checked out of IT Signature on $today at $out_time. Working Hours so far: $workedTime";
+                                    }
+                                    $text = urlencode($smsText);
+                                    $output4 = preg_replace('!\s+!', ' ', $text);
+                                    $baseurl = "https://www.textit.biz/sendmsg";
+                                    $url = "$baseurl/?id=942021070701&pw=7470&to=$employee_number&text=$output4&eco=Y";
+                                    $ret = file($url);
+                                    $res2 = explode(":", $ret[0]);
                                 }
                             }
-                            // OUT message
-                            $text = urlencode("$employee_name attended IT Signature left on $att_date at $out_time. <br><br>Working Hours: $workedTime");
-                            $output4 = preg_replace('!\s+!', ' ', $text);
-                            $baseurl = "https://www.textit.biz/sendmsg";
-                            $url = "$baseurl/?id=942021070701&pw=7470&to=$employee_number&text=$output4&eco=Y";
-                            $ret = file($url); 
-                            $res= explode(":",$ret[0]);  
                             echo json_encode(array('status' => 'info', 'message' => $message));
                         } else {
                             echo json_encode(array('status' => 'info', 'message' => 'You have already marked attendances'));

@@ -37,11 +37,18 @@ const MobileSidebar = () => {
                   SidebarContent?.map((item, index) => {
                     // Filter children based on permissions
                     const filteredChildren = item.children?.filter((child: any) => {
-                      // Check if super admin is required
-                      if (child.requireSuperAdmin) {
-                        // Support both boolean (true/false) and number (1/0) formats
-                        return !!(currentUser?.isSuperAdmin || (currentUser as any)?.is_super_admin);
+                      const isSuperAdmin = !!(currentUser?.isSuperAdmin || (currentUser as any)?.is_super_admin);
+
+                      // Super admins only see items explicitly marked for them
+                      if (isSuperAdmin) {
+                        return !!child.requireSuperAdmin;
                       }
+
+                      // Non-super-admins never see super-admin-only items
+                      if (child.requireSuperAdmin) {
+                        return false;
+                      }
+
                       // Check anyPermission first
                       if (child.anyPermission && Array.isArray(child.anyPermission)) {
                         return hasAnyPermission(child.anyPermission);
