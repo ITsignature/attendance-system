@@ -115,7 +115,7 @@ class HolidayService {
         let workingSundays = 0;   // Track working Sundays separately
         
         const currentDate = new Date(start);
-        while (currentDate <= end) {
+        while (currentDate <= end) { 
             totalDays++;
             const dayOfWeek = currentDate.getDay();
             const dateStr = currentDate.toISOString().split('T')[0];
@@ -125,7 +125,7 @@ class HolidayService {
                 holidayCount++;
             }
             // Check if it's a weekend
-            else if (dayOfWeek === 0 || dayOfWeek === 6) {
+            else if (dayOfWeek === 0 || dayOfWeek === 6) { 
                 weekendDays++;
 
                 // Check weekend working configuration
@@ -134,7 +134,7 @@ class HolidayService {
 
                 if (employeeWeekendConfig) {
                     // Use employee-specific weekend configuration
-                    // monthly_schedule keys are "YYYY-MM"; nth = Math.ceil(date/7) gives 1st/2nd/3rd/4th/5th occurrence
+                    // monthly_schedule keys are "YYYY-MM"; nth = Math.ceil(date/7) gives 1st/2nd/3rd/4th/5th occurrence                            
                     const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
                     const nth = Math.ceil(currentDate.getDate() / 7);
 
