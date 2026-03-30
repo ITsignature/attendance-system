@@ -1773,7 +1773,8 @@ router.patch('/bulk', [
     .optional({ checkFalsy: true })
     .isIn(['full_day', 'half_day', 'short_leave', 'on_leave']),
   body('work_type').optional().isIn(['office', 'remote', 'hybrid']),
-  body('notes').optional().isLength({ max: 500 })
+  body('notes').optional().isLength({ max: 500 }),
+  body('force_recalculate').optional().isBoolean()
 ], asyncHandler(async (req, res) => {
   /* ───────── 1. basic validation ───────── */
   const errors = validationResult(req);
@@ -1786,7 +1787,7 @@ router.patch('/bulk', [
   }
 
   const db = getDB();
-  const { start_date, end_date, employee_ids } = req.body;
+  const { start_date, end_date, employee_ids, force_recalculate = false } = req.body;
 
   // Validate date range
   const startDate = new Date(start_date);
@@ -1906,12 +1907,12 @@ router.patch('/bulk', [
             db
           );
 
-          /* ───────── 8. build UPDATE SET list (only changed columns) ───────── */
+          /* ───────── 8. build UPDATE SET list ───────── */
           const cols = [];
           const vals = [];
 
           const maybePush = (col, newVal, oldVal) => {
-            if (newVal !== undefined && newVal !== oldVal) {
+            if (newVal !== undefined && (force_recalculate || newVal !== oldVal)) {
               cols.push(`${col} = ?`);
               vals.push(newVal);
             }
