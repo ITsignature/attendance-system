@@ -781,23 +781,34 @@ const LivePayrollDashboard: React.FC = () => {
                           <Table.Cell className="text-sm">
                             {record.check_out || '-'}
                           </Table.Cell>
-                          <Table.Cell className="text-blue-600 font-medium">
-                            {record.working_minutes.toLocaleString()} mins
-                            <div className="text-xs text-gray-500">
-                              ({record.working_hours} hrs)
-                            </div>
-                            {record.overtime_minutes > 0 && (
-                              <div className="text-xs text-red-600 font-medium">
-                                +{record.overtime_minutes} OT mins
-                              </div>
+                          <Table.Cell className="font-medium">
+                            {record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)' ? (
+                              <span className="text-red-600 font-bold text-base">
+                                {record.overtime_minutes.toLocaleString()} mins
+                                <div className="text-xs font-medium">({(record.overtime_minutes / 60).toFixed(2)} hrs)</div>
+                              </span>
+                            ) : (
+                              <>
+                                <span className="text-blue-600">{record.working_minutes.toLocaleString()} mins</span>
+                                <div className="text-xs text-gray-500">({record.working_hours} hrs)</div>
+                                {record.overtime_minutes > 0 && (
+                                  <div className="text-xs text-red-600 font-medium">+{record.overtime_minutes} OT mins</div>
+                                )}
+                              </>
                             )}
                           </Table.Cell>
-                          <Table.Cell className="text-green-600 font-bold">
-                            {formatCurrency(record.daily_salary)}
-                            {record.overtime_amount > 0 && (
-                              <div className="text-xs text-red-600 font-medium">
-                                +{formatCurrency(record.overtime_amount)} OT
-                              </div>
+                          <Table.Cell className="font-bold">
+                            {record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)' ? (
+                              <span className="text-red-600 text-base">
+                                {formatCurrency(record.overtime_amount)}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="text-green-600">{formatCurrency(record.daily_salary)}</span>
+                                {record.overtime_amount > 0 && (
+                                  <div className="text-xs text-red-600 font-medium">+{formatCurrency(record.overtime_amount)} OT</div>
+                                )}
+                              </>
                             )}
                           </Table.Cell>
                           <Table.Cell>

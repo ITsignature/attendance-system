@@ -1514,7 +1514,7 @@ class PayrollRunService {
 
         // Saturday/Sunday: fetch per-day so we can split configured vs unconfigured
         const [weekendRows] = await db.execute(`
-            SELECT date, is_weekend, payable_duration
+            SELECT date, is_weekend, payable_duration, check_in_time, check_out_time
             FROM attendance
             WHERE employee_id = ?
             AND date BETWEEN ? AND ?
@@ -1528,21 +1528,41 @@ class PayrollRunService {
         let unconfiguredSundaySeconds = 0;
 
         for (const rec of weekendRows) {
-            const secs = parseFloat(rec.payable_duration) || 0;
             const dateStr = rec.date instanceof Date
                 ? rec.date.toISOString().split('T')[0]
                 : String(rec.date).split('T')[0];
             if (rec.is_weekend === 7) { // Saturday
                 if (isConfiguredWorkingDay(dateStr, 'saturday')) {
-                    configuredSaturdaySeconds += secs;
+                    // Configured Saturday: use payable_duration (break-deducted, schedule-capped)
+                    configuredSaturdaySeconds += parseFloat(rec.payable_duration) || 0;
                 } else {
-                    unconfiguredSaturdaySeconds += secs;
+                    // Unconfigured Saturday: OT = ALL actual time worked (check-in to check-out)
+                    // Do NOT use payable_duration — it may be break-deducted against the regular schedule
+                    let actualSecs = 0;
+                    if (rec.check_in_time && rec.check_out_time) {
+                        const inT = new Date(`2000-01-01T${rec.check_in_time}`);
+                        const outT = new Date(`2000-01-01T${rec.check_out_time}`);
+                        if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+                            actualSecs = Math.round((outT - inT) / 1000);
+                        }
+                    }
+                    unconfiguredSaturdaySeconds += actualSecs;
                 }
             } else if (rec.is_weekend === 1) { // Sunday
                 if (isConfiguredWorkingDay(dateStr, 'sunday')) {
-                    configuredSundaySeconds += secs;
+                    // Configured Sunday: use payable_duration (break-deducted, schedule-capped)
+                    configuredSundaySeconds += parseFloat(rec.payable_duration) || 0;
                 } else {
-                    unconfiguredSundaySeconds += secs;
+                    // Unconfigured Sunday: OT = ALL actual time worked (check-in to check-out)
+                    let actualSecs = 0;
+                    if (rec.check_in_time && rec.check_out_time) {
+                        const inT = new Date(`2000-01-01T${rec.check_in_time}`);
+                        const outT = new Date(`2000-01-01T${rec.check_out_time}`);
+                        if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+                            actualSecs = Math.round((outT - inT) / 1000);
+                        }
+                    }
+                    unconfiguredSundaySeconds += actualSecs;
                 }
             }
         }
@@ -4753,9 +4773,19 @@ class PayrollRunService {
                 let overtimeAmount = 0;
 
                 if (isUnscheduledWeekend) {
-                    // ALL payable hours are OT for unscheduled weekend days
-                    overtimeMinutes = totalMinutes;
-                    overtimeAmount = (payableDurationSeconds / 3600) * hourlyRate * otMultiplier;
+                    // ALL actual time worked is OT for unscheduled weekend days
+                    // Use raw check-in/check-out diff — NOT payable_duration which may have been
+                    // break-deducted or overlap-capped against the regular schedule
+                    let actualWorkedSeconds = 0;
+                    if (record.check_in_time && record.check_out_time) {
+                        const actualIn = new Date(`2000-01-01T${record.check_in_time}`);
+                        const actualOut = new Date(`2000-01-01T${record.check_out_time}`);
+                        if (!isNaN(actualIn) && !isNaN(actualOut) && actualOut > actualIn) {
+                            actualWorkedSeconds = Math.round((actualOut - actualIn) / 1000);
+                        }
+                    }
+                    overtimeMinutes = Math.round(actualWorkedSeconds / 60);
+                    overtimeAmount = (actualWorkedSeconds / 3600) * hourlyRate * otMultiplier;
                 } else if (overtimeEnabled) {
                     const preShiftSeconds = parseInt(record.pre_shift_overtime_seconds) || 0;
                     const postShiftSeconds = parseInt(record.post_shift_overtime_seconds) || 0;
