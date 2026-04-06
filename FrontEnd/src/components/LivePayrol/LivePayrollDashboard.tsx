@@ -30,6 +30,11 @@ const LivePayrollDashboard: React.FC = () => {
     type: 'allowances' | 'deductions' | null;
   }>({ show: false, employee: null, type: null });
 
+  const [payslipModal, setPayslipModal] = useState<{
+    show: boolean;
+    employee: CalculatedPayroll | null;
+  }>({ show: false, employee: null });
+
   const [dailyDetailsModal, setDailyDetailsModal] = useState<{
     show: boolean;
     loading: boolean;
@@ -54,6 +59,15 @@ const LivePayrollDashboard: React.FC = () => {
 
   const closeModal = () => {
     setModalData({ show: false, employee: null, type: null });
+  };
+
+  const openPayslipModal = (e: React.MouseEvent, employee: CalculatedPayroll) => {
+    e.stopPropagation();
+    setPayslipModal({ show: true, employee });
+  };
+
+  const closePayslipModal = () => {
+    setPayslipModal({ show: false, employee: null });
   };
 
   const openDailyDetailsModal = async (employeeId: string, employeeName: string) => {
@@ -359,6 +373,7 @@ const LivePayrollDashboard: React.FC = () => {
               <Table.HeadCell>Gross Salary</Table.HeadCell>
               <Table.HeadCell>Deductions</Table.HeadCell>
               <Table.HeadCell>Net Salary</Table.HeadCell>
+              <Table.HeadCell>Payslip</Table.HeadCell>
             </Table.Head>
             <Table.Body>
               {paginatedResults.length > 0 ? (
@@ -498,12 +513,23 @@ const LivePayrollDashboard: React.FC = () => {
                       <Table.Cell className="font-bold text-purple-600">
                         {formatCurrency(result.net_salary)}
                       </Table.Cell>
+                      <Table.Cell>
+                        <button
+                          onClick={(e) => openPayslipModal(e, result)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400 transition-all duration-150 whitespace-nowrap shadow-sm"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          View Payslip
+                        </button>
+                      </Table.Cell>
                     </Table.Row>
                   );
                 })
               ) : (
                 <Table.Row>
-                  <Table.Cell colSpan={9} className="text-center py-8 text-gray-500">
+                  <Table.Cell colSpan={10} className="text-center py-8 text-gray-500">
                     No employee records found.
                   </Table.Cell>
                 </Table.Row>
@@ -862,6 +888,232 @@ const LivePayrollDashboard: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* ============================================= */}
+      {/* PAYSLIP MODAL                                  */}
+      {/* ============================================= */}
+      <Modal show={payslipModal.show} onClose={closePayslipModal} size="3xl">
+        <Modal.Header>
+          <div>
+            <div className="text-lg font-bold">Live Payroll Preview</div>
+            {payslipModal.employee && rawData?.period && (
+              <div className="text-sm font-normal text-gray-500 mt-0.5">
+                {new Date(rawData.period.start_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                {' '}&ndash;{' '}
+                {new Date(rawData.period.end_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </div>
+            )}
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          {payslipModal.employee && (() => {
+            const emp = payslipModal.employee;
+            const ebs = emp.earnings_by_source;
+            const sbc = emp.shortfall_by_cause;
+            const attendanceHours = ebs?.attendance?.hours ?? 0;
+            const paidLeaveHours = ebs?.paid_leaves?.hours ?? 0;
+            const liveSessionHours = ebs?.live_session?.hours ?? 0;
+            const hasShortfall = sbc && (
+              (sbc.unpaid_time_off?.deduction ?? 0) > 0 ||
+              (sbc.time_variance?.deduction ?? 0) > 0 ||
+              (sbc.absent_days?.deduction ?? 0) > 0
+            );
+
+            return (
+              <div className="space-y-6 text-sm">
+
+                {/* Employee Details */}
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3 pb-1 border-b">Employee Details</h3>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-1">
+                    <p><span className="text-gray-500">Name:</span> <span className="font-medium text-gray-800">{emp.employee_name}</span></p>
+                    <p><span className="text-gray-500">ID:</span> <span className="font-medium text-gray-800">{emp.employee_code}</span></p>
+                    <p><span className="text-gray-500">Department:</span> <span className="font-medium text-gray-800">{emp.department_name}</span></p>
+                  </div>
+                </div>
+
+                {/* Work Summary */}
+                {ebs && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-700 mb-3">Work Summary</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500">Worked Hours</p>
+                        <p className="text-base font-semibold text-gray-800">{attendanceHours.toFixed(2)}</p>
+                      </div>
+                      {paidLeaveHours > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-500">Paid Leave Hours</p>
+                          <p className="text-base font-semibold text-green-600">{paidLeaveHours.toFixed(2)}</p>
+                        </div>
+                      )}
+                      {liveSessionHours > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-500">Live Session Hours</p>
+                          <p className="text-base font-semibold text-yellow-600">{liveSessionHours.toFixed(2)}</p>
+                        </div>
+                      )}
+                      {ebs.overtime && ebs.overtime.minutes > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-500">Overtime</p>
+                          <p className="text-base font-semibold text-blue-600">{(ebs.overtime.minutes / 60).toFixed(2)} hrs</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Salary Calculation */}
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3 pb-1 border-b">Salary Calculation</h3>
+                  <div className="space-y-3">
+
+                    {/* Base Salary */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 font-medium">Base Salary (Full Month)</span>
+                      <span className="font-medium text-gray-700">{formatCurrency(emp.base_salary)}</span>
+                    </div>
+
+                    {/* Shortfall Breakdown */}
+                    {hasShortfall && (
+                      <div className="ml-4 bg-orange-50 border border-orange-200 p-3 rounded-lg">
+                        <div className="font-medium text-orange-800 mb-2 text-xs uppercase tracking-wide">Salary Reduction (Shortfall)</div>
+                        <div className="space-y-1.5">
+                          {(sbc!.time_variance?.deduction ?? 0) > 0 && (
+                            <div className="flex justify-between text-gray-700">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 bg-yellow-500 rounded-full inline-block"></span>
+                                Late Arrivals &amp; Early Departures ({sbc!.time_variance.hours.toFixed(2)}h)
+                              </span>
+                              <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.time_variance.deduction)}</span>
+                            </div>
+                          )}
+                          {(sbc!.unpaid_time_off?.deduction ?? 0) > 0 && (
+                            <div className="flex justify-between text-gray-700">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 bg-orange-500 rounded-full inline-block"></span>
+                                Unpaid Leaves ({sbc!.unpaid_time_off.hours.toFixed(2)}h)
+                              </span>
+                              <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.unpaid_time_off.deduction)}</span>
+                            </div>
+                          )}
+                          {(sbc!.absent_days?.deduction ?? 0) > 0 && (
+                            <div className="flex justify-between text-gray-700">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span>
+                                Absent Days
+                              </span>
+                              <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.absent_days.deduction)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actual Base Earned */}
+                    <div className="flex justify-between pt-1">
+                      <span className="text-gray-600">Base Salary Earned</span>
+                      <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{formatCurrency(emp.actual_earned_base - emp.overtime_amount)}</span>
+                    </div>
+
+                    {/* Earnings from Work breakdown */}
+                    <div className="ml-4 bg-green-50 border border-green-100 p-3 rounded-lg">
+                      <div className="font-medium text-green-800 mb-2 text-xs uppercase tracking-wide">Earnings from Work</div>
+                      <div className="space-y-1.5">
+                        {emp.allowances_breakdown.map((a, i) => (
+                          <div key={i} className="flex justify-between text-gray-700">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 bg-green-500 rounded-full inline-block"></span>
+                              {a.name}{a.is_percentage ? ' (% of Base)' : ''}
+                            </span>
+                            <span>+{formatCurrency(a.amount)}</span>
+                          </div>
+                        ))}
+                        {emp.bonuses_breakdown.map((b, i) => (
+                          <div key={i} className="flex justify-between text-gray-700">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 bg-teal-500 rounded-full inline-block"></span>
+                              {b.description}
+                            </span>
+                            <span>+{formatCurrency(b.amount)}</span>
+                          </div>
+                        ))}
+                        {ebs?.overtime && ebs.overtime.earned > 0 && (
+                          <div className="flex justify-between text-gray-700">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 bg-blue-500 rounded-full inline-block"></span>
+                              Overtime ({ebs.overtime.minutes} mins)
+                            </span>
+                            <span>+{formatCurrency(ebs.overtime.earned)}</span>
+                          </div>
+                        )}
+                        {(emp.allowances_breakdown.length === 0 && emp.bonuses_breakdown.length === 0 && !(ebs?.overtime?.earned)) && (
+                          <div className="text-gray-400 italic text-xs">No additional earnings</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Gross Salary */}
+                    <div className="flex justify-between pt-2 border-t-2 border-blue-600 font-semibold text-base">
+                      <span>Gross Salary</span>
+                      <span className="text-blue-600">{formatCurrency(emp.gross_salary)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Deductions */}
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-3 pb-1 border-b">Deductions (from Gross Salary)</h3>
+                  <div className="space-y-2">
+                    {emp.deductions_breakdown.map((d, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span className="text-gray-600">{d.name} <span className="text-xs text-gray-400 uppercase ml-1">{d.category}</span></span>
+                        <span className="font-medium text-red-600">-{formatCurrency(d.amount)}</span>
+                      </div>
+                    ))}
+                    {emp.financial_deductions_breakdown.map((d, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span className="text-gray-600">{d.description}</span>
+                        <span className="font-medium text-red-600">-{formatCurrency(d.amount)}</span>
+                      </div>
+                    ))}
+                    {(emp.deductions_breakdown.length === 0 && emp.financial_deductions_breakdown.length === 0) && (
+                      <div className="text-gray-400 italic">No deductions</div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t font-semibold">
+                      <span>Total Deductions</span>
+                      <span className="text-red-600">-{formatCurrency(emp.deductions_total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Net Salary */}
+                <div className="bg-blue-50 border border-blue-200 p-5 rounded-xl">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold text-gray-800">Net Salary</span>
+                    <span className="text-2xl font-bold text-blue-600">{formatCurrency(emp.net_salary)}</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-blue-200">
+                    <p className="text-xs text-gray-500">
+                      <span className="font-medium text-gray-600">Status:</span>{' '}
+                      <span className="capitalize text-blue-600 font-medium">Live Preview</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      <span className="font-medium text-gray-600">Calculated:</span>{' '}
+                      {lastCalculated.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={closePayslipModal}>Close</Button>
+        </Modal.Footer>
+      </Modal>
+
     </div>
   );
 };
