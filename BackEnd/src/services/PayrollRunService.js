@@ -1262,6 +1262,16 @@ class PayrollRunService {
         const employeeName = employeeInfo[0] ? `${employeeInfo[0].first_name} ${employeeInfo[0].last_name}` : 'Unknown';
         const employeeCode = employeeInfo[0]?.employee_code || employeeId;
 
+        // Fetch weekend_working_config to distinguish configured vs unconfigured weekend days
+        const [empWeekendRow] = await db.execute(`
+            SELECT weekend_working_config FROM employees WHERE id = ?
+        `, [employeeId]);
+        let weekendWorkingConfig = null;
+        try {
+            const raw = empWeekendRow[0]?.weekend_working_config;
+            weekendWorkingConfig = raw ? JSON.parse(raw) : null;
+        } catch(e) { weekendWorkingConfig = null; }
+
         // Get employee-specific period dates from payroll_records (supports custom cycles)
         const [recordInfo] = await db.execute(`
             SELECT pr.employee_period_start_date, pr.employee_period_end_date,
@@ -1281,6 +1291,46 @@ class PayrollRunService {
         };
         const clientId = recordInfo[0].client_id;
         const usesCustomCycle = recordInfo[0].uses_custom_cycle === 1;
+
+        // Fetch company default weekend schedule (used when employee monthly_schedule === null)
+        let companyDefaultWeekendConfig = null;
+        try {
+            const [companyDefaultRow] = await db.execute(`
+                SELECT setting_value FROM system_settings
+                WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
+                LIMIT 1
+            `, [clientId]);
+            if (companyDefaultRow[0]?.setting_value) {
+                companyDefaultWeekendConfig = JSON.parse(companyDefaultRow[0].setting_value);
+            }
+        } catch(e) { companyDefaultWeekendConfig = null; }
+
+        // Returns true if this specific date is a configured working Saturday/Sunday
+        const isConfiguredWorkingDay = (dateStr, dayType) => {
+            if (!weekendWorkingConfig) return true; // no config at all → backward compat → all working
+            const dayConfig = weekendWorkingConfig[dayType];
+            if (!dayConfig?.working) return false; // employee not marked as working that day type at all
+            const monthlySchedule = dayConfig.monthly_schedule;
+            if (monthlySchedule === undefined) return true; // absent → backward compat → all working
+            if (monthlySchedule === null) {
+                // null = use company default schedule
+                if (!companyDefaultWeekendConfig) return true; // no company default → all working
+                const companyDayConfig = companyDefaultWeekendConfig[dayType];
+                if (!companyDayConfig?.monthly_schedule) return true; // no company schedule → all working
+                const d = new Date(dateStr);
+                const yearMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                const nth = Math.ceil(d.getDate() / 7);
+                const monthPattern = companyDayConfig.monthly_schedule[yearMonth];
+                return Array.isArray(monthPattern) && monthPattern.includes(nth);
+            }
+            // Has own monthly_schedule object — use it directly
+            if (Object.keys(monthlySchedule).length === 0) return true; // empty → backward compat
+            const d = new Date(dateStr);
+            const yearMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const nth = Math.ceil(d.getDate() / 7);
+            const monthPattern = monthlySchedule[yearMonth];
+            return Array.isArray(monthPattern) && monthPattern.includes(nth);
+        };
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -1451,21 +1501,76 @@ class PayrollRunService {
 
         // Now calculate the aggregated totals
         // NOTE: payable_duration is stored in SECONDS, so we sum them first, then convert to hours
+
+        // Weekday seconds via aggregate SQL (no filtering needed)
         const [completedSeconds] = await db.execute(`
             SELECT
-                SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) as weekday_seconds,
-                SUM(CASE WHEN is_weekend = 7 THEN payable_duration ELSE 0 END) as saturday_seconds,
-                SUM(CASE WHEN is_weekend = 1 THEN payable_duration ELSE 0 END) as sunday_seconds
+                SUM(CASE WHEN is_weekend BETWEEN 2 AND 6 THEN payable_duration ELSE 0 END) as weekday_seconds
             FROM attendance
             WHERE employee_id = ?
             AND date BETWEEN ? AND ?
             AND check_out_time IS NOT NULL
         `, [employeeId, period.period_start_date, attendanceEndDateStr]);
 
-        // Convert seconds to hours (seconds / 60 / 60)
-        const attendanceWeekdayHours = parseFloat(completedSeconds[0].weekday_seconds || 0) / 3600;
-        const attendanceSaturdayHours = parseFloat(completedSeconds[0].saturday_seconds || 0) / 3600;
-        const attendanceSundayHours = parseFloat(completedSeconds[0].sunday_seconds || 0) / 3600;
+        // Saturday/Sunday: fetch per-day so we can split configured vs unconfigured
+        const [weekendRows] = await db.execute(`
+            SELECT date, is_weekend, payable_duration, check_in_time, check_out_time
+            FROM attendance
+            WHERE employee_id = ?
+            AND date BETWEEN ? AND ?
+            AND check_out_time IS NOT NULL
+            AND is_weekend IN (1, 7)
+        `, [employeeId, period.period_start_date, attendanceEndDateStr]);
+
+        let configuredSaturdaySeconds = 0;
+        let unconfiguredSaturdaySeconds = 0;
+        let configuredSundaySeconds = 0;
+        let unconfiguredSundaySeconds = 0;
+
+        for (const rec of weekendRows) {
+            const dateStr = rec.date instanceof Date
+                ? rec.date.toISOString().split('T')[0]
+                : String(rec.date).split('T')[0];
+            if (rec.is_weekend === 7) { // Saturday
+                if (isConfiguredWorkingDay(dateStr, 'saturday')) {
+                    // Configured Saturday: use payable_duration (break-deducted, schedule-capped)
+                    configuredSaturdaySeconds += parseFloat(rec.payable_duration) || 0;
+                } else {
+                    // Unconfigured Saturday: OT = ALL actual time worked (check-in to check-out)
+                    // Do NOT use payable_duration — it may be break-deducted against the regular schedule
+                    let actualSecs = 0;
+                    if (rec.check_in_time && rec.check_out_time) {
+                        const inT = new Date(`2000-01-01T${rec.check_in_time}`);
+                        const outT = new Date(`2000-01-01T${rec.check_out_time}`);
+                        if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+                            actualSecs = Math.round((outT - inT) / 1000);
+                        }
+                    }
+                    unconfiguredSaturdaySeconds += actualSecs;
+                }
+            } else if (rec.is_weekend === 1) { // Sunday
+                if (isConfiguredWorkingDay(dateStr, 'sunday')) {
+                    // Configured Sunday: use payable_duration (break-deducted, schedule-capped)
+                    configuredSundaySeconds += parseFloat(rec.payable_duration) || 0;
+                } else {
+                    // Unconfigured Sunday: OT = ALL actual time worked (check-in to check-out)
+                    let actualSecs = 0;
+                    if (rec.check_in_time && rec.check_out_time) {
+                        const inT = new Date(`2000-01-01T${rec.check_in_time}`);
+                        const outT = new Date(`2000-01-01T${rec.check_out_time}`);
+                        if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+                            actualSecs = Math.round((outT - inT) / 1000);
+                        }
+                    }
+                    unconfiguredSundaySeconds += actualSecs;
+                }
+            }
+        }
+
+        // Convert seconds to hours
+        const attendanceWeekdayHours  = parseFloat(completedSeconds[0].weekday_seconds || 0) / 3600;
+        const attendanceSaturdayHours = configuredSaturdaySeconds / 3600;
+        const attendanceSundayHours   = configuredSundaySeconds / 3600;
 
         console.log(`\n      📊 Attendance Hours for ${employeeName} (${employeeCode}):`);
         console.log(`         Weekday: ${attendanceWeekdayHours.toFixed(2)}h`);
@@ -1952,9 +2057,15 @@ class PayrollRunService {
         let timeVarianceSundayHours = 0;
 
         for (const record of attendanceWithSchedule) {
-            const dayOfWeek = new Date(record.date).getDay();
-            let expectedDailyHours = 0;
+            const recDateStr = record.date instanceof Date
+                ? record.date.toISOString().split('T')[0]
+                : String(record.date).split('T')[0];
 
+            // Skip unconfigured Saturday/Sunday — those hours are treated as OT, not expected work
+            if (record.is_weekend === 7 && !isConfiguredWorkingDay(recDateStr, 'saturday')) continue;
+            if (record.is_weekend === 1  && !isConfiguredWorkingDay(recDateStr, 'sunday'))   continue;
+
+            let expectedDailyHours = 0;
             if (record.is_weekend >= 2 && record.is_weekend <= 6) {
                 expectedDailyHours = weekdayDailyHours;
             } else if (record.is_weekend === 7) {
@@ -2064,6 +2175,10 @@ class PayrollRunService {
                 absent_days: {
                     deduction: absentDaysDeduction
                 }
+            },
+            unconfigured_weekend_overtime: {
+                saturday_seconds: unconfiguredSaturdaySeconds,
+                sunday_seconds:   unconfiguredSundaySeconds
             }
         };
     }
@@ -4219,6 +4334,53 @@ class PayrollRunService {
                     console.log(`   Total Overtime Amount: ${overtimeAmount.toFixed(2)}`);
                 }
 
+                // ========================================
+                // Unconfigured weekend days → treat all worked hours as OT
+                // ========================================
+                const uncOT = attendanceData.unconfigured_weekend_overtime;
+                if (uncOT) {
+                    const satRate = parseFloat(emp.saturday_hourly_rate) || 0;
+                    const sunRate = parseFloat(emp.sunday_hourly_rate) || parseFloat(emp.weekday_hourly_rate) || 0;
+                    const satMult = parseFloat(emp.saturday_ot_multiplier) || 1;
+                    const sunMult = parseFloat(emp.sunday_ot_multiplier)   || 1;
+
+                    if (uncOT.saturday_seconds > 0) {
+                        const satOTAmount = (uncOT.saturday_seconds / 3600) * satRate * satMult;
+                        overtimeAmount += satOTAmount;
+                        overtimeDetailsWithAmount.push({
+                            date: 'unconfigured-saturday',
+                            day_type: 'saturday',
+                            total_minutes: Math.round(uncOT.saturday_seconds / 60),
+                            pre_shift_minutes: 0,
+                            post_shift_minutes: 0,
+                            pre_shift_enabled: false,
+                            post_shift_enabled: false,
+                            hourly_rate: satRate,
+                            multiplier: satMult,
+                            amount: satOTAmount
+                        });
+                        console.log(`   Unconfigured Saturday OT: ${(uncOT.saturday_seconds/3600).toFixed(2)}h × Rs.${satRate} × ${satMult}x = Rs.${satOTAmount.toFixed(2)}`);
+                    }
+
+                    if (uncOT.sunday_seconds > 0) {
+                        const sunOTAmount = (uncOT.sunday_seconds / 3600) * sunRate * sunMult;
+                        overtimeAmount += sunOTAmount;
+                        overtimeDetailsWithAmount.push({
+                            date: 'unconfigured-sunday',
+                            day_type: 'sunday',
+                            total_minutes: Math.round(uncOT.sunday_seconds / 60),
+                            pre_shift_minutes: 0,
+                            post_shift_minutes: 0,
+                            pre_shift_enabled: false,
+                            post_shift_enabled: false,
+                            hourly_rate: sunRate,
+                            multiplier: sunMult,
+                            amount: sunOTAmount
+                        });
+                        console.log(`   Unconfigured Sunday OT: ${(uncOT.sunday_seconds/3600).toFixed(2)}h × Rs.${sunRate} × ${sunMult}x = Rs.${sunOTAmount.toFixed(2)}`);
+                    }
+                }
+
                 return {
                     ...emp,
                     actual_worked_days: attendedDaysByEmployee[emp.employee_id] || 0,
@@ -4502,7 +4664,54 @@ class PayrollRunService {
             const postShiftOTEnabled = empSettings[0]?.post_shift_overtime_enabled || false;
             const weekdayOTMultiplier = parseFloat(empSettings[0]?.weekday_ot_multiplier) || 1.0;
             const saturdayOTMultiplier = parseFloat(empSettings[0]?.saturday_ot_multiplier) || 1.0;
-            const sundayOTMultiplier = parseFloat(empSettings[0]?.sunday_ot_multiplier) || 1.0;
+            const sundayOTMultiplier = parseFloat(empSettings[0]?.sunday_ot_multiplier)   || 1.0;
+
+            // Fetch weekend_working_config to distinguish configured vs unconfigured days
+            const [empWCRow] = await db.execute(`
+                SELECT weekend_working_config FROM employees WHERE id = ?
+            `, [employeeId]);
+            let weekendCfg = null;
+            try {
+                const raw = empWCRow[0]?.weekend_working_config;
+                weekendCfg = raw ? JSON.parse(raw) : null;
+            } catch(e) { weekendCfg = null; }
+
+            // Fetch company default for employees using company default schedule
+            let companyDefaultCfg = null;
+            try {
+                const [companyRow] = await db.execute(`
+                    SELECT setting_value FROM system_settings
+                    WHERE client_id = (SELECT client_id FROM payroll_runs WHERE id = ? LIMIT 1)
+                      AND setting_key = 'default_weekend_working_config'
+                    LIMIT 1
+                `, [runId]);
+                if (companyRow[0]?.setting_value) {
+                    companyDefaultCfg = JSON.parse(companyRow[0].setting_value);
+                }
+            } catch(e) { companyDefaultCfg = null; }
+
+            const isConfiguredDay = (dateStr, dayType) => {
+                if (!weekendCfg) return true;
+                const dayConfig = weekendCfg[dayType];
+                if (!dayConfig?.working) return false;
+                const ms = dayConfig.monthly_schedule;
+                if (ms === undefined) return true; // absent → backward compat → all working
+                if (ms === null) {
+                    // use company default
+                    if (!companyDefaultCfg) return true;
+                    const compDayConfig = companyDefaultCfg[dayType];
+                    if (!compDayConfig?.monthly_schedule) return true;
+                    const d = new Date(dateStr);
+                    const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                    const nth = Math.ceil(d.getDate() / 7);
+                    return Array.isArray(compDayConfig.monthly_schedule[ym]) && compDayConfig.monthly_schedule[ym].includes(nth);
+                }
+                if (Object.keys(ms).length === 0) return true;
+                const d = new Date(dateStr);
+                const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                const nth = Math.ceil(d.getDate() / 7);
+                return Array.isArray(ms[ym]) && ms[ym].includes(nth);
+            };
 
             // Get daily attendance records for the employee-specific period
             const [attendanceRecords] = await db.execute(`
@@ -4538,30 +4747,49 @@ class PayrollRunService {
                 let hourlyRate = weekdayHourlyRate;
                 let dayType = 'Weekday';
                 let otMultiplier = weekdayOTMultiplier;
+                const workDateStr = record.work_date instanceof Date
+                    ? record.work_date.toISOString().split('T')[0]
+                    : String(record.work_date).split('T')[0];
 
                 // is_weekend: 1 = Sunday, 7 = Saturday, 0 or null = Weekday
                 if (record.is_weekend === 1) {
-                    hourlyRate = sundayHourlyRate;
+                    hourlyRate = sundayHourlyRate > 0 ? sundayHourlyRate : weekdayHourlyRate;
                     otMultiplier = sundayOTMultiplier;
-                    dayType = 'Sunday';
+                    dayType = isConfiguredDay(workDateStr, 'sunday') ? 'Sunday' : 'Sunday (Unscheduled)';
                 } else if (record.is_weekend === 7) {
                     hourlyRate = saturdayHourlyRate;
                     otMultiplier = saturdayOTMultiplier;
-                    dayType = 'Saturday';
+                    dayType = isConfiguredDay(workDateStr, 'saturday') ? 'Saturday' : 'Saturday (Unscheduled)';
                 }
 
-                // Calculate daily salary from regular hours
-                const dailySalary = totalHours * hourlyRate;
+                const isUnscheduledWeekend = dayType === 'Saturday (Unscheduled)' || dayType === 'Sunday (Unscheduled)';
 
-                // Calculate overtime if enabled
+                // For unscheduled weekends: all worked minutes are OT, no regular salary
+                // For scheduled days: regular salary calculation
+                const dailySalary = isUnscheduledWeekend ? 0 : totalHours * hourlyRate;
+
+                // Calculate overtime
                 let overtimeMinutes = 0;
                 let overtimeAmount = 0;
 
-                if (overtimeEnabled) {
+                if (isUnscheduledWeekend) {
+                    // ALL actual time worked is OT for unscheduled weekend days
+                    // Use raw check-in/check-out diff — NOT payable_duration which may have been
+                    // break-deducted or overlap-capped against the regular schedule
+                    let actualWorkedSeconds = 0;
+                    if (record.check_in_time && record.check_out_time) {
+                        const actualIn = new Date(`2000-01-01T${record.check_in_time}`);
+                        const actualOut = new Date(`2000-01-01T${record.check_out_time}`);
+                        if (!isNaN(actualIn) && !isNaN(actualOut) && actualOut > actualIn) {
+                            actualWorkedSeconds = Math.round((actualOut - actualIn) / 1000);
+                        }
+                    }
+                    overtimeMinutes = Math.round(actualWorkedSeconds / 60);
+                    overtimeAmount = (actualWorkedSeconds / 3600) * hourlyRate * otMultiplier;
+                } else if (overtimeEnabled) {
                     const preShiftSeconds = parseInt(record.pre_shift_overtime_seconds) || 0;
                     const postShiftSeconds = parseInt(record.post_shift_overtime_seconds) || 0;
 
-                    // Determine applicable overtime seconds based on enable flags
                     let totalOvertimeSeconds = 0;
                     if (preShiftOTEnabled && postShiftOTEnabled) {
                         totalOvertimeSeconds = preShiftSeconds + postShiftSeconds;
@@ -4573,11 +4801,7 @@ class PayrollRunService {
 
                     if (totalOvertimeSeconds > 0) {
                         overtimeMinutes = Math.round(totalOvertimeSeconds / 60);
-
-                        // Calculate per-second rate
                         const perSecondRate = hourlyRate / 3600;
-
-                        // Calculate overtime amount (TODO: Skip holidays for now)
                         overtimeAmount = totalOvertimeSeconds * perSecondRate * otMultiplier;
                     }
                 }
