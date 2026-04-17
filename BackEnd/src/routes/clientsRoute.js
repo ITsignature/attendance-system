@@ -424,9 +424,6 @@ router.put('/:id/sms-config',
 
     await smsService.saveClientConfig(id, config);
 
-    // Also update the sms_enabled flag on the client record for display
-    await db.execute('UPDATE clients SET sms_enabled = ? WHERE id = ?', [enabled ? 1 : 0, id]);
-
     res.status(200).json({ success: true, message: 'SMS configuration saved', data: config });
   })
 );

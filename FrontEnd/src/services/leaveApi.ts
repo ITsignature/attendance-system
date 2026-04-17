@@ -40,6 +40,7 @@ export interface LeaveRequest {
   reviewer_comments?: string;
   supporting_documents?: string[] | null;
   department_name?: string;
+  is_paid?: boolean;
 }
 
 export interface LeaveDashboard {
@@ -334,6 +335,46 @@ class LeaveApiService {
       return response;
     } catch (error) {
       console.error('Failed to fetch my leave requests:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a leave request
+   */
+  async updateLeaveRequest(requestId: string, data: Partial<{
+    leave_type_id: string;
+    start_date: string;
+    end_date: string;
+    leave_duration: 'full_day' | 'half_day' | 'short_leave';
+    start_time: string | null;
+    end_time: string | null;
+    reason: string;
+    is_paid: boolean;
+  }>): Promise<ApiResponse> {
+    try {
+      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to update leave request:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a leave request
+   */
+  async deleteLeaveRequest(requestId: string): Promise<ApiResponse> {
+    try {
+      const response = await apiService.apiCall(`/api/leaves/requests/${requestId}`, {
+        method: 'DELETE',
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to delete leave request:', error);
       throw error;
     }
   }
