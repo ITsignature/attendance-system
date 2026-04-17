@@ -291,7 +291,7 @@ const EmployeePayroll = () => {
                           <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
                           Absent Days
                         </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction + earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
+                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
                       </div>
                     )}
                     </div>
