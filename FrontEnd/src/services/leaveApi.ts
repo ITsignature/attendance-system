@@ -10,6 +10,8 @@ export interface LeaveType {
   name: string;
   description?: string;
   max_days_per_year?: number;
+  max_days_per_month?: number;
+  tracking_period?: 'Monthly' | 'Yearly';
   max_consecutive_days?: number;
   is_paid: boolean;
   requires_approval: boolean;
@@ -81,7 +83,9 @@ export interface CreateLeaveRequestData {
 export interface CreateLeaveTypeData {
   name: string;
   description?: string;
-  max_days_per_year: number;
+  tracking_period: 'Monthly' | 'Yearly';
+  max_days_per_year?: number;
+  max_days_per_month?: number;
   max_consecutive_days?: number;
   is_paid: boolean;
   requires_approval: boolean;

@@ -492,23 +492,50 @@ const applyForLeave = asyncHandler(async (req, res) => {
     days_requested = hours / 8; // Assuming 8-hour workday
   }
 
-  // Check if employee has already taken maximum days
-  const [leaveTaken] = await db.execute(`
-    SELECT SUM(days_requested) as total_days
-    FROM leave_requests
-    WHERE employee_id = ?
-      AND leave_type_id = ?
-      AND status = 'approved'
-      AND YEAR(start_date) = YEAR(?)
-  `, [employeeId, leave_type_id, start_date]);
+  // Check leave balance based on tracking period
+  const trackingPeriod = leaveType.tracking_period || 'yearly';
+  const maxDays = trackingPeriod === 'monthly' ? leaveType.max_days_per_month : leaveType.max_days_per_year;
 
-  const totalDaysTaken = parseFloat(leaveTaken[0].total_days || 0);
+  if (maxDays && maxDays > 0) {
+    const requestStartDate = new Date(start_date);
+    let periodStartDate, periodEndDate;
 
-  if (leaveType.max_days_per_year && (totalDaysTaken + days_requested) > leaveType.max_days_per_year) {
-    return res.status(400).json({
-      success: false,
-      message: `You have exceeded the maximum allowed days (${leaveType.max_days_per_year}) for this leave type this year. Days taken: ${totalDaysTaken}`
-    });
+    if (trackingPeriod === 'monthly') {
+      // Check current month
+      periodStartDate = new Date(requestStartDate.getFullYear(), requestStartDate.getMonth(), 1);
+      periodEndDate = new Date(requestStartDate.getFullYear(), requestStartDate.getMonth() + 1, 0);
+    } else {
+      // Check current year
+      periodStartDate = new Date(requestStartDate.getFullYear(), 0, 1);
+      periodEndDate = new Date(requestStartDate.getFullYear(), 11, 31);
+    }
+
+    const [leaveTaken] = await db.execute(`
+      SELECT COALESCE(SUM(days_requested), 0) as total_days
+      FROM leave_requests
+      WHERE employee_id = ?
+        AND leave_type_id = ?
+        AND status IN ('approved', 'pending')
+        AND (
+          (start_date >= ? AND start_date <= ?)
+          OR (end_date >= ? AND end_date <= ?)
+          OR (start_date <= ? AND end_date >= ?)
+        )
+    `, [employeeId, leave_type_id, periodStartDate, periodEndDate, periodStartDate, periodEndDate, periodStartDate, periodEndDate]);
+
+    const totalDaysTaken = parseFloat(leaveTaken[0].total_days || 0);
+    const remainingDays = maxDays - totalDaysTaken;
+
+    if ((totalDaysTaken + days_requested) > maxDays) {
+      const periodLabel = trackingPeriod === 'monthly'
+        ? `for ${requestStartDate.toLocaleString('default', { month: 'long', year: 'numeric' })}`
+        : `for ${requestStartDate.getFullYear()}`;
+
+      return res.status(400).json({
+        success: false,
+        message: `You have exceeded the maximum allowed days (${maxDays}) for ${leaveType.name} ${periodLabel}. You have ${remainingDays} day(s) remaining but requested ${days_requested} day(s).`
+      });
+    }
   }
 
   // Check consecutive days limit

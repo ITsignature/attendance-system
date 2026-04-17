@@ -49,6 +49,8 @@ router.get('/types',
         name,
         description,
         max_days_per_year,
+        max_days_per_month,
+        tracking_period,
         max_consecutive_days,
         is_paid,
         requires_approval,
@@ -72,12 +74,15 @@ router.post('/types',
   checkPermission('leave_types.create'),
   [
     body('name').trim().notEmpty().withMessage('Leave type name is required'),
-    body('max_days_per_year').isInt({ min: 0 }).withMessage('Max days per year must be a positive number'),
+    body('tracking_period').isIn(['Monthly','Yearly']).withMessage('Tracking period must be Monthly or Yearly'),
+    body('max_days_per_year').optional().isInt({ min: 0 }).withMessage('Max days per year must be a positive number'),
+    body('max_days_per_month').optional().isFloat({min : 0}).withMessage('Max days per month must be a positive number'),
     body('max_consecutive_days').optional().isInt({ min: 0 }).withMessage('Max consecutive days must be a positive number'),
-    body('is_paid').isBoolean().withMessage('is_paid must be a boolean'),
-    body('requires_approval').isBoolean().withMessage('requires_approval must be a boolean'),
+    body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
+    body('requires_approval').optional().isBoolean().withMessage('requires_approval must be a boolean'),
     body('notice_period_days').optional().isInt({ min: 0 }).withMessage('Notice period must be a positive number')
   ],
+
   asyncHandler(async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -90,15 +95,47 @@ router.post('/types',
 
     const db = getDB();
     const clientId = req.user.clientId;
+
     const {
       name,
       description,
-      max_days_per_year,
+      tracking_period = 'Yearly',
+      max_days_per_year = null,
+      max_days_per_month = null,
       max_consecutive_days,
       is_paid,
       requires_approval,
       notice_period_days
     } = req.body;
+
+    if (tracking_period === 'Yearly') {
+      if (!max_days_per_year) {
+        return res.status(400).json({
+          success: false,
+          message: 'Max days per year is required for Yearly tracking period'
+        });
+      }
+      if (max_days_per_month) {
+        return res.status(400).json({
+          success: false,
+          message: 'Max days per month is not allowed for Yearly tracking period'
+        });
+      }
+    } else if (tracking_period === 'Monthly') {
+      if (!max_days_per_month) {
+        return res.status(400).json({
+          success: false,
+          message: 'Max days per month is required for Monthly tracking period'
+        });
+      }
+      if (max_days_per_year) {
+        return res.status(400).json({
+          success: false,
+          message: 'Max days per year is not allowed for Monthly tracking period'
+        });
+      }
+    }
+
 
     const leaveTypeId = uuidv4();
 
@@ -108,19 +145,23 @@ router.post('/types',
         client_id,
         name,
         description,
+        tracking_period,
         max_days_per_year,
+        max_days_per_month,
         max_consecutive_days,
         is_paid,
         requires_approval,
         notice_period_days,
         is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
     `, [
       leaveTypeId,
       clientId,
       name,
       description || null,
-      max_days_per_year,
+      tracking_period,
+      max_days_per_year || null,
+      max_days_per_month || null,
       max_consecutive_days || null,
       is_paid,
       requires_approval,
@@ -141,7 +182,9 @@ router.put('/types/:id',
   [
     param('id').isUUID().withMessage('Valid leave type ID is required'),
     body('name').optional().trim().notEmpty().withMessage('Leave type name cannot be empty'),
+    body('tracking_period').isIn(['Monthly','Yearly']).withMessage('Tracking period must be Monthly or Yearly'),
     body('max_days_per_year').optional().isInt({ min: 0 }).withMessage('Max days per year must be a positive number'),
+    body('max_days_per_month').optional().isFloat({min : 0}).withMessage('Max days per month must be a positive number'),
     body('max_consecutive_days').optional().isInt({ min: 0 }).withMessage('Max consecutive days must be a positive number'),
     body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
     body('requires_approval').optional().isBoolean().withMessage('requires_approval must be a boolean'),
@@ -179,7 +222,9 @@ router.put('/types/:id',
     const allowedFields = [
       'name',
       'description',
+      'tracking_period',
       'max_days_per_year',
+      'max_days_per_month',
       'max_consecutive_days',
       'is_paid',
       'requires_approval',
@@ -267,6 +312,119 @@ router.delete('/types/:id',
     res.json({
       success: true,
       message: 'Leave type deleted successfully'
+    });
+  })
+);
+
+// GET /api/leaves/balance - Get leave balance for specific employee and leave type
+router.get('/balance',
+  checkPermission('leaves.view'),
+  [
+    query('employee_id').isUUID().withMessage('Valid employee ID is required'),
+    query('leave_type_id').isUUID().withMessage('Valid leave type ID is required'),
+    query('start_date').isISO8601().withMessage('Valid start date is required')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { employee_id, leave_type_id, start_date } = req.query;
+    const db = getDB();
+    const clientId = req.user.clientId;
+
+    // Verify employee belongs to client
+    const [employee] = await db.execute(`
+      SELECT id FROM employees WHERE id = ? AND client_id = ?
+    `, [employee_id, clientId]);
+
+    if (employee.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    // Get leave type details
+    const [leaveTypes] = await db.execute(`
+      SELECT tracking_period, max_days_per_year, max_days_per_month, name, is_paid
+      FROM leave_types
+      WHERE id = ? AND client_id = ? AND is_active = TRUE
+    `, [leave_type_id, clientId]);
+
+    if (leaveTypes.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Leave type not found'
+      });
+    }
+
+    const leaveType = leaveTypes[0];
+    const trackingPeriod = leaveType.tracking_period || 'Yearly';
+    const maxDays = trackingPeriod === 'Monthly' ? leaveType.max_days_per_month : leaveType.max_days_per_year;
+
+    if (!maxDays || maxDays === 0) {
+      return res.json({
+        success: true,
+        balance: {
+          limit: 0,
+          taken: 0,
+          remaining: 0,
+          period: '',
+          tracking_period: trackingPeriod,
+          is_paid: leaveType.is_paid,
+          leave_type_name: leaveType.name,
+          unlimited: true
+        }
+      });
+    }
+
+    const requestDate = new Date(start_date);
+    let periodStartDate, periodEndDate, periodLabel;
+
+    if (trackingPeriod === 'Monthly') {
+      periodStartDate = new Date(requestDate.getFullYear(), requestDate.getMonth(), 1);
+      periodEndDate = new Date(requestDate.getFullYear(), requestDate.getMonth() + 1, 0);
+      periodLabel = `${requestDate.toLocaleString('default', { month: 'long' })} ${requestDate.getFullYear()}`;
+    } else {
+      periodStartDate = new Date(requestDate.getFullYear(), 0, 1);
+      periodEndDate = new Date(requestDate.getFullYear(), 11, 31);
+      periodLabel = requestDate.getFullYear().toString();
+    }
+
+    const [leaveTaken] = await db.execute(`
+      SELECT COALESCE(SUM(days_requested), 0) as total_days
+      FROM leave_requests
+      WHERE employee_id = ?
+        AND leave_type_id = ?
+        AND status IN ('approved', 'pending')
+        AND (
+          (start_date >= ? AND start_date <= ?)
+          OR (end_date >= ? AND end_date <= ?)
+          OR (start_date <= ? AND end_date >= ?)
+        )
+    `, [employee_id, leave_type_id, periodStartDate, periodEndDate, periodStartDate, periodEndDate, periodStartDate, periodEndDate]);
+
+    const daysTaken = parseFloat(leaveTaken[0].total_days || 0);
+    const remaining = maxDays - daysTaken;
+
+    res.json({
+      success: true,
+      balance: {
+        limit: maxDays,
+        taken: daysTaken,
+        remaining: remaining,
+        period: periodLabel,
+        tracking_period: trackingPeriod,
+        is_paid: leaveType.is_paid,
+        leave_type_name: leaveType.name,
+        unlimited: false
+      }
     });
   })
 );
@@ -502,8 +660,7 @@ router.get('/requests',
     });
   })
 );
-// POST /api/leaves/request - Submit new leave request
-// POST /api/leaves/request - Submit new leave request
+
 // POST /api/leaves/request - Admin creates leave request for any employee
 router.post('/request',
   checkPermission('leaves.create'),
@@ -542,7 +699,6 @@ router.post('/request',
       days_requested,
       supporting_documents = null,
       notes = null,
-      is_paid = true
     } = req.body;
 
     const adminUserId = req.user.userId;
@@ -679,79 +835,120 @@ router.post('/request',
       }
 
       // Check paid leave balance and determine if this leave can be paid
-      let finalIsPaid = is_paid;
-      let paidLeaveInfo = null;
+      // let finalIsPaid = is_paid;
+      // let paidLeaveInfo = null;
 
-      if (is_paid) {
-        // Get paid_leaves_per_month setting
-        const [paidLeavesSetting] = await db.execute(`
-          SELECT setting_value
-          FROM system_settings
-          WHERE setting_key = 'paid_leaves_per_month'
-          AND (client_id = ? OR client_id IS NULL)
-          ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END
-          LIMIT 1
-        `, [clientId]);
+      //Get leave type details including tracking configuration
+      const [leaveTypeInfo] = await db.execute(`
+        SELECT 
+        is_paid,
+        tracking_period,
+        max_days_per_year,
+        max_days_per_month,
+        max_consecutive_days,
+        requires_approval
+        FROM leave_types
+        WHERE id = ? AND client_id = ?
+      `, [leave_type_id, clientId]);
 
-        let paidLeavesLimit = 2; // Default value
-        if (paidLeavesSetting.length > 0) {
-          try {
-            paidLeavesLimit = JSON.parse(paidLeavesSetting[0].setting_value);
-          } catch (e) {
-            paidLeavesLimit = parseInt(paidLeavesSetting[0].setting_value) || 2;
-          }
-        }
+      if(leaveTypeInfo.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Leave type not found for the client'
+        });
+      }
 
-        // Calculate the month range for the leave request
-        const requestStartMonth = new Date(start_date);
+      const leaveTypeDetails = leaveTypeInfo[0];
+      const leaveTypeId = leave_type_id;
+      const finalIsPaid = leaveTypeDetails.is_paid;
+      const trackingPeriod = leaveTypeDetails.tracking_period;
+      const maxDaysPerYear = leaveTypeDetails.max_days_per_year;
+      const maxDaysPerMonth = leaveTypeDetails.max_days_per_month;
+
+      const requestStartMonth = new Date(start_date);
+
+      // Initialize variables for leave balance check
+      let LeaveInfo = null;
+      let totalLeavesTaken = 0;
+      let remainingLeaves = 0;
+      let LeavesLimit = 0;
+
+      if(trackingPeriod === 'Monthly' && maxDaysPerMonth > 0) {
         const firstDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth(), 1);
         const lastDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth() + 1, 0);
 
-        // Calculate total paid leaves already taken/approved in this month
-        const [existingPaidLeaves] = await db.execute(`
-          SELECT COALESCE(SUM(days_requested), 0) as total_paid_leaves
+        const [existingLeaves] = await db.execute(`
+          SELECT COALESCE(SUM(days_requested), 0) as total_leaves
           FROM leave_requests
           WHERE employee_id = ?
-          AND is_paid = TRUE
+          AND leave_type_id = ?
           AND status IN ('approved', 'pending')
           AND (
             (start_date >= ? AND start_date <= ?)
             OR (end_date >= ? AND end_date <= ?)
             OR (start_date <= ? AND end_date >= ?)
           )
-        `, [employee_id, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth]);
+        `, [employee_id, leaveTypeId, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth]);
 
-        const totalPaidLeavesTaken = parseFloat(existingPaidLeaves[0].total_paid_leaves) || 0;
-        const remainingPaidLeaves = paidLeavesLimit - totalPaidLeavesTaken;
+        totalLeavesTaken = parseFloat(existingLeaves[0].total_leaves) || 0;
+        remainingLeaves = maxDaysPerMonth - totalLeavesTaken;
+        LeavesLimit = maxDaysPerMonth;
 
-        paidLeaveInfo = {
-          paid_leaves_limit: paidLeavesLimit,
-          paid_leaves_taken: totalPaidLeavesTaken,
-          paid_leaves_remaining: remainingPaidLeaves,
+        LeaveInfo = {
+          leaves_limit: maxDaysPerMonth,
+          leaves_taken: totalLeavesTaken,
+          leaves_remaining: remainingLeaves,
           days_requested: calculatedDays,
           month: `${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`
         };
 
-        // If remaining leaves are insufficient, reject the paid leave request
-        if (calculatedDays > remainingPaidLeaves) {
+      } else if(trackingPeriod === 'Yearly' && maxDaysPerYear > 0) {
+        const firstDayOfYear = new Date(requestStartMonth.getFullYear(), 0, 1);
+        const lastDayOfYear = new Date(requestStartMonth.getFullYear(), 11, 31);
+
+        const [existingLeaves] = await db.execute(`
+          SELECT COALESCE(SUM(days_requested), 0) as total_leaves
+          FROM leave_requests
+          WHERE employee_id = ?
+          AND leave_type_id = ?
+          AND status IN ('approved', 'pending')
+          AND (
+            (start_date >= ? AND start_date <= ?)
+            OR (end_date >= ? AND end_date <= ?)
+            OR (start_date <= ? AND end_date >= ?)
+          )
+        `, [employee_id, leaveTypeId, firstDayOfYear, lastDayOfYear, firstDayOfYear, lastDayOfYear, firstDayOfYear, lastDayOfYear]);
+
+        totalLeavesTaken = parseFloat(existingLeaves[0].total_leaves) || 0;
+        remainingLeaves = maxDaysPerYear - totalLeavesTaken;
+        LeavesLimit = maxDaysPerYear;
+
+        LeaveInfo = {
+          leaves_limit: maxDaysPerYear,
+          leaves_taken: totalLeavesTaken,
+          leaves_remaining: remainingLeaves,
+          days_requested: calculatedDays,
+          year: requestStartMonth.getFullYear()
+        };
+      }
+
+      if (calculatedDays > remainingLeaves) {
           return res.status(400).json({
             success: false,
-            message: `Paid leave limit exceeded. Employee has ${remainingPaidLeaves} day(s) remaining but requested ${calculatedDays} day(s).`,
+            message: `Leave limit exceeded. Employee has ${remainingLeaves} day(s) remaining but requested ${calculatedDays} day(s).`,
             error: {
-              type: 'PAID_LEAVE_LIMIT_EXCEEDED',
-              paid_leave_info: {
-                limit: paidLeavesLimit,
-                taken: totalPaidLeavesTaken,
-                remaining: remainingPaidLeaves,
+              type: 'LEAVE_LIMIT_EXCEEDED',
+              leave_info: {
+                limit: LeavesLimit,
+                taken: totalLeavesTaken,
+                remaining: remainingLeaves,
                 requested: calculatedDays,
-                month: `${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`
-              }
-            }
+                ...(trackingPeriod === 'Monthly' ? {month :`${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`} : { year: requestStartMonth.getFullYear() }),
+        }, }
           });
-        } else {
-          console.log(`✅ Paid leave check passed. Limit: ${paidLeavesLimit}, Taken: ${totalPaidLeavesTaken}, Remaining: ${remainingPaidLeaves}, Requesting: ${calculatedDays}`);
+      }else {
+          console.log(`✅ leave check passed. Limit: ${LeavesLimit}, Taken: ${totalLeavesTaken}, Remaining: ${remainingLeaves}, Requesting: ${calculatedDays}`);
         }
-      }
 
       // Calculate day-of-week breakdown
       // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
@@ -815,9 +1012,9 @@ router.post('/request',
       };
 
       // Add paid leave info if available
-      if (paidLeaveInfo) {
-        responseData.paid_leave_info = paidLeaveInfo;
-      }
+      // if (paidLeaveInfo) {
+      //   responseData.paid_leave_info = paidLeaveInfo;
+      // }
 
       res.status(201).json({
         success: true,
