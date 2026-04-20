@@ -42,6 +42,8 @@ interface LeaveType {
   max_days_per_request?: number;
   advance_notice_days?: number;
   max_days_per_year?: number;
+  max_days_per_month?: number;
+  tracking_period?: 'Monthly' | 'Yearly';
   is_paid: boolean;
 }
 
@@ -56,7 +58,6 @@ interface FormData {
   reason: string;
   admin_notes: string;
   supporting_documents: File[];
-  is_paid: boolean;
 }
 
 interface FormErrors {
@@ -84,8 +85,7 @@ const LeaveRequestForm: React.FC = () => {
     end_time: '',
     reason: '',
     admin_notes: '',
-    supporting_documents: [],
-    is_paid: true
+    supporting_documents: []
   });
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -96,17 +96,22 @@ const LeaveRequestForm: React.FC = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [success, setSuccess] = useState<string>('');
   const [calculatedDays, setCalculatedDays] = useState<number>(0);
-  const [paidLeaveBalance, setPaidLeaveBalance] = useState<{
+  const [leaveTypeBalance, setLeaveTypeBalance] = useState<{
     limit: number;
     taken: number;
     remaining: number;
-    month: string;
+    period: string;
+    tracking_period: 'Monthly' | 'Yearly';
+    is_paid: boolean;
+    leave_type_name: string;
+    unlimited: boolean;
   } | null>(null);
   const [loadingBalance, setLoadingBalance] = useState<boolean>(false);
   const [holidaysInRange, setHolidaysInRange] = useState<Holiday[]>([]);
 
-
-
+  // Display format dates (dd/mm/yyyy)
+  const [displayStartDate, setDisplayStartDate] = useState<string>('');
+  const [displayEndDate, setDisplayEndDate] = useState<string>('');
 
   // Load initial data
   useEffect(() => {
@@ -118,12 +123,14 @@ const LeaveRequestForm: React.FC = () => {
     calculateLeaveDays();
   }, [formData.start_date, formData.end_date, formData.leave_duration, holidaysInRange]);
 
-  // Auto-uncheck paid leave if requested days exceed balance
+  // Fetch leave type balance when employee, leave type, or start date changes
   useEffect(() => {
-    if (formData.is_paid && paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining && calculatedDays > 0) {
-      setFormData(prev => ({ ...prev, is_paid: false }));
+    if (formData.employee_id && formData.leave_type_id && formData.start_date) {
+      fetchLeaveTypeBalance();
+    } else {
+      setLeaveTypeBalance(null);
     }
-  }, [calculatedDays, paidLeaveBalance]);
+  }, [formData.employee_id, formData.leave_type_id, formData.start_date]);
 
   // Adjust end date when duration changes
   useEffect(() => {
@@ -131,15 +138,6 @@ const LeaveRequestForm: React.FC = () => {
       setFormData(prev => ({ ...prev, end_date: formData.start_date }));
     }
   }, [formData.leave_duration, formData.start_date]);
-
-  // Fetch paid leave balance when employee or start date changes
-  useEffect(() => {
-    if (formData.employee_id && formData.start_date) {
-      fetchPaidLeaveBalance();
-    } else {
-      setPaidLeaveBalance(null);
-    }
-  }, [formData.employee_id, formData.start_date]);
 
   // Check for holidays in the selected date range
   useEffect(() => {
@@ -150,51 +148,32 @@ const LeaveRequestForm: React.FC = () => {
     }
   }, [formData.start_date, formData.end_date]);
 
-  const fetchPaidLeaveBalance = async (): Promise<void> => {
-    if (!formData.employee_id || !formData.start_date) return;
+  const fetchLeaveTypeBalance = async (): Promise<void> => {
+    if (!formData.employee_id || !formData.leave_type_id || !formData.start_date) return;
 
     try {
       setLoadingBalance(true);
 
-      // Get settings first to know the limit
-      const settingsResponse = await apiService.apiCall('/api/settings', { method: 'GET' });
-      const paidLeavesLimit = settingsResponse?.data?.settings?.paid_leaves_per_month?.value || 2;
-
-      // Get the month from start_date
-      const startDate = new Date(formData.start_date);
-      const firstDayOfMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1).toISOString().split('T')[0];
-      const lastDayOfMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).toISOString().split('T')[0];
-
-      // Fetch leave requests for this employee in this month
-      const leavesResponse = await leaveApiService.getLeaveRequests({
+      // Build query string for GET request
+      const queryParams = new URLSearchParams({
         employee_id: formData.employee_id,
-        start_date: firstDayOfMonth,
-        end_date: lastDayOfMonth,
-        status: 'approved,pending'
+        leave_type_id: formData.leave_type_id,
+        start_date: formData.start_date
       });
 
-      // Calculate total paid leaves taken
-      let totalPaidLeavesTaken = 0;
-      if (leavesResponse.success && leavesResponse.data) {
-        const leaves = Array.isArray(leavesResponse.data) ? leavesResponse.data : leavesResponse.data.requests || [];
-        totalPaidLeavesTaken = leaves
-          .filter((leave: any) => leave.is_paid === true || leave.is_paid === 1)
-          .reduce((sum: number, leave: any) => sum + (parseFloat(leave.days_requested) || 0), 0);
+      const response = await apiService.apiCall(`/api/leaves/balance?${queryParams.toString()}`, {
+        method: 'GET'
+      });
+
+      if (response.success && response.balance) {
+        setLeaveTypeBalance(response.balance);
+      } else {
+        setLeaveTypeBalance(null);
       }
 
-      const remaining = Math.max(0, paidLeavesLimit - totalPaidLeavesTaken);
-      const monthStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`;
-
-      setPaidLeaveBalance({
-        limit: paidLeavesLimit,
-        taken: totalPaidLeavesTaken,
-        remaining: remaining,
-        month: monthStr
-      });
-
     } catch (error) {
-      console.error('Failed to fetch paid leave balance:', error);
-      setPaidLeaveBalance(null);
+      console.error('Failed to fetch leave type balance:', error);
+      setLeaveTypeBalance(null);
     } finally {
       setLoadingBalance(false);
     }
@@ -309,6 +288,55 @@ const LeaveRequestForm: React.FC = () => {
     }
   };
 
+  // Handle date input changes (dd/mm/yyyy format with auto-formatting)
+  const handleDateChange = (field: 'start_date' | 'end_date', rawValue: string): void => {
+    // Remove all non-digit characters
+    const digitsOnly = rawValue.replace(/\D/g, '');
+
+    // Auto-format as user types: dd/mm/yyyy
+    let formattedValue = '';
+    if (digitsOnly.length > 0) {
+      formattedValue = digitsOnly.substring(0, 2); // dd
+      if (digitsOnly.length >= 3) {
+        formattedValue += '/' + digitsOnly.substring(2, 4); // /mm
+      }
+      if (digitsOnly.length >= 5) {
+        formattedValue += '/' + digitsOnly.substring(4, 8); // /yyyy
+      }
+    }
+
+    // Update display state
+    if (field === 'start_date') {
+      setDisplayStartDate(formattedValue);
+    } else {
+      setDisplayEndDate(formattedValue);
+    }
+
+    // Validate format and convert to backend format
+    if (isValidDateFormat(formattedValue) && formattedValue) {
+      const backendDate = convertToBackendFormat(formattedValue);
+      setFormData(prev => ({ ...prev, [field]: backendDate }));
+
+      // Clear error
+      if (errors[field]) {
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+      }
+    } else if (!formattedValue) {
+      // Clear the backend date if display is empty
+      setFormData(prev => ({ ...prev, [field]: '' }));
+    } else if (digitsOnly.length === 8) {
+      // Only show error if user has entered 8 digits but format is invalid
+      setErrors(prev => ({
+        ...prev,
+        [field]: 'Invalid date. Check day/month/year values'
+      }));
+    }
+  };
+
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
@@ -365,9 +393,9 @@ const LeaveRequestForm: React.FC = () => {
       // If it's a date range (start !== end), allow it even with holidays
     }
 
-    // Validate paid leave balance
-    if (formData.is_paid && paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining) {
-      newErrors.general = `Cannot request ${calculatedDays} day(s) of paid leave. Only ${paidLeaveBalance.remaining} day(s) remaining this month. Please uncheck "This is a paid leave" to submit as unpaid leave.`;
+    // Validate leave type balance
+    if (leaveTypeBalance && !leaveTypeBalance.unlimited && calculatedDays > leaveTypeBalance.remaining) {
+      newErrors.general = `Cannot request ${calculatedDays} day(s). Only ${leaveTypeBalance.remaining} day(s) remaining for ${leaveTypeBalance.leave_type_name} ${leaveTypeBalance.tracking_period === 'Monthly' ? 'this month' : 'this year'}.`;
     }
 
     setErrors(newErrors);
@@ -396,8 +424,7 @@ const LeaveRequestForm: React.FC = () => {
         reason: formData.reason.trim(),
         days_requested: calculatedDays,
         notes: formData.admin_notes.trim() || null,
-        supporting_documents: formData.supporting_documents?.length > 0 ? formData.supporting_documents : null,
-        is_paid: formData.is_paid
+        supporting_documents: formData.supporting_documents?.length > 0 ? formData.supporting_documents : null
       };
 
       console.log('submit data',submitData);
@@ -406,7 +433,7 @@ const LeaveRequestForm: React.FC = () => {
 
       if (response.success) {
         setSuccess(`Leave request created successfully for ${selectedEmployee?.first_name} ${selectedEmployee?.last_name}!`);
-        
+
         // Reset form
         setFormData({
           employee_id: '',
@@ -418,8 +445,7 @@ const LeaveRequestForm: React.FC = () => {
           end_time: '',
           reason: '',
           admin_notes: '',
-          supporting_documents: [],
-          is_paid: true
+          supporting_documents: []
         });
         setSelectedEmployee(null);
         setCalculatedDays(0);
@@ -450,6 +476,42 @@ const LeaveRequestForm: React.FC = () => {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  // Convert yyyy-mm-dd to dd/mm/yyyy for display
+  const convertToDisplayFormat = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  // Convert dd/mm/yyyy to yyyy-mm-dd for backend
+  const convertToBackendFormat = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return '';
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  // Validate dd/mm/yyyy format
+  const isValidDateFormat = (dateStr: string): boolean => {
+    if (!dateStr) return true; // Allow empty
+    const regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+    const match = dateStr.match(regex);
+    if (!match) return false;
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    if (year < 1900 || year > 2100) return false;
+
+    // Check valid day for the month
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
   };
 
   const getDurationBadgeColor = (duration: string): string => {
@@ -626,13 +688,14 @@ const employeeOptions = employees
           {/* Date Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="start_date" value="Start Date *" />
+              <Label htmlFor="start_date" value="Start Date * (dd/mm/yyyy)" />
               <TextInput
                 id="start_date"
-                type="date"
-                value={formData.start_date}
-                min=""
-                onChange={(e) => handleInputChange('start_date', e.target.value)}
+                type="text"
+                value={displayStartDate}
+                onChange={(e) => handleDateChange('start_date', e.target.value)}
+                placeholder="dd/mm/yyyy"
+                maxLength={10}
                 className={errors.start_date ? 'border-red-500' : ''}
                 icon={FaCalendarAlt}
                 required
@@ -643,13 +706,14 @@ const employeeOptions = employees
             </div>
 
             <div>
-              <Label htmlFor="end_date" value="End Date *" />
+              <Label htmlFor="end_date" value="End Date * (dd/mm/yyyy)" />
               <TextInput
                 id="end_date"
-                type="date"
-                value={formData.end_date}
-                min={formData.start_date}
-                onChange={(e) => handleInputChange('end_date', e.target.value)}
+                type="text"
+                value={displayEndDate}
+                onChange={(e) => handleDateChange('end_date', e.target.value)}
+                placeholder="dd/mm/yyyy"
+                maxLength={10}
                 className={errors.end_date ? 'border-red-500' : ''}
                 icon={FaCalendarAlt}
                 disabled={formData.leave_duration !== 'full_day'}
@@ -827,42 +891,58 @@ const employeeOptions = employees
             />
           </div>
 
-          {/* Is Paid Checkbox */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_paid"
-                checked={formData.is_paid}
-                onChange={(e) => handleInputChange('is_paid', e.target.checked)}
-                disabled={loadingBalance || (paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining)}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <Label htmlFor="is_paid" className={`${loadingBalance || (paidLeaveBalance && calculatedDays > paidLeaveBalance.remaining) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
-                This is a paid leave
-              </Label>
+          {/* Leave Type Balance Information */}
+          {formData.leave_type_id && formData.employee_id && formData.start_date && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <FaInfoCircle />
+                Leave Balance
+              </h4>
+
+              {loadingBalance ? (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Spinner size="sm" />
+                  <span>Loading balance...</span>
+                </div>
+              ) : leaveTypeBalance ? (
+                <div className="space-y-2">
+                  <div className="text-sm">
+                    <p className="text-gray-700">
+                      <strong className="text-blue-800">{leaveTypeBalance.leave_type_name}</strong>
+                      {leaveTypeBalance.is_paid && (
+                        <Badge color="success" size="xs" className="ml-2">Paid Leave</Badge>
+                      )}
+                    </p>
+
+                    {leaveTypeBalance.unlimited ? (
+                      <p className="text-green-600 font-medium mt-1">
+                        ✓ Unlimited - No balance restrictions
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-gray-700 mt-1">
+                          <strong className="text-lg text-blue-900">{leaveTypeBalance.remaining}</strong> of <strong>{leaveTypeBalance.limit}</strong> days remaining
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Period: {leaveTypeBalance.period} ({leaveTypeBalance.tracking_period})
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Already taken: {leaveTypeBalance.taken} day(s)
+                        </p>
+
+                        {calculatedDays > 0 && calculatedDays > leaveTypeBalance.remaining && (
+                          <p className="text-sm text-red-600 font-medium mt-2 flex items-center gap-1">
+                            <span>⚠️</span>
+                            <span>Insufficient balance! Requesting {calculatedDays} day(s) but only {leaveTypeBalance.remaining} day(s) available.</span>
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
-
-            {/* Balance Information */}
-            {loadingBalance && (
-              <p className="text-sm text-gray-500 ml-6">Loading balance...</p>
-            )}
-
-            {!loadingBalance && paidLeaveBalance && (
-              <div className="ml-6">
-                <p className="text-sm text-gray-600">
-                  Paid Leave Balance: <span className="font-semibold">{paidLeaveBalance.remaining}/{paidLeaveBalance.limit}</span> remaining
-                  (Month: {paidLeaveBalance.month})
-                </p>
-
-                {calculatedDays > 0 && calculatedDays > paidLeaveBalance.remaining && (
-                  <p className="text-sm text-red-600 font-medium mt-1">
-                    ⚠️ Insufficient paid leave balance! Requesting {calculatedDays} day(s) but only {paidLeaveBalance.remaining} day(s) available. Please submit as unpaid leave.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Submit Buttons */}
           <div className="flex justify-end space-x-3 pt-4 border-t">

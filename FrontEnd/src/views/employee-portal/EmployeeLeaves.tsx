@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { ClockIcon, CheckCircleIcon, XCircleIcon, ClockIcon as PendingIcon } from '@heroicons/react/24/outline';
+import fi from 'date-fns/esm/locale/fi/index.js';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -51,6 +52,10 @@ const EmployeeLeaves = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  //Display format dates(dd/mm/yyyy)
+  const [displayStartDate, setDisplayStartDate] = useState('');
+  const [displayEndDate, setDisplayEndDate] = useState('');
 
   useEffect(() => {
     fetchLeaveData();
@@ -136,6 +141,83 @@ const EmployeeLeaves = () => {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Convert dd/mm/yyyy to yyyy/mm/dd for backend
+  const convertToBackendFormat = (dateStr:string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('/');
+    if (parts.length !== 3)
+      return '';
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`;
+  };
+
+  // Validate dd/mm/yyyy format
+  const isValidDateFormat = (dateStr: string): boolean => {
+    if (!dateStr)
+      return true;
+    const regex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+    const match = dateStr.match(regex);
+    if (!match)
+      return false;
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year  = parseInt(match[3], 10);
+
+    if (month < 1 || month > 12)
+      return false;
+    if (day < 1 || day > 31)
+      return false;
+    if (year < 1900 || year > 2100)
+      return false;
+
+    const date = new Date(year, month-1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  };
+
+
+  //Handle date input change (dd/mm/yyy format with auto-formatting)
+  const handleDateChange = (field: 'start_date' | 'end_date', rawValue: string): void => {
+    //Remove all non-digit characters
+    const digitsOnly = rawValue.replace(/\D/g, '');
+
+    //Auto format as user types: dd/mm/yyyy
+    let formattedValue = '';
+    if (digitsOnly.length > 0){
+      formattedValue = digitsOnly.substring(0,2); //dd
+      if (digitsOnly.length >= 3) {
+        formattedValue += '/' + digitsOnly.substring(2,4); //mm
+      }
+      if (digitsOnly.length >= 5) {
+        formattedValue += '/' + digitsOnly.substring(4,8); //yyyy
+      }
+    }
+
+  // update display state
+  if (field === 'start_date'){
+      setDisplayStartDate(formattedValue);
+  } else {
+      setDisplayEndDate(formattedValue);
+  }
+
+  //validate and convert to backend format
+  if (isValidDateFormat(formattedValue) && formattedValue){
+    const backEndDate = convertToBackendFormat(formattedValue);
+    setFormData(prev => ({...prev, [field]: backEndDate}));
+  } else if(!formattedValue){
+    setFormData(prev => ({...prev, [field]: ''}));
+  }  
+};
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -199,25 +281,29 @@ const EmployeeLeaves = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start Date *
+                  Start Date * <span className="text-xs text-gray-500">(dd/mm/yyyy)</span>
                 </label>
                 <input
-                  type="date"
+                  type="text"
                   required
-                  value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  value={displayStartDate}
+                  onChange={(e) => handleDateChange('start_date', e.target.value)}
+                  placeholder="dd/mm/yyyy"
+                  maxLength={10}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  End Date *
+                  End Date * <span className="text-xs text-gray-500">(dd/mm/yyyy)</span>
                 </label>
                 <input
-                  type="date"
+                  type="text"
                   required
-                  value={formData.end_date}
-                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                  value={displayEndDate}
+                  onChange={(e) => handleDateChange('end_date', e.target.value)}
+                  placeholder="dd/mm/yyyy"
+                  maxLength={10}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -347,10 +433,10 @@ const EmployeeLeaves = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {new Date(request.start_date).toLocaleDateString()} -
+                          {formatDate(request.start_date)} -
                         </div>
                         <div className="text-sm text-gray-900">
-                          {new Date(request.end_date).toLocaleDateString()}
+                          {formatDate(request.end_date)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -380,7 +466,7 @@ const EmployeeLeaves = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(request.applied_date).toLocaleDateString()}
+                        {formatDate(request.applied_date)}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         <div className="max-w-xs">
