@@ -66,6 +66,16 @@ const EmployeeAllowances: React.FC = () => {
         }
       }
 
+      const isNumericCode = (code: string) => /^\d+$/.test(code);
+      employeesArray.sort((a, b) => {
+        const aNum = isNumericCode(a.employee_code);
+        const bNum = isNumericCode(b.employee_code);
+        if (aNum && bNum) return parseInt(a.employee_code) - parseInt(b.employee_code);
+        if (aNum) return -1;
+        if (bNum) return 1;
+        return a.employee_code.localeCompare(b.employee_code);
+      });
+
       setEmployees(employeesArray);
     } catch (error) {
       console.error('Error fetching data:', error);
