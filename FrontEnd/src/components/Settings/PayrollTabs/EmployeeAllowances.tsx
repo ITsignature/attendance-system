@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, DollarSign, User } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, DollarSign, User, Check } from 'lucide-react';
 import payrollConfigApi, { EmployeeAllowance, CreateEmployeeAllowanceRequest } from '../../../services/payrollConfigApi';
 import apiService from '../../../services/api';
 import { useDynamicRBAC } from '../../RBACSystem/rbacSystem';
@@ -23,12 +23,15 @@ const EmployeeAllowances: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
 
-  // Permission checks
+  // Multi-select state for add mode
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+
   const canAdd = hasPermission('settings.employee_allowances.add');
   const canEdit = hasPermission('settings.employee_allowances.edit');
   const canDelete = hasPermission('settings.employee_allowances.delete');
 
-  const [formData, setFormData] = useState<CreateEmployeeAllowanceRequest>({
+  const [formData, setFormData] = useState<Omit<CreateEmployeeAllowanceRequest, 'employee_id'> & { employee_id: string }>({
     employee_id: '',
     allowance_type: '',
     allowance_name: '',
@@ -52,7 +55,6 @@ const EmployeeAllowances: React.FC = () => {
 
       setAllowances(allowancesData);
 
-      // Handle different possible response structures
       let employeesArray: Employee[] = [];
       if (employeesResponse.data) {
         if (Array.isArray(employeesResponse.data)) {
@@ -64,8 +66,6 @@ const EmployeeAllowances: React.FC = () => {
         }
       }
 
-      console.log('Employees response:', employeesResponse);
-      console.log('Parsed employees array:', employeesArray);
       setEmployees(employeesArray);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -81,18 +81,35 @@ const EmployeeAllowances: React.FC = () => {
       if (editingAllowance) {
         await payrollConfigApi.updateEmployeeAllowance(editingAllowance.id, formData);
         alert('Allowance updated successfully!');
+        resetForm();
+        fetchData();
       } else {
-        await payrollConfigApi.createEmployeeAllowance(formData);
-        alert('Allowance created successfully!');
+        if (selectedEmployeeIds.length === 0) {
+          alert('Please select at least one employee.');
+          return;
+        }
+        let successCount = 0;
+        const errors: string[] = [];
+        for (const empId of selectedEmployeeIds) {
+          try {
+            await payrollConfigApi.createEmployeeAllowance({ ...formData, employee_id: empId });
+            successCount++;
+          } catch (err: any) {
+            const emp = employees.find(e => e.id === empId);
+            errors.push(`${emp?.employee_code ?? empId}: ${err.message ?? 'Failed'}`);
+          }
+        }
+        if (errors.length > 0) {
+          alert(`Created ${successCount} allowance(s).\nFailed:\n${errors.join('\n')}`);
+        } else {
+          alert(`Allowance created for ${successCount} employee(s) successfully!`);
+        }
+        resetForm();
+        fetchData();
       }
-
-      resetForm();
-      fetchData();
     } catch (error) {
       console.error('Error saving allowance:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to save allowance';
-
-      // Check if it's a permission error
       if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
         alert('You do not have permission to modify these settings.');
       } else {
@@ -113,6 +130,7 @@ const EmployeeAllowances: React.FC = () => {
       effective_from: allowance.effective_from,
       effective_to: allowance.effective_to
     });
+    setSelectedEmployeeIds([]);
     setShowForm(true);
   };
 
@@ -125,8 +143,6 @@ const EmployeeAllowances: React.FC = () => {
       } catch (error) {
         console.error('Error deleting allowance:', error);
         const errorMsg = error instanceof Error ? error.message : 'Failed to delete allowance';
-
-        // Check if it's a permission error
         if (errorMsg.includes('Access denied') || errorMsg.includes('permission')) {
           alert('You do not have permission to delete these settings.');
         } else {
@@ -147,7 +163,35 @@ const EmployeeAllowances: React.FC = () => {
       effective_from: new Date().toISOString().split('T')[0]
     });
     setEditingAllowance(null);
+    setSelectedEmployeeIds([]);
+    setEmployeeSearch('');
     setShowForm(false);
+  };
+
+  const toggleEmployeeSelection = (id: string) => {
+    setSelectedEmployeeIds(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    );
+  };
+
+  const filteredForModal = employees.filter(emp => {
+    const q = employeeSearch.toLowerCase();
+    return (
+      emp.employee_code.toLowerCase().includes(q) ||
+      emp.first_name.toLowerCase().includes(q) ||
+      emp.last_name.toLowerCase().includes(q)
+    );
+  });
+
+  const allFilteredSelected = filteredForModal.length > 0 && filteredForModal.every(e => selectedEmployeeIds.includes(e.id));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedEmployeeIds(prev => prev.filter(id => !filteredForModal.some(e => e.id === id)));
+    } else {
+      const newIds = filteredForModal.map(e => e.id);
+      setSelectedEmployeeIds(prev => Array.from(new Set([...prev, ...newIds])));
+    }
   };
 
   const filteredAllowances = allowances.filter(allowance => {
@@ -312,30 +356,100 @@ const EmployeeAllowances: React.FC = () => {
       {/* Add/Edit Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white dark:bg-gray-800">
+          <div className="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white dark:bg-gray-800 mb-10">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
               {editingAllowance ? 'Edit' : 'Add'} Employee Allowance
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Employee selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Employee
+                  {editingAllowance ? 'Employee' : 'Employees'}
                 </label>
-                <select
-                  required
-                  value={formData.employee_id}
-                  onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  disabled={!!editingAllowance}
-                >
-                  <option value="">Select Employee</option>
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.employee_code} - {emp.first_name} {emp.last_name}
-                    </option>
-                  ))}
-                </select>
+
+                {editingAllowance ? (
+                  <select
+                    required
+                    value={formData.employee_id}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="">Select Employee</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.employee_code} - {emp.first_name} {emp.last_name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
+                    {/* Search inside list */}
+                    <div className="p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 flex gap-2 items-center">
+                      <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Search employees..."
+                        value={employeeSearch}
+                        onChange={(e) => setEmployeeSearch(e.target.value)}
+                        className="flex-1 bg-transparent text-sm outline-none dark:text-white placeholder-gray-400"
+                      />
+                      {selectedEmployeeIds.length > 0 && (
+                        <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          {selectedEmployeeIds.length} selected
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Select all row */}
+                    {filteredForModal.length > 0 && (
+                      <div
+                        className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700"
+                        onClick={toggleSelectAll}
+                      >
+                        <div className={`w-4 h-4 border-2 rounded flex items-center justify-center flex-shrink-0 ${
+                          allFilteredSelected
+                            ? 'bg-blue-600 border-blue-600'
+                            : 'border-gray-400'
+                        }`}>
+                          {allFilteredSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Select all{employeeSearch ? ' matching' : ''}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Employee list */}
+                    <div className="max-h-48 overflow-y-auto">
+                      {filteredForModal.length === 0 ? (
+                        <p className="text-center text-sm text-gray-400 py-4">No employees found</p>
+                      ) : (
+                        filteredForModal.map(emp => {
+                          const isSelected = selectedEmployeeIds.includes(emp.id);
+                          return (
+                            <div
+                              key={emp.id}
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                              }`}
+                              onClick={() => toggleEmployeeSelection(emp.id)}
+                            >
+                              <div className={`w-4 h-4 border-2 rounded flex items-center justify-center flex-shrink-0 ${
+                                isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-400'
+                              }`}>
+                                {isSelected && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                              <span className="text-sm text-gray-900 dark:text-white">
+                                {emp.employee_code} - {emp.first_name} {emp.last_name}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -443,15 +557,15 @@ const EmployeeAllowances: React.FC = () => {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 border border-transparent rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 border border-transparent rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700"
                 >
-                  {editingAllowance ? 'Update' : 'Create'}
+                  {editingAllowance ? 'Update' : `Create${!editingAllowance && selectedEmployeeIds.length > 1 ? ` (${selectedEmployeeIds.length})` : ''}`}
                 </button>
               </div>
             </form>
