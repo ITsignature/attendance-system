@@ -150,7 +150,20 @@ export async function exportLivePayrollToExcel(
   // ── Build data rows (arrays) ──────────────────────────────────────────────
   type DataRow = (number | string)[];
 
-  const dataRows: DataRow[] = calculatedResults.map(result => {
+  const sortedResults = [...calculatedResults].sort((a, b) => {
+    const codeA = String(a.employee_code || '');
+    const codeB = String(b.employee_code || '');
+    const numA = Number(codeA);
+    const numB = Number(codeB);
+    const aIsNum = !isNaN(numA) && codeA.trim() !== '';
+    const bIsNum = !isNaN(numB) && codeB.trim() !== '';
+    if (aIsNum && bIsNum) return numA - numB;
+    if (aIsNum) return -1;
+    if (bIsNum) return 1;
+    return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  const dataRows: DataRow[] = sortedResults.map(result => {
     const raw = rawByEmpId.get(result.employee_id) || {};
     const row: DataRow = new Array(TOTAL_COLS).fill('');
 
@@ -167,7 +180,7 @@ export async function exportLivePayrollToExcel(
       const pe   = new Date(periodInfo.end_date);
       row[4] = Math.max(1, (pe.getFullYear()-hire.getFullYear())*12+(pe.getMonth()-hire.getMonth())+1);
     }
-    row[5] = result.expected_base_salary || 0;
+    row[5] = result.base_salary || 0;
     row[6] = raw.actual_worked_days || 0;
 
     const whRate = parseFloat(raw.weekday_hourly_rate) || 0;
@@ -193,7 +206,7 @@ export async function exportLivePayrollToExcel(
     allowanceNames.forEach((nm,i) => { row[AL_S-1+i] = allowMap[nm]||0; });
 
     row[BONUS-1]  = result.bonuses_total || 0;
-    row[GROSS-1]  = round2((result.expected_base_salary||0)+(result.overtime_amount||0)+(result.allowances_total||0));
+    row[GROSS-1]  = round2((result.base_salary||0)+(result.overtime_amount||0)+(result.allowances_total||0));
 
     const sc = result.shortfall_by_cause;
     let unpHr = 0;
@@ -230,7 +243,7 @@ export async function exportLivePayrollToExcel(
     row[REMK-1]    = '';
     row[ROUND-1]   = Math.round(result.net_salary||0);
 
-    const expBase = result.expected_base_salary||0;
+    const expBase = result.base_salary||0;
     const epf12   = round2(expBase/100*12);
     const etf3    = round2(expBase/100*3);
     row[COEX_S-1]   = epf12;
@@ -328,7 +341,7 @@ export async function exportLivePayrollToExcel(
 
   const subHeaders: [number, string][] = [
     [1, 'Emp. Code'], [2, 'Name'], [3, 'Designation'], [4, 'DOJ'],
-    [5, 'Work Month'], [6, 'Expected Base Salary'], [7, 'No. of Working Days'], [8, 'Normal Hourly Rate'],
+    [5, 'Work Month'], [6, 'Base Salary'], [7, 'No. of Working Days'], [8, 'Normal Hourly Rate'],
     [OT_S,   'Weekday OT Rate'], [OT_S+1, 'OT Hours\n(Wkday+Sat+Hol)'],
     [OT_S+2, 'Sunday OT Rate'], [OT_S+3, 'OT Hours\n(Sunday)'], [OT_S+4, 'OT Amount'],
     ...allowanceNames.map((nm, i): [number,string] => [AL_S+i, nm]),

@@ -4713,6 +4713,30 @@ class PayrollRunService {
                 return Array.isArray(ms[ym]) && ms[ym].includes(nth);
             };
 
+            // Calculate standard hours per day type from employee schedule
+            let standardWeekdayHours = 8;
+            if (employee.weekday_in_time && employee.weekday_out_time) {
+                const inT = new Date(`2000-01-01T${employee.weekday_in_time}`);
+                const outT = new Date(`2000-01-01T${employee.weekday_out_time}`);
+                if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+                    standardWeekdayHours = (outT - inT) / 3600000;
+                }
+            }
+            let standardSaturdayHours = 0;
+            let standardSundayHours = 0;
+            if (weekendCfg) {
+                if (weekendCfg.saturday?.working && weekendCfg.saturday.in_time && weekendCfg.saturday.out_time) {
+                    const inT = new Date(`2000-01-01T${weekendCfg.saturday.in_time}`);
+                    const outT = new Date(`2000-01-01T${weekendCfg.saturday.out_time}`);
+                    if (!isNaN(inT) && !isNaN(outT) && outT > inT) standardSaturdayHours = (outT - inT) / 3600000;
+                }
+                if (weekendCfg.sunday?.working && weekendCfg.sunday.in_time && weekendCfg.sunday.out_time) {
+                    const inT = new Date(`2000-01-01T${weekendCfg.sunday.in_time}`);
+                    const outT = new Date(`2000-01-01T${weekendCfg.sunday.out_time}`);
+                    if (!isNaN(inT) && !isNaN(outT) && outT > inT) standardSundayHours = (outT - inT) / 3600000;
+                }
+            }
+
             // Get daily attendance records for the employee-specific period
             const [attendanceRecords] = await db.execute(`
                 SELECT
@@ -4732,26 +4756,85 @@ class PayrollRunService {
                 ORDER BY a.date ASC
             `, [employeeId, periodStartDate, periodEndDate]);
 
-            console.log(`   Found ${attendanceRecords.length} attendance records for ${employee.employee_name}`);
+            // Get approved leave requests overlapping the period
+            const [leaveRequests] = await db.execute(`
+                SELECT
+                    DATE(lr.start_date) as start_date,
+                    DATE(lr.end_date) as end_date,
+                    lr.leave_duration,
+                    lr.is_paid,
+                    lt.name as leave_type_name
+                FROM leave_requests lr
+                JOIN leave_types lt ON lr.leave_type_id = lt.id
+                WHERE lr.employee_id = ?
+                  AND lr.status = 'approved'
+                  AND lr.end_date >= ?
+                  AND lr.start_date <= ?
+            `, [employeeId, periodStartDate, periodEndDate]);
 
-            // Calculate daily salary based on hours worked and day type
-            const dailyDetails = attendanceRecords.map(record => {
-                // payable_duration is now stored in SECONDS
+            // Get holidays for the period
+            const clientIdRow = await db.execute(`SELECT client_id FROM payroll_runs WHERE id = ? LIMIT 1`, [runId]);
+            const runClientId = clientIdRow[0][0]?.client_id;
+            const [holidays] = await db.execute(`
+                SELECT DATE(date) as holiday_date, name
+                FROM holidays
+                WHERE client_id = ?
+                  AND date BETWEEN ? AND ?
+                  AND (applies_to_all = TRUE OR department_ids IS NULL)
+            `, [runClientId, periodStartDate, periodEndDate]);
+
+            // Build lookup maps
+            const attendanceMap = {};
+            attendanceRecords.forEach(r => {
+                const ds = r.work_date instanceof Date ? r.work_date.toISOString().split('T')[0] : String(r.work_date).split('T')[0];
+                attendanceMap[ds] = r;
+            });
+
+            const holidayMap = {};
+            holidays.forEach(h => {
+                const ds = h.holiday_date instanceof Date ? h.holiday_date.toISOString().split('T')[0] : String(h.holiday_date).split('T')[0];
+                holidayMap[ds] = h.name;
+            });
+
+            // Expand leave requests into per-day map
+            const leaveMap = {};
+            for (const lr of leaveRequests) {
+                const startD = new Date(lr.start_date);
+                const endD = new Date(lr.end_date);
+                let cur = new Date(startD);
+                while (cur <= endD) {
+                    const ds = cur.toISOString().split('T')[0];
+                    const dow = cur.getDay(); // 0=Sun, 6=Sat
+                    let leaveDailySalary = 0;
+                    if (lr.is_paid) {
+                        let leaveHourlyRate = weekdayHourlyRate;
+                        let standardHours = standardWeekdayHours;
+                        if (dow === 0) { leaveHourlyRate = sundayHourlyRate > 0 ? sundayHourlyRate : weekdayHourlyRate; standardHours = standardSundayHours; }
+                        else if (dow === 6) { leaveHourlyRate = saturdayHourlyRate; standardHours = standardSaturdayHours; }
+                        const mult = lr.leave_duration === 'half_day' ? 0.5 : lr.leave_duration === 'short_leave' ? 0.25 : 1;
+                        leaveDailySalary = leaveHourlyRate * standardHours * mult;
+                    }
+                    leaveMap[ds] = {
+                        leave_type_name: lr.leave_type_name,
+                        is_paid: lr.is_paid,
+                        leave_duration: lr.leave_duration,
+                        daily_salary: parseFloat(leaveDailySalary.toFixed(2))
+                    };
+                    cur.setDate(cur.getDate() + 1);
+                }
+            }
+
+            // Helper: process an attendance record into a detail object
+            const processAttendance = (record) => {
                 const payableDurationSeconds = parseFloat(record.payable_duration) || 0;
-
-                // Convert seconds to hours and minutes
-                const totalHours = payableDurationSeconds / 3600; // seconds to hours
-                const totalMinutes = Math.round(payableDurationSeconds / 60); // seconds to minutes
-
-                // Determine hourly rate based on day type
+                const totalHours = payableDurationSeconds / 3600;
+                const totalMinutes = Math.round(payableDurationSeconds / 60);
                 let hourlyRate = weekdayHourlyRate;
                 let dayType = 'Weekday';
                 let otMultiplier = weekdayOTMultiplier;
                 const workDateStr = record.work_date instanceof Date
                     ? record.work_date.toISOString().split('T')[0]
                     : String(record.work_date).split('T')[0];
-
-                // is_weekend: 1 = Sunday, 7 = Saturday, 0 or null = Weekday
                 if (record.is_weekend === 1) {
                     hourlyRate = sundayHourlyRate > 0 ? sundayHourlyRate : weekdayHourlyRate;
                     otMultiplier = sundayOTMultiplier;
@@ -4761,21 +4844,11 @@ class PayrollRunService {
                     otMultiplier = saturdayOTMultiplier;
                     dayType = isConfiguredDay(workDateStr, 'saturday') ? 'Saturday' : 'Saturday (Unscheduled)';
                 }
-
                 const isUnscheduledWeekend = dayType === 'Saturday (Unscheduled)' || dayType === 'Sunday (Unscheduled)';
-
-                // For unscheduled weekends: all worked minutes are OT, no regular salary
-                // For scheduled days: regular salary calculation
                 const dailySalary = isUnscheduledWeekend ? 0 : totalHours * hourlyRate;
-
-                // Calculate overtime
                 let overtimeMinutes = 0;
                 let overtimeAmount = 0;
-
                 if (isUnscheduledWeekend) {
-                    // ALL actual time worked is OT for unscheduled weekend days
-                    // Use raw check-in/check-out diff — NOT payable_duration which may have been
-                    // break-deducted or overlap-capped against the regular schedule
                     let actualWorkedSeconds = 0;
                     if (record.check_in_time && record.check_out_time) {
                         const actualIn = new Date(`2000-01-01T${record.check_in_time}`);
@@ -4789,25 +4862,17 @@ class PayrollRunService {
                 } else if (overtimeEnabled) {
                     const preShiftSeconds = parseInt(record.pre_shift_overtime_seconds) || 0;
                     const postShiftSeconds = parseInt(record.post_shift_overtime_seconds) || 0;
-
                     let totalOvertimeSeconds = 0;
-                    if (preShiftOTEnabled && postShiftOTEnabled) {
-                        totalOvertimeSeconds = preShiftSeconds + postShiftSeconds;
-                    } else if (preShiftOTEnabled) {
-                        totalOvertimeSeconds = preShiftSeconds;
-                    } else if (postShiftOTEnabled) {
-                        totalOvertimeSeconds = postShiftSeconds;
-                    }
-
+                    if (preShiftOTEnabled && postShiftOTEnabled) totalOvertimeSeconds = preShiftSeconds + postShiftSeconds;
+                    else if (preShiftOTEnabled) totalOvertimeSeconds = preShiftSeconds;
+                    else if (postShiftOTEnabled) totalOvertimeSeconds = postShiftSeconds;
                     if (totalOvertimeSeconds > 0) {
                         overtimeMinutes = Math.round(totalOvertimeSeconds / 60);
-                        const perSecondRate = hourlyRate / 3600;
-                        overtimeAmount = totalOvertimeSeconds * perSecondRate * otMultiplier;
+                        overtimeAmount = totalOvertimeSeconds * (hourlyRate / 3600) * otMultiplier;
                     }
                 }
-
                 return {
-                    date: record.work_date,
+                    date: workDateStr,
                     day_type: dayType,
                     check_in: record.check_in_time,
                     check_out: record.check_out_time,
@@ -4817,13 +4882,101 @@ class PayrollRunService {
                     overtime_amount: parseFloat(overtimeAmount.toFixed(2)),
                     hourly_rate: parseFloat(hourlyRate.toFixed(2)),
                     daily_salary: parseFloat(dailySalary.toFixed(2)),
-                    status: record.status
+                    status: record.status,
+                    record_type: 'attendance'
                 };
-            });
+            };
+
+            // Iterate over every calendar day in the period
+            console.log(`   Found ${attendanceRecords.length} attendance records for ${employee.employee_name}`);
+            const allDailyDetails = [];
+            let cur = new Date(periodStartDate);
+            const periodEnd = new Date(periodEndDate);
+
+            while (cur <= periodEnd) {
+                const ds = cur.toISOString().split('T')[0];
+                const dow = cur.getDay(); // 0=Sun, 6=Sat
+                const dayTypeLabel = dow === 0 ? 'Sunday' : dow === 6 ? 'Saturday' : 'Weekday';
+
+                if (attendanceMap[ds]) {
+                    allDailyDetails.push(processAttendance(attendanceMap[ds]));
+                } else if (leaveMap[ds]) {
+                    const lv = leaveMap[ds];
+                    allDailyDetails.push({
+                        date: ds,
+                        day_type: dayTypeLabel,
+                        check_in: null,
+                        check_out: null,
+                        working_minutes: 0,
+                        working_hours: 0,
+                        overtime_minutes: 0,
+                        overtime_amount: 0,
+                        hourly_rate: 0,
+                        daily_salary: lv.daily_salary,
+                        status: lv.is_paid ? 'paid_leave' : 'unpaid_leave',
+                        record_type: 'leave',
+                        leave_type_name: lv.leave_type_name,
+                        is_paid_leave: lv.is_paid
+                    });
+                } else if (holidayMap[ds]) {
+                    allDailyDetails.push({
+                        date: ds,
+                        day_type: dayTypeLabel,
+                        check_in: null,
+                        check_out: null,
+                        working_minutes: 0,
+                        working_hours: 0,
+                        overtime_minutes: 0,
+                        overtime_amount: 0,
+                        hourly_rate: 0,
+                        daily_salary: 0,
+                        status: 'holiday',
+                        record_type: 'holiday',
+                        holiday_name: holidayMap[ds]
+                    });
+                } else if (dow === 0 || dow === 6) {
+                    const dayKey = dow === 0 ? 'sunday' : 'saturday';
+                    const isWorkingWeekend = weekendCfg ? (weekendCfg[dayKey]?.working === true) : false;
+                    allDailyDetails.push({
+                        date: ds,
+                        day_type: dayTypeLabel,
+                        check_in: null,
+                        check_out: null,
+                        working_minutes: 0,
+                        working_hours: 0,
+                        overtime_minutes: 0,
+                        overtime_amount: 0,
+                        hourly_rate: 0,
+                        daily_salary: 0,
+                        status: isWorkingWeekend ? 'absent' : 'weekend_off',
+                        record_type: isWorkingWeekend ? 'absent' : 'weekend_off'
+                    });
+                } else {
+                    allDailyDetails.push({
+                        date: ds,
+                        day_type: 'Weekday',
+                        check_in: null,
+                        check_out: null,
+                        working_minutes: 0,
+                        working_hours: 0,
+                        overtime_minutes: 0,
+                        overtime_amount: 0,
+                        hourly_rate: weekdayHourlyRate,
+                        daily_salary: 0,
+                        status: 'absent',
+                        record_type: 'absent'
+                    });
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
 
             // Calculate totals
-            const totalMinutes = dailyDetails.reduce((sum, day) => sum + day.working_minutes, 0);
-            const totalSalary = dailyDetails.reduce((sum, day) => sum + day.daily_salary, 0);
+            const totalMinutes = allDailyDetails.filter(d => d.record_type === 'attendance').reduce((s, d) => s + d.working_minutes, 0);
+            const totalSalary = allDailyDetails.reduce((s, d) => s + (d.daily_salary || 0) + (d.overtime_amount || 0), 0);
+            const workingDays = allDailyDetails.filter(d => d.record_type === 'attendance').length;
+            const absentDays = allDailyDetails.filter(d => d.record_type === 'absent').length;
+            const paidLeaveDays = allDailyDetails.filter(d => d.record_type === 'leave' && d.is_paid_leave).length;
+            const unpaidLeaveDays = allDailyDetails.filter(d => d.record_type === 'leave' && !d.is_paid_leave).length;
 
             return {
                 employee: {
@@ -4837,12 +4990,15 @@ class PayrollRunService {
                     end_date: periodEndDate,
                     uses_custom_cycle: usesCustomCycle
                 },
-                daily_records: dailyDetails,
+                daily_records: allDailyDetails,
                 summary: {
-                    total_working_days: dailyDetails.length,
+                    total_working_days: workingDays,
                     total_working_minutes: totalMinutes,
                     total_working_hours: parseFloat((totalMinutes / 60).toFixed(2)),
-                    total_salary_earned: parseFloat(totalSalary.toFixed(2))
+                    total_salary_earned: parseFloat(totalSalary.toFixed(2)),
+                    absent_days: absentDays,
+                    paid_leave_days: paidLeaveDays,
+                    unpaid_leave_days: unpaidLeaveDays
                 }
             };
 

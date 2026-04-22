@@ -741,30 +741,34 @@ const LivePayrollDashboard: React.FC = () => {
           ) : dailyDetailsModal.data ? (
             <div className="space-y-6">
               {/* Summary Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-blue-50 rounded-lg">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-blue-50 rounded-lg">
                 <div>
-                  <p className="text-sm text-gray-600">Total Working Days</p>
-                  <p className="text-xl font-bold text-blue-700">
-                    {dailyDetailsModal.data.summary.total_working_days}
-                  </p>
+                  <p className="text-xs text-gray-600">Working Days</p>
+                  <p className="text-xl font-bold text-blue-700">{dailyDetailsModal.data.summary.total_working_days}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Total Minutes</p>
-                  <p className="text-xl font-bold text-blue-700">
-                    {dailyDetailsModal.data.summary.total_working_minutes.toLocaleString()} mins
-                  </p>
+                  <p className="text-xs text-gray-600">Total Hours</p>
+                  <p className="text-xl font-bold text-blue-700">{dailyDetailsModal.data.summary.total_working_hours.toFixed(2)} hrs</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Total Hours</p>
-                  <p className="text-xl font-bold text-blue-700">
-                    {dailyDetailsModal.data.summary.total_working_hours.toFixed(2)} hrs
-                  </p>
+                  <p className="text-xs text-red-600">Absent Days</p>
+                  <p className="text-xl font-bold text-red-600">{dailyDetailsModal.data.summary.absent_days ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Total Salary Earned</p>
-                  <p className="text-xl font-bold text-green-700">
-                    {formatCurrency(dailyDetailsModal.data.summary.total_salary_earned)}
-                  </p>
+                  <p className="text-xs text-yellow-600">Paid Leaves</p>
+                  <p className="text-xl font-bold text-yellow-600">{dailyDetailsModal.data.summary.paid_leave_days ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-orange-600">Unpaid Leaves</p>
+                  <p className="text-xl font-bold text-orange-600">{dailyDetailsModal.data.summary.unpaid_leave_days ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600">Total Minutes</p>
+                  <p className="text-xl font-bold text-blue-700">{dailyDetailsModal.data.summary.total_working_minutes.toLocaleString()} mins</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-600">Total Salary Earned</p>
+                  <p className="text-xl font-bold text-green-700">{formatCurrency(dailyDetailsModal.data.summary.total_salary_earned)}</p>
                 </div>
               </div>
 
@@ -782,78 +786,102 @@ const LivePayrollDashboard: React.FC = () => {
                   </Table.Head>
                   <Table.Body>
                     {dailyDetailsModal.data.daily_records.length > 0 ? (
-                      dailyDetailsModal.data.daily_records.map((record: any, index: number) => (
-                        <Table.Row key={index} className="hover:bg-gray-50">
-                          <Table.Cell className="font-medium">
-                            {new Date(record.date).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Badge
-                              color={
-                                record.day_type === 'Sunday' ? 'failure' :
-                                record.day_type === 'Saturday' ? 'warning' : 'info'
-                              }
-                            >
-                              {record.day_type}
-                            </Badge>
-                          </Table.Cell>
-                          <Table.Cell className="text-sm">
-                            {record.check_in || '-'}
-                          </Table.Cell>
-                          <Table.Cell className="text-sm">
-                            {record.check_out || '-'}
-                          </Table.Cell>
-                          <Table.Cell className="font-medium">
-                            {record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)' ? (
-                              <span className="text-red-600 font-bold text-base">
-                                {record.overtime_minutes.toLocaleString()} mins
-                                <div className="text-xs font-medium">({(record.overtime_minutes / 60).toFixed(2)} hrs)</div>
-                              </span>
-                            ) : (
-                              <>
-                                <span className="text-blue-600">{record.working_minutes.toLocaleString()} mins</span>
-                                <div className="text-xs text-gray-500">({record.working_hours} hrs)</div>
-                                {record.overtime_minutes > 0 && (
-                                  <div className="text-xs text-red-600 font-medium">+{record.overtime_minutes} OT mins</div>
-                                )}
-                              </>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell className="font-bold">
-                            {record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)' ? (
-                              <span className="text-red-600 text-base">
-                                {formatCurrency(record.overtime_amount)}
-                              </span>
-                            ) : (
-                              <>
-                                <span className="text-green-600">{formatCurrency(record.daily_salary)}</span>
-                                {record.overtime_amount > 0 && (
-                                  <div className="text-xs text-red-600 font-medium">+{formatCurrency(record.overtime_amount)} OT</div>
-                                )}
-                              </>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Badge
-                              color={
-                                record.status === 'present' ? 'success' :
-                                record.status === 'late' ? 'warning' :
-                                record.status === 'absent' ? 'failure' : 'info'
-                              }
-                            >
-                              {record.status}
-                            </Badge>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))
+                      dailyDetailsModal.data.daily_records.map((record: any, index: number) => {
+                        const isAbsent = record.record_type === 'absent';
+                        const isLeave = record.record_type === 'leave';
+                        const isHoliday = record.record_type === 'holiday';
+                        const isWeekendOff = record.record_type === 'weekend_off';
+                        const isUnscheduledWeekend = record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)';
+
+                        const rowBg = isAbsent ? 'bg-red-50 dark:bg-red-900/10' :
+                                      isLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
+                                      isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
+                                      isHoliday ? 'bg-blue-50 dark:bg-blue-900/10' :
+                                      isWeekendOff ? 'bg-gray-50 dark:bg-gray-800/50' : '';
+
+                        const statusColor = record.status === 'present' ? 'success' :
+                                            record.status === 'late' ? 'warning' :
+                                            record.status === 'absent' ? 'failure' :
+                                            record.status === 'paid_leave' ? 'warning' :
+                                            record.status === 'unpaid_leave' ? 'pink' :
+                                            record.status === 'holiday' ? 'info' :
+                                            record.status === 'weekend_off' ? 'gray' : 'gray';
+
+                        const statusLabel = record.status === 'paid_leave' ? 'Paid Leave' :
+                                            record.status === 'unpaid_leave' ? 'Unpaid Leave' :
+                                            record.status === 'holiday' ? 'Holiday' :
+                                            record.status === 'weekend_off' ? 'Weekend Off' :
+                                            record.status;
+
+                        return (
+                          <Table.Row key={index} className={`hover:brightness-95 ${rowBg}`}>
+                            <Table.Cell className="font-medium">
+                              {new Date(record.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Badge color={record.day_type === 'Sunday' || record.day_type === 'Sunday (Unscheduled)' ? 'failure' : record.day_type === 'Saturday' || record.day_type === 'Saturday (Unscheduled)' ? 'warning' : 'info'}>
+                                {record.day_type}
+                              </Badge>
+                            </Table.Cell>
+                            <Table.Cell className="text-sm">{record.check_in || '-'}</Table.Cell>
+                            <Table.Cell className="text-sm">{record.check_out || '-'}</Table.Cell>
+                            <Table.Cell className="font-medium">
+                              {isAbsent || isWeekendOff ? (
+                                <span className="text-gray-400">—</span>
+                              ) : isLeave ? (
+                                <div>
+                                  <span className="text-yellow-700 font-medium">{record.leave_type_name}</span>
+                                  <div className="text-xs text-gray-500">{record.is_paid_leave ? 'Paid' : 'Unpaid'}</div>
+                                </div>
+                              ) : isHoliday ? (
+                                <div>
+                                  <span className="text-blue-700 font-medium">{record.holiday_name}</span>
+                                </div>
+                              ) : isUnscheduledWeekend ? (
+                                <span className="text-red-600 font-bold">
+                                  {record.overtime_minutes.toLocaleString()} mins
+                                  <div className="text-xs font-medium">({(record.overtime_minutes / 60).toFixed(2)} hrs)</div>
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="text-blue-600">{record.working_minutes.toLocaleString()} mins</span>
+                                  <div className="text-xs text-gray-500">({record.working_hours} hrs)</div>
+                                  {record.overtime_minutes > 0 && <div className="text-xs text-red-600 font-medium">+{record.overtime_minutes} OT mins</div>}
+                                </>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell className="font-bold">
+                              {isAbsent ? (
+                                <span className="text-red-500">Rs. 0.00</span>
+                              ) : isWeekendOff ? (
+                                <span className="text-gray-400">—</span>
+                              ) : isHoliday ? (
+                                <span className="text-blue-600">—</span>
+                              ) : isLeave ? (
+                                record.is_paid_leave ? (
+                                  <span className="text-yellow-700">{formatCurrency(record.daily_salary)}</span>
+                                ) : (
+                                  <span className="text-orange-600">Rs. 0.00 <span className="text-xs font-normal">(Unpaid)</span></span>
+                                )
+                              ) : isUnscheduledWeekend ? (
+                                <span className="text-red-600">{formatCurrency(record.overtime_amount)}</span>
+                              ) : (
+                                <>
+                                  <span className="text-green-600">{formatCurrency(record.daily_salary)}</span>
+                                  {record.overtime_amount > 0 && <div className="text-xs text-red-600 font-medium">+{formatCurrency(record.overtime_amount)} OT</div>}
+                                </>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Badge color={statusColor as any}>{statusLabel}</Badge>
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })
                     ) : (
                       <Table.Row>
                         <Table.Cell colSpan={7} className="text-center py-8 text-gray-500">
-                          No attendance records found for this period.
+                          No records found for this period.
                         </Table.Cell>
                       </Table.Row>
                     )}
