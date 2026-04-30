@@ -26,8 +26,6 @@ const employeePortalRoutes = require('./src/routes/employeePortalRoute');
 const sessionCleanup = require('./src/services/sessionCleanup');
 const devicesRoutes = require('./src/routes/devicesRoute');
 const { connectMQTT, markStaleDevicesOffline } = require('./src/services/mqttService');
-const devicesRoutes = require('./src/routes/devicesRoute');
-const { connectMQTT, markStaleDevicesOffline } = require('./src/services/mqttService');
 
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
 const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
