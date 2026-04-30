@@ -51,6 +51,7 @@ const Error = Loadable(lazy(() => import('../views/auth/error/Error')));
 const RoleManagement = Loadable(lazy(() => import('../components/RBACSystem/roleManagement')));
 const AdminUserManagement = Loadable(lazy(() => import('../components/RBACSystem/adminUserManagement')));
 const ClientManagement = Loadable(lazy(() => import('../components/RBACSystem/ClientManagement')));
+const DeviceManagement = Loadable(lazy(() => import('../components/Devices/DeviceManagement')));
 const AdminLogin = Loadable(lazy(() => import('../components/RBACSystem/adminLogin')));
 const ManualAttendance =Loadable(lazy(() => import('../components/Attendance/ManualAttendance')));
 const LivePayroll = Loadable(lazy(() => import('../components/LivePayrol/PayrollEmployeeRecords')));
@@ -374,6 +375,15 @@ const Router = [
           <SuperAdminRoute>
             <ClientManagement />
           </SuperAdminRoute>
+        )
+      },
+      {
+        path: '/devices',
+        exact: true,
+        element: (
+          <AuthenticatedApp>
+            <DeviceManagement />
+          </AuthenticatedApp>
         )
       },
       // {

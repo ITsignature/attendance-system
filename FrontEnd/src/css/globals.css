@@ -178,7 +178,9 @@
     @apply hover:text-primary
   }
 
-
+  .cmd-btn {
+    @apply px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+  }
 
 
 

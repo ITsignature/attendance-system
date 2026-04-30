@@ -7,6 +7,7 @@ import {
   IconCurrencyDollar,
   IconBuilding,
   IconSettings,
+  IconDeviceDesktop,
 } from '@tabler/icons-react';
 
 import { uniqueId } from 'lodash';
@@ -147,6 +148,13 @@ const SidebarContent = [
         icon: IconBuilding,
         href: '/clientmanagement',
         requireSuperAdmin: true,
+      },
+      {
+        id: uniqueId(),
+        title: 'Devices',
+        icon: IconDeviceDesktop,
+        href: '/devices',
+        permission: 'dashboard.view',
       },
     ],
   },
