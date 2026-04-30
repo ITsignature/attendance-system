@@ -591,6 +591,24 @@ const hhmmToMinutes = (t) => {
                 </p>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Break Duration (hours)
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="4"
+                  value={localSettings.break_duration_hours ?? 0}
+                  onChange={(e) => updateLocalSetting('break_duration_hours', parseFloat(e.target.value) || 0)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Break time deducted from payable hours each day (e.g. 1 = 1 hour lunch break)
+                </p>
+              </div>
+
               {/* NEW ATTENDANCE SETTINGS */}
               <div className="border-t pt-6 mt-6">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white mb-4">

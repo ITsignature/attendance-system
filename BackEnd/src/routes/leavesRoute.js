@@ -660,7 +660,145 @@ router.get('/requests',
     });
   })
 );
+// PUT /api/leaves/requests/:id - Update a leave request
+router.put('/requests/:id',
+  checkPermission('leaves.create'),
+  [
+    param('id').isUUID().withMessage('Valid request ID is required'),
+    body('leave_type_id').optional().isUUID().withMessage('Valid leave type ID is required'),
+    body('start_date').optional().isISO8601().withMessage('Valid start date is required'),
+    body('end_date').optional().isISO8601().withMessage('Valid end date is required'),
+    body('leave_duration').optional().isIn(['full_day', 'half_day', 'short_leave']).withMessage('Valid leave duration is required'),
+    body('start_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
+    body('end_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
+    body('reason').optional().trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be between 10-500 characters'),
+    body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
 
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const requestId = req.params.id;
+
+    // Fetch existing request
+    const [existing] = await db.execute(`
+      SELECT lr.*, e.client_id
+      FROM leave_requests lr
+      JOIN employees e ON lr.employee_id = e.id
+      WHERE lr.id = ? AND e.client_id = ?
+    `, [requestId, clientId]);
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: 'Leave request not found' });
+    }
+
+    const current = existing[0];
+    const {
+      leave_type_id = current.leave_type_id,
+      start_date = current.start_date,
+      end_date = current.end_date,
+      leave_duration = current.leave_duration || 'full_day',
+      start_time = current.start_time || null,
+      end_time = current.end_time || null,
+      reason = current.reason,
+      is_paid = current.is_paid
+    } = req.body;
+
+    // Validate date range
+    if (new Date(start_date) > new Date(end_date)) {
+      return res.status(400).json({ success: false, message: 'End date must be on or after start date' });
+    }
+
+    if (leave_duration !== 'full_day' && start_date !== end_date) {
+      return res.status(400).json({ success: false, message: 'Half-day and short leaves must be on the same date' });
+    }
+
+    if (leave_duration === 'short_leave' && (!start_time || !end_time)) {
+      return res.status(400).json({ success: false, message: 'Start time and end time are required for short leave' });
+    }
+
+    // Recalculate days
+    let calculatedDays;
+    if (leave_duration === 'half_day') {
+      calculatedDays = 0.5;
+    } else if (leave_duration === 'short_leave') {
+      calculatedDays = 0.25;
+    } else {
+      const startD = new Date(start_date);
+      const endD = new Date(end_date);
+      const totalDays = Math.ceil((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+      const [holidays] = await db.execute(`
+        SELECT COUNT(*) as count FROM holidays
+        WHERE client_id = ? AND date BETWEEN ? AND ? AND (applies_to_all = TRUE OR department_ids IS NULL)
+      `, [clientId, start_date, end_date]);
+      calculatedDays = totalDays - (holidays[0].count || 0);
+    }
+
+    // Recalculate dayofweek breakdown
+    const dayOfWeekCounts = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0 };
+    let currentDate = new Date(start_date);
+    const leaveEndDate = new Date(end_date);
+    while (currentDate <= leaveEndDate) {
+      const jsDow = currentDate.getDay();
+      const mysqlDow = jsDow === 0 ? 1 : jsDow + 1;
+      dayOfWeekCounts[mysqlDow.toString()]++;
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    await db.execute(`
+      UPDATE leave_requests
+      SET leave_type_id = ?, start_date = ?, end_date = ?, leave_duration = ?,
+          start_time = ?, end_time = ?, reason = ?, is_paid = ?,
+          days_requested = ?, dayofweek = ?,
+          status = 'pending', reviewed_by = NULL, reviewed_at = NULL, reviewer_comments = NULL,
+          payable_leave_hours_weekday = 0, payable_leave_hours_saturday = 0, payable_leave_hours_sunday = 0
+      WHERE id = ?
+    `, [
+      leave_type_id, start_date, end_date, leave_duration,
+      start_time, end_time, reason, is_paid,
+      calculatedDays, JSON.stringify(dayOfWeekCounts),
+      requestId
+    ]);
+
+    res.json({ success: true, message: 'Leave request updated successfully' });
+  })
+);
+
+// DELETE /api/leaves/requests/:id - Delete a leave request
+router.delete('/requests/:id',
+  checkPermission('leaves.create'),
+  [param('id').isUUID().withMessage('Valid request ID is required')],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
+
+    const db = getDB();
+    const clientId = req.user.clientId;
+    const requestId = req.params.id;
+
+    const [existing] = await db.execute(`
+      SELECT lr.id FROM leave_requests lr
+      JOIN employees e ON lr.employee_id = e.id
+      WHERE lr.id = ? AND e.client_id = ?
+    `, [requestId, clientId]);
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: 'Leave request not found' });
+    }
+
+    await db.execute('DELETE FROM leave_requests WHERE id = ?', [requestId]);
+
+    res.json({ success: true, message: 'Leave request deleted successfully' });
+  })
+);
+
+// POST /api/leaves/request - Submit new leave request
 // POST /api/leaves/request - Admin creates leave request for any employee
 router.post('/request',
   checkPermission('leaves.create'),

@@ -393,7 +393,7 @@ router.get('/fingerprint', [
         currentTime,
         schedule.start_time,
         schedule.end_time,
-        breakDuration,
+        0,
         employeeId,
         db
       );
@@ -838,8 +838,8 @@ const getWorkDurationSettings = async (clientId, db) => {
   const [settings] = await db.execute(`
     SELECT setting_key, setting_value
     FROM system_settings 
-    WHERE setting_key IN ('working_hours_per_day', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'working_hours_per_day') 
-    AND client_id = ? 
+    WHERE setting_key IN ('working_hours_per_day', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'break_duration_hours')
+    AND client_id = ?
     ORDER BY CASE WHEN client_id IS NULL THEN 1 ELSE 0 END, client_id DESC
   `, [clientId]);
   
@@ -856,7 +856,8 @@ const getWorkDurationSettings = async (clientId, db) => {
     full_day_minimum_hours: settingsMap.full_day_minimum_hours || 7,
     half_day_minimum_hours: settingsMap.half_day_minimum_hours || 4,
     short_leave_minimum_hours: settingsMap.short_leave_minimum_hours || 1,
-    working_hours_per_day: settingsMap.working_hours_per_day || 8
+    working_hours_per_day: settingsMap.working_hours_per_day || 8,
+    break_duration_hours: settingsMap.break_duration_hours || 0
   };
 };
 
@@ -1344,7 +1345,7 @@ const calculateWorkHours = async (
         req.body.check_out_time,
         schedule.start_time,
         schedule.end_time,
-        breakDuration,
+        0, // break_duration removed, pass 0
         req.body.employee_id,
         db
       );
@@ -1928,7 +1929,7 @@ router.patch('/bulk', [
             eff.check_out_time,
             current.scheduled_in_time,
             current.scheduled_out_time,
-            breakDuration,
+            0, // break_duration removed, pass 0
             employeeId,
             db
           );
@@ -2224,7 +2225,7 @@ console.log('final workDuration:', workDuration);
       eff.check_out_time,
       current.scheduled_in_time,
       current.scheduled_out_time,
-      breakDuration,
+      0, // break_duration removed, pass 0
       current.employee_id,
       db
     );
