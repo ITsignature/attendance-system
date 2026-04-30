@@ -24,6 +24,10 @@ const settingsRoutes = require('./src/routes/settingsRoute');
 const holidaysRoutes = require('./src/routes/holidaysRoute');
 const employeePortalRoutes = require('./src/routes/employeePortalRoute');
 const sessionCleanup = require('./src/services/sessionCleanup');
+const devicesRoutes = require('./src/routes/devicesRoute');
+const { connectMQTT, markStaleDevicesOffline } = require('./src/services/mqttService');
+const devicesRoutes = require('./src/routes/devicesRoute');
+const { connectMQTT, markStaleDevicesOffline } = require('./src/services/mqttService');
 
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
 const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
@@ -167,6 +171,14 @@ connectDB().then(() => {
 
   // Start cron job for auto-creating monthly payroll runs
   startPayrollCronJobs();
+
+  // Connect to MQTT broker
+  connectMQTT();
+
+  // Mark devices offline if no heartbeat received in last 2 minutes
+  cron.schedule('* * * * *', () => {
+    markStaleDevicesOffline();
+  });
 }).catch(err => {
   console.error('Database connection failed:', err);
   process.exit(1);
@@ -205,6 +217,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rbac', rbacRoutes);
 
 app.use('/api/clients', clientRoutes);
+app.use('/api/devices', devicesRoutes);
 app.use('/api/departments', departments);
 app.use('/api/designations', designations);
 app.use('/api/settings', settingsRoutes);

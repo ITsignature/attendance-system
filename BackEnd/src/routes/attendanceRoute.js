@@ -14,18 +14,19 @@ const router = express.Router();
 
 // File logger for debugging fingerprint endpoint
 const logToFile = (message) => {
-  const logDir = path.join(__dirname, '..', 'logs');
-  const logFile = path.join(logDir, 'fingerprint-debug.log');
+  try {
+    const logDir = path.join(__dirname, '..', 'logs');
+    const logFile = path.join(logDir, 'fingerprint-debug.log');
 
-  // Create logs directory if it doesn't exist
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(logFile, `[${timestamp}] ${message}\n`);
+  } catch (e) {
+    // Non-critical logging — never let this crash the request
   }
-
-  const timestamp = new Date().toISOString();
-  const logMessage = `[${timestamp}] ${message}\n`;
-
-  fs.appendFileSync(logFile, logMessage);
 };
 
 // Time validation regex - supports HH:MM and HH:MM:SS formats
@@ -383,13 +384,16 @@ router.get('/fingerprint', [
         schedule
       );
 
+      // Get client break duration setting
+      const breakDuration = await getClientBreakDuration(clientId, db);
+
       // Calculate payable duration
       const payableDuration = await calculatePayableDuration(
         record.check_in_time,
         currentTime,
         schedule.start_time,
         schedule.end_time,
-        durationSettings.break_duration_hours,
+        0,
         employeeId,
         db
       );
@@ -878,6 +882,22 @@ const normalizeTimeFormat = (timeString) => {
 };
 
 /**
+ * Get client's break duration setting in hours
+ * Returns 0 if no setting exists (no break deduction)
+ */
+const getClientBreakDuration = async (clientId, db) => {
+  const [settings] = await db.execute(`
+    SELECT setting_value FROM system_settings
+    WHERE client_id = ? AND setting_key = 'break_duration_hours'
+  `, [clientId]);
+
+  if (settings.length > 0) {
+    return parseFloat(JSON.parse(settings[0].setting_value)) || 0;
+  }
+  return 0;
+};
+
+/**
  * Calculate payable duration based on overlap between scheduled and actual hours
  * Works for both weekdays and weekends (uses the stored scheduled times)
  * Returns SECONDS for precision without excessive storage
@@ -1316,13 +1336,16 @@ const calculateWorkHours = async (
       console.log("Enhanced arrival status:", arrivalResult);
       console.log("Enhanced duration status:", durationResult);
 
+      // Get client break duration setting
+      const breakDuration = await getClientBreakDuration(clientId, db);
+
       // Calculate payable duration
       const payableDuration = await calculatePayableDuration(
         req.body.check_in_time,
         req.body.check_out_time,
         schedule.start_time,
         schedule.end_time,
-        durationSettings.break_duration_hours,
+        0, // break_duration removed, pass 0
         req.body.employee_id,
         db
       );
@@ -1898,12 +1921,15 @@ router.patch('/bulk', [
           }
 
           /* ───────── 7. calculate payable duration ───────── */
+          // Get client break duration setting
+          const breakDuration = await getClientBreakDuration(req.user.clientId, db);
+
           const payableDuration = await calculatePayableDuration(
             eff.check_in_time,
             eff.check_out_time,
             current.scheduled_in_time,
             current.scheduled_out_time,
-            durationSettings.break_duration_hours,
+            0, // break_duration removed, pass 0
             employeeId,
             db
           );
@@ -2191,12 +2217,15 @@ if (leaveRow) {
 console.log('final workDuration:', workDuration);
 
     /* ───────── 4. calculate payable duration ───────── */
+    // Get client break duration setting
+    const breakDuration = await getClientBreakDuration(req.user.clientId, db);
+
     const payableDuration = await calculatePayableDuration(
       eff.check_in_time,
       eff.check_out_time,
       current.scheduled_in_time,
       current.scheduled_out_time,
-      durationSettings.break_duration_hours,
+      0, // break_duration removed, pass 0
       current.employee_id,
       db
     );
