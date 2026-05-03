@@ -3,7 +3,7 @@ import { Modal, TextInput, Label, Badge } from 'flowbite-react';
 import {
   HiDesktopComputer, HiPlus, HiRefresh, HiTrash, HiPencil,
   HiWifi, HiChip, HiLightningBolt, HiCog, HiCheck, HiX,
-  HiFingerPrint, HiStatusOnline, HiStatusOffline, HiEye
+  HiFingerPrint, HiStatusOnline, HiStatusOffline
 } from 'react-icons/hi';
 import { useDynamicRBAC } from '../RBACSystem/rbacSystem';
 import apiService from '../../services/api';
@@ -120,8 +120,8 @@ const DeviceManagement: React.FC = () => {
 
   const fetchDevices = useCallback(async () => {
     try {
-      const res = await (apiService as any).get('/api/devices');
-      if (res.data?.success) setDevices(res.data.data);
+      const res = await apiService.apiCall<any>('/api/devices');
+      if (res.success) setDevices(res.data);
     } catch {
       setError('Failed to load devices');
     } finally {
@@ -132,8 +132,8 @@ const DeviceManagement: React.FC = () => {
   const fetchClients = useCallback(async () => {
     if (!isSuperAdmin) return;
     try {
-      const res = await (apiService as any).get('/api/clients');
-      if (res.data?.success) setClients(res.data.data);
+      const res = await apiService.apiCall<any>('/api/clients');
+      if (res.success) setClients(res.data);
     } catch { /* ignore */ }
   }, [isSuperAdmin]);
 
@@ -166,17 +166,17 @@ const DeviceManagement: React.FC = () => {
     }
     setIsRegistering(true);
     try {
-      const res = await (apiService as any).post('/api/devices', registerForm);
-      if (res.data?.success) {
+      const res = await apiService.apiCall<any>('/api/devices', { method: 'POST', body: JSON.stringify(registerForm) });
+      if (res.success) {
         showSuccess('Device registered successfully');
         setShowRegisterModal(false);
         setRegisterForm({ device_id: '', client_id: '', name: '', location: '' });
         fetchDevices();
       } else {
-        showError(res.data?.message || 'Registration failed');
+        showError(res.message || 'Registration failed');
       }
     } catch (e: any) {
-      showError(e?.response?.data?.message || 'Registration failed');
+      showError(e?.message || 'Registration failed');
     } finally {
       setIsRegistering(false);
     }
@@ -193,13 +193,13 @@ const DeviceManagement: React.FC = () => {
   const handleEdit = async () => {
     if (!editingDevice) return;
     try {
-      const res = await (apiService as any).put(`/api/devices/${editingDevice.id}`, editForm);
-      if (res.data?.success) {
+      const res = await apiService.apiCall<any>(`/api/devices/${editingDevice.id}`, { method: 'PUT', body: JSON.stringify(editForm) });
+      if (res.success) {
         showSuccess('Device updated');
         setShowEditModal(false);
         fetchDevices();
       } else {
-        showError(res.data?.message || 'Update failed');
+        showError(res.message || 'Update failed');
       }
     } catch { showError('Update failed'); }
   };
@@ -209,9 +209,9 @@ const DeviceManagement: React.FC = () => {
   const handleDelete = async (device: Device) => {
     if (!confirm(`Delete device "${device.name}" (${device.device_id})? This cannot be undone.`)) return;
     try {
-      const res = await (apiService as any).delete(`/api/devices/${device.id}`);
-      if (res.data?.success) { showSuccess('Device deleted'); fetchDevices(); }
-      else showError(res.data?.message || 'Delete failed');
+      const res = await apiService.apiCall<any>(`/api/devices/${device.id}`, { method: 'DELETE' });
+      if (res.success) { showSuccess('Device deleted'); fetchDevices(); }
+      else showError(res.message || 'Delete failed');
     } catch { showError('Delete failed'); }
   };
 
@@ -222,12 +222,12 @@ const DeviceManagement: React.FC = () => {
     setIsSendingCommand(true);
     setCommandResult(null);
     try {
-      const res = await (apiService as any).post(`/api/devices/${selectedDevice.id}/command`, { command, ...params });
-      const result = res.data?.result || res.data;
-      setCommandResult({ success: result?.success ?? res.data?.success, message: result?.message || res.data?.message || 'Command sent' });
-      fetchDevices(); // refresh status
+      const res = await apiService.apiCall<any>(`/api/devices/${selectedDevice.id}/command`, { method: 'POST', body: JSON.stringify({ command, ...params }) });
+      const result = (res.data as any)?.result || res.data;
+      setCommandResult({ success: result?.success ?? res.success, message: result?.message || res.message || 'Command sent' });
+      fetchDevices();
     } catch (e: any) {
-      const msg = e?.response?.data?.message || 'Command failed or device offline';
+      const msg = e?.message || 'Command failed or device offline';
       setCommandResult({ success: false, message: msg });
     } finally {
       setIsSendingCommand(false);
