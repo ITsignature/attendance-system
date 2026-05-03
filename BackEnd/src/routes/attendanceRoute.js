@@ -1337,7 +1337,7 @@ const calculateWorkHours = async (
       console.log("Enhanced duration status:", durationResult);
 
       // Get client break duration setting
-      const breakDuration = await getClientBreakDuration(clientId, db);
+      const breakDuration = await getClientBreakDuration(req.user.clientId, db);
 
       // Calculate payable duration
       const payableDuration = await calculatePayableDuration(
@@ -1889,7 +1889,7 @@ router.patch('/bulk', [
             eff.break_end_time || null,
             req.user.clientId,
             db,
-            schedule
+            schedule 
           );
 
           /* ───────── 5. determine arrival status ───────── */
