@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal, TextInput, Label, Select, Textarea } from 'flowbite-react';
 import { HiPlus, HiOfficeBuilding, HiUserGroup, HiCog, HiEye, HiCheckCircle, HiXCircle, HiClock, HiChat } from 'react-icons/hi';
 import { useDynamicRBAC } from './rbacSystem';
+import apiService from '../../services/api';
 
 interface Client {
   id: string;
@@ -88,19 +89,11 @@ const ClientManagement: React.FC = () => {
   const loadClients = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch('http://localhost:5000/api/clients', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setClients(data.data);
+      const response = await apiService.getClients();
+      if (response.success) {
+        setClients(response.data);
       } else {
-        setError(data.message || 'Failed to load clients');
+        setError(response.message || 'Failed to load clients');
       }
     } catch (error: any) {
       setError(error.message || 'Failed to load clients');
@@ -111,21 +104,13 @@ const ClientManagement: React.FC = () => {
 
   const loadClientDetails = async (clientId: string) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:5000/api/clients/${clientId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setSelectedClient(data.data);
-        setClientAdmins(data.data.adminUsers || []);
+      const response = await apiService.apiCall(`/api/clients/${clientId}`);
+      if (response.success) {
+        setSelectedClient(response.data);
+        setClientAdmins(response.data.adminUsers || []);
         setShowViewModal(true);
       } else {
-        setError(data.message || 'Failed to load client details');
+        setError(response.message || 'Failed to load client details');
       }
     } catch (error: any) {
       setError(error.message || 'Failed to load client details');
@@ -134,17 +119,9 @@ const ClientManagement: React.FC = () => {
 
   const loadRolesForClient = async (clientId: string) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:5000/api/clients/${clientId}/roles`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setAvailableRoles(data.data);
+      const response = await apiService.apiCall(`/api/clients/${clientId}/roles`);
+      if (response.success) {
+        setAvailableRoles(response.data);
       }
     } catch (error: any) {
       console.error('Failed to load roles:', error);
@@ -190,27 +167,16 @@ const ClientManagement: React.FC = () => {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const url = selectedClient
-        ? `http://localhost:5000/api/clients/${selectedClient.id}`
-        : 'http://localhost:5000/api/clients';
+      const response = selectedClient
+        ? await apiService.updateClient(selectedClient.id, clientFormData)
+        : await apiService.createClient(clientFormData);
 
-      const response = await fetch(url, {
-        method: selectedClient ? 'PUT' : 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(clientFormData)
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setSuccess(data.message);
+      if (response.success) {
+        setSuccess(response.message);
         setShowClientModal(false);
         loadClients();
       } else {
-        setError(data.message || 'Failed to save client');
+        setError(response.message || 'Failed to save client');
       }
     } catch (error: any) {
       setError(error.message || 'Failed to save client');
@@ -221,22 +187,12 @@ const ClientManagement: React.FC = () => {
 
   const handleToggleClientStatus = async (client: Client) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:5000/api/clients/${client.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ is_active: !client.is_active })
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const response = await apiService.updateClient(client.id, { is_active: !client.is_active });
+      if (response.success) {
         setSuccess(`Client ${!client.is_active ? 'activated' : 'deactivated'} successfully`);
         loadClients();
       } else {
-        setError(data.message || 'Failed to update client status');
+        setError(response.message || 'Failed to update client status');
       }
     } catch (error: any) {
       setError(error.message || 'Failed to update client status');
@@ -267,23 +223,17 @@ const ClientManagement: React.FC = () => {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:5000/api/clients/${selectedClient.id}/admin-users`, {
+      const response = await apiService.apiCall(`/api/clients/${selectedClient.id}/admin-users`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(adminFormData)
       });
 
-      const data = await response.json();
-      if (data.success) {
+      if (response.success) {
         setSuccess('Admin user created successfully');
         setShowAdminModal(false);
         loadClients();
       } else {
-        setError(data.message || 'Failed to create admin user');
+        setError(response.message || 'Failed to create admin user');
       }
     } catch (error: any) {
       setError(error.message || 'Failed to create admin user');
@@ -299,18 +249,14 @@ const ClientManagement: React.FC = () => {
     setIsSmsLoading(true);
     setShowSmsModal(true);
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`http://localhost:5000/api/clients/${client.id}/sms-config`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
+      const response = await apiService.apiCall(`/api/clients/${client.id}/sms-config`);
+      if (response.success) {
         setSmsFormData({
-          account_id: data.data.account_id || '',
-          password: data.data.password || '',
-          base_url: data.data.base_url || 'https://www.textit.biz/sendmsg',
-          enabled: Boolean(data.data.enabled),
-          notification_number: data.data.notification_number || ''
+          account_id: response.data.account_id || '',
+          password: response.data.password || '',
+          base_url: response.data.base_url || 'https://www.textit.biz/sendmsg',
+          enabled: Boolean(response.data.enabled),
+          notification_number: response.data.notification_number || ''
         });
       }
     } catch (err: any) {
@@ -327,19 +273,16 @@ const ClientManagement: React.FC = () => {
     setError('');
     setSuccess('');
     try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`http://localhost:5000/api/clients/${selectedClient.id}/sms-config`, {
+      const response = await apiService.apiCall(`/api/clients/${selectedClient.id}/sms-config`, {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(smsFormData)
       });
-      const data = await res.json();
-      if (data.success) {
+      if (response.success) {
         setSuccess('SMS configuration saved successfully');
         setShowSmsModal(false);
         loadClients();
       } else {
-        setError(data.message || 'Failed to save SMS config');
+        setError(response.message || 'Failed to save SMS config');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to save SMS config');

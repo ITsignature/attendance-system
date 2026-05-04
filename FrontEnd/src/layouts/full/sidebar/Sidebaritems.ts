@@ -154,6 +154,13 @@ const SidebarContent = [
         title: 'Devices',
         icon: IconDeviceDesktop,
         href: '/devices',
+        requireSuperAdmin: true,
+      },
+      {
+        id: uniqueId(),
+        title: 'Devices',
+        icon: IconDeviceDesktop,
+        href: '/devices',
         permission: 'dashboard.view',
       },
     ],
