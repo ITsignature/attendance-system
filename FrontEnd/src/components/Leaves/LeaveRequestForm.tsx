@@ -374,8 +374,8 @@ const LeaveRequestForm: React.FC = () => {
       }
     }
 
-    if (!formData.reason.trim() || formData.reason.trim().length < 10) {
-      newErrors.reason = 'Reason must be at least 10 characters';
+    if (!formData.reason.trim()) {
+      newErrors.reason = 'Reason is required';
     }
 
     // Validate no single-day leave on holidays
@@ -871,9 +871,6 @@ const employeeOptions = employees
               className={errors.reason ? 'border-red-500' : ''}
               required
             />
-            <p className="text-sm text-gray-500 mt-1">
-              Minimum 10 characters required ({formData.reason.length}/10)
-            </p>
             {errors.reason && (
               <p className="text-red-500 text-sm mt-1">{errors.reason}</p>
             )}

@@ -563,7 +563,7 @@ const handleConfirmAction = async () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason *</label>
             <Textarea rows={3} value={editForm.reason}
               onChange={e => setEditForm(p => ({ ...p, reason: e.target.value }))}
-              placeholder="Reason for leave (min 10 characters)"
+              placeholder="Reason for leave"
             />
           </div>
 

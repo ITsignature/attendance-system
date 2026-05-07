@@ -448,10 +448,10 @@ const applyForLeave = asyncHandler(async (req, res) => {
     });
   }
 
-  if (reason.length < 10 || reason.length > 500) {
+  if (reason.length > 500) {
     return res.status(400).json({
       success: false,
-      message: 'Reason must be between 10 and 500 characters'
+      message: 'Reason must not exceed 500 characters'
     });
   }
 

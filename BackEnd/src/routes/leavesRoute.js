@@ -18,7 +18,7 @@ const validateLeaveRequest = [
   body('leave_duration').isIn(['full_day', 'half_day', 'short_leave']).withMessage('Valid leave duration is required'),
   body('start_time').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
   body('end_time').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
-  body('reason').trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be between 10-500 characters'),
+  body('reason').trim().isLength({ min: 1, max: 500 }).withMessage('Reason is required and must not exceed 500 characters'),
   body('days_requested').isFloat({ min: 0.25, max: 365 }).withMessage('Days requested must be between 0.25 and 365'),
 ];
 
@@ -671,7 +671,7 @@ router.put('/requests/:id',
     body('leave_duration').optional().isIn(['full_day', 'half_day', 'short_leave']).withMessage('Valid leave duration is required'),
     body('start_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
     body('end_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
-    body('reason').optional().trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be between 10-500 characters'),
+    body('reason').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Reason must not exceed 500 characters'),
     body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
   ],
   asyncHandler(async (req, res) => {
@@ -810,7 +810,7 @@ router.post('/request',
     body('leave_duration').isIn(['full_day', 'half_day', 'short_leave']).withMessage('Valid leave duration is required'),
     body('start_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
     body('end_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
-    body('reason').trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be between 10-500 characters'),
+    body('reason').trim().isLength({ min: 1, max: 500 }).withMessage('Reason is required and must not exceed 500 characters'),
     body('days_requested').optional({ checkFalsy: true }).isFloat({ min: 0.25, max: 365 }).withMessage('Days requested must be between 0.25 and 365'),
     body('notes').optional().trim().isLength({ max: 500 }).withMessage('Notes too long')
   ],
