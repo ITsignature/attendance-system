@@ -393,7 +393,7 @@ router.get('/fingerprint', [
         currentTime,
         schedule.start_time,
         schedule.end_time,
-        0,
+        breakDuration,
         employeeId,
         db
       );
@@ -1345,7 +1345,7 @@ const calculateWorkHours = async (
         req.body.check_out_time,
         schedule.start_time,
         schedule.end_time,
-        0, // break_duration removed, pass 0
+        breakDuration,
         req.body.employee_id,
         db
       );
@@ -1929,7 +1929,7 @@ router.patch('/bulk', [
             eff.check_out_time,
             current.scheduled_in_time,
             current.scheduled_out_time,
-            0, // break_duration removed, pass 0
+            breakDuration,
             employeeId,
             db
           );
@@ -2225,7 +2225,7 @@ console.log('final workDuration:', workDuration);
       eff.check_out_time,
       current.scheduled_in_time,
       current.scheduled_out_time,
-      0, // break_duration removed, pass 0
+      breakDuration,
       current.employee_id,
       db
     );
