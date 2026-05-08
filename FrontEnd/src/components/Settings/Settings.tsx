@@ -1061,6 +1061,23 @@ const hhmmToMinutes = (t) => {
                 </select>
               </div> */}
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Daily Rate Calculation Method
+                </label>
+                <select
+                  value={localSettings.daily_rate_method || 'dynamic'}
+                  onChange={(e) => updateLocalSetting('daily_rate_method', e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="dynamic">Based on actual working days</option>
+                  <option value="fixed_30">Fixed 30-day month</option>
+                </select>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  "Fixed 30-day month" divides base salary by 30 regardless of working days in the period
+                </p>
+              </div>
+
               {/* OVERTIME SETTINGS - Now managed at employee level */}
               <div className="border-t pt-6 mt-6">
                 {/* <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg"> */}

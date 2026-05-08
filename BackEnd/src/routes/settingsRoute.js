@@ -38,7 +38,7 @@ const validateSettingKey = (key) => {
     'paid_leaves_per_month',
 
     // Payroll Settings
-    'payroll_cycle', 'salary_processing_date', 'tax_calculation_method',
+    'payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'daily_rate_method',
     
     // Privacy Settings
     'data_retention_years', 'audit_logs_enabled', 'anonymize_data_enabled',
@@ -390,7 +390,7 @@ router.put('/:key',
     const { checkPermission } = require('../middleware/rbacMiddleware');
     const attendanceSettings = ['working_hours_per_day', 'work_start_time', 'work_end_time', 'late_threshold_minutes', 'break_duration_hours', 'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'weekend_working_days', 'day_specific_schedules'];
     const leaveSettings = ['paid_leaves_per_month'];
-    const payrollSettings = ['payroll_cycle', 'salary_processing_date', 'tax_calculation_method'];
+    const payrollSettings = ['payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'daily_rate_method'];
 
     if (attendanceSettings.includes(key)) {
       checkPermission('settings.attendance.edit')(req, res, () => {});

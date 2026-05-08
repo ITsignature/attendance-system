@@ -67,9 +67,18 @@ class PayrollRunService {
             // Get eligible employees based on filters
             const employees = await this.getEligibleEmployees(clientId, period_id, employee_filters);
 
+            // Determine daily rate method for this client
+            const SettingsHelper = require('../utils/settingsHelper').SettingsHelper;
+            const settingsHelper = new SettingsHelper(clientId);
+            const dailyRateMethod = await settingsHelper.getSetting('daily_rate_method') || 'dynamic';
+
             // Create draft payroll records for eligible employees
             for (const employee of employees) {
-                await this.createDraftPayrollRecord(runId, employee);
+                if (dailyRateMethod === 'fixed_30') {
+                    await this.createDraftPayrollRecordFixed(runId, employee);
+                } else {
+                    await this.createDraftPayrollRecord(runId, employee);
+                }
             }
 
             // Update run statistics
@@ -561,6 +570,132 @@ class PayrollRunService {
 
         return recordId;
     }
+
+    /**
+     * Same as createDraftPayrollRecord but daily_salary = base_salary / 30 (fixed month)
+     */
+    async createDraftPayrollRecordFixed(runId, employee) {
+        const db = getDB();
+        const recordId = uuidv4();
+
+        const [periodInfo] = await db.execute(`
+            SELECT pp.period_start_date, pp.period_end_date, pr.client_id
+            FROM payroll_runs pr
+            JOIN payroll_periods pp ON pr.period_id = pp.id
+            WHERE pr.id = ?
+        `, [runId]);
+
+        if (periodInfo.length === 0) {
+            throw new Error('Payroll run or period not found');
+        }
+
+        const period = periodInfo[0];
+        const clientId = period.client_id;
+
+        const PayrollCycleService = require('./PayrollCycleService');
+        const employeePeriod = await PayrollCycleService.calculateEmployeePeriod(
+            employee.id,
+            period.period_start_date,
+            period.period_end_date
+        );
+
+        const periodStart = employeePeriod.startDate;
+        const periodEnd = employeePeriod.endDate;
+
+        let defaultHoursPerDay = 8;
+        try {
+            const SettingsHelper = require('../utils/settingsHelper').SettingsHelper;
+            const settingsHelper = new SettingsHelper(clientId);
+            const hoursPerDay = await settingsHelper.getSetting('working_hours_per_day');
+            defaultHoursPerDay = hoursPerDay ? Number(hoursPerDay) : 8;
+        } catch (error) {
+            console.log('Error loading working hours from system settings, using default 8 hours:', error.message);
+        }
+
+        const HolidayService = require('./HolidayService');
+        const workingDaysCalc = await HolidayService.calculateWorkingDays(
+            clientId,
+            periodStart,
+            periodEnd,
+            employee.department_id,
+            false,
+            employee.id
+        );
+
+        const weekdayWorkingDays = workingDaysCalc.working_days - workingDaysCalc.weekend_working_days;
+        const workingSaturdays = workingDaysCalc.working_saturdays || 0;
+        const workingSundays = workingDaysCalc.working_sundays || 0;
+
+        const weekdayDailyHours = await this.getEmployeeDailyHoursForDayType(
+            employee.id, defaultHoursPerDay, periodStart, periodEnd, 'weekday'
+        );
+        const saturdayDailyHours = await this.getEmployeeDailyHoursForDayType(
+            employee.id, defaultHoursPerDay, periodStart, periodEnd, 'saturday'
+        );
+        const sundayDailyHours = await this.getEmployeeDailyHoursForDayType(
+            employee.id, defaultHoursPerDay, periodStart, periodEnd, 'sunday'
+        );
+
+        const baseSalary = parseFloat(employee.base_salary) || 0;
+
+        // Fixed 30-day month divisor
+        const dailySalary = baseSalary / 30;
+
+        // Fetch break duration so hourly rate divisor matches payable_duration (which already deducts break)
+        let breakDurationHours = 0;
+        try {
+            const SettingsHelper = require('../utils/settingsHelper').SettingsHelper;
+            const settingsHelper = new SettingsHelper(clientId);
+            const breakSetting = await settingsHelper.getSetting('break_duration_hours');
+            breakDurationHours = breakSetting ? Number(breakSetting) : 0;
+        } catch (error) {
+            console.log('Error loading break_duration_hours, defaulting to 0:', error.message);
+        }
+
+        const weekdayPayableHours  = Math.max(0, weekdayDailyHours  - breakDurationHours);
+        const saturdayPayableHours = Math.max(0, saturdayDailyHours - breakDurationHours);
+        const sundayPayableHours   = Math.max(0, sundayDailyHours   - breakDurationHours);
+
+        const weekdayHourlyRate  = weekdayPayableHours  > 0 ? dailySalary / weekdayPayableHours  : 0;
+        const saturdayHourlyRate = saturdayPayableHours > 0 ? dailySalary / saturdayPayableHours : 0;
+        const sundayHourlyRate   = sundayPayableHours   > 0 ? dailySalary / sundayPayableHours   : 0;
+
+        const periodStartStr = PayrollCycleService.formatDate(periodStart);
+        const periodEndStr = PayrollCycleService.formatDate(periodEnd);
+
+        console.log(`📊 Pre-calculated values (fixed/30) for ${employee.first_name} ${employee.last_name}:`);
+        console.log(`   Period: ${periodStartStr} to ${periodEndStr} ${employeePeriod.usesCustomCycle ? '(Custom Cycle)' : '(Default)'}`);
+        console.log(`   Working Days - Weekdays: ${weekdayWorkingDays}, Saturdays: ${workingSaturdays}, Sundays: ${workingSundays}`);
+        console.log(`   Daily Hours - Weekdays: ${weekdayDailyHours}h, Saturday: ${saturdayDailyHours}h, Sunday: ${sundayDailyHours}h`);
+        console.log(`   Break Duration: ${breakDurationHours}h → Payable Hours - Weekday: ${weekdayPayableHours}h, Saturday: ${saturdayPayableHours}h, Sunday: ${sundayPayableHours}h`);
+        console.log(`   Base Salary: Rs. ${baseSalary.toLocaleString()}`);
+        console.log(`   Daily Salary: Rs. ${dailySalary.toFixed(2)} (${baseSalary} ÷ 30)`);
+        console.log(`   Hourly Rates - Weekday: Rs. ${weekdayHourlyRate.toFixed(2)}, Saturday: Rs. ${saturdayHourlyRate.toFixed(2)}, Sunday: Rs. ${sundayHourlyRate.toFixed(2)}`);
+
+        await db.execute(`
+            INSERT INTO payroll_records (
+                id, run_id, employee_id, employee_code, employee_name,
+                department_name, designation_name, calculation_status,
+                base_salary, attendance_affects_salary,
+                employee_period_start_date, employee_period_end_date, uses_custom_cycle,
+                weekday_working_days, working_saturdays, working_sundays,
+                weekday_daily_hours, saturday_daily_hours, sunday_daily_hours,
+                daily_salary, weekday_hourly_rate, saturday_hourly_rate, sunday_hourly_rate
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            recordId, runId, employee.id, employee.employee_code,
+            `${employee.first_name} ${employee.last_name}`,
+            employee.department_name, employee.designation_name,
+            baseSalary, employee.attendance_affects_salary ? 1 : 0,
+            periodStartStr, periodEndStr, employeePeriod.usesCustomCycle ? 1 : 0,
+            weekdayWorkingDays, workingSaturdays, workingSundays,
+            weekdayDailyHours, saturdayDailyHours, sundayDailyHours,
+            dailySalary, weekdayHourlyRate, saturdayHourlyRate, sundayHourlyRate
+        ]);
+
+        return recordId;
+    }
+
 
     /**
      * Calculate single payroll record with proper method selection
