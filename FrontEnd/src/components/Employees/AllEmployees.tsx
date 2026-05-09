@@ -726,6 +726,7 @@ const AllEmployees: React.FC = () => {
                   />
                 </Table.HeadCell>
                 <Table.HeadCell>Employee</Table.HeadCell>
+                <Table.HeadCell>Fingerprint ID</Table.HeadCell>
                 <Table.HeadCell>Department</Table.HeadCell>
                 <Table.HeadCell>Status</Table.HeadCell>
                 <Table.HeadCell>Type</Table.HeadCell>
@@ -767,6 +768,15 @@ const AllEmployees: React.FC = () => {
                             </div>
                           </div>
                         </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {employee.fingerprint_id != null ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            #{employee.fingerprint_id}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">Not Set</span>
+                        )}
                       </Table.Cell>
                       <Table.Cell>
                         <div className="text-sm text-gray-900 dark:text-white">
@@ -813,7 +823,7 @@ const AllEmployees: React.FC = () => {
                   ))
                 ) : (
                   <Table.Row>
-                    <Table.Cell colSpan={7} className="text-center py-8">
+                    <Table.Cell colSpan={8} className="text-center py-8">
                       <div className="flex flex-col items-center">
                         <HiOutlineUsers className="h-12 w-12 text-gray-300 mb-4" />
                         <p className="text-lg text-gray-500 dark:text-gray-400">No employees found</p>

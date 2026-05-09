@@ -41,6 +41,8 @@ export interface Employee {
   department_name?: string;
   designation_title?: string;
   manager_name?: string;
+  fingerprint_id?: number | null;
+  years_of_service?: number;
 }
 
 export interface CreateEmployeeData {
