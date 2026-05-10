@@ -144,14 +144,15 @@ router.get('/fingerprint', [
 
       await db.execute(`
         INSERT INTO attendance (
-          id, employee_id, date, check_in_time, check_out_time,
+          id, employee_id, client_id, date, check_in_time, check_out_time,
           total_hours, overtime_hours,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend
-        ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 'office', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 'office', ?, ?, ?)
       `, [
         attendanceId,
         employeeId,
+        clientId,
         today,
         currentTime,
         arrivalStatus,
@@ -482,7 +483,8 @@ router.get('/fingerprint', [
   } catch (error) {
     console.error('❌ Fingerprint attendance error:', error);
     return res.status(200).json({
-      message: 'System error'
+      message: 'System error',
+      debug_error: error.message
     });
   }
 }));
@@ -603,13 +605,13 @@ router.post('/manual-sync', [
 
       await db.execute(`
         INSERT INTO attendance (
-          id, employee_id, date, check_in_time, check_out_time,
+          id, employee_id, client_id, date, check_in_time, check_out_time,
           total_hours, overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds,
           arrival_status, work_duration, work_type,
           scheduled_in_time, scheduled_out_time, is_weekend, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'office', ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'office', ?, ?, ?, ?)
       `, [
-        attendanceId, employeeId, date, check_in_time, check_out_time,
+        attendanceId, employeeId, clientId, date, check_in_time, check_out_time,
         totalHours, overtimeHours, preShiftOvertimeSeconds, postShiftOvertimeSeconds, arrivalResult.status,
         durationResult.status, schedule.start_time, schedule.end_time,
         isWeekend, 'Synced from old system'
@@ -1360,6 +1362,7 @@ const calculateWorkHours = async (
       const attendanceData = {
         id: attendanceId,
         employee_id: req.body.employee_id,
+        client_id: req.user.clientId,
         date: req.body.date,
         check_in_time: req.body.check_in_time || null,
         check_out_time: req.body.check_out_time || null,
@@ -1384,9 +1387,9 @@ const calculateWorkHours = async (
 
       const insertQuery = `
         INSERT INTO attendance (
-          id, employee_id, date, check_in_time, check_out_time, total_hours,
+          id, employee_id, client_id, date, check_in_time, check_out_time, total_hours,
           overtime_hours, pre_shift_overtime_seconds, post_shift_overtime_seconds, break_start_time, break_end_time, arrival_status, work_duration, work_type, notes, created_by, scheduled_in_time, scheduled_out_time, payable_duration, is_weekend
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       await db.execute(insertQuery, Object.values(attendanceData));
