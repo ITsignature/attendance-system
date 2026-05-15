@@ -499,7 +499,7 @@ class PayrollRunService {
         const workingSundays = workingDaysCalc.working_sundays || 0;
 
         // Pre-calculate daily hours for weekdays, Saturday, and Sunday
-        const weekdayDailyHours = await this.getEmployeeDailyHoursForDayType(
+        const weekdayDailyHoursRaw = await this.getEmployeeDailyHoursForDayType(
             employee.id,
             defaultHoursPerDay,
             periodStart,
@@ -507,7 +507,7 @@ class PayrollRunService {
             'weekday'
         );
 
-        const saturdayDailyHours = await this.getEmployeeDailyHoursForDayType(
+        const saturdayDailyHoursRaw = await this.getEmployeeDailyHoursForDayType(
             employee.id,
             defaultHoursPerDay,
             periodStart,
@@ -515,13 +515,29 @@ class PayrollRunService {
             'saturday'
         );
 
-        const sundayDailyHours = await this.getEmployeeDailyHoursForDayType(
+        const sundayDailyHoursRaw = await this.getEmployeeDailyHoursForDayType(
             employee.id,
             defaultHoursPerDay,
             periodStart,
             periodEnd,
             'sunday'
         );
+
+        // Subtract break duration so daily hours match payable_duration (which is already break-deducted)
+        // This prevents a mismatch where expected hours use raw shift hours but actual hours are break-deducted
+        let breakDurationHours = 0;
+        try {
+            const SettingsHelper = require('../utils/settingsHelper').SettingsHelper;
+            const settingsHelper = new SettingsHelper(clientId);
+            const breakSetting = await settingsHelper.getSetting('break_duration_hours');
+            breakDurationHours = breakSetting ? Number(breakSetting) : 0;
+        } catch (error) {
+            console.log('Error loading break_duration_hours, defaulting to 0:', error.message);
+        }
+
+        const weekdayDailyHours  = Math.max(0, weekdayDailyHoursRaw  - breakDurationHours);
+        const saturdayDailyHours = Math.max(0, saturdayDailyHoursRaw - breakDurationHours);
+        const sundayDailyHours   = Math.max(0, sundayDailyHoursRaw   - breakDurationHours);
 
         // Calculate daily salary and hourly rates
         const baseSalary = parseFloat(employee.base_salary) || 0;
@@ -689,7 +705,7 @@ class PayrollRunService {
             baseSalary, employee.attendance_affects_salary ? 1 : 0,
             periodStartStr, periodEndStr, employeePeriod.usesCustomCycle ? 1 : 0,
             weekdayWorkingDays, workingSaturdays, workingSundays,
-            weekdayDailyHours, saturdayDailyHours, sundayDailyHours,
+            weekdayPayableHours, saturdayPayableHours, sundayPayableHours,
             dailySalary, weekdayHourlyRate, saturdayHourlyRate, sundayHourlyRate
         ]);
 
@@ -788,8 +804,16 @@ class PayrollRunService {
 
             actualEarnedBaseSalary = attendanceCalculation.earned_salary || 0;
             attendanceDeduction = attendanceCalculation.total || 0;
+            const nonWorkingDayCredit = attendanceCalculation.non_working_day_credit || 0;
+
+            // For fixed-30: add non-working day credit (holidays + non-working Saturdays + Sundays)
+            // separately on top of earned salary, same way OT is added — not mixed into deduction
+            actualEarnedBaseSalary += nonWorkingDayCredit;
 
             console.log(`   Base Salary (Full): Rs.${parseFloat(record.base_salary).toFixed(2)}`);
+            if (nonWorkingDayCredit > 0) {
+                console.log(`   Non-Working Day Credit (Fixed-30): Rs.${nonWorkingDayCredit.toFixed(2)}`);
+            }
             console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
             console.log(`   Attendance Shortfall: Rs.${attendanceDeduction.toFixed(2)}`);
         }
@@ -821,8 +845,8 @@ class PayrollRunService {
         // STEP 4: Calculate all deductions on GROSS SALARY
         // Note: EPF/ETF calculated on actual earned base, employee deductions on gross salary
         // =============================================
-        console.log(`\n💸 Step 4: Calculating deductions (EPF/ETF on earned base, employee deductions on gross)...`);
-        const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary);
+        console.log(`\n💸 Step 4: Calculating deductions (EPF/ETF on base salary, employee deductions on gross)...`);
+        const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary, baseSalary);
         console.log(`   Total Deductions: Rs.${deductionComponents.total.toFixed(2)}`);
 
         // =============================================
@@ -1526,10 +1550,11 @@ class PayrollRunService {
         const fullPeriodSaturdays = parseFloat(rates.working_saturdays) || 0;
         const fullPeriodSundays = parseFloat(rates.working_sundays) || 0;
 
-        // Daily hours by day type
-        const weekdayDailyHours = parseFloat(rates.weekday_daily_hours) || 0;
+        // Daily hours by day type — values stored in payroll_records are already break-deducted
+        // (createDraftPayrollRecord subtracts break_duration_hours at run creation time)
+        const weekdayDailyHours  = parseFloat(rates.weekday_daily_hours)  || 0;
         const saturdayDailyHours = parseFloat(rates.saturday_daily_hours) || 0;
-        const sundayDailyHours = parseFloat(rates.sunday_daily_hours) || 0;
+        const sundayDailyHours   = parseFloat(rates.sunday_daily_hours)   || 0;
 
         console.log(`\n   💵 Pre-calculated Rates for ${employeeName} (${employeeCode}):`);
         console.log(`      Daily Salary: Rs.${dailySalary.toFixed(2)}`);
@@ -2024,9 +2049,85 @@ class PayrollRunService {
         console.log(`      ─────────────────────────────────────────────────────`);
         console.log(`      Total Actual Earned: Rs.${totalActualEarned.toFixed(2)}`);
 
+        // =============================================
+        // FIXED-30 ADJUSTMENT: Add salary for non-working days
+        // =============================================
+        // For fixed-30, base_salary / 30 means the employee is paid for ALL 30 days including
+        // holidays, non-working Saturdays, and Sundays. The expected/actual hours above only
+        // cover working days, so we must credit the salary for non-working days separately.
+        let fixed30NonWorkingDayCredit = 0;
+        let holidayCreditDays = 0;
+        let nonWorkingSatCreditDays = 0;
+        let sundayCreditDays = 0;
+        let dailySalaryFixed30 = 0;
+
+        const SettingsHelperFixed = require('../utils/settingsHelper').SettingsHelper;
+        const settingsHelperFixed = new SettingsHelperFixed(clientId);
+        const dailyRateMethodFixed = await settingsHelperFixed.getSetting('daily_rate_method').catch(() => null);
+
+        if (dailyRateMethodFixed === 'fixed_30') {
+            dailySalaryFixed30 = parseFloat(rates.daily_salary) || 0;
+
+            // Fetch holidays for this period
+            const [holidayRows] = await db.execute(`
+                SELECT DATE(date) as hdate FROM holidays
+                WHERE client_id = ? AND date BETWEEN ? AND ?
+                AND (applies_to_all = TRUE OR department_ids IS NULL)
+            `, [clientId, period.period_start_date, attendanceEndDateStr]);
+            const holidaySet = new Set(holidayRows.map(h => {
+                const d = h.hdate instanceof Date ? h.hdate.toISOString().split('T')[0] : String(h.hdate).split('T')[0];
+                return d;
+            }));
+
+            // Count total Saturdays and Sundays in the calculation period
+            // Then subtract the configured working ones (already computed in payroll_records)
+            // to get non-working Saturdays/Sundays that need credit
+            let totalSaturdaysInPeriod = 0;
+            let totalSundaysInPeriod = 0;
+
+            const calcStart = parseLocalDate(period.period_start_date);
+            const calcEnd   = parseLocalDate(attendanceEndDateStr);
+            let cur = new Date(calcStart);
+
+            while (cur <= calcEnd) {
+                const ds = getLocalDateString(cur);
+                const dow = cur.getDay();
+
+                if (holidaySet.has(ds)) {
+                    // Holiday — employee is paid but not counted in expected working hours
+                    // Do NOT double-count if it's also a Saturday/Sunday
+                    fixed30NonWorkingDayCredit += dailySalaryFixed30;
+                    holidayCreditDays++;
+                } else if (dow === 6) {
+                    totalSaturdaysInPeriod++;
+                } else if (dow === 0) {
+                    totalSundaysInPeriod++;
+                }
+
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            // Non-working Saturdays = total Saturdays (excluding holiday Saturdays) - working Saturdays
+            // working_saturdays is already correctly computed by HolidayService at run creation
+            const workingSaturdaysInPeriod = parseFloat(rates.working_saturdays) || 0;
+            const workingSundaysInPeriod   = parseFloat(rates.working_sundays)   || 0;
+            nonWorkingSatCreditDays = Math.max(0, totalSaturdaysInPeriod - workingSaturdaysInPeriod);
+            sundayCreditDays        = Math.max(0, totalSundaysInPeriod   - workingSundaysInPeriod);
+
+            fixed30NonWorkingDayCredit += nonWorkingSatCreditDays * dailySalaryFixed30;
+            fixed30NonWorkingDayCredit += sundayCreditDays        * dailySalaryFixed30;
+
+            console.log(`\n   🗓️  FIXED-30 Non-Working Day Credit for ${employeeName} (${employeeCode}):`);
+            console.log(`      Holidays: ${holidayCreditDays} × Rs.${dailySalaryFixed30.toFixed(2)} = Rs.${(holidayCreditDays * dailySalaryFixed30).toFixed(2)}`);
+            console.log(`      Non-Working Saturdays: ${nonWorkingSatCreditDays} × Rs.${dailySalaryFixed30.toFixed(2)} = Rs.${(nonWorkingSatCreditDays * dailySalaryFixed30).toFixed(2)}`);
+            console.log(`      Sundays (non-working): ${sundayCreditDays} × Rs.${dailySalaryFixed30.toFixed(2)} = Rs.${(sundayCreditDays * dailySalaryFixed30).toFixed(2)}`);
+            console.log(`      Total Credit: Rs.${fixed30NonWorkingDayCredit.toFixed(2)}`);
+        }
+
         // Calculate deduction: EXPECTED EARNED (until NOW) - ACTUAL EARNED (until NOW)
-        // This is the CORRECT way - only deduct for the period that has passed
-        const deduction = Math.max(0, totalExpectedEarned - totalActualEarned);
+        // Non-working day credit is returned separately and added on top — not mixed into deduction logic
+        const totalActualEarnedAdjusted = totalActualEarned;
+        const deduction = Math.max(0, totalExpectedEarned - totalActualEarnedAdjusted);
 
         const currentTimeStr = new Date().toLocaleString('en-US', {
             year: 'numeric',
@@ -2042,10 +2143,10 @@ class PayrollRunService {
         console.log(`\n   📊 ${calcMode} for ${employeeName} (${employeeCode}):`);
         console.log(`      Calculated At: ${currentTimeStr}`);
         console.log(`      Expected Earned: Rs.${totalExpectedEarned.toFixed(2)}`);
-        console.log(`      Actual Earned: Rs.${totalActualEarned.toFixed(2)}`);
+        console.log(`      Actual Earned: Rs.${totalActualEarned.toFixed(2)}${fixed30NonWorkingDayCredit > 0 ? ` + Rs.${fixed30NonWorkingDayCredit.toFixed(2)} (non-working day credit) = Rs.${totalActualEarnedAdjusted.toFixed(2)}` : ''}`);
         console.log(`      ─────────────────────────────────────────────────────`);
         console.log(`      Attendance Deduction: Rs.${deduction.toFixed(2)}`);
-        console.log(`      (Formula: Expected - Actual, NOT Base Salary - Actual)`);
+        console.log(`      (Formula: Expected - Actual${fixed30NonWorkingDayCredit > 0 ? ' - NonWorkingCredit' : ''}, NOT Base Salary - Actual)`);
 
         if (deduction === 0) {
             console.log(`      ✅ No deduction - ${employeeName} worked all expected hours!`);
@@ -2247,6 +2348,7 @@ class PayrollRunService {
                 details: `Shortfall: ${(totalExpectedHours - totalActualHours).toFixed(2)}h of ${totalExpectedHours.toFixed(2)}h expected (calculated at ${currentTimeStr})`
             }],
             earned_salary: totalActualEarned,
+            non_working_day_credit: fixed30NonWorkingDayCredit,
             expected_salary: totalExpectedEarned,
             has_live_session: todayIsLive,
             live_session_hours: todayIsLive ? todayActualHours : 0,
@@ -2296,6 +2398,15 @@ class PayrollRunService {
                 live_session: {
                     hours: todayIsLive ? todayActualHours : 0,
                     earned: liveSessionEarned
+                },
+                non_working_day_credit: {
+                    earned: fixed30NonWorkingDayCredit,
+                    breakdown: {
+                        holidays: holidayCreditDays,
+                        non_working_saturdays: nonWorkingSatCreditDays,
+                        non_working_sundays: sundayCreditDays,
+                        daily_rate: dailySalaryFixed30
+                    }
                 }
             },
             shortfall_by_cause: {
@@ -3264,18 +3375,19 @@ class PayrollRunService {
     /**
      * Calculate deduction components
      */
-    async calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary = null) {
-        // Use actualEarnedBaseSalary for EPF/ETF if provided, otherwise use grossSalary
-        const baseForStatutory = actualEarnedBaseSalary !== null ? parseFloat(actualEarnedBaseSalary) : parseFloat(grossSalary);
+    async calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary = null, baseSalary = null) {
+        // EPF/ETF must be calculated on the fixed base salary, not on gross or earned salary
+        // This ensures EPF is always a fixed % of the employee's contracted base salary
+        const baseForStatutory = baseSalary !== null ? parseFloat(baseSalary)
+            : actualEarnedBaseSalary !== null ? parseFloat(actualEarnedBaseSalary)
+            : parseFloat(grossSalary);
         const baseForEmployee = parseFloat(grossSalary) || 0;
         const components = [];
         let total = 0;
 
         console.log(`💸 DEDUCTION CALCULATION:`);
         console.log(`   Gross Salary (for employee deductions): ${grossSalary}`);
-        if (actualEarnedBaseSalary !== null) {
-            console.log(`   Actual Earned Base (for EPF/ETF): ${actualEarnedBaseSalary}`);
-        }
+        console.log(`   Base Salary (for EPF/ETF): ${baseForStatutory}`);
 
         // =============================================
         // 1. CONFIGURED DEDUCTION COMPONENTS (EPF/ETF - calculated on earned base)
@@ -3284,10 +3396,8 @@ class PayrollRunService {
             console.log(`   📋 Processing ${employeeData.configuredComponents.deductions.length} configured deduction components`);
 
             for (const component of employeeData.configuredComponents.deductions) {
-                // Use earned base for statutory deductions (EPF/ETF), gross for others
-                const baseAmount = (component.category === 'statutory' ||
-                                   component.component_name.toLowerCase().includes('epf') ||
-                                   component.component_name.toLowerCase().includes('etf'))
+                // Use base salary if component is flagged as deduct_from_base_salary
+                const baseAmount = component.deduct_from_base_salary
                     ? baseForStatutory
                     : baseForEmployee;
 
@@ -3825,7 +3935,7 @@ class PayrollRunService {
                 return {
                     ...record,
                     expected_base_salary: attendanceCalc.expected_salary || 0,
-                    actual_earned_base: attendanceCalc.earned_salary || 0,
+                    actual_earned_base: (attendanceCalc.earned_salary || 0) + (attendanceCalc.non_working_day_credit || 0),
                     attendance_shortfall: attendanceCalc.total || 0,
                     earnings_by_source: attendanceCalc.earnings_by_source || null,
                     shortfall_by_cause: attendanceCalc.shortfall_by_cause || null
@@ -4031,7 +4141,8 @@ class PayrollRunService {
                     pc.calculation_value,
                     pc.is_taxable,
                     pc.applies_to,
-                    pc.applies_to_ids
+                    pc.applies_to_ids,
+                    pc.deduct_from_base_salary
                 FROM payroll_components pc
                 WHERE pc.client_id = ? AND pc.is_active = 1
             `, [clientId]);
@@ -4319,7 +4430,8 @@ class PayrollRunService {
                     component_name: comp.component_name,
                     calculation_type: comp.calculation_type,
                     calculation_value: comp.calculation_value,
-                    category: comp.category
+                    category: comp.category,
+                    deduct_from_base_salary: comp.deduct_from_base_salary ? true : false
                 }));
 
                 // Convert payroll component allowances to standard format

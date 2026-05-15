@@ -27,7 +27,8 @@ const PayrollComponents: React.FC = () => {
     is_taxable: true,
     is_mandatory: false,
     applies_to: 'all',
-    applies_to_ids: []
+    applies_to_ids: [],
+    deduct_from_base_salary: false
   });
 
   useEffect(() => {
@@ -85,7 +86,8 @@ const PayrollComponents: React.FC = () => {
       is_taxable: component.is_taxable,
       is_mandatory: component.is_mandatory,
       applies_to: component.applies_to,
-      applies_to_ids: component.applies_to_ids || []
+      applies_to_ids: component.applies_to_ids || [],
+      deduct_from_base_salary: component.deduct_from_base_salary || false
     });
     setShowForm(true);
   };
@@ -385,33 +387,25 @@ const PayrollComponents: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center">
-                  {/* <input
+              {formData.component_type === 'deduction' && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <input
                     type="checkbox"
-                    id="is_taxable"
-                    checked={formData.is_taxable}
-                    onChange={(e) => setFormData({ ...formData, is_taxable: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  /> */}
-                  {/* <label htmlFor="is_taxable" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                    Include in taxable income
-                  </label> */}
+                    id="deduct_from_base_salary"
+                    checked={formData.deduct_from_base_salary || false}
+                    onChange={(e) => setFormData({ ...formData, deduct_from_base_salary: e.target.checked })}
+                    className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
+                  />
+                  <div>
+                    <label htmlFor="deduct_from_base_salary" className="block text-sm font-medium text-amber-800 cursor-pointer">
+                      Deduct from Base Salary
+                    </label>
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      If checked, percentage is calculated on the fixed base salary (e.g. EPF). Otherwise calculated on gross salary.
+                    </p>
+                  </div>
                 </div>
-
-                <div className="flex items-center">
-                  {/* <input
-                    type="checkbox"
-                    id="is_mandatory"
-                    checked={formData.is_mandatory}
-                    onChange={(e) => setFormData({ ...formData, is_mandatory: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  /> */}
-                  {/* <label htmlFor="is_mandatory" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                    Mandatory for all employees
-                  </label> */}
-                </div>
-              </div>
+              )}
 
               <div className="flex justify-end space-x-3 pt-4">
                 <button

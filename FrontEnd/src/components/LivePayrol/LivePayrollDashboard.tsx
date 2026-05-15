@@ -366,7 +366,7 @@ const LivePayrollDashboard: React.FC = () => {
             <Table.Head>
               <Table.HeadCell>Employee</Table.HeadCell>
               <Table.HeadCell>Base Salary</Table.HeadCell>
-              <Table.HeadCell>Expected Base</Table.HeadCell>
+              {/* <Table.HeadCell>Expected Base</Table.HeadCell> */}
               <Table.HeadCell>Actual Earned</Table.HeadCell>
               <Table.HeadCell>Shortfall</Table.HeadCell>
               <Table.HeadCell>Allowances</Table.HeadCell>
@@ -398,9 +398,9 @@ const LivePayrollDashboard: React.FC = () => {
                         </div>
                       </Table.Cell>
                       <Table.Cell>{formatCurrency(result.base_salary)}</Table.Cell>
-                      <Table.Cell className="text-blue-600">
+                      {/* <Table.Cell className="text-blue-600">
                         {formatCurrency(result.expected_base_salary)}
-                      </Table.Cell>
+                      </Table.Cell> */}
                       <Table.Cell className="text-green-600 font-medium">
                         <div className="relative group inline-block">
                           <span className="cursor-help">
@@ -433,6 +433,31 @@ const LivePayrollDashboard: React.FC = () => {
                                     <span className="text-gray-600">Overtime ({result.earnings_by_source.overtime.minutes}min):</span>
                                     <span className="font-medium text-red-600">{formatCurrency(result.earnings_by_source.overtime.earned)}</span>
                                   </div>
+                                )}
+                                {result.earnings_by_source.non_working_day_credit && result.earnings_by_source.non_working_day_credit.earned > 0 && (
+                                  <>
+                                    <div className="border-t border-gray-100 pt-1 mt-1">
+                                      <span className="text-gray-500 font-medium">Non-Working Days:</span>
+                                    </div>
+                                    {result.earnings_by_source.non_working_day_credit.breakdown.holidays > 0 && (
+                                      <div className="flex justify-between pl-2">
+                                        <span className="text-gray-600">Holidays ({result.earnings_by_source.non_working_day_credit.breakdown.holidays}):</span>
+                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.holidays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
+                                      </div>
+                                    )}
+                                    {result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays > 0 && (
+                                      <div className="flex justify-between pl-2">
+                                        <span className="text-gray-600">Non-Working Sat ({result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays}):</span>
+                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
+                                      </div>
+                                    )}
+                                    {result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays > 0 && (
+                                      <div className="flex justify-between pl-2">
+                                        <span className="text-gray-600">Sundays ({result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays}):</span>
+                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>

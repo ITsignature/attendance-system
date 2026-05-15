@@ -17,6 +17,7 @@ export interface PayrollComponent {
   applies_to: 'all' | 'department' | 'designation' | 'individual';
   applies_to_ids?: string[];
   is_active: boolean;
+  deduct_from_base_salary: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -65,6 +66,7 @@ export interface CreatePayrollComponentRequest {
   is_mandatory?: boolean;
   applies_to?: 'all' | 'department' | 'designation' | 'individual';
   applies_to_ids?: string[];
+  deduct_from_base_salary?: boolean;
 }
 
 export interface CreateEmployeeAllowanceRequest {

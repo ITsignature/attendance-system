@@ -187,6 +187,7 @@ router.get('/components',
                     applies_to,
                     applies_to_ids,
                     is_active,
+                    deduct_from_base_salary,
                     created_at,
                     updated_at
                 FROM payroll_components
@@ -256,7 +257,8 @@ router.post('/components',
             is_taxable = false,
             is_mandatory = false,
             applies_to = 'all',
-            applies_to_ids = null
+            applies_to_ids = null,
+            deduct_from_base_salary = false
         } = req.body;
 
         // Handle applies_to_ids: if it's an empty array or applies_to is 'all', set to null
@@ -271,16 +273,17 @@ router.post('/components',
                 id, client_id, component_name, component_type, category,
                 calculation_type, calculation_value, calculation_formula,
                 is_taxable, is_mandatory, applies_to, applies_to_ids,
-                is_active, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                is_active, deduct_from_base_salary, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         `, [
             componentId, clientId, component_name, component_type, category,
             calculation_type,
-            calculation_value ?? null,          // handle missing numeric
-            calculation_formula ?? null,        // handle missing formula
+            calculation_value ?? null,
+            calculation_formula ?? null,
             is_taxable, is_mandatory, applies_to,
             processedAppliesIds,
-            true
+            true,
+            deduct_from_base_salary ? 1 : 0
         ]);
 
             res.status(201).json({

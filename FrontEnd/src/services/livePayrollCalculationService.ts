@@ -21,6 +21,15 @@ interface EarningsBySource {
     minutes: number;
     earned: number;
   };
+  non_working_day_credit?: {
+    earned: number;
+    breakdown: {
+      holidays: number;
+      non_working_saturdays: number;
+      non_working_sundays: number;
+      daily_rate: number;
+    };
+  };
 }
 
 interface ShortfallByCause {
@@ -68,6 +77,7 @@ interface EmployeeData {
     calculation_type: string;
     calculation_value: number;
     category: string;
+    deduct_from_base_salary?: boolean;
   }>;
   financial: {
     loans: number;
@@ -193,6 +203,7 @@ class LivePayrollCalculationService {
     let etf_employer = 0;
     let total = 0;
     const breakdown: DeductionBreakdown[] = [];
+    const baseSalary = employee.base_salary || 0;
 
     if (!employee.deductions || employee.deductions.length === 0) {
       return { epf_employee: 0, etf_employer: 0, total: 0, breakdown: [] };
@@ -204,7 +215,9 @@ class LivePayrollCalculationService {
       const value = isNaN(rawValue) ? 0 : rawValue;
 
       if (deduction.calculation_type === 'percentage' && value > 0) {
-        const amount = (actualEarnedBase * value) / 100;
+        // Use base salary if flagged, otherwise use actual earned (gross)
+        const baseForCalc = deduction.deduct_from_base_salary ? baseSalary : actualEarnedBase;
+        const amount = (baseForCalc * value) / 100;
         const calculatedAmount = Math.round(amount * 100) / 100;
 
         breakdown.push({
@@ -263,7 +276,11 @@ class LivePayrollCalculationService {
     let actual_earned_base = employee.attendance.earned_salary;
     const attendance_shortfall = employee.attendance.shortfall;
 
-    // Step 1.5: Add overtime to actual earned base
+    // Step 1.5: Add non-working day credit for fixed-30 clients (holidays + non-working Sat/Sun)
+    const non_working_day_credit = employee.attendance.earnings_by_source?.non_working_day_credit?.earned || 0;
+    actual_earned_base += non_working_day_credit;
+
+    // Step 1.6: Add overtime to actual earned base
     const overtime_amount = employee.overtime?.total_amount || 0;
     actual_earned_base += overtime_amount;
 

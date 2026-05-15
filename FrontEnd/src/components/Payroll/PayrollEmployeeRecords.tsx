@@ -17,6 +17,15 @@ interface EarningsBySource {
     hours: number;
     earned: number;
   };
+  non_working_day_credit?: {
+    earned: number;
+    breakdown: {
+      holidays: number;
+      non_working_saturdays: number;
+      non_working_sundays: number;
+      daily_rate: number;
+    };
+  };
 }
 
 interface ShortfallByCause {
@@ -306,6 +315,31 @@ const PayrollEmployeeRecords: React.FC = () => {
                                   <span className="text-gray-600">Active Session:</span>
                                   <span className="font-medium text-gray-900">{formatCurrency(record.earnings_by_source.live_session.earned)}</span>
                                 </div>
+                              )}
+                              {record.earnings_by_source.non_working_day_credit && record.earnings_by_source.non_working_day_credit.earned > 0 && (
+                                <>
+                                  <div className="border-t border-gray-100 pt-1 mt-1">
+                                    <span className="text-gray-500 font-medium">Non-Working Days:</span>
+                                  </div>
+                                  {record.earnings_by_source.non_working_day_credit.breakdown.holidays > 0 && (
+                                    <div className="flex justify-between pl-2">
+                                      <span className="text-gray-600">Holidays ({record.earnings_by_source.non_working_day_credit.breakdown.holidays}):</span>
+                                      <span className="font-medium text-gray-900">{formatCurrency(record.earnings_by_source.non_working_day_credit.breakdown.holidays * record.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
+                                    </div>
+                                  )}
+                                  {record.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays > 0 && (
+                                    <div className="flex justify-between pl-2">
+                                      <span className="text-gray-600">Non-Working Sat ({record.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays}):</span>
+                                      <span className="font-medium text-gray-900">{formatCurrency(record.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays * record.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
+                                    </div>
+                                  )}
+                                  {record.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays > 0 && (
+                                    <div className="flex justify-between pl-2">
+                                      <span className="text-gray-600">Sundays ({record.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays}):</span>
+                                      <span className="font-medium text-gray-900">{formatCurrency(record.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays * record.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
