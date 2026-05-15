@@ -38,10 +38,12 @@ function connectMQTT() {
     isConnected = true;
     console.log('✅ MQTT connected to broker:', MQTT_BROKER);
 
-    // Subscribe to all device status and result topics
+    // Fingerprint device topics
     mqttClient.subscribe('devices/+/status', { qos: 1 });
     mqttClient.subscribe('devices/+/result', { qos: 1 });
-    console.log('📡 MQTT subscribed to devices/+/status and devices/+/result');
+    // Door lock enroll progress topic
+    mqttClient.subscribe('devices/+/enroll/progress', { qos: 1 });
+    console.log('📡 MQTT subscribed to device topics');
   });
 
   mqttClient.on('reconnect', () => {
@@ -61,16 +63,32 @@ function connectMQTT() {
     try {
       const payload = JSON.parse(message.toString());
       const parts = topic.split('/');
-      // topic format: devices/{device_id}/status  or  devices/{device_id}/result
-      if (parts.length !== 3 || parts[0] !== 'devices') return;
+      if (parts[0] !== 'devices') return;
 
       const deviceId = parts[1];
       const type = parts[2];
 
       if (type === 'status') {
         await handleStatusMessage(deviceId, payload);
+        // Door lock resolves pending commands via status (no separate result topic)
+        if (pendingCommands.has(deviceId)) {
+          const { resolve, timer } = pendingCommands.get(deviceId);
+          clearTimeout(timer);
+          pendingCommands.delete(deviceId);
+          resolve({ success: true, message: `Door: ${payload.door || 'unknown'}`, door: payload.door });
+        }
       } else if (type === 'result') {
         await handleResultMessage(deviceId, payload);
+      } else if (parts.length === 4 && parts[2] === 'enroll' && parts[3] === 'progress') {
+        // Door lock enroll progress — resolve pending enroll command when done
+        if (payload.state === 6 || payload.state === 7) { // ENROLL_DONE_OK=6, ENROLL_DONE_FAIL=7
+          if (pendingCommands.has(deviceId)) {
+            const { resolve, timer } = pendingCommands.get(deviceId);
+            clearTimeout(timer);
+            pendingCommands.delete(deviceId);
+            resolve({ success: payload.state === 6, message: payload.msg || 'Enroll complete' });
+          }
+        }
       }
     } catch (err) {
       console.error('MQTT message parse error:', err.message);
@@ -81,30 +99,69 @@ function connectMQTT() {
 async function handleStatusMessage(deviceId, payload) {
   try {
     const db = getDB();
-    await db.execute(
-      `UPDATE fingerprint_devices SET
-        is_online = 1,
-        last_seen = NOW(),
-        last_ip = ?,
-        wifi_rssi = ?,
-        wifi_ssid = ?,
-        free_heap = ?,
-        uptime_minutes = ?,
-        current_mode = ?,
-        firmware_version = ?,
-        updated_at = NOW()
-      WHERE device_id = ?`,
-      [
-        payload.ip || null,
-        payload.rssi || null,
-        payload.ssid || null,
-        payload.free_heap || null,
-        payload.uptime_minutes || null,
-        payload.mode || 'attendance',
-        payload.firmware || null,
-        deviceId,
-      ]
-    );
+
+    // Check device type to handle door lock vs fingerprint status fields
+    const [rows] = await db.execute('SELECT device_type FROM fingerprint_devices WHERE device_id = ?', [deviceId]);
+    if (rows.length === 0) return; // unregistered device, ignore
+    const isDoorLock = rows[0].device_type === 'doorlock';
+
+    if (isDoorLock) {
+      // Door lock status payload fields: online, door, rssi, signal_pct, fp_ready, fp_count, rfid_ready, uptime_min, ip, unlock_dur, ssid
+      await db.execute(
+        `UPDATE fingerprint_devices SET
+          is_online = 1,
+          last_seen = NOW(),
+          last_ip = ?,
+          wifi_rssi = ?,
+          wifi_ssid = ?,
+          uptime_minutes = ?,
+          door_status = ?,
+          fp_count = ?,
+          rfid_ready = ?,
+          unlock_duration = ?,
+          current_mode = ?,
+          updated_at = NOW()
+        WHERE device_id = ?`,
+        [
+          payload.ip || null,
+          payload.rssi || null,
+          payload.ssid || null,
+          payload.uptime_min || null,
+          payload.door || null,
+          payload.fp_count ?? null,
+          payload.rfid_ready ? 1 : 0,
+          payload.unlock_dur || null,
+          payload.door === 'open' ? 'open' : 'locked',
+          deviceId,
+        ]
+      );
+    } else {
+      // Fingerprint attendance device
+      await db.execute(
+        `UPDATE fingerprint_devices SET
+          is_online = 1,
+          last_seen = NOW(),
+          last_ip = ?,
+          wifi_rssi = ?,
+          wifi_ssid = ?,
+          free_heap = ?,
+          uptime_minutes = ?,
+          current_mode = ?,
+          firmware_version = ?,
+          updated_at = NOW()
+        WHERE device_id = ?`,
+        [
+          payload.ip || null,
+          payload.rssi || null,
+          payload.ssid || null,
+          payload.free_heap || null,
+          payload.uptime_minutes || null,
+          payload.mode || 'attendance',
+          payload.firmware || null,
+          deviceId,
+        ]
+      );
+    }
   } catch (err) {
     console.error('MQTT handleStatusMessage DB error:', err.message);
   }
@@ -142,18 +199,65 @@ async function handleResultMessage(deviceId, payload) {
   }
 }
 
+// Door lock fingerprint commands go to /finger topic, others to /commands
+const DOORLOCK_FINGER_COMMANDS = ['enroll', 'delete_fp', 'list_fp', 'export_all', 'export_one', 'import_template'];
+
+// Map HRMS command names to door lock action names + topic
+function buildDoorLockPayload(command, params) {
+  // fingerprint sub-topic commands
+  if (DOORLOCK_FINGER_COMMANDS.includes(command)) {
+    const actionMap = {
+      enroll:           { action: 'enroll',           id: params.enroll_id },
+      delete_fp:        { action: 'delete',            id: params.delete_id },
+      list_fp:          { action: 'list' },
+      export_all:       { action: 'export_all' },
+      export_one:       { action: 'export_one',        id: params.fp_id },
+      import_template:  { action: 'import_template',   id: params.fp_id, template: params.template },
+    };
+    return { topic: 'finger', payload: actionMap[command] || { action: command } };
+  }
+  // RFID sub-topic commands
+  if (command === 'start_rfid_scan') return { topic: 'commands', payload: { action: 'start_rfid_scan' } };
+  if (command === 'stop_rfid_scan')  return { topic: 'commands', payload: { action: 'stop_rfid_scan' } };
+
+  // main /commands topic
+  const actionMap = {
+    unlock:             { action: 'unlock' },
+    lock:               { action: 'lock' },
+    status:             { action: 'status' },
+    get_status:         { action: 'status' },
+    restart:            { action: 'restart' },
+    reboot:             { action: 'restart' },
+    set_duration:       { action: 'set_duration',      value: params.value },
+    set_baseurl:        { action: 'set_baseurl',        value: params.base_url || params.value },
+    update_wifi:        { action: 'set_wifi',           ssid: params.ssid, pass: params.password },
+    clear_settings:     { action: 'clear_settings' },
+    ota_update:         { action: 'ota_update',         url: params.url },
+  };
+  return { topic: 'commands', payload: actionMap[command] || { action: command } };
+}
+
 /**
  * Send a command to a device and wait for its result (max 30s)
- * Returns a promise that resolves with { success, message }
+ * deviceType: 'fingerprint' | 'doorlock'
  */
-function sendCommand(deviceId, command, params = {}) {
+function sendCommand(deviceId, command, params = {}, deviceType = 'fingerprint') {
   return new Promise((resolve, reject) => {
     if (!isConnected || !mqttClient) {
       return reject(new Error('MQTT broker not connected'));
     }
 
-    const topic = `devices/${deviceId}/commands`;
-    const payload = JSON.stringify({ command, ...params, ts: Date.now() });
+    let topic;
+    let payloadStr;
+
+    if (deviceType === 'doorlock') {
+      const { topic: subTopic, payload: dlPayload } = buildDoorLockPayload(command, params);
+      topic = `devices/${deviceId}/${subTopic}`;
+      payloadStr = JSON.stringify({ ...dlPayload, ts: Date.now() });
+    } else {
+      topic = `devices/${deviceId}/commands`;
+      payloadStr = JSON.stringify({ command, ...params, ts: Date.now() });
+    }
 
     // Cancel any existing pending command for this device
     if (pendingCommands.has(deviceId)) {

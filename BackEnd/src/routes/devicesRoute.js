@@ -103,9 +103,10 @@ router.post('/',
     if (existing.length > 0) return res.status(409).json({ success: false, message: 'device_id already registered' });
 
     const id = uuidv4();
+    const device_type = req.body.device_type === 'doorlock' ? 'doorlock' : 'fingerprint';
     await db.execute(
-      `INSERT INTO fingerprint_devices (id, device_id, client_id, name, location) VALUES (?, ?, ?, ?, ?)`,
-      [id, device_id, client_id, name, location || null]
+      `INSERT INTO fingerprint_devices (id, device_id, client_id, name, location, device_type) VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, device_id, client_id, name, location || null, device_type]
     );
 
     const [newDevice] = await db.execute('SELECT * FROM fingerprint_devices WHERE id = ?', [id]);
@@ -164,20 +165,23 @@ router.delete('/:id', requireSuperAdmin, asyncHandler(async (req, res) => {
 // POST /api/devices/:id/command
 // body: { command: 'enroll', enroll_id: 5 }
 // =============================================
+// All valid commands across both device types
+const FINGERPRINT_COMMANDS = [
+  'enroll', 'delete_fp', 'clear_all', 'update_url', 'update_wifi',
+  'reconnect_wifi', 'clear_settings', 'reboot', 'set_attendance_mode', 'get_status',
+];
+const DOORLOCK_COMMANDS = [
+  'unlock', 'lock', 'status', 'restart',
+  'enroll', 'delete_fp', 'list_fp', 'export_all', 'export_one', 'import_template',
+  'start_rfid_scan', 'stop_rfid_scan',
+  'set_duration', 'set_baseurl', 'update_wifi', 'clear_settings',
+  'ota_update', 'get_status',
+];
+const ALL_COMMANDS = [...new Set([...FINGERPRINT_COMMANDS, ...DOORLOCK_COMMANDS])];
+
 router.post('/:id/command',
   [
-    body('command').isIn([
-      'enroll',
-      'delete_fp',
-      'clear_all',
-      'update_url',
-      'update_wifi',
-      'reconnect_wifi',
-      'clear_settings',
-      'reboot',
-      'set_attendance_mode',
-      'get_status',
-    ]).withMessage('Invalid command'),
+    body('command').isIn(ALL_COMMANDS).withMessage('Invalid command'),
   ],
   asyncHandler(async (req, res) => {
     const errors = validationResult(req);
@@ -190,7 +194,7 @@ router.post('/:id/command',
     const db = getDB();
     const clientScope = getClientScope(req);
 
-    let query = 'SELECT device_id FROM fingerprint_devices WHERE id = ?';
+    let query = 'SELECT device_id, device_type FROM fingerprint_devices WHERE id = ?';
     const params = [req.params.id];
     if (clientScope) { query += ' AND client_id = ?'; params.push(clientScope); }
 
@@ -198,29 +202,56 @@ router.post('/:id/command',
     if (rows.length === 0) return res.status(404).json({ success: false, message: 'Device not found' });
 
     const deviceId = rows[0].device_id;
+    const deviceType = rows[0].device_type;
     const { command, ...cmdParams } = req.body;
+
+    // Validate command is allowed for this device type
+    if (deviceType === 'doorlock' && !DOORLOCK_COMMANDS.includes(command)) {
+      return res.status(400).json({ success: false, message: `Command '${command}' not supported for door lock devices` });
+    }
+    if (deviceType === 'fingerprint' && !FINGERPRINT_COMMANDS.includes(command)) {
+      return res.status(400).json({ success: false, message: `Command '${command}' not supported for fingerprint devices` });
+    }
 
     // validate command-specific params
     if (command === 'enroll') {
       const id = parseInt(cmdParams.enroll_id);
-      if (!id || id < 1 || id > 127) {
-        return res.status(400).json({ success: false, message: 'enroll_id must be 1-127' });
+      const max = deviceType === 'doorlock' ? 300 : 127;
+      if (!id || id < 1 || id > max) {
+        return res.status(400).json({ success: false, message: `enroll_id must be 1-${max}` });
       }
     }
     if (command === 'delete_fp') {
       const id = parseInt(cmdParams.delete_id);
-      if (!id || id < 1 || id > 127) {
-        return res.status(400).json({ success: false, message: 'delete_id must be 1-127' });
+      const max = deviceType === 'doorlock' ? 300 : 127;
+      if (!id || id < 1 || id > max) {
+        return res.status(400).json({ success: false, message: `delete_id must be 1-${max}` });
       }
     }
-    if (command === 'update_url') {
-      if (!cmdParams.base_url || (!cmdParams.base_url.startsWith('http://') && !cmdParams.base_url.startsWith('https://'))) {
+    if (command === 'export_one') {
+      const id = parseInt(cmdParams.fp_id);
+      if (!id || id < 1 || id > 300) {
+        return res.status(400).json({ success: false, message: 'fp_id must be 1-300' });
+      }
+    }
+    if (command === 'set_duration') {
+      const d = parseInt(cmdParams.value);
+      if (!d || d < 1 || d > 30) {
+        return res.status(400).json({ success: false, message: 'duration value must be 1-30 seconds' });
+      }
+    }
+    if (command === 'update_url' || command === 'set_baseurl') {
+      const url = cmdParams.base_url || cmdParams.value;
+      if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
         return res.status(400).json({ success: false, message: 'base_url must start with http:// or https://' });
       }
     }
     if (command === 'update_wifi') {
       if (!cmdParams.ssid) return res.status(400).json({ success: false, message: 'ssid is required' });
       if (!cmdParams.password) return res.status(400).json({ success: false, message: 'password is required' });
+    }
+    if (command === 'ota_update') {
+      if (!cmdParams.url) return res.status(400).json({ success: false, message: 'url is required for OTA update' });
     }
 
     // Record command sent
@@ -230,7 +261,7 @@ router.post('/:id/command',
     );
 
     try {
-      const result = await sendCommand(deviceId, command, cmdParams);
+      const result = await sendCommand(deviceId, command, cmdParams, deviceType);
       res.json({ success: true, message: 'Command executed', result });
     } catch (err) {
       // Update status to failed if timed out

@@ -17,6 +17,7 @@ interface Device {
   client_name?: string;
   name: string;
   location?: string;
+  device_type: 'fingerprint' | 'doorlock';
   is_online: boolean;
   last_seen?: string;
   last_ip?: string;
@@ -26,6 +27,10 @@ interface Device {
   uptime_minutes?: number;
   current_mode?: string;
   firmware_version?: string;
+  door_status?: string;
+  fp_count?: number;
+  rfid_ready?: boolean;
+  unlock_duration?: number;
   last_command?: string;
   last_command_at?: string;
   last_command_status?: string;
@@ -97,7 +102,7 @@ const DeviceManagement: React.FC = () => {
 
   // Register device modal (super admin only)
   const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [registerForm, setRegisterForm] = useState({ device_id: '', client_id: '', name: '', location: '' });
+  const [registerForm, setRegisterForm] = useState({ device_id: '', client_id: '', name: '', location: '', device_type: 'fingerprint' });
   const [isRegistering, setIsRegistering] = useState(false);
 
   // Edit device modal
@@ -170,7 +175,7 @@ const DeviceManagement: React.FC = () => {
       if (res.success) {
         showSuccess('Device registered successfully');
         setShowRegisterModal(false);
-        setRegisterForm({ device_id: '', client_id: '', name: '', location: '' });
+        setRegisterForm({ device_id: '', client_id: '', name: '', location: '', device_type: 'fingerprint' });
         fetchDevices();
       } else {
         showError(res.message || 'Registration failed');
@@ -328,9 +333,27 @@ const DeviceManagement: React.FC = () => {
                     <span className="font-medium text-gray-700">{timeAgo(device.last_seen)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Mode</span>
-                    <span className={`font-medium capitalize ${device.current_mode === 'enroll' ? 'text-orange-600' : 'text-gray-700'}`}>{device.current_mode || 'attendance'}</span>
+                    <span className="text-gray-500">Type</span>
+                    <span className="font-medium text-gray-700 capitalize">{device.device_type === 'doorlock' ? 'Door Lock' : 'Fingerprint'}</span>
                   </div>
+                  {device.device_type === 'doorlock' && device.door_status && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Door</span>
+                      <span className={`font-medium capitalize ${device.door_status === 'open' ? 'text-green-600' : 'text-gray-700'}`}>{device.door_status}</span>
+                    </div>
+                  )}
+                  {device.device_type === 'doorlock' && device.fp_count !== undefined && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">FP Templates</span>
+                      <span className="font-medium text-gray-700">{device.fp_count}</span>
+                    </div>
+                  )}
+                  {device.device_type === 'fingerprint' && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Mode</span>
+                      <span className={`font-medium capitalize ${device.current_mode === 'enroll' ? 'text-orange-600' : 'text-gray-700'}`}>{device.current_mode || 'attendance'}</span>
+                    </div>
+                  )}
                   {device.is_online && (
                     <>
                       <div className="flex justify-between text-xs">
@@ -417,68 +440,147 @@ const DeviceManagement: React.FC = () => {
               )}
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Mode */}
-                <Section title="Mode" icon={<HiLightningBolt className="w-4 h-4" />}>
-                  <button disabled={isSendingCommand} onClick={() => sendCommand('set_attendance_mode')} className="cmd-btn bg-green-600 text-white hover:bg-green-700">
-                    Set Attendance Mode
-                  </button>
-                  <button disabled={isSendingCommand} onClick={() => sendCommand('get_status')} className="cmd-btn bg-gray-600 text-white hover:bg-gray-700">
-                    Refresh Status
-                  </button>
-                </Section>
 
-                {/* Fingerprint enrollment */}
-                <Section title="Fingerprint Enrollment" icon={<HiFingerPrint className="w-4 h-4" />}>
-                  <div className="flex gap-2">
-                    <TextInput type="number" min={1} max={127} placeholder="ID (1-127)" value={enrollId} onChange={e => setEnrollId(e.target.value)} className="flex-1" sizing="sm" />
-                    <button disabled={isSendingCommand || !enrollId} onClick={() => sendCommand('enroll', { enroll_id: parseInt(enrollId) })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
-                      Start Enroll
+                {/* ── DOOR LOCK CONTROLS ── */}
+                {selectedDevice.device_type === 'doorlock' ? (<>
+
+                  <Section title="Door Control" icon={<HiLightningBolt className="w-4 h-4" />}>
+                    <div className="flex gap-2">
+                      <button disabled={isSendingCommand} onClick={() => sendCommand('unlock')} className="cmd-btn bg-green-600 text-white hover:bg-green-700 flex-1">
+                        Unlock Door
+                      </button>
+                      <button disabled={isSendingCommand} onClick={() => sendCommand('lock')} className="cmd-btn bg-gray-700 text-white hover:bg-gray-800 flex-1">
+                        Lock Door
+                      </button>
+                    </div>
+                    <button disabled={isSendingCommand} onClick={() => sendCommand('get_status')} className="cmd-btn bg-gray-500 text-white hover:bg-gray-600 w-full mt-2">
+                      Refresh Status
                     </button>
-                  </div>
-                </Section>
+                  </Section>
 
-                {/* Delete fingerprint */}
-                <Section title="Delete Fingerprint" icon={<HiTrash className="w-4 h-4" />}>
-                  <div className="flex gap-2">
-                    <TextInput type="number" min={1} max={127} placeholder="ID (1-127)" value={deleteId} onChange={e => setDeleteId(e.target.value)} className="flex-1" sizing="sm" />
-                    <button disabled={isSendingCommand || !deleteId} onClick={() => sendCommand('delete_fp', { delete_id: parseInt(deleteId) })} className="cmd-btn bg-orange-600 text-white hover:bg-orange-700 whitespace-nowrap">
-                      Delete
+                  <Section title="Unlock Duration" icon={<HiCog className="w-4 h-4" />}>
+                    <div className="flex gap-2">
+                      <TextInput type="number" min={1} max={30} placeholder="Seconds (1-30)" value={enrollId} onChange={e => setEnrollId(e.target.value)} className="flex-1" sizing="sm" />
+                      <button disabled={isSendingCommand || !enrollId} onClick={() => sendCommand('set_duration', { value: parseInt(enrollId) })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
+                        Set Duration
+                      </button>
+                    </div>
+                  </Section>
+
+                  <Section title="Fingerprint Enrollment" icon={<HiFingerPrint className="w-4 h-4" />}>
+                    <div className="flex gap-2">
+                      <TextInput type="number" min={1} max={300} placeholder="ID (1-300)" value={deleteId} onChange={e => setDeleteId(e.target.value)} className="flex-1" sizing="sm" />
+                      <button disabled={isSendingCommand || !deleteId} onClick={() => sendCommand('enroll', { enroll_id: parseInt(deleteId) })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
+                        Start Enroll
+                      </button>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <TextInput type="number" min={1} max={300} placeholder="Delete ID (1-300)" value={enrollId} onChange={e => setEnrollId(e.target.value)} className="flex-1" sizing="sm" />
+                      <button disabled={isSendingCommand || !enrollId} onClick={() => sendCommand('delete_fp', { delete_id: parseInt(enrollId) })} className="cmd-btn bg-orange-600 text-white hover:bg-orange-700 whitespace-nowrap">
+                        Delete
+                      </button>
+                    </div>
+                    <button disabled={isSendingCommand} onClick={() => sendCommand('list_fp')} className="cmd-btn bg-gray-500 text-white hover:bg-gray-600 w-full mt-2">
+                      List Fingerprints
                     </button>
-                  </div>
-                  <button disabled={isSendingCommand} onClick={() => { if (confirm('Delete ALL fingerprints on this device?')) sendCommand('clear_all'); }} className="cmd-btn bg-red-600 text-white hover:bg-red-700 w-full mt-2">
-                    Clear All Fingerprints
-                  </button>
-                </Section>
+                  </Section>
 
-                {/* Update BASE URL */}
-                <Section title="Update Server URL" icon={<HiChip className="w-4 h-4" />}>
-                  <TextInput placeholder="https://your-server.com/api/attendance/fingerprint?client_id=xxx&fingerprint_id=" value={newBaseUrl} onChange={e => setNewBaseUrl(e.target.value)} sizing="sm" />
-                  <button disabled={isSendingCommand || !newBaseUrl} onClick={() => sendCommand('update_url', { base_url: newBaseUrl })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
-                    Update URL
-                  </button>
-                </Section>
+                  <Section title="RFID Card" icon={<HiChip className="w-4 h-4" />}>
+                    <div className="flex gap-2">
+                      <button disabled={isSendingCommand} onClick={() => sendCommand('start_rfid_scan')} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 flex-1">
+                        Start RFID Scan
+                      </button>
+                      <button disabled={isSendingCommand} onClick={() => sendCommand('stop_rfid_scan')} className="cmd-btn bg-gray-600 text-white hover:bg-gray-700 flex-1">
+                        Stop Scan
+                      </button>
+                    </div>
+                  </Section>
 
-                {/* Update WiFi */}
-                <Section title="Update WiFi" icon={<HiWifi className="w-4 h-4" />}>
-                  <TextInput placeholder="WiFi SSID" value={newWifiSSID} onChange={e => setNewWifiSSID(e.target.value)} sizing="sm" className="mb-2" />
-                  <TextInput type="password" placeholder="WiFi Password" value={newWifiPass} onChange={e => setNewWifiPass(e.target.value)} sizing="sm" />
-                  <button disabled={isSendingCommand || !newWifiSSID || !newWifiPass} onClick={() => sendCommand('update_wifi', { ssid: newWifiSSID, password: newWifiPass })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
-                    Update WiFi
-                  </button>
-                </Section>
+                  <Section title="Update Server URL" icon={<HiChip className="w-4 h-4" />}>
+                    <TextInput placeholder="https://your-server.com/api/..." value={newBaseUrl} onChange={e => setNewBaseUrl(e.target.value)} sizing="sm" />
+                    <button disabled={isSendingCommand || !newBaseUrl} onClick={() => sendCommand('set_baseurl', { base_url: newBaseUrl })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
+                      Update URL
+                    </button>
+                  </Section>
 
-                {/* System actions */}
-                <Section title="System" icon={<HiCog className="w-4 h-4" />}>
-                  <button disabled={isSendingCommand} onClick={() => sendCommand('reconnect_wifi')} className="cmd-btn bg-yellow-500 text-white hover:bg-yellow-600">
-                    Reconnect WiFi
-                  </button>
-                  <button disabled={isSendingCommand} onClick={() => { if (confirm('Reboot this device?')) sendCommand('reboot'); }} className="cmd-btn bg-orange-600 text-white hover:bg-orange-700">
-                    Reboot
-                  </button>
-                  <button disabled={isSendingCommand} onClick={() => { if (confirm('Clear ALL settings on this device (WiFi, URL, Device ID)?')) sendCommand('clear_settings'); }} className="cmd-btn bg-red-700 text-white hover:bg-red-800">
-                    Clear Settings
-                  </button>
-                </Section>
+                  <Section title="Update WiFi" icon={<HiWifi className="w-4 h-4" />}>
+                    <TextInput placeholder="WiFi SSID" value={newWifiSSID} onChange={e => setNewWifiSSID(e.target.value)} sizing="sm" className="mb-2" />
+                    <TextInput type="password" placeholder="WiFi Password" value={newWifiPass} onChange={e => setNewWifiPass(e.target.value)} sizing="sm" />
+                    <button disabled={isSendingCommand || !newWifiSSID || !newWifiPass} onClick={() => sendCommand('update_wifi', { ssid: newWifiSSID, password: newWifiPass })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
+                      Update WiFi
+                    </button>
+                  </Section>
+
+                  <Section title="System" icon={<HiCog className="w-4 h-4" />}>
+                    <button disabled={isSendingCommand} onClick={() => { if (confirm('Reboot this device?')) sendCommand('restart'); }} className="cmd-btn bg-orange-600 text-white hover:bg-orange-700">
+                      Reboot
+                    </button>
+                    <button disabled={isSendingCommand} onClick={() => { if (confirm('Clear ALL settings?')) sendCommand('clear_settings'); }} className="cmd-btn bg-red-700 text-white hover:bg-red-800">
+                      Clear Settings
+                    </button>
+                  </Section>
+
+                </>) : (<>
+
+                {/* ── FINGERPRINT ATTENDANCE CONTROLS ── */}
+                  <Section title="Mode" icon={<HiLightningBolt className="w-4 h-4" />}>
+                    <button disabled={isSendingCommand} onClick={() => sendCommand('set_attendance_mode')} className="cmd-btn bg-green-600 text-white hover:bg-green-700">
+                      Set Attendance Mode
+                    </button>
+                    <button disabled={isSendingCommand} onClick={() => sendCommand('get_status')} className="cmd-btn bg-gray-600 text-white hover:bg-gray-700">
+                      Refresh Status
+                    </button>
+                  </Section>
+
+                  <Section title="Fingerprint Enrollment" icon={<HiFingerPrint className="w-4 h-4" />}>
+                    <div className="flex gap-2">
+                      <TextInput type="number" min={1} max={127} placeholder="ID (1-127)" value={enrollId} onChange={e => setEnrollId(e.target.value)} className="flex-1" sizing="sm" />
+                      <button disabled={isSendingCommand || !enrollId} onClick={() => sendCommand('enroll', { enroll_id: parseInt(enrollId) })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
+                        Start Enroll
+                      </button>
+                    </div>
+                  </Section>
+
+                  <Section title="Delete Fingerprint" icon={<HiTrash className="w-4 h-4" />}>
+                    <div className="flex gap-2">
+                      <TextInput type="number" min={1} max={127} placeholder="ID (1-127)" value={deleteId} onChange={e => setDeleteId(e.target.value)} className="flex-1" sizing="sm" />
+                      <button disabled={isSendingCommand || !deleteId} onClick={() => sendCommand('delete_fp', { delete_id: parseInt(deleteId) })} className="cmd-btn bg-orange-600 text-white hover:bg-orange-700 whitespace-nowrap">
+                        Delete
+                      </button>
+                    </div>
+                    <button disabled={isSendingCommand} onClick={() => { if (confirm('Delete ALL fingerprints on this device?')) sendCommand('clear_all'); }} className="cmd-btn bg-red-600 text-white hover:bg-red-700 w-full mt-2">
+                      Clear All Fingerprints
+                    </button>
+                  </Section>
+
+                  <Section title="Update Server URL" icon={<HiChip className="w-4 h-4" />}>
+                    <TextInput placeholder="https://your-server.com/api/attendance/fingerprint?client_id=xxx&fingerprint_id=" value={newBaseUrl} onChange={e => setNewBaseUrl(e.target.value)} sizing="sm" />
+                    <button disabled={isSendingCommand || !newBaseUrl} onClick={() => sendCommand('update_url', { base_url: newBaseUrl })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
+                      Update URL
+                    </button>
+                  </Section>
+
+                  <Section title="Update WiFi" icon={<HiWifi className="w-4 h-4" />}>
+                    <TextInput placeholder="WiFi SSID" value={newWifiSSID} onChange={e => setNewWifiSSID(e.target.value)} sizing="sm" className="mb-2" />
+                    <TextInput type="password" placeholder="WiFi Password" value={newWifiPass} onChange={e => setNewWifiPass(e.target.value)} sizing="sm" />
+                    <button disabled={isSendingCommand || !newWifiSSID || !newWifiPass} onClick={() => sendCommand('update_wifi', { ssid: newWifiSSID, password: newWifiPass })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
+                      Update WiFi
+                    </button>
+                  </Section>
+
+                  <Section title="System" icon={<HiCog className="w-4 h-4" />}>
+                    <button disabled={isSendingCommand} onClick={() => sendCommand('reconnect_wifi')} className="cmd-btn bg-yellow-500 text-white hover:bg-yellow-600">
+                      Reconnect WiFi
+                    </button>
+                    <button disabled={isSendingCommand} onClick={() => { if (confirm('Reboot this device?')) sendCommand('reboot'); }} className="cmd-btn bg-orange-600 text-white hover:bg-orange-700">
+                      Reboot
+                    </button>
+                    <button disabled={isSendingCommand} onClick={() => { if (confirm('Clear ALL settings on this device (WiFi, URL, Device ID)?')) sendCommand('clear_settings'); }} className="cmd-btn bg-red-700 text-white hover:bg-red-800">
+                      Clear Settings
+                    </button>
+                  </Section>
+
+                </>)}
               </div>
             </div>
           )}
@@ -509,6 +611,13 @@ const DeviceManagement: React.FC = () => {
             <div>
               <Label value="Location" />
               <TextInput placeholder="e.g. Ground Floor Lobby" value={registerForm.location} onChange={e => setRegisterForm(p => ({ ...p, location: e.target.value }))} />
+            </div>
+            <div>
+              <Label value="Device Type *" />
+              <select value={registerForm.device_type} onChange={e => setRegisterForm(p => ({ ...p, device_type: e.target.value }))} className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                <option value="fingerprint">Fingerprint Attendance Device (ESP8266)</option>
+                <option value="doorlock">Smart Door Lock (ESP32)</option>
+              </select>
             </div>
           </div>
         </Modal.Body>
