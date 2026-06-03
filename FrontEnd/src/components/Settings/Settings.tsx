@@ -46,7 +46,7 @@ const SettingsWithBackend = () => {
   const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false);
   const [showLeaveTypeModal, setShowLeaveTypeModal] = useState(false);
   const [editingLeaveType, setEditingLeaveType] = useState<LeaveType | null>(null);
-  const [leaveTypeFormData,   setLeaveTypeFormData] = useState<CreateLeaveTypeData>({
+  const [leaveTypeFormData, setLeaveTypeFormData] = useState<CreateLeaveTypeData>({
     name: '',
     description: '',
     tracking_period: 'Yearly',
@@ -55,7 +55,9 @@ const SettingsWithBackend = () => {
     max_consecutive_days: 0,
     is_paid: true,
     requires_approval: true,
-    notice_period_days: 0
+    notice_period_days: 0,
+    is_trainee_only: false,
+    accrual_per_month: 0
   });
 
   // 🔧 FIX: Force refresh settings when component mounts to avoid stale data
@@ -180,7 +182,9 @@ useEffect(() => {
       max_consecutive_days: 0,
       is_paid: true,
       requires_approval: true,
-      notice_period_days: 0
+      notice_period_days: 0,
+      is_trainee_only: false,
+      accrual_per_month: 0
     });
     setShowLeaveTypeModal(true);
   };
@@ -196,7 +200,9 @@ useEffect(() => {
       max_consecutive_days: leaveType.max_consecutive_days || 0,
       is_paid: leaveType.is_paid,
       requires_approval: leaveType.requires_approval,
-      notice_period_days: leaveType.notice_period_days || 0
+      notice_period_days: leaveType.notice_period_days || 0,
+      is_trainee_only: leaveType.is_trainee_only || false,
+      accrual_per_month: leaveType.accrual_per_month || 0
     });
     setShowLeaveTypeModal(true);
   };
@@ -978,6 +984,15 @@ const hhmmToMinutes = (t) => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                               {leaveType.notice_period_days || 0} days
                             </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {leaveType.is_trainee_only ? (
+                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100">
+                                  Trainee · {leaveType.accrual_per_month}/mo
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400">—</span>
+                              )}
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               {hasPermission('leave_types.edit') && (
                                 <button
@@ -1358,7 +1373,44 @@ const hhmmToMinutes = (t) => {
                     />
                     <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Requires Approval</span>
                   </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={leaveTypeFormData.is_trainee_only || false}
+                      onChange={(e) => setLeaveTypeFormData({
+                        ...leaveTypeFormData,
+                        is_trainee_only: e.target.checked,
+                        accrual_per_month: e.target.checked ? (leaveTypeFormData.accrual_per_month || 0.5) : 0
+                      })}
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Trainee Only (Accrual-based)</span>
+                  </label>
                 </div>
+
+                {leaveTypeFormData.is_trainee_only && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monthly Accrual Rate (days)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="5"
+                      value={leaveTypeFormData.accrual_per_month || 0.5}
+                      onChange={(e) => setLeaveTypeFormData({
+                        ...leaveTypeFormData,
+                        accrual_per_month: parseFloat(e.target.value) || 0.5
+                      })}
+                      className="w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Days added to each trainee's cumulative balance per calendar month (e.g. 0.5)
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
@@ -1372,8 +1424,13 @@ const hhmmToMinutes = (t) => {
                   onClick={handleSaveLeaveType}
                   disabled={
                     !leaveTypeFormData.name ||
-                    (leaveTypeFormData.tracking_period === 'Yearly' && leaveTypeFormData.max_days_per_year === 0) ||
-                    (leaveTypeFormData.tracking_period === 'Monthly' && leaveTypeFormData.max_days_per_month === 0)
+                    (leaveTypeFormData.is_trainee_only
+                      ? (leaveTypeFormData.accrual_per_month || 0) <= 0
+                      : (
+                          (leaveTypeFormData.tracking_period === 'Yearly'  && leaveTypeFormData.max_days_per_year  === 0) ||
+                          (leaveTypeFormData.tracking_period === 'Monthly' && leaveTypeFormData.max_days_per_month === 0)
+                        )
+                    )
                   }
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

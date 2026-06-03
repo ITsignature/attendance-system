@@ -228,6 +228,8 @@ router.get('/stats',
         permanent: 0,
         contract: 0,
         intern: 0,
+        consultant: 0,
+        trainee: 0,
         by_department: departmentCounts.map(dept => ({
           department: dept.department,
           count: dept.count
@@ -380,7 +382,7 @@ router.put('/:id',
     body('manager_id').optional().isUUID().withMessage('Invalid manager ID'),
     body('hire_date').optional().isISO8601().withMessage('Please enter a valid hire date'),
     body('employment_status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']).withMessage('Invalid employment status'),
-    body('employee_type').optional().isIn(['full_time', 'part_time', 'contract', 'intern']).withMessage('Invalid employee type'),
+    body('employee_type').optional().isIn(['permanent', 'contract', 'intern', 'consultant', 'trainee']).withMessage('Invalid employee type'),
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
     body('marital_status').optional().isIn(['single', 'married', 'divorced', 'widowed']).withMessage('Invalid marital status'),
     
@@ -796,9 +798,9 @@ router.post('/',
     body('manager_id').optional({ values: 'falsy' }).isUUID().withMessage('Invalid manager ID'),
     body('hire_date').isISO8601().withMessage('Please enter a valid hire date'),
     body('employment_status').isIn(['active', 'inactive']).withMessage('Invalid employment status'),
-    body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant']).withMessage('Invalid employee type'),
+    body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant', 'trainee']).withMessage('Invalid employee type'),
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
-    
+
     // Emergency Contact Validations
     body('emergency_contact_name').optional({values: 'falsy'}).trim().isLength({ min: 1 }).withMessage('Emergency contact name cannot be empty if provided'),  
     body('emergency_contact_phone').optional({values: 'falsy'}).trim().isLength({ min: 10 }).withMessage('Emergency contact phone must be at least 10 digits if provided'),
@@ -1290,7 +1292,7 @@ router.post('/',
     
     // Still Required
     body('employment_status').isIn(['active', 'inactive']).withMessage('Invalid employment status'),
-    body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant']).withMessage('Invalid employee type'),
+    body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant', 'trainee']).withMessage('Invalid employee type'),
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
     body('follows_company_schedule').optional().isBoolean()
   ],

@@ -1,4 +1,4 @@
-// EmployeeDetails.tsx - Complete Enhanced Design with Updated Attendance and Leave tabs
+﻿// EmployeeDetails.tsx - Complete Enhanced Design with Updated Attendance and Leave tabs
 import React, { useState, useEffect } from "react";
 import { Tabs, Button, Select, Modal, TextInput, Label, Badge, Spinner, Alert, Card, Breadcrumb, Table } from "flowbite-react";
 import { HiUser, HiBriefcase, HiDocumentText, HiCash, HiHome, HiCalendar, HiClock, HiPhone, HiMail, HiLocationMarker, HiIdentification, HiRefresh } from "react-icons/hi";
@@ -6,7 +6,7 @@ import { FaEye, FaDownload, FaPlus, FaTrash, FaEdit, FaCheck, FaTimes } from "re
 import { useNavigate, useParams } from "react-router";
 import { DynamicProtectedComponent } from "../RBACSystem/rbacSystem";
 import apiService from '../../services/api';
-import leaveApiService from '../../services/leaveApi';
+import leaveApiService, { AccrualBalance, LeaveType } from '../../services/leaveApi';
 import payrollApiService, { PayrollRecord } from '../../services/payrollService';
 import PayrollCycleConfig from './PayrollCycleConfig';
 
@@ -36,7 +36,7 @@ interface Employee {
   manager_name?: string;
   hire_date: string;
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
-  employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
+  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   base_salary?: number;
   attendance_affects_salary?: boolean;
   payable_hours_policy?: 'strict_schedule' | 'actual_worked';
@@ -225,6 +225,8 @@ const EmployeeDetails: React.FC = () => {
   const [terminating, setTerminating] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [leavesLoading, setLeavesLoading] = useState(false);
+  const [accrualBalances, setAccrualBalances] = useState<Array<AccrualBalance & { leave_type_name: string }>>([]);
+  const [accrualBalancesLoading, setAccrualBalancesLoading] = useState(false);
   
   // Get today's date in YYYY-MM-DD format
   const todayStr = () => {
@@ -301,14 +303,14 @@ const EmployeeDetails: React.FC = () => {
       setLoading(true);
       setError('');
       
-      console.log('🔄 Loading employee data for ID:', employeeId);
+      console.log('ðŸ”„ Loading employee data for ID:', employeeId);
       
       const response = await apiService.getEmployee(employeeId!);
       
       if (response.success && response.data) {
         const employeeData = response.data.employee;
         setEmployee(employeeData);
-        console.log('✅ Employee data loaded:', employeeData);
+        console.log('âœ… Employee data loaded:', employeeData);
         
         // Load additional data
         await Promise.all([
@@ -322,7 +324,7 @@ const EmployeeDetails: React.FC = () => {
         setError(response.message || 'Failed to load employee data');
       }
     } catch (error: any) {
-      console.error('❌ Failed to load employee:', error);
+      console.error('âŒ Failed to load employee:', error);
       setError('Failed to load employee data');
     } finally {
       setLoading(false);
@@ -409,17 +411,46 @@ const EmployeeDetails: React.FC = () => {
     }
   };
 
-  const loadFinancialData = async (empId: string) => {
+  const loadAccrualBalances = async (empId: string) => {
+    try {
+      setAccrualBalancesLoading(true);
+      const leaveTypesRes = await leaveApiService.getLeaveTypes();
+      if (!leaveTypesRes.success || !leaveTypesRes.data) return;
+      const traineeLeaveTypes = (leaveTypesRes.data as LeaveType[]).filter(t => t.is_trainee_only);
+      if (traineeLeaveTypes.length === 0) { setAccrualBalances([]); return; }
+
+      const results = await Promise.all(
+        traineeLeaveTypes.map(async (lt) => {
+          try {
+            const res = await leaveApiService.getAccrualBalance(empId, lt.id);
+            if (res.success && res.data) {
+              return { ...res.data, leave_type_name: lt.name };
+            }
+            return { employee_id: empId, leave_type_id: lt.id, cumulative_accrued: 0, cumulative_used: 0, available_balance: 0, last_accrual_month: null, not_yet_processed: true, leave_type_name: lt.name };
+          } catch {
+            return null;
+          }
+        })
+      );
+      setAccrualBalances(results.filter(Boolean) as Array<AccrualBalance & { leave_type_name: string }>);
+    } catch (error) {
+      console.warn('Failed to load accrual balances:', error);
+    } finally {
+      setAccrualBalancesLoading(false);
+    }
+  };
+
+    const loadFinancialData = async (empId: string) => {
     try {
       setFinancialLoading(true);
-      console.log('🔄 Loading financial data for employee:', empId);
+      console.log('ðŸ”„ Loading financial data for employee:', empId);
 
       // Get financial records from our new API
       const response = await loadFinancialRecordsFromAPI(empId);
 
       if (response && response.length > 0) {
         setFinancialRecords(response);
-        console.log('✅ Financial data loaded:', response.length, 'records');
+        console.log('âœ… Financial data loaded:', response.length, 'records');
 
         // Calculate summary from the loaded records
         const totalEarned = response.reduce((sum, record) => sum + record.amount, 0);
@@ -436,7 +467,7 @@ const EmployeeDetails: React.FC = () => {
         setPayrollSummary(null);
       }
     } catch (error) {
-      console.error('❌ Failed to load financial data:', error);
+      console.error('âŒ Failed to load financial data:', error);
       setFinancialRecords([]);
       setPayrollSummary(null);
     } finally {
@@ -446,12 +477,12 @@ const EmployeeDetails: React.FC = () => {
 
   const loadDocuments = async (empId: string) => {
     try {
-      console.log('🔄 Loading documents for employee:', empId);
+      console.log('ðŸ”„ Loading documents for employee:', empId);
       
       const response = await apiService.apiCall(`/api/employees/${empId}/documents`);
       
       if (response.success && response.data) {
-        console.log('✅ Documents loaded:', response.data.documents);
+        console.log('âœ… Documents loaded:', response.data.documents);
         setDocuments(response.data.documents || {});
       } else {
         console.warn('Failed to load documents:', response.message);
@@ -524,11 +555,11 @@ const EmployeeDetails: React.FC = () => {
   };
 
   const getDocumentIcon = (mimeType: string) => {
-    if (mimeType.includes('pdf')) return '📄';
-    if (mimeType.includes('image')) return '🖼️';
-    if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
-    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
-    return '📁';
+    if (mimeType.includes('pdf')) return 'ðŸ“„';
+    if (mimeType.includes('image')) return 'ðŸ–¼ï¸';
+    if (mimeType.includes('word') || mimeType.includes('document')) return 'ðŸ“';
+    if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'ðŸ“Š';
+    return 'ðŸ“';
   };
 
   // Handle terminate employee
@@ -608,7 +639,7 @@ const EmployeeDetails: React.FC = () => {
   // Handle payslip download
   const handleDownloadPayslip = async (recordId: string, description: string) => {
     try {
-      console.log('🔄 Downloading payslip for record:', recordId);
+      console.log('ðŸ”„ Downloading payslip for record:', recordId);
       const response = await payrollApiService.getPayslip(recordId);
 
       if (response.success && response.data) {
@@ -618,7 +649,7 @@ const EmployeeDetails: React.FC = () => {
         setError('Failed to generate payslip');
       }
     } catch (error) {
-      console.error('❌ Failed to download payslip:', error);
+      console.error('âŒ Failed to download payslip:', error);
       setError('Failed to download payslip');
     }
   };
@@ -627,7 +658,7 @@ const EmployeeDetails: React.FC = () => {
   const handleAddFinancialRecord = async () => {
     try {
       setAddingRecord(true);
-      console.log('🔄 Adding financial record:', newRecordData);
+      console.log('ðŸ”„ Adding financial record:', newRecordData);
 
       // Validate form data
       const validation = validateFinancialRecord(newRecordData);
@@ -711,12 +742,12 @@ const EmployeeDetails: React.FC = () => {
         });
         setShowAddRecordModal(false);
 
-        console.log('✅ Financial record added successfully');
+        console.log('âœ… Financial record added successfully');
       } else {
         setError(response.message || 'Failed to add financial record');
       }
     } catch (error: any) {
-      console.error('❌ Failed to add financial record:', error);
+      console.error('âŒ Failed to add financial record:', error);
       setError(error.message || 'Failed to add financial record');
     } finally {
       setAddingRecord(false);
@@ -730,7 +761,7 @@ const EmployeeDetails: React.FC = () => {
     }
 
     try {
-      console.log('🔄 Deleting financial record:', record.id);
+      console.log('ðŸ”„ Deleting financial record:', record.id);
 
       // Determine the endpoint based on record type
       let endpoint = '';
@@ -753,14 +784,14 @@ const EmployeeDetails: React.FC = () => {
       });
 
       if (response.success) {
-        console.log('✅ Financial record deleted successfully');
+        console.log('âœ… Financial record deleted successfully');
         // Refresh financial data
         await loadFinancialData(employee!.id);
       } else {
         setError(response.message || 'Failed to delete financial record');
       }
     } catch (error: any) {
-      console.error('❌ Failed to delete financial record:', error);
+      console.error('âŒ Failed to delete financial record:', error);
       setError(error.message || 'Failed to delete financial record');
     }
   };
@@ -1395,8 +1426,8 @@ const EmployeeDetails: React.FC = () => {
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {employee.payable_hours_policy === 'actual_worked'
-                          ? 'Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid full 8 hours.'
-                          : 'Pay is capped to scheduled hours. Late arrival or early departure results in lost hours. Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid only 7 hours.'
+                          ? 'Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM â†’ Paid full 8 hours.'
+                          : 'Pay is capped to scheduled hours. Late arrival or early departure results in lost hours. Example: Schedule 9AM-5PM, Actual 10AM-6PM â†’ Paid only 7 hours.'
                         }
                       </p>
                     </div>
@@ -1565,11 +1596,11 @@ const EmployeeDetails: React.FC = () => {
                                       </p>
                                       <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                                         <span>{formatFileSize(doc.file_size)}</span>
-                                        <span>•</span>
+                                        <span>â€¢</span>
                                         <span>{formatDate(doc.uploaded_at)}</span>
                                         {doc.uploaded_by_name && (
                                           <>
-                                            <span>•</span>
+                                            <span>â€¢</span>
                                             <span>by {doc.uploaded_by_name}</span>
                                           </>
                                         )}
@@ -1817,6 +1848,60 @@ const EmployeeDetails: React.FC = () => {
                     </div>
                   </div>
                 </Card>
+
+
+                {/* Trainee Accrual Balances */}
+                {employee.employee_type === 'trainee' && (
+                  <Card>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-base font-semibold text-purple-800 dark:text-purple-200 flex items-center gap-2">
+                        <HiIdentification className="w-5 h-5" />
+                        Trainee Accrual Balances
+                      </h4>
+                      <Button size="xs" color="purple" onClick={() => loadAccrualBalances(employee.id)} disabled={accrualBalancesLoading}>
+                        <HiRefresh className="mr-1 h-3 w-3" />
+                        Refresh
+                      </Button>
+                    </div>
+                    {accrualBalancesLoading ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-500"><Spinner size="sm" /> Loading accrual balances...</div>
+                    ) : accrualBalances.length === 0 ? (
+                      <p className="text-sm text-gray-500">No accrual-based leave types found.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {accrualBalances.map((bal) => (
+                          <div key={bal.leave_type_id} className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                            <h5 className="text-sm font-semibold text-purple-800 dark:text-purple-200 mb-2">{bal.leave_type_name}</h5>
+                            {bal.not_yet_processed ? (
+                              <p className="text-xs text-yellow-700">⚠️ Accrual not yet processed. Contact HR.</p>
+                            ) : (
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 dark:text-gray-400">Available</span>
+                                  <span className="font-bold text-purple-900 dark:text-purple-100">{bal.available_balance} day(s)</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 dark:text-gray-400">Total Accrued</span>
+                                  <span className="text-gray-700 dark:text-gray-300">{bal.cumulative_accrued}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600 dark:text-gray-400">Used</span>
+                                  <span className="text-gray-700 dark:text-gray-300">{bal.cumulative_used}</span>
+                                </div>
+                                {bal.last_accrual_month && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Last Accrual</span>
+                                    <span className="text-xs text-gray-500">{bal.last_accrual_month}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                )}
 
                 {/* Leave Table */}
                 <Card>
@@ -2132,7 +2217,7 @@ const EmployeeDetails: React.FC = () => {
         {/* Quick Actions Footer */}
         <div className="mt-8 flex justify-between items-center">
           <Button color="gray" onClick={() => navigate('/employees')}>
-            ← Back to Employees
+            â† Back to Employees
           </Button>
         </div>
 
@@ -2500,3 +2585,4 @@ const EmployeeDetails: React.FC = () => {
 };
 
 export default EmployeeDetails;
+

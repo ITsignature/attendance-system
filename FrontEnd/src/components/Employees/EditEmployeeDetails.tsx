@@ -62,7 +62,7 @@ interface Employee {
   manager_id?: string;
   hire_date: string;
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
-  employee_type: 'full_time' | 'part_time' | 'contract' | 'intern';
+  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   base_salary?: number;
   attendance_affects_salary?: boolean;
   payable_hours_policy?: 'strict_schedule' | 'actual_worked';
@@ -1079,10 +1079,11 @@ const EditEmployeeDetails: React.FC = () => {
                 value={formData.employee_type || ''}
                 onChange={(e) => handleChange('employee_type', e.target.value)}
               >
-                <option value="full_time">Full Time</option>
-                <option value="part_time">Part Time</option>
+                <option value="permanent">Permanent</option>
                 <option value="contract">Contract</option>
                 <option value="intern">Intern</option>
+                <option value="consultant">Consultant</option>
+                <option value="trainee">Trainee</option>
               </Select>
             </div>
 

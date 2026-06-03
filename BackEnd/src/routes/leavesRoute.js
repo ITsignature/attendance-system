@@ -55,6 +55,8 @@ router.get('/types',
         is_paid,
         requires_approval,
         notice_period_days,
+        is_trainee_only,
+        accrual_per_month,
         is_active,
         created_at
       FROM leave_types
@@ -80,7 +82,9 @@ router.post('/types',
     body('max_consecutive_days').optional().isInt({ min: 0 }).withMessage('Max consecutive days must be a positive number'),
     body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
     body('requires_approval').optional().isBoolean().withMessage('requires_approval must be a boolean'),
-    body('notice_period_days').optional().isInt({ min: 0 }).withMessage('Notice period must be a positive number')
+    body('notice_period_days').optional().isInt({ min: 0 }).withMessage('Notice period must be a positive number'),
+    body('is_trainee_only').optional().isBoolean().withMessage('is_trainee_only must be a boolean'),
+    body('accrual_per_month').optional().isFloat({min : 0}).withMessage('Accrual per month must be a positive number')
   ],
 
   asyncHandler(async (req, res) => {
@@ -105,37 +109,47 @@ router.post('/types',
       max_consecutive_days,
       is_paid,
       requires_approval,
-      notice_period_days
+      notice_period_days,
+      is_trainee_only,
+      accrual_per_month
     } = req.body;
 
-    if (tracking_period === 'Yearly') {
-      if (!max_days_per_year) {
-        return res.status(400).json({
-          success: false,
-          message: 'Max days per year is required for Yearly tracking period'
-        });
-      }
-      if (max_days_per_month) {
-        return res.status(400).json({
-          success: false,
-          message: 'Max days per month is not allowed for Yearly tracking period'
-        });
-      }
-    } else if (tracking_period === 'Monthly') {
-      if (!max_days_per_month) {
-        return res.status(400).json({
-          success: false,
-          message: 'Max days per month is required for Monthly tracking period'
-        });
-      }
-      if (max_days_per_year) {
-        return res.status(400).json({
-          success: false,
-          message: 'Max days per year is not allowed for Monthly tracking period'
-        });
-      }
+    if (is_trainee_only && !(accrual_per_month>0)){
+      return res.status(400).json({
+        success: false,
+        message: 'Every trainee-only leave type must be accrual based'
+      });
     }
 
+    if (!(accrual_per_month > 0)) {
+      if (tracking_period === 'Yearly') {
+        if (!max_days_per_year) {
+          return res.status(400).json({
+            success: false,
+            message: 'Max days per year is required for Yearly tracking period'
+          });
+        }
+        if (max_days_per_month) {
+          return res.status(400).json({
+            success: false,
+            message: 'Max days per month is not allowed for Yearly tracking period'
+          });
+        }
+      } else if (tracking_period === 'Monthly') {
+        if (!max_days_per_month) {
+          return res.status(400).json({
+            success: false,
+            message: 'Max days per month is required for Monthly tracking period'
+          });
+        }
+        if (max_days_per_year) {
+          return res.status(400).json({
+            success: false,
+            message: 'Max days per year is not allowed for Monthly tracking period'
+          });
+        }
+      }
+    }
 
     const leaveTypeId = uuidv4();
 
@@ -152,8 +166,10 @@ router.post('/types',
         is_paid,
         requires_approval,
         notice_period_days,
+        is_trainee_only,
+        accrual_per_month,
         is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
     `, [
       leaveTypeId,
       clientId,
@@ -165,7 +181,9 @@ router.post('/types',
       max_consecutive_days || null,
       is_paid,
       requires_approval,
-      notice_period_days || null
+      notice_period_days || null,
+      is_trainee_only,
+      accrual_per_month
     ]);
 
     res.status(201).json({
@@ -188,7 +206,9 @@ router.put('/types/:id',
     body('max_consecutive_days').optional().isInt({ min: 0 }).withMessage('Max consecutive days must be a positive number'),
     body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
     body('requires_approval').optional().isBoolean().withMessage('requires_approval must be a boolean'),
-    body('notice_period_days').optional().isInt({ min: 0 }).withMessage('Notice period must be a positive number')
+    body('notice_period_days').optional().isInt({ min: 0 }).withMessage('Notice period must be a positive number'),
+    body('is_trainee_only').optional().isBoolean().withMessage('is_trainee_only must be a boolean'),
+    body('accrual_per_month').optional().isFloat({min : 0}).withMessage('Accrual per month must be a positive number')
   ],
   asyncHandler(async (req, res) => {
     const errors = validationResult(req);
@@ -228,7 +248,9 @@ router.put('/types/:id',
       'max_consecutive_days',
       'is_paid',
       'requires_approval',
-      'notice_period_days'
+      'notice_period_days',
+      'is_trainee_only',
+      'accrual_per_month'
     ];
 
     allowedFields.forEach(field => {
@@ -424,6 +446,68 @@ router.get('/balance',
         is_paid: leaveType.is_paid,
         leave_type_name: leaveType.name,
         unlimited: false
+      }
+    });
+  })
+);
+
+// GET /api/leaves/accrual-balance - Get accrual balance for a trainee employee
+router.get('/accrual-balance',
+  checkPermission('leaves.view'),
+  [
+    query('employee_id').isUUID().withMessage('Valid employee ID is required'),
+    query('leave_type_id').isUUID().withMessage('Valid leave type ID is required')
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
+
+    const { employee_id, leave_type_id } = req.query;
+    const db = getDB();
+    const clientId = req.user.clientId;
+
+    // Verify employee belongs to client
+    const [employee] = await db.execute(`
+      SELECT id FROM employees WHERE id = ? AND client_id = ?
+    `, [employee_id, clientId]);
+
+    if (employee.length === 0) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+
+    const [rows] = await db.execute(`
+      SELECT cumulative_accrued, cumulative_used, available_balance, last_accrual_month
+      FROM leave_accrual_balances
+      WHERE employee_id = ? AND leave_type_id = ?
+    `, [employee_id, leave_type_id]);
+
+    if (rows.length === 0) {
+      return res.json({
+        success: true,
+        balance: {
+          employee_id,
+          leave_type_id,
+          cumulative_accrued: 0,
+          cumulative_used: 0,
+          available_balance: 0,
+          last_accrual_month: null,
+          not_yet_processed: true
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      balance: {
+        employee_id,
+        leave_type_id,
+        cumulative_accrued:  parseFloat(rows[0].cumulative_accrued),
+        cumulative_used:     parseFloat(rows[0].cumulative_used),
+        available_balance:   parseFloat(rows[0].available_balance),
+        last_accrual_month:  rows[0].last_accrual_month,
+        not_yet_processed:   false
       }
     });
   })
@@ -672,7 +756,6 @@ router.put('/requests/:id',
     body('start_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid start time format'),
     body('end_time').optional({ values: 'falsy' }).matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Invalid end time format'),
     body('reason').optional().trim().isLength({ min: 1, max: 500 }).withMessage('Reason must not exceed 500 characters'),
-    body('is_paid').optional().isBoolean().withMessage('is_paid must be a boolean'),
   ],
   asyncHandler(async (req, res) => {
     const errors = validationResult(req);
@@ -704,9 +787,18 @@ router.put('/requests/:id',
       leave_duration = current.leave_duration || 'full_day',
       start_time = current.start_time || null,
       end_time = current.end_time || null,
-      reason = current.reason,
-      is_paid = current.is_paid
+      reason = current.reason
     } = req.body;
+
+    // Always derive is_paid from the leave type, not from client input
+    const [leaveTypeRows] = await db.execute(
+      `SELECT is_paid FROM leave_types WHERE id = ? AND client_id = ? AND is_active = TRUE`,
+      [leave_type_id, clientId]
+    );
+    if (leaveTypeRows.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid leave type' });
+    }
+    const is_paid = leaveTypeRows[0].is_paid;
 
     // Validate date range
     if (new Date(start_date) > new Date(end_date)) {
@@ -845,7 +937,7 @@ router.post('/request',
     try {
       // Verify employee belongs to same client
       const [employee] = await db.execute(`
-        SELECT id, first_name, last_name, email, employment_status
+        SELECT id, first_name, last_name, email, employment_status,employee_type
         FROM employees 
         WHERE id = ? AND client_id = ?
       `, [employee_id, clientId]);
@@ -893,8 +985,9 @@ router.post('/request',
 
       // Verify leave type belongs to client
       const [leaveType] = await db.execute(`
-        SELECT id, name, max_days_per_year, max_consecutive_days
-        FROM leave_types 
+        SELECT id, name, is_paid, tracking_period, max_days_per_year, max_days_per_month,
+               max_consecutive_days, requires_approval, is_trainee_only, accrual_per_month
+        FROM leave_types
         WHERE id = ? AND client_id = ? AND is_active = TRUE
       `, [leave_type_id, clientId]);
 
@@ -903,6 +996,15 @@ router.post('/request',
           success: false,
           message: 'Invalid leave type'
         });
+      }
+
+      if (leaveType[0].is_trainee_only) {
+        if (employee[0].employee_type !== 'trainee') {
+          return res.status(403).json({
+            success: false,
+            message: 'This leave type is available for trainees only'
+          });
+        }
       }
 
       // Check for overlapping requests
@@ -960,7 +1062,82 @@ router.post('/request',
         `, [clientId, start_date, end_date]);
 
         const holidayCount = holidays.length;
-        calculatedDays = totalCalendarDays - holidayCount;
+
+        // Fetch company default weekend schedule (used when employee monthly_schedule === null)
+        let companyDefaultWeekendConfig = null;
+        try {
+            const [companyDefaultRow] = await db.execute(`
+                SELECT setting_value FROM system_settings
+                WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
+                LIMIT 1
+            `, [clientId]);
+            if (companyDefaultRow[0]?.setting_value) {
+                companyDefaultWeekendConfig = JSON.parse(companyDefaultRow[0].setting_value);
+            }
+        } catch(e) { companyDefaultWeekendConfig = null; }
+
+        // Fetch whether the employee works on saturday and sunday
+        const [empWeekendRows] = await db.execute(`
+          SELECT weekend_working_config
+          FROM employees
+          WHERE id = ?
+        `, [employee_id]);
+
+        let empWeekendConfig = null;
+        if (empWeekendRows.length > 0 && empWeekendRows[0].weekend_working_config) {
+          try { empWeekendConfig = JSON.parse(empWeekendRows[0].weekend_working_config); } catch (e) {}
+        }
+
+        // Helper: given a date, return which nth occurrence of that weekday it is in its month (1-based)
+        const getNthOccurrence = (date) => {
+          let count = 0;
+          const d = new Date(date.getFullYear(), date.getMonth(), 1);
+          while (d <= date) {
+            if (d.getDay() === date.getDay()) count++;
+            d.setDate(d.getDate() + 1);
+          }
+          return count;
+        };
+
+        let weekendDaysToExclude = 0;
+        let currentDay = new Date(start_date);
+        const lastDay = new Date(end_date);
+
+        while (currentDay <= lastDay) {
+          const dow = currentDay.getDay(); // 0=Sunday, 6=Saturday
+          const isSaturday = dow === 6;
+          const isSunday   = dow === 0;
+
+          if (isSaturday || isSunday) {
+            const dayKey = isSaturday ? 'saturday' : 'sunday';
+            const empWorking = empWeekendConfig?.[dayKey]?.working;
+
+            if (empWorking === false) {
+              // Employee config explicitly says not working — exclude this day
+              weekendDaysToExclude++;
+            } else if (empWorking === true) {
+              // Employee works this day type — check company schedule for this specific date
+              const yearMonth = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}`;
+              const companySchedule = companyDefaultWeekendConfig?.[dayKey]?.monthly_schedule?.[yearMonth] || [];
+              const nth = getNthOccurrence(currentDay);
+              if (!companySchedule.includes(nth)) {
+                // This specific occurrence is not a working day per company schedule — exclude
+                weekendDaysToExclude++;
+              }
+            } else {
+              // No employee config — fall back entirely to company default schedule
+              const yearMonth = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}`;
+              const companySchedule = companyDefaultWeekendConfig?.[dayKey]?.monthly_schedule?.[yearMonth] || [];
+              const nth = getNthOccurrence(currentDay);
+              if (!companySchedule.includes(nth)) {
+                weekendDaysToExclude++;
+              }
+            }
+          }
+          currentDay.setDate(currentDay.getDate() + 1);
+        }
+
+        calculatedDays = totalCalendarDays - holidayCount - weekendDaysToExclude;
 
         if (holidayCount > 0) {
           console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date}`);
@@ -972,121 +1149,140 @@ router.post('/request',
         }
       }
 
-      // Check paid leave balance and determine if this leave can be paid
-      // let finalIsPaid = is_paid;
-      // let paidLeaveInfo = null;
-
-      //Get leave type details including tracking configuration
-      const [leaveTypeInfo] = await db.execute(`
-        SELECT 
-        is_paid,
-        tracking_period,
-        max_days_per_year,
-        max_days_per_month,
-        max_consecutive_days,
-        requires_approval
-        FROM leave_types
-        WHERE id = ? AND client_id = ?
-      `, [leave_type_id, clientId]);
-
-      if(leaveTypeInfo.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Leave type not found for the client'
-        });
-      }
-
-      const leaveTypeDetails = leaveTypeInfo[0];
+      // Use the already-fetched leave type details from the first query above
+      const leaveTypeDetails = leaveType[0];
       const leaveTypeId = leave_type_id;
       const finalIsPaid = leaveTypeDetails.is_paid;
       const trackingPeriod = leaveTypeDetails.tracking_period;
       const maxDaysPerYear = leaveTypeDetails.max_days_per_year;
       const maxDaysPerMonth = leaveTypeDetails.max_days_per_month;
+      const isTraineeOnly = leaveTypeDetails.is_trainee_only;
+      const accrualPerMonth = leaveTypeDetails.accrual_per_month;
 
       const requestStartMonth = new Date(start_date);
 
-      // Initialize variables for leave balance check
-      let LeaveInfo = null;
-      let totalLeavesTaken = 0;
-      let remainingLeaves = 0;
-      let LeavesLimit = 0;
+      if (isTraineeOnly && accrualPerMonth > 0) {
+        // Accrual-based leave — check cumulative balance
+        const [accrualRows] = await db.execute(`
+          SELECT cumulative_accrued, cumulative_used, available_balance
+          FROM leave_accrual_balances
+          WHERE employee_id = ? AND leave_type_id = ?
+        `, [employee_id, leaveTypeId]);
 
-      if(trackingPeriod === 'Monthly' && maxDaysPerMonth > 0) {
-        const firstDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth(), 1);
-        const lastDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth() + 1, 0);
-
-        const [existingLeaves] = await db.execute(`
-          SELECT COALESCE(SUM(days_requested), 0) as total_leaves
-          FROM leave_requests
-          WHERE employee_id = ?
-          AND leave_type_id = ?
-          AND status IN ('approved', 'pending')
-          AND (
-            (start_date >= ? AND start_date <= ?)
-            OR (end_date >= ? AND end_date <= ?)
-            OR (start_date <= ? AND end_date >= ?)
-          )
-        `, [employee_id, leaveTypeId, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth]);
-
-        totalLeavesTaken = parseFloat(existingLeaves[0].total_leaves) || 0;
-        remainingLeaves = maxDaysPerMonth - totalLeavesTaken;
-        LeavesLimit = maxDaysPerMonth;
-
-        LeaveInfo = {
-          leaves_limit: maxDaysPerMonth,
-          leaves_taken: totalLeavesTaken,
-          leaves_remaining: remainingLeaves,
-          days_requested: calculatedDays,
-          month: `${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`
-        };
-
-      } else if(trackingPeriod === 'Yearly' && maxDaysPerYear > 0) {
-        const firstDayOfYear = new Date(requestStartMonth.getFullYear(), 0, 1);
-        const lastDayOfYear = new Date(requestStartMonth.getFullYear(), 11, 31);
-
-        const [existingLeaves] = await db.execute(`
-          SELECT COALESCE(SUM(days_requested), 0) as total_leaves
-          FROM leave_requests
-          WHERE employee_id = ?
-          AND leave_type_id = ?
-          AND status IN ('approved', 'pending')
-          AND (
-            (start_date >= ? AND start_date <= ?)
-            OR (end_date >= ? AND end_date <= ?)
-            OR (start_date <= ? AND end_date >= ?)
-          )
-        `, [employee_id, leaveTypeId, firstDayOfYear, lastDayOfYear, firstDayOfYear, lastDayOfYear, firstDayOfYear, lastDayOfYear]);
-
-        totalLeavesTaken = parseFloat(existingLeaves[0].total_leaves) || 0;
-        remainingLeaves = maxDaysPerYear - totalLeavesTaken;
-        LeavesLimit = maxDaysPerYear;
-
-        LeaveInfo = {
-          leaves_limit: maxDaysPerYear,
-          leaves_taken: totalLeavesTaken,
-          leaves_remaining: remainingLeaves,
-          days_requested: calculatedDays,
-          year: requestStartMonth.getFullYear()
-        };
-      }
-
-      if (calculatedDays > remainingLeaves) {
+        if (accrualRows.length === 0 || accrualRows[0].available_balance === null) {
           return res.status(400).json({
             success: false,
-            message: `Leave limit exceeded. Employee has ${remainingLeaves} day(s) remaining but requested ${calculatedDays} day(s).`,
-            error: {
-              type: 'LEAVE_LIMIT_EXCEEDED',
-              leave_info: {
-                limit: LeavesLimit,
-                taken: totalLeavesTaken,
-                remaining: remainingLeaves,
-                requested: calculatedDays,
-                ...(trackingPeriod === 'Monthly' ? {month :`${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`} : { year: requestStartMonth.getFullYear() }),
-        }, }
+            message: 'Accrual balance not yet calculated for this employee. Contact HR.',
+            error: { type: 'ACCRUAL_BALANCE_NOT_FOUND' }
           });
-      }else {
-          console.log(`✅ leave check passed. Limit: ${LeavesLimit}, Taken: ${totalLeavesTaken}, Remaining: ${remainingLeaves}, Requesting: ${calculatedDays}`);
         }
+
+        const availableBalance  = parseFloat(accrualRows[0].available_balance);
+        const cumulativeAccrued = parseFloat(accrualRows[0].cumulative_accrued);
+        const cumulativeUsed    = parseFloat(accrualRows[0].cumulative_used);
+
+        if (calculatedDays > availableBalance) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient accrual balance. Available: ${availableBalance} day(s), requested: ${calculatedDays} day(s).`,
+            error: {
+              type: 'INSUFFICIENT_ACCRUAL_BALANCE',
+              leave_info: {
+                accrued:   cumulativeAccrued,
+                used:      cumulativeUsed,
+                available: availableBalance,
+                requested: calculatedDays
+              }
+            }
+          });
+        }
+        // Balance is sufficient — deduction happens on approval, not here
+
+      } else {
+            // Initialize variables for leave balance check
+          let LeaveInfo = null;
+          let totalLeavesTaken = 0;
+          let remainingLeaves = 0;
+          let LeavesLimit = 0;
+
+          if(trackingPeriod === 'Monthly' && maxDaysPerMonth > 0) {
+            const firstDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth(), 1);
+            const lastDayOfMonth = new Date(requestStartMonth.getFullYear(), requestStartMonth.getMonth() + 1, 0);
+
+            const [existingLeaves] = await db.execute(`
+              SELECT COALESCE(SUM(days_requested), 0) as total_leaves
+              FROM leave_requests
+              WHERE employee_id = ?
+              AND leave_type_id = ?
+              AND status IN ('approved', 'pending')
+              AND (
+                (start_date >= ? AND start_date <= ?)
+                OR (end_date >= ? AND end_date <= ?)
+                OR (start_date <= ? AND end_date >= ?)
+              )
+            `, [employee_id, leaveTypeId, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth, firstDayOfMonth, lastDayOfMonth]);
+
+            totalLeavesTaken = parseFloat(existingLeaves[0].total_leaves) || 0;
+            remainingLeaves = maxDaysPerMonth - totalLeavesTaken;
+            LeavesLimit = maxDaysPerMonth;
+
+            LeaveInfo = {
+              leaves_limit: maxDaysPerMonth,
+              leaves_taken: totalLeavesTaken,
+              leaves_remaining: remainingLeaves,
+              days_requested: calculatedDays,
+              month: `${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`
+            };
+
+          } else if(trackingPeriod === 'Yearly' && maxDaysPerYear > 0) {
+            const firstDayOfYear = new Date(requestStartMonth.getFullYear(), 0, 1);
+            const lastDayOfYear = new Date(requestStartMonth.getFullYear(), 11, 31);
+
+            const [existingLeaves] = await db.execute(`
+              SELECT COALESCE(SUM(days_requested), 0) as total_leaves
+              FROM leave_requests
+              WHERE employee_id = ?
+              AND leave_type_id = ?
+              AND status IN ('approved', 'pending')
+              AND (
+                (start_date >= ? AND start_date <= ?)
+                OR (end_date >= ? AND end_date <= ?)
+                OR (start_date <= ? AND end_date >= ?)
+              )
+            `, [employee_id, leaveTypeId, firstDayOfYear, lastDayOfYear, firstDayOfYear, lastDayOfYear, firstDayOfYear, lastDayOfYear]);
+
+            totalLeavesTaken = parseFloat(existingLeaves[0].total_leaves) || 0;
+            remainingLeaves = maxDaysPerYear - totalLeavesTaken;
+            LeavesLimit = maxDaysPerYear;
+
+            LeaveInfo = {
+              leaves_limit: maxDaysPerYear,
+              leaves_taken: totalLeavesTaken,
+              leaves_remaining: remainingLeaves,
+              days_requested: calculatedDays,
+              year: requestStartMonth.getFullYear()
+            };
+          }
+
+          if (calculatedDays > remainingLeaves) {
+              return res.status(400).json({
+                success: false,
+                message: `Leave limit exceeded. Employee has ${remainingLeaves} day(s) remaining but requested ${calculatedDays} day(s).`,
+                error: {
+                  type: 'LEAVE_LIMIT_EXCEEDED',
+                  leave_info: {
+                    limit: LeavesLimit,
+                    taken: totalLeavesTaken,
+                    remaining: remainingLeaves,
+                    requested: calculatedDays,
+                    ...(trackingPeriod === 'Monthly' ? {month :`${requestStartMonth.getFullYear()}-${String(requestStartMonth.getMonth() + 1).padStart(2, '0')}`} : { year: requestStartMonth.getFullYear() }),
+            }, }
+              });
+          }else {
+              console.log(`✅ leave check passed. Limit: ${LeavesLimit}, Taken: ${totalLeavesTaken}, Remaining: ${remainingLeaves}, Requesting: ${calculatedDays}`);
+          }
+
+      }
 
       // Calculate day-of-week breakdown
       // MySQL DAYOFWEEK: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
@@ -1169,6 +1365,8 @@ router.post('/request',
     }
   })
 );
+
+
 // PUT /api/leaves/requests/:id/approve - Approve leave request
 router.put('/requests/:id/approve',
   checkPermission('leaves.approve'),
@@ -1241,6 +1439,7 @@ router.put('/requests/:id/approve',
 
         // Calculate default weekday hours
         let weekdayHours = 8; // Default
+
         if (emp.in_time && emp.out_time) {
           const inTime = new Date(`2000-01-01 ${emp.in_time}`);
           const outTime = new Date(`2000-01-01 ${emp.out_time}`);
@@ -1318,7 +1517,7 @@ router.put('/requests/:id/approve',
             currentDate.setDate(currentDate.getDate() + 1);
           }
         }
-
+        
         console.log(`   Day-of-week breakdown:`, dayOfWeekCounts);
 
         // Calculate payable hours using the dayofweek breakdown
@@ -1404,18 +1603,42 @@ router.put('/requests/:id/approve',
         console.log(`   ✅ Total payable leave hours: ${totalHours.toFixed(2)}h`);
       }
 
+      // If this is an accrual-type leave, deduct balance on approval
+      const [leaveTypeForAccrual] = await db.execute(`
+        SELECT is_trainee_only, accrual_per_month FROM leave_types WHERE id = ?
+      `, [request[0].leave_type_id]);
+
+      if (leaveTypeForAccrual.length > 0 && leaveTypeForAccrual[0].is_trainee_only && leaveTypeForAccrual[0].accrual_per_month > 0) {
+        const daysToDeduct = parseFloat(request[0].days_requested);
+
+        const [affectedRows] = await db.execute(`
+          UPDATE leave_accrual_balances
+          SET cumulative_used   = cumulative_used   + ?,
+              available_balance = available_balance - ?
+          WHERE employee_id = ? AND leave_type_id = ? AND available_balance >= ?
+        `, [daysToDeduct, daysToDeduct, request[0].employee_id, request[0].leave_type_id, daysToDeduct]);
+
+        if (affectedRows.affectedRows === 0) {
+          console.warn(`Accrual balance insufficient or missing for employee ${request[0].employee_id} on approval of request ${requestId}. Proceeding with approval anyway.`);
+        }
+
+        await db.execute(`
+          UPDATE leave_requests SET balance_deducted = 1 WHERE id = ?
+        `, [requestId]);
+      }
+
       // Update request status and payable hours (split by day type)
       await db.execute(`
-  UPDATE leave_requests
-  SET status = 'approved',
-      reviewed_by = ?,
-      reviewed_at = NOW(),
-      reviewer_comments = ?,
-      payable_leave_hours_weekday = ?,
-      payable_leave_hours_saturday = ?,
-      payable_leave_hours_sunday = ?
-  WHERE id = ?
-`, [reviewerId, comments || null, payableWeekdayHours, payableSaturdayHours, payableSundayHours, requestId]);
+        UPDATE leave_requests
+        SET status = 'approved',
+            reviewed_by = ?,
+            reviewed_at = NOW(),
+            reviewer_comments = ?,
+            payable_leave_hours_weekday = ?,
+            payable_leave_hours_saturday = ?,
+            payable_leave_hours_sunday = ?
+        WHERE id = ?
+`,    [reviewerId, comments || null, payableWeekdayHours, payableSaturdayHours, payableSundayHours, requestId]);
 
       const totalPayableHours = payableWeekdayHours + payableSaturdayHours + payableSundayHours;
 
@@ -1486,15 +1709,27 @@ router.put('/requests/:id/reject',
         });
       }
 
+      // If balance was already deducted (approved then rejected), reverse it
+      if (request[0].balance_deducted) {
+        const daysToRestore = parseFloat(request[0].days_requested);
+        await db.execute(`
+          UPDATE leave_accrual_balances
+          SET cumulative_used   = cumulative_used   - ?,
+              available_balance = available_balance + ?
+          WHERE employee_id = ? AND leave_type_id = ?
+        `, [daysToRestore, daysToRestore, request[0].employee_id, request[0].leave_type_id]);
+      }
+
       // Update request status
       await db.execute(`
-        UPDATE leave_requests 
-        SET status = 'rejected', 
-            reviewed_by = ?, 
-            reviewed_at = NOW(), 
+        UPDATE leave_requests
+        SET status = 'rejected',
+            balance_deducted = 0,
+            reviewed_by = ?,
+            reviewed_at = NOW(),
             reviewer_comments = ?
         WHERE id = ?
-      `, [reviewerId, comments||null, requestId]);
+      `, [reviewerId, comments || null, requestId]);
 
       res.json({
         success: true,
