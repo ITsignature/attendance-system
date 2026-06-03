@@ -16,8 +16,20 @@ export interface LeaveType {
   is_paid: boolean;
   requires_approval: boolean;
   notice_period_days?: number;
+  is_trainee_only?: boolean;
+  accrual_per_month?: number;
   is_active: boolean;
   created_at: string;
+}
+
+export interface AccrualBalance {
+  employee_id: string;
+  leave_type_id: string;
+  cumulative_accrued: number;
+  cumulative_used: number;
+  available_balance: number;
+  last_accrual_month: string | null;
+  not_yet_processed?: boolean;
 }
 
 export interface LeaveRequest {
@@ -92,6 +104,8 @@ export interface CreateLeaveTypeData {
   requires_approval: boolean;
   notice_period_days?: number;
   approval_hierarchy?: any[];
+  is_trainee_only?: boolean;
+  accrual_per_month?: number;
 }
 
 export interface LeaveRequestFilters {
@@ -552,6 +566,25 @@ class LeaveApiService {
       isValid: errors.length === 0,
       errors: errors
     };
+  }
+
+  /**
+   * Get accrual balance for a trainee employee and a specific leave type
+   */
+  async getAccrualBalance(employeeId: string, leaveTypeId: string): Promise<ApiResponse<AccrualBalance>> {
+    try {
+      const response = await apiService.apiCall(
+        `/api/leaves/accrual-balance?employee_id=${employeeId}&leave_type_id=${leaveTypeId}`
+      );
+      // Backend returns { success, balance } — normalize to { success, data }
+      if (response.success && response.balance) {
+        return { ...response, data: response.balance };
+      }
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch accrual balance:', error);
+      throw error;
+    }
   }
 }
 

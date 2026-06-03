@@ -74,8 +74,7 @@ const LeaveRequestsManagement: React.FC = () => {
     leave_duration: 'full_day' as 'full_day' | 'half_day' | 'short_leave',
     start_time: '',
     end_time: '',
-    reason: '',
-    is_paid: true
+    reason: ''
   });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -210,8 +209,7 @@ const handleConfirmAction = async () => {
       leave_duration: request.leave_duration || 'full_day',
       start_time: request.start_time || '',
       end_time: request.end_time || '',
-      reason: request.reason || '',
-      is_paid: request.is_paid ?? true
+      reason: request.reason || ''
     });
     setEditModal({ isOpen: true, request });
   };
@@ -236,8 +234,7 @@ const handleConfirmAction = async () => {
         leave_duration: editForm.leave_duration,
         start_time: editForm.start_time || null,
         end_time: editForm.end_time || null,
-        reason: editForm.reason,
-        is_paid: editForm.is_paid
+        reason: editForm.reason
       });
       if (res.success) {
         setEditModal({ isOpen: false, request: null });
@@ -550,13 +547,6 @@ const handleConfirmAction = async () => {
               </>
             )}
 
-            <div className="flex items-center gap-2 mt-2">
-              <input type="checkbox" id="edit_is_paid" checked={editForm.is_paid}
-                onChange={e => setEditForm(p => ({ ...p, is_paid: e.target.checked }))}
-                className="w-4 h-4 text-blue-600 rounded"
-              />
-              <label htmlFor="edit_is_paid" className="text-sm font-medium text-gray-700 dark:text-gray-300">Paid Leave</label>
-            </div>
           </div>
 
           <div>

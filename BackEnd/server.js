@@ -31,6 +31,7 @@ const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
 const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
 const { connectDB, closeDB } = require('./src/config/database');
 const PayrollRunService = require('./src/services/PayrollRunService');
+const LeaveAccrualService = require('./src/services/LeaveAccrualService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -138,6 +139,35 @@ function startPayrollCronJobs() {
   console.log(`⏰ Cron job scheduled: Auto-create payroll runs at ${cronSchedule}`);
 }
 
+function startLeaveAccrualCronJob() {
+  const cronSchedule = process.env.LEAVE_ACCRUAL_CRON_SCHEDULE || '0 1 1 * *';
+
+  cron.schedule(cronSchedule, async () => {
+    try {
+      console.log('⏰ CRON: Leave accrual job triggered at', new Date().toISOString());
+      const { getDB } = require('./src/config/database');
+      const result = await LeaveAccrualService.processMonthlyAccrual(getDB());
+      console.log('✅ CRON: Leave accrual completed.', result.summary);
+    } catch (error) {
+      console.error('❌ CRON: Leave accrual failed:', error.message);
+    }
+  });
+
+  console.log(`⏰ Cron job scheduled: Leave accrual at ${cronSchedule}`);
+}
+
+// Manual trigger for leave accrual (backfill + testing)
+app.post('/api/admin/trigger-leave-accrual', async (req, res) => {
+  try {
+    console.log('🔧 MANUAL TRIGGER: Leave accrual');
+    const { getDB } = require('./src/config/database');
+    const result = await LeaveAccrualService.processMonthlyAccrual(getDB());
+    res.json({ success: true, message: 'Leave accrual triggered successfully', data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Leave accrual failed', error: error.message });
+  }
+});
+
 // Manual trigger endpoint for testing (optional)
 app.post('/api/admin/trigger-payroll-cron', async (req, res) => {
   try {
@@ -169,6 +199,9 @@ connectDB().then(() => {
 
   // Start cron job for auto-creating monthly payroll runs
   startPayrollCronJobs();
+
+  // Start cron job for monthly leave accrual
+  startLeaveAccrualCronJob();
 
   // Connect to MQTT broker
   connectMQTT();

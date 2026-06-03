@@ -17,7 +17,7 @@ import {
   FaInfoCircle,
   FaClock
 } from 'react-icons/fa';
-import leaveApiService from '../../services/leaveApi';
+import leaveApiService, { AccrualBalance } from '../../services/leaveApi';
 import apiService from '../../services/api';
 import holidayService, { Holiday } from '../../services/holidayService';
 import ReactSelect from 'react-select';
@@ -33,6 +33,7 @@ interface Employee {
   department_name?: string;
   designation?: string;
   employment_status: string;
+  employee_type?: string;
 }
 
 interface LeaveType {
@@ -45,6 +46,8 @@ interface LeaveType {
   max_days_per_month?: number;
   tracking_period?: 'Monthly' | 'Yearly';
   is_paid: boolean;
+  is_trainee_only?: boolean;
+  accrual_per_month?: number;
 }
 
 interface FormData {
@@ -107,6 +110,7 @@ const LeaveRequestForm: React.FC = () => {
     unlimited: boolean;
   } | null>(null);
   const [loadingBalance, setLoadingBalance] = useState<boolean>(false);
+  const [accrualBalance, setAccrualBalance] = useState<AccrualBalance | null>(null);
   const [holidaysInRange, setHolidaysInRange] = useState<Holiday[]>([]);
 
   // Display format dates (dd/mm/yyyy)
@@ -151,29 +155,40 @@ const LeaveRequestForm: React.FC = () => {
   const fetchLeaveTypeBalance = async (): Promise<void> => {
     if (!formData.employee_id || !formData.leave_type_id || !formData.start_date) return;
 
+    const selectedLeaveType = leaveTypes.find(t => t.id === formData.leave_type_id);
+
     try {
       setLoadingBalance(true);
+      setAccrualBalance(null);
+      setLeaveTypeBalance(null);
 
-      // Build query string for GET request
-      const queryParams = new URLSearchParams({
-        employee_id: formData.employee_id,
-        leave_type_id: formData.leave_type_id,
-        start_date: formData.start_date
-      });
-
-      const response = await apiService.apiCall(`/api/leaves/balance?${queryParams.toString()}`, {
-        method: 'GET'
-      });
-
-      if (response.success && response.balance) {
-        setLeaveTypeBalance(response.balance);
+      if (selectedLeaveType?.is_trainee_only) {
+        const response = await leaveApiService.getAccrualBalance(formData.employee_id, formData.leave_type_id);
+        if (response.success && response.data) {
+          setAccrualBalance(response.data);
+        } else {
+          setAccrualBalance({ employee_id: formData.employee_id, leave_type_id: formData.leave_type_id, cumulative_accrued: 0, cumulative_used: 0, available_balance: 0, last_accrual_month: null, not_yet_processed: true });
+        }
       } else {
-        setLeaveTypeBalance(null);
+        const queryParams = new URLSearchParams({
+          employee_id: formData.employee_id,
+          leave_type_id: formData.leave_type_id,
+          start_date: formData.start_date
+        });
+
+        const response = await apiService.apiCall(`/api/leaves/balance?${queryParams.toString()}`, {
+          method: 'GET'
+        });
+
+        if (response.success && response.balance) {
+          setLeaveTypeBalance(response.balance);
+        }
       }
 
     } catch (error) {
       console.error('Failed to fetch leave type balance:', error);
       setLeaveTypeBalance(null);
+      setAccrualBalance(null);
     } finally {
       setLoadingBalance(false);
     }
@@ -394,7 +409,14 @@ const LeaveRequestForm: React.FC = () => {
     }
 
     // Validate leave type balance
-    if (leaveTypeBalance && !leaveTypeBalance.unlimited && calculatedDays > leaveTypeBalance.remaining) {
+    const selectedLeaveType = leaveTypes.find(t => t.id === formData.leave_type_id);
+    if (selectedLeaveType?.is_trainee_only) {
+      if (accrualBalance?.not_yet_processed) {
+        newErrors.general = 'Accrual balance not yet calculated. Contact HR.';
+      } else if (accrualBalance && calculatedDays > accrualBalance.available_balance) {
+        newErrors.general = `Insufficient accrual balance. Requesting ${calculatedDays} day(s) but only ${accrualBalance.available_balance} day(s) available.`;
+      }
+    } else if (leaveTypeBalance && !leaveTypeBalance.unlimited && calculatedDays > leaveTypeBalance.remaining) {
       newErrors.general = `Cannot request ${calculatedDays} day(s). Only ${leaveTypeBalance.remaining} day(s) remaining for ${leaveTypeBalance.leave_type_name} ${leaveTypeBalance.tracking_period === 'Monthly' ? 'this month' : 'this year'}.`;
     }
 
@@ -449,6 +471,7 @@ const LeaveRequestForm: React.FC = () => {
         });
         setSelectedEmployee(null);
         setCalculatedDays(0);
+        setAccrualBalance(null);
 
         // Navigate back after 2 seconds
         setTimeout(() => {
@@ -646,11 +669,13 @@ const employeeOptions = employees
               required
             >
               <option value="">Select leave type...</option>
-              {leaveTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
+              {leaveTypes
+                .filter(t => !t.is_trainee_only || selectedEmployee?.employee_type === 'trainee')
+                .map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}{type.is_trainee_only ? ' (Trainee)' : ''}
+                  </option>
+                ))}
             </Select>
             {errors.leave_type_id && (
               <p className="text-red-500 text-sm mt-1">{errors.leave_type_id}</p>
@@ -900,6 +925,35 @@ const employeeOptions = employees
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Spinner size="sm" />
                   <span>Loading balance...</span>
+                </div>
+              ) : accrualBalance ? (
+                <div className="text-sm space-y-1">
+                  {accrualBalance.not_yet_processed ? (
+                    <p className="text-yellow-700 font-medium">
+                      ⚠️ Accrual balance not yet calculated. Contact HR.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-gray-700">
+                        <strong className="text-blue-800">Available: {accrualBalance.available_balance} day(s)</strong>
+                        <Badge color="purple" size="xs" className="ml-2">Accrual-based</Badge>
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        Total accrued: {accrualBalance.cumulative_accrued} &nbsp;|&nbsp; Used: {accrualBalance.cumulative_used}
+                      </p>
+                      {accrualBalance.last_accrual_month && (
+                        <p className="text-xs text-gray-500">
+                          Last accrual: {accrualBalance.last_accrual_month}
+                        </p>
+                      )}
+                      {calculatedDays > 0 && calculatedDays > accrualBalance.available_balance && (
+                        <p className="text-sm text-red-600 font-medium mt-2 flex items-center gap-1">
+                          <span>⚠️</span>
+                          <span>Insufficient balance! Requesting {calculatedDays} day(s) but only {accrualBalance.available_balance} day(s) available.</span>
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               ) : leaveTypeBalance ? (
                 <div className="space-y-2">
