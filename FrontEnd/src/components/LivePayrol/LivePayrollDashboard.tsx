@@ -434,6 +434,12 @@ const LivePayrollDashboard: React.FC = () => {
                                     <span className="font-medium text-red-600">{formatCurrency(result.earnings_by_source.overtime.earned)}</span>
                                   </div>
                                 )}
+                                {result.earnings_by_source.extra_time_ot && result.earnings_by_source.extra_time_ot.earned > 0 && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Extra weekday work ({result.earnings_by_source.extra_time_ot.minutes}min):</span>
+                                    <span className="font-medium text-orange-600">{formatCurrency(result.earnings_by_source.extra_time_ot.earned)}</span>
+                                  </div>
+                                )}
                                 {result.earnings_by_source.non_working_day_credit && result.earnings_by_source.non_working_day_credit.earned > 0 && (
                                   <>
                                     <div className="border-t border-gray-100 pt-1 mt-1">
