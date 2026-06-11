@@ -221,6 +221,19 @@ router.put('/weekend-defaults',
 
     const value = config === null ? null : JSON.stringify(config);
 
+    // Fetch old config BEFORE saving — to know which months need recalculation
+    const [oldConfigRows] = await db.execute(
+      `SELECT setting_value FROM system_settings WHERE client_id = ? AND setting_key = 'default_weekend_working_config' LIMIT 1`,
+      [req.user.clientId]
+    );
+    let oldMonthKeys = [];
+    if (oldConfigRows.length > 0) {
+      try {
+        const oldConfig = JSON.parse(oldConfigRows[0].setting_value);
+        oldMonthKeys = Object.keys(oldConfig?.saturday?.monthly_schedule || {});
+      } catch (e) {}
+    }
+
     const [existing] = await db.execute(`
       SELECT id FROM system_settings WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
     `, [req.user.clientId]);
@@ -236,6 +249,41 @@ router.put('/weekend-defaults',
         INSERT INTO system_settings (id, client_id, setting_key, setting_value, setting_type, is_public, created_at, updated_at)
         VALUES (?, ?, 'default_weekend_working_config', ?, 'object', FALSE, NOW(), NOW())
       `, [uuidv4(), req.user.clientId, value]);
+    }
+
+    // Recalculate only months where Saturday indexes actually changed
+    // Fire-and-forget — never block the settings save response
+    try {
+      const { recalculateSaturdayCoveringForMonth, invalidateSatCoveringCache } = require('./attendanceRoute');
+      // Invalidate cache immediately so recalculation reads fresh data
+      invalidateSatCoveringCache(req.user.clientId);
+      const newMonthSchedule = config?.saturday?.monthly_schedule || {};
+      const oldMonthSchedule = (() => {
+        try {
+          return JSON.parse(oldConfigRows[0]?.setting_value)?.saturday?.monthly_schedule || {};
+        } catch (e) { return {}; }
+      })();
+
+      // Find months where indexes changed (added, removed, or array content differs)
+      const allMonths = new Set([...Object.keys(oldMonthSchedule), ...Object.keys(newMonthSchedule)]);
+      const changedMonths = Array.from(allMonths).filter(month => {
+        const oldIndexes = JSON.stringify((oldMonthSchedule[month] || []).slice().sort());
+        const newIndexes = JSON.stringify((newMonthSchedule[month] || []).slice().sort());
+        return oldIndexes !== newIndexes;
+      });
+
+      (async () => {
+        for (const yearMonth of changedMonths) {
+          try {
+            await recalculateSaturdayCoveringForMonth(req.user.clientId, db, yearMonth);
+            console.log(`✅ Saturday covering recalculated for client ${req.user.clientId} month ${yearMonth}`);
+          } catch (err) {
+            console.error(`❌ Saturday covering recalculation failed for ${yearMonth}:`, err.message);
+          }
+        }
+      })();
+    } catch (err) {
+      console.error('❌ Saturday covering recalculation setup failed:', err.message);
     }
 
     res.status(200).json({ success: true, message: 'Company weekend defaults updated', data: config });

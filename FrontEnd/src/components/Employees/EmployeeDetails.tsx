@@ -75,8 +75,27 @@ interface Employee {
       full_day_salary: boolean;
     };
   } | null;
+  saturday_covering_enabled?: boolean | number;
   created_at: string;
   updated_at: string;
+}
+
+interface SaturdayCoveringStatus {
+  enabled: boolean;
+  yearMonth: string;
+  saturdayDates: string[];
+  totalObligation: number;
+  satDurationSeconds: number;
+  coveringSeconds: number;
+  remainingSeconds: number;
+  isCompleted: boolean;
+  coveredCount: number;
+  totalSaturdays: number;
+  extraTimeSeconds: number;
+  coveringHours: number;
+  remainingHours: number;
+  totalObligationHours: number;
+  extraTimeMinutes: number;
 }
 
 interface AttendanceRecord {
@@ -258,6 +277,12 @@ const EmployeeDetails: React.FC = () => {
     month: ''
   });
 
+  // Saturday Covering State
+  const currentYM = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const [satCoveringYM, setSatCoveringYM] = useState<string>(currentYM);
+  const [satCoveringStatus, setSatCoveringStatus] = useState<SaturdayCoveringStatus | null>(null);
+  const [satCoveringLoading, setSatCoveringLoading] = useState(false);
+
   // Filter states for Financial Records (keeping existing)
   const [filterType, setFilterType] = useState<string>('all');
   const [filterMonthYear, setFilterMonthYear] = useState<string>('all');
@@ -297,6 +322,13 @@ const EmployeeDetails: React.FC = () => {
       loadLeaveData(employee.id);
     }
   }, [leaveFilters, activeSidebarTab]);
+
+  // Load saturday covering when employee loads or month changes
+  useEffect(() => {
+    if (employee && (employee.saturday_covering_enabled === true || employee.saturday_covering_enabled === 1)) {
+      loadSaturdayCoveringStatus(employee.id, satCoveringYM);
+    }
+  }, [employee?.id, satCoveringYM]);
 
   const loadEmployeeData = async () => {
     try {
@@ -437,6 +469,20 @@ const EmployeeDetails: React.FC = () => {
       console.warn('Failed to load accrual balances:', error);
     } finally {
       setAccrualBalancesLoading(false);
+    }
+  };
+
+  const loadSaturdayCoveringStatus = async (empId: string, ym: string) => {
+    try {
+      setSatCoveringLoading(true);
+      const response = await apiService.apiCall(`/api/attendance/saturday-covering/${empId}?yearMonth=${ym}`);
+      if (response.success && response.data) {
+        setSatCoveringStatus(response.data);
+      }
+    } catch (e) {
+      console.warn('Failed to load saturday covering status:', e);
+    } finally {
+      setSatCoveringLoading(false);
     }
   };
 
@@ -1549,6 +1595,154 @@ const EmployeeDetails: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {/* Saturday Covering Status Section */}
+                {(employee.saturday_covering_enabled === true || employee.saturday_covering_enabled === 1) && (
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <HiClock className="w-6 h-6 text-purple-600" />
+                      Saturday Covering Status
+                    </h3>
+
+                    {/* Month picker */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Month:</label>
+                      <input
+                        type="month"
+                        value={satCoveringYM}
+                        onChange={(e) => setSatCoveringYM(e.target.value)}
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+
+                    {satCoveringLoading ? (
+                      <div className="flex items-center gap-2 py-4">
+                        <Spinner size="sm" />
+                        <span className="text-sm text-gray-500">Loading...</span>
+                      </div>
+                    ) : !satCoveringStatus || !satCoveringStatus.enabled ? (
+                      <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center text-gray-500">
+                        No saturday covering data available for this month.
+                      </div>
+                    ) : satCoveringStatus.totalSaturdays === 0 ? (
+                      <div className="space-y-3">
+                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center text-gray-500 text-sm">
+                          No working Saturdays configured for {satCoveringYM}.
+                        </div>
+                        {satCoveringStatus.extraTimeSeconds > 0 && (
+                          <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
+                            <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mb-1">
+                              Extra Time Accumulated (OT Eligible)
+                            </p>
+                            <p className="text-xl font-bold text-orange-900 dark:text-orange-100">
+                              {satCoveringStatus.extraTimeMinutes} min
+                            </p>
+                            <p className="text-xs text-orange-500 mt-0.5">
+                              ({(satCoveringStatus.extraTimeSeconds / 3600).toFixed(2)}h) — will be paid as overtime earnings
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Status header */}
+                        <div className={`p-4 rounded-lg border-2 ${
+                          satCoveringStatus.isCompleted
+                            ? 'bg-green-50 border-green-300 dark:bg-green-900/20 dark:border-green-700'
+                            : 'bg-yellow-50 border-yellow-300 dark:bg-yellow-900/20 dark:border-yellow-700'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                              Overall Status
+                            </span>
+                            <Badge color={satCoveringStatus.isCompleted ? 'success' : 'warning'}>
+                              {satCoveringStatus.isCompleted ? '✓ Completed' : '⏳ In Progress'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            {satCoveringStatus.coveredCount} of {satCoveringStatus.totalSaturdays} Saturday{satCoveringStatus.totalSaturdays > 1 ? 's' : ''} covered
+                          </p>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div>
+                          <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                            <span>Covered: {satCoveringStatus.coveringHours}h</span>
+                            <span>Total: {satCoveringStatus.totalObligationHours}h</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                            <div
+                              className={`h-3 rounded-full transition-all ${
+                                satCoveringStatus.isCompleted ? 'bg-green-500' : 'bg-yellow-400'
+                              }`}
+                              style={{
+                                width: `${Math.min(100, (satCoveringStatus.coveringSeconds / satCoveringStatus.totalObligation) * 100).toFixed(1)}%`
+                              }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-xs mt-1">
+                            <span className="text-gray-500">
+                              {((satCoveringStatus.coveringSeconds / satCoveringStatus.totalObligation) * 100).toFixed(1)}% covered
+                            </span>
+                            {!satCoveringStatus.isCompleted && (
+                              <span className="text-red-500 font-medium">
+                                {satCoveringStatus.remainingHours}h remaining
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Saturday dates breakdown */}
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Saturday Dates</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {satCoveringStatus.saturdayDates.map((date, idx) => {
+                              const isCovered = idx < satCoveringStatus.coveredCount;
+                              const label = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                              return (
+                                <div
+                                  key={date}
+                                  className={`flex items-center gap-2 p-2 rounded-lg text-sm ${
+                                    isCovered
+                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                      : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                                  }`}
+                                >
+                                  <span>{isCovered ? '✓' : '○'}</span>
+                                  <span>{label}</span>
+                                  {isCovered && <Badge color="success" size="xs">Covered</Badge>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Stats grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Hours Covered</p>
+                            <p className="text-lg font-bold text-blue-900 dark:text-blue-100">{satCoveringStatus.coveringHours}h</p>
+                          </div>
+                          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">Hours Remaining</p>
+                            <p className="text-lg font-bold text-red-900 dark:text-red-100">
+                              {satCoveringStatus.isCompleted ? '0h' : `${satCoveringStatus.remainingHours}h`}
+                            </p>
+                          </div>
+                          <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg">
+                            <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Extra Time (OT Eligible)</p>
+                            <p className="text-lg font-bold text-orange-900 dark:text-orange-100">
+                              {satCoveringStatus.extraTimeMinutes} min
+                            </p>
+                            <p className="text-xs text-orange-500">
+                              ({(satCoveringStatus.extraTimeSeconds / 3600).toFixed(2)}h)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Emergency Contact Section */}
                 <div>

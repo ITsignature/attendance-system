@@ -452,6 +452,10 @@ router.get('/fingerprint', [
       console.log(`   ✅ Check-out successful at ${currentTime}`);
       console.log(`   Total Hours: ${totalHours}h, Overtime: ${overtimeHours}h (actual, no multiplier)`);
 
+      // Saturday covering computation (fire-and-forget, never crash the checkout)
+      computeSaturdayCovering(record.id, employeeId, clientId, payableDuration, today, db)
+        .catch(err => console.error('❌ Saturday covering error (fingerprint):', err.message));
+
       // Send check-out SMS notification
       if (emp.phone && emp.client_name) {
         const workingHours = smsService.calculateWorkingHours(record.check_in_time, currentTime);
@@ -739,6 +743,7 @@ const getEmployeeSchedule = async (employeeId, clientId, db, date = null) => {
       e.out_time,
       e.follows_company_schedule,
       e.weekend_working_config,
+      
       CONCAT(e.first_name, ' ', e.last_name) as employee_name
     FROM employees e
     WHERE e.id = ? AND e.client_id = ? AND e.employment_status = 'active'
@@ -997,6 +1002,8 @@ const calculatePayableDuration = async (checkInTime, checkOutTime, scheduledInTi
   const breakSeconds = Math.round((breakDuration || 0) * 60 * 60); // hours to seconds
   payableDurationSeconds = Math.max(0, payableDurationSeconds - breakSeconds);
 
+
+
   return payableDurationSeconds; // Return as INTEGER seconds
 };
 
@@ -1194,6 +1201,8 @@ const calculateWorkHours = async (
     const scheduledStart = new Date(`2000-01-01T${normalise(employeeSchedule.start_time)}`);
     const scheduledEnd = new Date(`2000-01-01T${normalise(employeeSchedule.end_time)}`);
 
+    
+
     // Calculate early arrival (seconds worked before scheduled start)
     const preScheduleSeconds = inDate < scheduledStart
       ? Math.floor((scheduledStart - inDate) / 1000)
@@ -1240,6 +1249,413 @@ const calculateWorkHours = async (
     preShiftOvertimeSeconds: preShiftOvertimeSeconds,   // Seconds before scheduled start
     postShiftOvertimeSeconds: postShiftOvertimeSeconds  // Seconds after scheduled end
   };
+};
+
+// =============================================
+// SATURDAY COVERING HELPERS
+// =============================================
+
+// In-memory cache for saturday covering config
+// Key: `${employeeId}:${clientId}:${yearMonth}` or `emp:${employeeId}:${clientId}` for enabled flag
+// TTL: 5 minutes — short enough to pick up config changes, long enough to avoid DB hammering
+const _satCoveringCache = new Map();
+const SAT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+const _cacheGet = (key) => {
+  const entry = _satCoveringCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > SAT_CACHE_TTL_MS) {
+    _satCoveringCache.delete(key);
+    return null;
+  }
+  return entry.val;
+};
+
+const _cacheSet = (key, val) => {
+  _satCoveringCache.set(key, { val, ts: Date.now() });
+};
+
+// Call this when config changes or employee is updated to invalidate stale cache
+const invalidateSatCoveringCache = (clientId, yearMonth = null) => {
+  for (const key of _satCoveringCache.keys()) {
+    if (key.includes(clientId)) {
+      if (!yearMonth || key.includes(yearMonth)) {
+        _satCoveringCache.delete(key);
+      }
+    }
+  }
+};
+
+/**
+ * Get the saturday covering config for an employee.
+ * Priority: employee's own weekend_working_config → system_settings default_weekend_working_config
+ * Returns { saturdayDates: ['2026-06-06', ...], satDurationSeconds: number, config }
+ */
+const getSaturdayCoveringConfig = async (employeeId, clientId, db, yearMonth) => {
+  // yearMonth = 'YYYY-MM' e.g. '2026-06'
+
+  const cacheKey = `cfg:${employeeId}:${clientId}:${yearMonth}`;
+  const cached = _cacheGet(cacheKey);
+  if (cached) return cached;
+
+  // 1. Try employee's own config
+  const [empRows] = await db.execute(
+    `SELECT weekend_working_config, break_start_time, break_end_time FROM employees WHERE id = ? AND client_id = ?`,
+    [employeeId, clientId]
+  );
+  if (empRows.length === 0) return { saturdayDates: [], satDurationSeconds: 0, config: null };
+
+  const emp = empRows[0];
+  let config = null;
+
+  if (emp.weekend_working_config) {
+    try { config = JSON.parse(emp.weekend_working_config); } catch (e) {}
+  }
+
+  // 2. Fallback to system_settings
+  if (!config) {
+    const [settingRows] = await db.execute(
+      `SELECT setting_value FROM system_settings WHERE client_id = ? AND setting_key = 'default_weekend_working_config' LIMIT 1`,
+      [clientId]
+    );
+    if (settingRows.length > 0) {
+      try { config = JSON.parse(settingRows[0].setting_value); } catch (e) {}
+    }
+  }
+
+  if (!config || !config.saturday || !config.saturday.working) {
+    return { saturdayDates: [], satDurationSeconds: 0, config };
+  }
+
+  // 3. Get Saturday dates for this month
+  // If employee's monthly_schedule is null, fall back to system_settings monthly_schedule
+  let monthSchedule = config.saturday.monthly_schedule || null;
+
+  if (!monthSchedule) {
+    const [settingRows] = await db.execute(
+      `SELECT setting_value FROM system_settings WHERE client_id = ? AND setting_key = 'default_weekend_working_config' LIMIT 1`,
+      [clientId]
+    );
+    if (settingRows.length > 0) {
+      try {
+        const defaultConfig = JSON.parse(settingRows[0].setting_value);
+        monthSchedule = defaultConfig?.saturday?.monthly_schedule || {};
+      } catch (e) {}
+    }
+  }
+
+  const satIndexes = (monthSchedule || {})[yearMonth] || [];
+  if (satIndexes.length === 0) return { saturdayDates: [], satDurationSeconds: 0, config };
+
+  // Convert Saturday indexes to actual dates
+  const saturdayDates = getSaturdayDatesFromIndexes(yearMonth, satIndexes);
+
+  // 4. Calculate saturday duration in seconds using employee's own in_time/out_time
+  const satInTime = config.saturday.in_time || '08:00';
+  const satOutTime = config.saturday.out_time || '17:00';
+
+  const satIn = new Date(`2000-01-01T${satInTime}:00`);
+  const satOut = new Date(`2000-01-01T${satOutTime}:00`);
+  let satDurationSeconds = Math.max(0, (satOut - satIn) / 1000);
+
+  // Subtract client break duration
+  const [breakSetting] = await db.execute(
+    `SELECT setting_value FROM system_settings WHERE client_id = ? AND setting_key = 'break_duration_hours' LIMIT 1`,
+    [clientId]
+  );
+  if (breakSetting.length > 0) {
+    const breakHours = parseFloat(JSON.parse(breakSetting[0].setting_value)) || 0;
+    satDurationSeconds = Math.max(0, satDurationSeconds - breakHours * 3600);
+  }
+
+  const result = { saturdayDates, satDurationSeconds, config };
+  _cacheSet(cacheKey, result);
+  return result;
+};
+
+/**
+ * Convert month + Saturday indexes (1-based) to actual YYYY-MM-DD date strings
+ */
+const getSaturdayDatesFromIndexes = (yearMonth, indexes) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const dates = [];
+  let satCount = 0;
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month - 1, d);
+    if (date.getDay() === 6) { // Saturday
+      satCount++;
+      if (indexes.includes(satCount)) {
+        const mm = String(month).padStart(2, '0');
+        const dd = String(d).padStart(2, '0');
+        dates.push(`${year}-${mm}-${dd}`);
+      }
+    }
+  }
+  return dates;
+};
+
+/**
+ * Core saturday covering computation.
+ * Called after every checkout. Updates the attendance record's covering columns.
+ *
+ * @param {string} attendanceId - The attendance record just checked out
+ * @param {string} employeeId
+ * @param {string} clientId
+ * @param {number} payableDurationSeconds - payable_duration of this record
+ * @param {string} attendanceDate - 'YYYY-MM-DD'
+ * @param {object} db
+ */
+const computeSaturdayCovering = async (attendanceId, employeeId, clientId, payableDurationSeconds, attendanceDate, db) => {
+  // Check if saturday covering is enabled — cached to avoid DB hit on every checkout
+  const enabledCacheKey = `enabled:${employeeId}:${clientId}`;
+  let satCoveringEnabled = _cacheGet(enabledCacheKey);
+  if (satCoveringEnabled === null) {
+    const [empRows] = await db.execute(
+      `SELECT saturday_covering_enabled FROM employees WHERE id = ? AND client_id = ?`,
+      [employeeId, clientId]
+    );
+    satCoveringEnabled = empRows.length > 0 && !!empRows[0].saturday_covering_enabled;
+    _cacheSet(enabledCacheKey, satCoveringEnabled);
+  }
+  if (!satCoveringEnabled) return;
+
+  const yearMonth = attendanceDate.substring(0, 7); // 'YYYY-MM'
+  const stdSeconds = 8 * 3600; // 8 hours in seconds
+
+  // 1. Get previous record of THIS month (most recent before this attendance record)
+  // to get running totals
+  // Use date range instead of DATE_FORMAT so the composite index is used
+  const monthStart = `${yearMonth}-01`;
+  const monthEnd = `${yearMonth}-31`;
+  const [prevRows] = await db.execute(
+    `SELECT extra_time_from_payable_duration, saturday_covering_seconds, saturday_covering_is_completed
+     FROM attendance
+     WHERE employee_id = ? AND date >= ? AND date <= ? AND date < ?
+       AND is_auto_covered = 0 AND check_out_time IS NOT NULL
+     ORDER BY date DESC LIMIT 1`,
+    [employeeId, monthStart, monthEnd, attendanceDate]
+  );
+
+  let prevExtra = prevRows.length > 0 ? (parseInt(prevRows[0].extra_time_from_payable_duration) || 0) : 0;
+  let prevCoveringSeconds = prevRows.length > 0 ? (parseInt(prevRows[0].saturday_covering_seconds) || 0) : 0;
+
+  // 2. Calculate today's extra seconds
+  const extraToday = Math.max(0, (payableDurationSeconds || 0) - stdSeconds);
+
+  // 3. Get saturday config for this month
+  const { saturdayDates, satDurationSeconds } = await getSaturdayCoveringConfig(employeeId, clientId, db, yearMonth);
+  const satCount = saturdayDates.length;
+  const totalObligation = satCount * satDurationSeconds;
+
+  let newExtra = 0;
+  let newCoveringSeconds = prevCoveringSeconds;
+  let newCompleted = false;
+
+  if (satCount === 0) {
+    // No Saturdays configured — accumulate extra time only
+    newExtra = prevExtra + extraToday;
+    newCoveringSeconds = prevCoveringSeconds;
+    newCompleted = false;
+  } else {
+    // Saturdays configured
+    const remaining = Math.max(0, totalObligation - prevCoveringSeconds);
+
+    if (remaining <= 0) {
+      // Already completed from previous days
+      newCompleted = true;
+      newCoveringSeconds = prevCoveringSeconds;
+      // Extra today goes back to extra_time column
+      newExtra = prevExtra + extraToday;
+    } else {
+      // Not yet completed — try to cover
+      const available = prevExtra + extraToday;
+
+      if (available >= remaining) {
+        // Equal or larger — obligation met
+        newCoveringSeconds = prevCoveringSeconds + remaining;
+        newExtra = available - remaining;
+        newCompleted = true;
+      } else {
+        // Lower — partial coverage
+        newCoveringSeconds = prevCoveringSeconds + available;
+        newExtra = 0;
+        newCompleted = false;
+      }
+    }
+  }
+
+  // 4. Update the attendance record
+  await db.execute(
+    `UPDATE attendance
+     SET extra_time_from_payable_duration = ?,
+         saturday_covering_seconds = ?,
+         saturday_covering_is_completed = ?
+     WHERE id = ?`,
+    [newExtra, newCoveringSeconds, newCompleted ? 1 : 0, attendanceId]
+  );
+
+  // 5. Create auto attendance records for any newly crossed Saturday thresholds
+  // This runs whether or not fully completed — handles partial coverage (e.g. 2 of 3 Saturdays earned)
+  const prevCoveredCount = satDurationSeconds > 0 ? Math.floor(prevCoveringSeconds / satDurationSeconds) : 0;
+  const newCoveredCount  = satDurationSeconds > 0 ? Math.floor(newCoveringSeconds  / satDurationSeconds) : 0;
+
+  if (newCoveredCount > prevCoveredCount && saturdayDates.length > 0) {
+    await createAutoCoveredSaturdayRecords(employeeId, clientId, db, saturdayDates, yearMonth, newCoveringSeconds);
+  }
+};
+
+/**
+ * Create auto-covered attendance records for Saturdays that have been earned.
+ * Only creates records that don't already exist (skips if physical attendance exists).
+ * Tracks how many Saturdays are covered based on saturday_covering_seconds vs obligation per Saturday.
+ */
+const createAutoCoveredSaturdayRecords = async (employeeId, clientId, db, saturdayDates, yearMonth, coveringSeconds) => {
+  // Get Saturday duration to know how many are covered
+  const { satDurationSeconds, config } = await getSaturdayCoveringConfig(employeeId, clientId, db, yearMonth);
+  if (!satDurationSeconds || !config) return;
+
+  const coveredCount = satDurationSeconds > 0
+    ? Math.min(saturdayDates.length, Math.floor(coveringSeconds / satDurationSeconds))
+    : 0;
+
+  const satInTime = config.saturday.in_time || '08:00';
+  const satOutTime = config.saturday.out_time || '17:00';
+
+  for (let i = 0; i < coveredCount; i++) {
+    const satDate = saturdayDates[i];
+
+    // payable duration = saturday obligation per day (already has break deducted)
+    const payableSecs = satDurationSeconds;
+    // total_hours = raw scheduled hours (in_time to out_time, no break deducted)
+    const satIn = new Date(`2000-01-01T${satInTime}:00`);
+    const satOut = new Date(`2000-01-01T${satOutTime}:00`);
+    const totalHoursVal = parseFloat(((satOut - satIn) / 3600000).toFixed(2));
+
+    // Get day of week value for is_weekend column
+    const dateObj = new Date(satDate);
+    const jsDayOfWeek = dateObj.getDay(); // 6 = Saturday
+    const isWeekend = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1; // MySQL DAYOFWEEK: Saturday = 7
+
+    // Check if a record already exists for this date
+    const [existing] = await db.execute(
+      `SELECT id, is_auto_covered, check_out_time FROM attendance WHERE employee_id = ? AND date = ?`,
+      [employeeId, satDate]
+    );
+
+    if (existing.length > 0) {
+      const rec = existing[0];
+
+      if (rec.is_auto_covered) {
+        // Already auto-covered — skip
+        continue;
+      }
+
+      if (rec.check_out_time) {
+        // Physical attendance exists with actual checkout — never overwrite
+        console.log(`⚠️  Skipping auto-cover for ${satDate} — physical attendance record exists`);
+        continue;
+      }
+
+      // Absent record (no checkout) — update it to covered values
+      await db.execute(
+        `UPDATE attendance SET
+          check_in_time = ?, check_out_time = ?,
+          total_hours = ?, work_duration = 'full_day',
+          arrival_status = 'on_time', payable_duration = ?,
+          scheduled_in_time = ?, scheduled_out_time = ?,
+          is_auto_covered = 1,
+          notes = 'Auto-covered by weekday extra time',
+          updated_at = NOW()
+        WHERE id = ?`,
+        [satInTime, satOutTime, totalHoursVal, payableSecs, satInTime, satOutTime, rec.id]
+      );
+      console.log(`✅ Auto-covered existing absent Saturday record updated: ${satDate} for employee ${employeeId}`);
+    } else {
+      // No record exists — create new auto-covered record
+      const autoId = uuidv4();
+      await db.execute(
+        `INSERT INTO attendance (
+          id, employee_id, client_id, date,
+          check_in_time, check_out_time,
+          total_hours, overtime_hours,
+          pre_shift_overtime_seconds, post_shift_overtime_seconds,
+          arrival_status, work_duration, work_type,
+          scheduled_in_time, scheduled_out_time,
+          is_weekend, payable_duration,
+          is_auto_covered, notes,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 'on_time', 'full_day', 'office', ?, ?, ?, ?, 1, 'Auto-covered by weekday extra time', NOW(), NOW())`,
+        [
+          autoId, employeeId, clientId, satDate,
+          satInTime, satOutTime, totalHoursVal,
+          satInTime, satOutTime,
+          isWeekend, payableSecs
+        ]
+      );
+      console.log(`✅ Auto-covered Saturday record created: ${satDate} for employee ${employeeId}`);
+    }
+  }
+};
+
+/**
+ * Recalculate saturday covering for all affected employees in a given month.
+ * Called when default_weekend_working_config changes.
+ * Deletes existing auto-covered records and re-runs from the latest real checkout of that month.
+ */
+const recalculateSaturdayCoveringForMonth = async (clientId, db, yearMonth) => {
+  // Get all saturday_covering_enabled employees for this client
+  const [employees] = await db.execute(
+    `SELECT id FROM employees WHERE client_id = ? AND saturday_covering_enabled = 1 AND employment_status != 'terminated'`,
+    [clientId]
+  );
+
+  for (const emp of employees) {
+    const employeeId = emp.id;
+
+    const mStart = `${yearMonth}-01`;
+    const mEnd   = `${yearMonth}-31`;
+
+    // 1. Delete all auto-covered records for this month
+    await db.execute(
+      `DELETE FROM attendance WHERE employee_id = ? AND date >= ? AND date <= ? AND is_auto_covered = 1`,
+      [employeeId, mStart, mEnd]
+    );
+
+    // 2. Reset covering columns on all real records of this month
+    await db.execute(
+      `UPDATE attendance
+       SET extra_time_from_payable_duration = 0,
+           saturday_covering_seconds = 0,
+           saturday_covering_is_completed = 0
+       WHERE employee_id = ? AND date >= ? AND date <= ? AND is_auto_covered = 0`,
+      [employeeId, mStart, mEnd]
+    );
+
+    // 3. Re-run covering logic record by record in chronological order
+    const [records] = await db.execute(
+      `SELECT id, date, payable_duration, check_out_time
+       FROM attendance
+       WHERE employee_id = ? AND date >= ? AND date <= ? AND is_auto_covered = 0
+       ORDER BY date ASC`,
+      [employeeId, mStart, mEnd]
+    );
+
+    for (const record of records) {
+      if (!record.check_out_time) continue; // Only process checked-out records
+      await computeSaturdayCovering(
+        record.id,
+        employeeId,
+        clientId,
+        parseInt(record.payable_duration) || 0,
+        record.date,
+        db
+      );
+    }
+
+    console.log(`✅ Recalculated saturday covering for employee ${employeeId} in ${yearMonth}`);
+  }
 };
 
 // =============================================
@@ -1413,6 +1829,12 @@ const calculateWorkHours = async (
       // Determine what was auto-calculated
       const arrivalAutoCalculated = !req.body.arrival_status || req.body.arrival_status !== autoArrivalStatus;
       const durationAutoCalculated = !req.body.work_duration || req.body.work_duration !== autoWorkDuration;
+
+      // Saturday covering — only if checkout time was provided in this POST
+      if (req.body.check_out_time) {
+        computeSaturdayCovering(attendanceId, req.body.employee_id, req.user.clientId, payableDuration, req.body.date, db)
+          .catch(err => console.error('❌ Saturday covering error (POST /):', err.message));
+      }
 
       // Send SMS notifications for check-in and/or check-out
       const record = newRecord[0];
@@ -1927,11 +2349,16 @@ router.patch('/bulk', [
           // Get client break duration setting
           const breakDuration = await getClientBreakDuration(req.user.clientId, db);
 
+          // When force_recalculate=true use employee's CURRENT schedule times,
+          // otherwise use what was stored on the record at creation time
+          const effectiveScheduledIn  = force_recalculate ? schedule.start_time : current.scheduled_in_time;
+          const effectiveScheduledOut = force_recalculate ? schedule.end_time   : current.scheduled_out_time;
+
           const payableDuration = await calculatePayableDuration(
             eff.check_in_time,
             eff.check_out_time,
-            current.scheduled_in_time,
-            current.scheduled_out_time,
+            effectiveScheduledIn,
+            effectiveScheduledOut,
             breakDuration,
             employeeId,
             db
@@ -1960,6 +2387,12 @@ router.patch('/bulk', [
           maybePush('post_shift_overtime_seconds', postShiftOvertimeSeconds, current.post_shift_overtime_seconds);
           maybePush('payable_duration', payableDuration, current.payable_duration);
 
+          // When force_recalculate=true also update the stored scheduled times to match current employee schedule
+          if (force_recalculate) {
+            maybePush('scheduled_in_time',  schedule.start_time, current.scheduled_in_time);
+            maybePush('scheduled_out_time', schedule.end_time,   current.scheduled_out_time);
+          }
+
           ['work_type', 'notes'].forEach((k) =>
             maybePush(k, req.body[k], current[k])
           );
@@ -1983,6 +2416,15 @@ router.patch('/bulk', [
             `UPDATE attendance SET ${cols.join(', ')} WHERE id = ?`,
             vals
           );
+
+          // Saturday covering — awaited so each day's result is committed before the next day reads it
+          if (eff.check_out_time) {
+            try {
+              await computeSaturdayCovering(current.id, employeeId, req.user.clientId, payableDuration, dateStr, db);
+            } catch (err) {
+              console.error('❌ Saturday covering error (PATCH /bulk):', err.message);
+            }
+          }
 
           /* ───────── 10. fetch full updated record ───────── */
           const [[updated]] = await db.execute(
@@ -2273,6 +2715,12 @@ console.log('final workDuration:', workDuration);
       `UPDATE attendance SET ${cols.join(', ')} WHERE id = ?`,
       vals
     );
+
+    // Saturday covering — only if check_out_time is being set/updated
+    if (eff.check_out_time) {
+      computeSaturdayCovering(attendanceId, current.employee_id, req.user.clientId, payableDuration, current.date, db)
+        .catch(err => console.error('❌ Saturday covering error (PATCH /:id):', err.message));
+    }
 
     /* ───────── 6. return the fresh record ───────── */
     const [[updated]] = await db.execute(
@@ -2793,4 +3241,78 @@ router.get('/employee-schedule/:employeeId',
   })
 );
 
+// =============================================
+// SATURDAY COVERING STATUS ENDPOINT
+// =============================================
+router.get('/saturday-covering/:employeeId',
+  authenticate,
+  ensureClientAccess,
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+    const { employeeId } = req.params;
+    const { yearMonth } = req.query; // optional, defaults to current month
+
+    const ym = yearMonth || new Date().toISOString().substring(0, 7);
+
+    // Check if enabled
+    const [empRows] = await db.execute(
+      `SELECT saturday_covering_enabled FROM employees WHERE id = ? AND client_id = ?`,
+      [employeeId, req.user.clientId]
+    );
+    if (empRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Employee not found' });
+    }
+    if (!empRows[0].saturday_covering_enabled) {
+      return res.json({ success: true, data: { enabled: false } });
+    }
+
+    // Get config for the month
+    const { saturdayDates, satDurationSeconds } = await getSaturdayCoveringConfig(employeeId, req.user.clientId, db, ym);
+    const totalObligation = saturdayDates.length * satDurationSeconds;
+
+    // Get latest non-auto record of this month
+    const mStart = `${ym}-01`;
+    const mEnd   = `${ym}-31`;
+    const [latestRows] = await db.execute(
+      `SELECT saturday_covering_seconds, saturday_covering_is_completed, extra_time_from_payable_duration
+       FROM attendance
+       WHERE employee_id = ? AND date >= ? AND date <= ? AND is_auto_covered = 0 AND check_out_time IS NOT NULL
+       ORDER BY date DESC LIMIT 1`,
+      [employeeId, mStart, mEnd]
+    );
+
+    const latest = latestRows[0] || null;
+    const coveringSeconds = latest ? (parseInt(latest.saturday_covering_seconds) || 0) : 0;
+    const isCompleted = latest ? !!latest.saturday_covering_is_completed : false;
+    const extraTimeSeconds = latest ? (parseInt(latest.extra_time_from_payable_duration) || 0) : 0;
+    const remainingSeconds = Math.max(0, totalObligation - coveringSeconds);
+
+    const coveredCount = satDurationSeconds > 0 ? Math.floor(coveringSeconds / satDurationSeconds) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        enabled: true,
+        yearMonth: ym,
+        saturdayDates,
+        totalObligation,
+        satDurationSeconds,
+        coveringSeconds,
+        remainingSeconds,
+        isCompleted,
+        coveredCount,
+        totalSaturdays: saturdayDates.length,
+        extraTimeSeconds,
+        // Human readable
+        coveringHours: parseFloat((coveringSeconds / 3600).toFixed(2)),
+        remainingHours: parseFloat((remainingSeconds / 3600).toFixed(2)),
+        totalObligationHours: parseFloat((totalObligation / 3600).toFixed(2)),
+        extraTimeMinutes: Math.round(extraTimeSeconds / 60)
+      }
+    });
+  })
+);
+
 module.exports = router;
+module.exports.recalculateSaturdayCoveringForMonth = recalculateSaturdayCoveringForMonth;
+module.exports.invalidateSatCoveringCache = invalidateSatCoveringCache;

@@ -595,7 +595,10 @@ router.put('/:id',
       'payable_hours_policy',
 
       // Weekend Working Configuration
-      'weekend_working_config'
+      'weekend_working_config',
+
+      // Saturday Covering
+      'saturday_covering_enabled'
     ];
 
     const updateFields = [];
@@ -691,6 +694,14 @@ router.put('/:id',
           console.warn('Failed to parse weekend_working_config:', e);
           employee.weekend_working_config = null;
         }
+      }
+
+      // Invalidate saturday covering cache if relevant fields changed
+      if (req.body.hasOwnProperty('saturday_covering_enabled') || req.body.hasOwnProperty('weekend_working_config')) {
+        try {
+          const { invalidateSatCoveringCache } = require('./attendanceRoute');
+          invalidateSatCoveringCache(req.user.clientId);
+        } catch (e) {}
       }
 
       res.status(200).json({

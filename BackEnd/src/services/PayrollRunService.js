@@ -4270,6 +4270,41 @@ class PayrollRunService {
             console.log(`📊 Found ${allOvertime.length} overtime records...`);
 
             // ========================================
+            // BULK FETCH: extra_time_from_payable_duration (saturday covering OT display)
+            // Get the latest non-auto-covered record per employee per month within the period
+            // ========================================
+            const [allExtraTimeRows] = await db.execute(`
+                SELECT
+                    a.employee_id,
+                    a.extra_time_from_payable_duration,
+                    a.saturday_covering_is_completed
+                FROM attendance a
+                WHERE a.employee_id IN (${employeeIds.map(() => '?').join(',')})
+                  AND DATE(a.date) BETWEEN ? AND ?
+                  AND a.is_auto_covered = 0
+                  AND a.check_out_time IS NOT NULL
+                  AND a.extra_time_from_payable_duration IS NOT NULL
+                  AND (a.employee_id, a.date) IN (
+                      SELECT employee_id, MAX(date)
+                      FROM attendance
+                      WHERE employee_id IN (${employeeIds.map(() => '?').join(',')})
+                        AND DATE(date) BETWEEN ? AND ?
+                        AND is_auto_covered = 0
+                        AND check_out_time IS NOT NULL
+                      GROUP BY employee_id
+                  )
+            `, [...employeeIds, minPeriodStart, calculationEndDate.toISOString().split('T')[0],
+               ...employeeIds, minPeriodStart, calculationEndDate.toISOString().split('T')[0]]);
+
+            const extraTimeByEmployee = {};
+            allExtraTimeRows.forEach(row => {
+                extraTimeByEmployee[row.employee_id] = {
+                    extra_time_seconds: parseInt(row.extra_time_from_payable_duration) || 0,
+                    saturday_covering_is_completed: row.saturday_covering_is_completed ? true : false
+                };
+            });
+
+            // ========================================
             // BULK FETCH #5: Actual Attended Days
             // ========================================
             const calculationEndDateStr = calculationEndDate.toISOString().split('T')[0];
@@ -4628,6 +4663,28 @@ class PayrollRunService {
                     }
                 }
 
+                // Saturday covering extra-time OT earnings
+                const extraTimeData = extraTimeByEmployee[emp.employee_id] || { extra_time_seconds: 0 };
+                const weekdayOtMultiplier = parseFloat(emp.weekday_ot_multiplier) || 1.5;
+                const weekdayHourlyRate = parseFloat(emp.weekday_hourly_rate) || 0;
+                const extraTimeOtAmount = (extraTimeData.extra_time_seconds / 3600) * weekdayHourlyRate * weekdayOtMultiplier;
+                const extraTimeMinutes = Math.round(extraTimeData.extra_time_seconds / 60);
+
+                // Inject extra_time_ot into earnings_by_source
+                let enrichedEarningsBySource = attendanceData.earnings_by_source || null;
+                if (enrichedEarningsBySource && extraTimeData.extra_time_seconds > 0) {
+                    enrichedEarningsBySource = {
+                        ...enrichedEarningsBySource,
+                        extra_time_ot: {
+                            minutes: extraTimeMinutes,
+                            seconds: extraTimeData.extra_time_seconds,
+                            hourly_rate: weekdayHourlyRate,
+                            multiplier: weekdayOtMultiplier,
+                            earned: parseFloat(extraTimeOtAmount.toFixed(2))
+                        }
+                    };
+                }
+
                 return {
                     ...emp,
                     actual_worked_days: attendedDaysByEmployee[emp.employee_id] || 0,
@@ -4636,7 +4693,7 @@ class PayrollRunService {
                         earned_salary: attendanceData.earned_salary || 0,
                         shortfall: attendanceData.total || 0,
                         components: attendanceData.components || [],
-                        earnings_by_source: attendanceData.earnings_by_source || null,
+                        earnings_by_source: enrichedEarningsBySource,
                         shortfall_by_cause: attendanceData.shortfall_by_cause || null
                     },
                     allowances: combinedAllowances,
