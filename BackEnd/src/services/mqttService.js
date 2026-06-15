@@ -274,7 +274,7 @@ function sendCommand(deviceId, command, params = {}, deviceType = 'fingerprint')
 
     pendingCommands.set(deviceId, { resolve, reject, timer });
 
-    mqttClient.publish(topic, payload, { qos: 1 }, (err) => {
+    mqttClient.publish(topic, payloadStr, { qos: 1 }, (err) => {
       if (err) {
         clearTimeout(timer);
         pendingCommands.delete(deviceId);
