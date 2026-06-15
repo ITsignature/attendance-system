@@ -34,9 +34,9 @@ function initSocket(httpServer) {
         let query = 'SELECT id, client_id FROM fingerprint_devices WHERE device_id = ?';
         const params = [deviceId];
 
-        if (!socket.user.is_super_admin) {
+        if (!socket.user.isSuperAdmin) {
           query += ' AND client_id = ?';
-          params.push(socket.user.client_id);
+          params.push(socket.user.clientId);
         }
 
         const [rows] = await db.execute(query, params);

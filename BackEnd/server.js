@@ -38,6 +38,10 @@ const LeaveAccrualService = require('./src/services/LeaveAccrualService');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust the nginx reverse proxy (running on localhost) so req.ip and
+// express-rate-limit correctly read the X-Forwarded-For header.
+app.set('trust proxy', 'loopback');
+
 // CORS configuration - Allow all origins during development
 const corsOptions = {
   // origin: function (origin, callback) {

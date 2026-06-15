@@ -130,11 +130,14 @@ const DeviceManagement: React.FC = () => {
   // Fingerprint enrollment → employee assignment
   const [usedFpIds, setUsedFpIds] = useState<number[]>([]);
   const [isLoadingFpList, setIsLoadingFpList] = useState(false);
-  const [employeeSearch, setEmployeeSearch] = useState('');
-  const [employeeOptions, setEmployeeOptions] = useState<{ id: string; full_name: string; employee_code: string; fingerprint_id?: number | null }[]>([]);
-  const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; full_name: string; employee_code: string } | null>(null);
   const [isEnrollWaiting, setIsEnrollWaiting] = useState(false);
   const [enrollAssignMsg, setEnrollAssignMsg] = useState('');
+  const [enrollingEmployeeId, setEnrollingEmployeeId] = useState<string | null>(null);
+
+  // Employee fingerprint table
+  const [allEmployees, setAllEmployees] = useState<{ id: string; full_name: string; employee_code: string; fingerprint_id?: number | null }[]>([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [employeeTableSearch, setEmployeeTableSearch] = useState('');
 
   // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -254,9 +257,10 @@ const DeviceManagement: React.FC = () => {
     }
   };
 
-  const startEnroll = async (id: number) => {
+  const startEnroll = async (id: number, employeeId: string) => {
     if (!selectedDevice) return;
     setEnrollAssignMsg('');
+    setEnrollingEmployeeId(employeeId);
     setIsSendingCommand(true);
     setCommandResult(null);
     try {
@@ -264,10 +268,35 @@ const DeviceManagement: React.FC = () => {
       const result = (res.data as any)?.result || res.data;
       setCommandResult({ success: result?.success ?? res.success, message: result?.message || res.message || 'Enroll started' });
       if (result?.success ?? res.success) setIsEnrollWaiting(true);
+      else setEnrollingEmployeeId(null);
       fetchDevices();
     } catch (e: any) {
       const msg = e?.message || 'Command failed or device offline';
       setCommandResult({ success: false, message: msg });
+      setEnrollingEmployeeId(null);
+    } finally {
+      setIsSendingCommand(false);
+    }
+  };
+
+  const deleteFpForEmployee = async (employee: { id: string; full_name: string; fingerprint_id?: number | null }) => {
+    if (!selectedDevice || employee.fingerprint_id == null) return;
+    if (!confirm(`Delete fingerprint ID ${employee.fingerprint_id} from the device and remove it from ${employee.full_name}?`)) return;
+    setIsSendingCommand(true);
+    setCommandResult(null);
+    try {
+      const res = await apiService.apiCall<any>(`/api/devices/${selectedDevice.id}/command`, { method: 'POST', body: JSON.stringify({ command: 'delete_fp', delete_id: employee.fingerprint_id }) });
+      const result = (res.data as any)?.result || res.data;
+      const ok = result?.success ?? res.success;
+      setCommandResult({ success: ok, message: result?.message || res.message || 'Delete fingerprint' });
+      if (ok) {
+        await apiService.updateEmployee(employee.id, { fingerprint_id: null });
+        setAllEmployees(prev => prev.map(e => e.id === employee.id ? { ...e, fingerprint_id: null } : e));
+        refreshFpList();
+      }
+      fetchDevices();
+    } catch (e: any) {
+      setCommandResult({ success: false, message: e?.message || 'Command failed or device offline' });
     } finally {
       setIsSendingCommand(false);
     }
@@ -283,11 +312,11 @@ const DeviceManagement: React.FC = () => {
     setNewWifiPass('');
     setLogLines([]);
     setUsedFpIds([]);
-    setEmployeeSearch('');
-    setEmployeeOptions([]);
-    setSelectedEmployee(null);
     setIsEnrollWaiting(false);
     setEnrollAssignMsg('');
+    setEnrollingEmployeeId(null);
+    setAllEmployees([]);
+    setEmployeeTableSearch('');
     setShowControlPanel(true);
   };
 
@@ -353,10 +382,12 @@ const DeviceManagement: React.FC = () => {
       if (data.event === 'enroll_done') {
         setIsEnrollWaiting(false);
         const { success, message, enroll_id } = data.data;
-        if (success && selectedEmployee) {
+        const employee = allEmployees.find(e => e.id === enrollingEmployeeId);
+        if (success && employee) {
           try {
-            await apiService.updateEmployee(selectedEmployee.id, { fingerprint_id: enroll_id });
-            setEnrollAssignMsg(`Fingerprint ID ${enroll_id} enrolled and assigned to ${selectedEmployee.full_name}`);
+            await apiService.updateEmployee(employee.id, { fingerprint_id: enroll_id });
+            setAllEmployees(prev => prev.map(e => e.id === employee.id ? { ...e, fingerprint_id: enroll_id } : e));
+            setEnrollAssignMsg(`Fingerprint ID ${enroll_id} enrolled and assigned to ${employee.full_name}`);
           } catch (e: any) {
             setEnrollAssignMsg(`Enrolled ID ${enroll_id}, but failed to assign to employee: ${e?.message || 'unknown error'}`);
           }
@@ -365,6 +396,7 @@ const DeviceManagement: React.FC = () => {
         } else {
           setEnrollAssignMsg(`Enrollment failed: ${message}`);
         }
+        setEnrollingEmployeeId(null);
         refreshFpList();
       }
     });
@@ -374,7 +406,7 @@ const DeviceManagement: React.FC = () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [showControlPanel, selectedDevice?.device_id, selectedEmployee, refreshFpList]);
+  }, [showControlPanel, selectedDevice?.device_id, allEmployees, enrollingEmployeeId, refreshFpList]);
 
   useEffect(() => {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -387,23 +419,25 @@ const DeviceManagement: React.FC = () => {
     }
   }, [showControlPanel, selectedDevice?.id]);
 
-  // Employee search (debounced)
-  useEffect(() => {
-    if (!employeeSearch.trim()) {
-      setEmployeeOptions([]);
-      return;
+  // Fetch all employees (with fingerprint_id) when opening control panel
+  const fetchAllEmployees = useCallback(async () => {
+    setIsLoadingEmployees(true);
+    try {
+      const res = await apiService.getEmployees({ limit: 1000, sortBy: 'first_name', sortOrder: 'asc' } as any);
+      const employees = (res.data as any)?.employees || [];
+      setAllEmployees(employees.map((e: any) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code, fingerprint_id: e.fingerprint_id })));
+    } catch {
+      setAllEmployees([]);
+    } finally {
+      setIsLoadingEmployees(false);
     }
-    const handle = setTimeout(async () => {
-      try {
-        const res = await apiService.getEmployees({ search: employeeSearch, limit: 10 } as any);
-        const employees = (res.data as any)?.employees || [];
-        setEmployeeOptions(employees.map((e: any) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code, fingerprint_id: e.fingerprint_id })));
-      } catch {
-        setEmployeeOptions([]);
-      }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [employeeSearch]);
+  }, []);
+
+  useEffect(() => {
+    if (showControlPanel && selectedDevice?.device_type === 'fingerprint') {
+      fetchAllEmployees();
+    }
+  }, [showControlPanel, selectedDevice?.id, fetchAllEmployees]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -562,7 +596,7 @@ const DeviceManagement: React.FC = () => {
       )}
 
       {/* ── Control Panel Modal ──────────────────────────────────────────────── */}
-      <Modal show={showControlPanel} onClose={() => setShowControlPanel(false)} size="lg">
+      <Modal show={showControlPanel} onClose={() => setShowControlPanel(false)} size="7xl">
         <Modal.Header>
           <div className="flex items-center gap-2">
             <HiCog className="w-5 h-5 text-blue-600" />
@@ -690,60 +724,89 @@ const DeviceManagement: React.FC = () => {
                   <Section title="Fingerprint Enrollment" icon={<HiFingerPrint className="w-4 h-4" />}>
                     <div className="flex items-center justify-between text-xs mb-2">
                       <span className="text-gray-500">
-                        {isLoadingFpList ? 'Checking used IDs...' : `Used IDs: ${usedFpIds.length > 0 ? usedFpIds.join(', ') : 'none'}`}
+                        {isLoadingFpList ? 'Checking used IDs on device...' : `Used IDs on device: ${usedFpIds.length > 0 ? usedFpIds.join(', ') : 'none'}`}
+                        {suggestedFpId && <span className="ml-2 text-gray-400">· Suggested next free ID: {suggestedFpId}</span>}
                       </span>
                       <button onClick={refreshFpList} disabled={isLoadingFpList || !selectedDevice?.is_online} className="text-blue-600 hover:underline disabled:text-gray-400">
                         Refresh
                       </button>
                     </div>
 
-                    <Label className="text-xs">Assign to employee</Label>
-                    <TextInput
-                      placeholder="Search employee by name, code or email"
-                      value={selectedEmployee ? `${selectedEmployee.full_name} (${selectedEmployee.employee_code})` : employeeSearch}
-                      onChange={e => { setSelectedEmployee(null); setEmployeeSearch(e.target.value); }}
-                      sizing="sm"
-                      className="mb-1"
-                    />
-                    {employeeOptions.length > 0 && !selectedEmployee && (
-                      <div className="border border-gray-200 rounded-lg max-h-32 overflow-y-auto mb-2">
-                        {employeeOptions.map(emp => (
-                          <button
-                            key={emp.id}
-                            onClick={() => { setSelectedEmployee(emp); setEmployeeOptions([]); }}
-                            className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 flex justify-between"
-                          >
-                            <span>{emp.full_name} ({emp.employee_code})</span>
-                            {emp.fingerprint_id != null && <span className="text-gray-400">FP: {emp.fingerprint_id}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 items-center">
-                      <TextInput type="number" min={1} max={127} placeholder="ID (1-127)" value={enrollId || (suggestedFpId ? String(suggestedFpId) : '')} onChange={e => setEnrollId(e.target.value)} className="flex-1" sizing="sm" />
-                      <button
-                        disabled={isSendingCommand || isEnrollWaiting || !(enrollId || suggestedFpId)}
-                        onClick={() => startEnroll(parseInt(enrollId || String(suggestedFpId)))}
-                        className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap"
-                      >
-                        Start Enroll
-                      </button>
-                    </div>
-                    {suggestedFpId && !enrollId && (
-                      <p className="text-xs text-gray-400 mt-1">Suggested next free ID: {suggestedFpId}</p>
-                    )}
                     {isEnrollWaiting && (
-                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs flex items-center gap-2">
+                      <div className="mb-2 p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs flex items-center gap-2">
                         <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600" />
                         Waiting for fingerprint to be placed on the device sensor...
                       </div>
                     )}
                     {enrollAssignMsg && (
-                      <div className="mt-2 p-2 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs">
+                      <div className="mb-2 p-2 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs">
                         {enrollAssignMsg}
                       </div>
                     )}
+
+                    <TextInput
+                      placeholder="Search employees by name or code"
+                      value={employeeTableSearch}
+                      onChange={e => setEmployeeTableSearch(e.target.value)}
+                      sizing="sm"
+                      className="mb-2"
+                    />
+
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="max-h-80 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-semibold text-gray-600">Employee</th>
+                              <th className="text-left px-3 py-2 font-semibold text-gray-600">Code</th>
+                              <th className="text-left px-3 py-2 font-semibold text-gray-600">Fingerprint ID</th>
+                              <th className="text-right px-3 py-2 font-semibold text-gray-600">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {isLoadingEmployees ? (
+                              <tr><td colSpan={4} className="text-center py-4 text-gray-400">Loading employees...</td></tr>
+                            ) : allEmployees.filter(emp => {
+                                const q = employeeTableSearch.trim().toLowerCase();
+                                if (!q) return true;
+                                return emp.full_name.toLowerCase().includes(q) || emp.employee_code.toLowerCase().includes(q);
+                              }).map(emp => (
+                              <tr key={emp.id} className="border-t border-gray-100">
+                                <td className="px-3 py-2">{emp.full_name}</td>
+                                <td className="px-3 py-2 text-gray-500">{emp.employee_code}</td>
+                                <td className="px-3 py-2">
+                                  {emp.fingerprint_id != null
+                                    ? <span className="text-green-700 font-medium">#{emp.fingerprint_id}</span>
+                                    : <span className="text-gray-400">Not enrolled</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  {emp.fingerprint_id != null ? (
+                                    <button
+                                      disabled={isSendingCommand}
+                                      onClick={() => deleteFpForEmployee(emp)}
+                                      className="px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 disabled:opacity-50"
+                                    >
+                                      Delete
+                                    </button>
+                                  ) : (
+                                    <button
+                                      disabled={isSendingCommand || isEnrollWaiting || suggestedFpId == null}
+                                      onClick={() => startEnroll(suggestedFpId as number, emp.id)}
+                                      className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                                    >
+                                      {isEnrollWaiting && enrollingEmployeeId === emp.id ? 'Enrolling...' : `Add (ID ${suggestedFpId ?? '-'})`}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                            {!isLoadingEmployees && allEmployees.length === 0 && (
+                              <tr><td colSpan={4} className="text-center py-4 text-gray-400">No employees found</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </Section>
 
                   <Section title="Delete Fingerprint" icon={<HiTrash className="w-4 h-4" />}>
