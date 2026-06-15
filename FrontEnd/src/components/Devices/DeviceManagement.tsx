@@ -127,6 +127,15 @@ const DeviceManagement: React.FC = () => {
   const [newWifiSSID, setNewWifiSSID] = useState('');
   const [newWifiPass, setNewWifiPass] = useState('');
 
+  // Fingerprint enrollment → employee assignment
+  const [usedFpIds, setUsedFpIds] = useState<number[]>([]);
+  const [isLoadingFpList, setIsLoadingFpList] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [employeeOptions, setEmployeeOptions] = useState<{ id: string; full_name: string; employee_code: string; fingerprint_id?: number | null }[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; full_name: string; employee_code: string } | null>(null);
+  const [isEnrollWaiting, setIsEnrollWaiting] = useState(false);
+  const [enrollAssignMsg, setEnrollAssignMsg] = useState('');
+
   // ── Data fetching ───────────────────────────────────────────────────────────
 
   const fetchDevices = useCallback(async () => {
@@ -245,6 +254,25 @@ const DeviceManagement: React.FC = () => {
     }
   };
 
+  const startEnroll = async (id: number) => {
+    if (!selectedDevice) return;
+    setEnrollAssignMsg('');
+    setIsSendingCommand(true);
+    setCommandResult(null);
+    try {
+      const res = await apiService.apiCall<any>(`/api/devices/${selectedDevice.id}/command`, { method: 'POST', body: JSON.stringify({ command: 'enroll', enroll_id: id }) });
+      const result = (res.data as any)?.result || res.data;
+      setCommandResult({ success: result?.success ?? res.success, message: result?.message || res.message || 'Enroll started' });
+      if (result?.success ?? res.success) setIsEnrollWaiting(true);
+      fetchDevices();
+    } catch (e: any) {
+      const msg = e?.message || 'Command failed or device offline';
+      setCommandResult({ success: false, message: msg });
+    } finally {
+      setIsSendingCommand(false);
+    }
+  };
+
   const openControlPanel = (device: Device) => {
     setSelectedDevice(device);
     setCommandResult(null);
@@ -254,8 +282,36 @@ const DeviceManagement: React.FC = () => {
     setNewWifiSSID('');
     setNewWifiPass('');
     setLogLines([]);
+    setUsedFpIds([]);
+    setEmployeeSearch('');
+    setEmployeeOptions([]);
+    setSelectedEmployee(null);
+    setIsEnrollWaiting(false);
+    setEnrollAssignMsg('');
     setShowControlPanel(true);
   };
+
+  // Lowest unused fingerprint ID (1-127)
+  const suggestedFpId = (() => {
+    for (let id = 1; id <= 127; id++) {
+      if (!usedFpIds.includes(id)) return id;
+    }
+    return null;
+  })();
+
+  const refreshFpList = useCallback(async () => {
+    if (!selectedDevice) return;
+    setIsLoadingFpList(true);
+    try {
+      const res = await apiService.apiCall<any>(`/api/devices/${selectedDevice.id}/command`, { method: 'POST', body: JSON.stringify({ command: 'list_fp' }) });
+      const result = (res.data as any)?.result || res.data;
+      setUsedFpIds(result?.used_ids || []);
+    } catch {
+      // ignore — device may be offline
+    } finally {
+      setIsLoadingFpList(false);
+    }
+  }, [selectedDevice]);
 
   // ── Live serial console via Socket.io ──────────────────────────────────────
 
@@ -292,16 +348,62 @@ const DeviceManagement: React.FC = () => {
       });
     });
 
+    socket.on('device_event', async (data: { deviceId: string; event: string; data: any }) => {
+      if (data.deviceId !== selectedDevice.device_id) return;
+      if (data.event === 'enroll_done') {
+        setIsEnrollWaiting(false);
+        const { success, message, enroll_id } = data.data;
+        if (success && selectedEmployee) {
+          try {
+            await apiService.updateEmployee(selectedEmployee.id, { fingerprint_id: enroll_id });
+            setEnrollAssignMsg(`Fingerprint ID ${enroll_id} enrolled and assigned to ${selectedEmployee.full_name}`);
+          } catch (e: any) {
+            setEnrollAssignMsg(`Enrolled ID ${enroll_id}, but failed to assign to employee: ${e?.message || 'unknown error'}`);
+          }
+        } else if (success) {
+          setEnrollAssignMsg(`Fingerprint ID ${enroll_id} enrolled successfully`);
+        } else {
+          setEnrollAssignMsg(`Enrollment failed: ${message}`);
+        }
+        refreshFpList();
+      }
+    });
+
     return () => {
       socket.emit('leave_device_log', selectedDevice.device_id);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [showControlPanel, selectedDevice?.device_id]);
+  }, [showControlPanel, selectedDevice?.device_id, selectedEmployee, refreshFpList]);
 
   useEffect(() => {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logLines]);
+
+  // Fetch used fingerprint IDs when opening control panel for a fingerprint device
+  useEffect(() => {
+    if (showControlPanel && selectedDevice?.device_type === 'fingerprint' && selectedDevice.is_online) {
+      refreshFpList();
+    }
+  }, [showControlPanel, selectedDevice?.id]);
+
+  // Employee search (debounced)
+  useEffect(() => {
+    if (!employeeSearch.trim()) {
+      setEmployeeOptions([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const res = await apiService.getEmployees({ search: employeeSearch, limit: 10 } as any);
+        const employees = (res.data as any)?.employees || [];
+        setEmployeeOptions(employees.map((e: any) => ({ id: e.id, full_name: e.full_name, employee_code: e.employee_code, fingerprint_id: e.fingerprint_id })));
+      } catch {
+        setEmployeeOptions([]);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [employeeSearch]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -586,12 +688,62 @@ const DeviceManagement: React.FC = () => {
                   </Section>
 
                   <Section title="Fingerprint Enrollment" icon={<HiFingerPrint className="w-4 h-4" />}>
-                    <div className="flex gap-2">
-                      <TextInput type="number" min={1} max={127} placeholder="ID (1-127)" value={enrollId} onChange={e => setEnrollId(e.target.value)} className="flex-1" sizing="sm" />
-                      <button disabled={isSendingCommand || !enrollId} onClick={() => sendCommand('enroll', { enroll_id: parseInt(enrollId) })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
+                    <div className="flex items-center justify-between text-xs mb-2">
+                      <span className="text-gray-500">
+                        {isLoadingFpList ? 'Checking used IDs...' : `Used IDs: ${usedFpIds.length > 0 ? usedFpIds.join(', ') : 'none'}`}
+                      </span>
+                      <button onClick={refreshFpList} disabled={isLoadingFpList || !selectedDevice?.is_online} className="text-blue-600 hover:underline disabled:text-gray-400">
+                        Refresh
+                      </button>
+                    </div>
+
+                    <Label className="text-xs">Assign to employee</Label>
+                    <TextInput
+                      placeholder="Search employee by name, code or email"
+                      value={selectedEmployee ? `${selectedEmployee.full_name} (${selectedEmployee.employee_code})` : employeeSearch}
+                      onChange={e => { setSelectedEmployee(null); setEmployeeSearch(e.target.value); }}
+                      sizing="sm"
+                      className="mb-1"
+                    />
+                    {employeeOptions.length > 0 && !selectedEmployee && (
+                      <div className="border border-gray-200 rounded-lg max-h-32 overflow-y-auto mb-2">
+                        {employeeOptions.map(emp => (
+                          <button
+                            key={emp.id}
+                            onClick={() => { setSelectedEmployee(emp); setEmployeeOptions([]); }}
+                            className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 flex justify-between"
+                          >
+                            <span>{emp.full_name} ({emp.employee_code})</span>
+                            {emp.fingerprint_id != null && <span className="text-gray-400">FP: {emp.fingerprint_id}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 items-center">
+                      <TextInput type="number" min={1} max={127} placeholder="ID (1-127)" value={enrollId || (suggestedFpId ? String(suggestedFpId) : '')} onChange={e => setEnrollId(e.target.value)} className="flex-1" sizing="sm" />
+                      <button
+                        disabled={isSendingCommand || isEnrollWaiting || !(enrollId || suggestedFpId)}
+                        onClick={() => startEnroll(parseInt(enrollId || String(suggestedFpId)))}
+                        className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap"
+                      >
                         Start Enroll
                       </button>
                     </div>
+                    {suggestedFpId && !enrollId && (
+                      <p className="text-xs text-gray-400 mt-1">Suggested next free ID: {suggestedFpId}</p>
+                    )}
+                    {isEnrollWaiting && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600" />
+                        Waiting for fingerprint to be placed on the device sensor...
+                      </div>
+                    )}
+                    {enrollAssignMsg && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs">
+                        {enrollAssignMsg}
+                      </div>
+                    )}
                   </Section>
 
                   <Section title="Delete Fingerprint" icon={<HiTrash className="w-4 h-4" />}>

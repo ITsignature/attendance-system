@@ -62,7 +62,13 @@ function emitDeviceLog(deviceId, line) {
   io.to(`device:${deviceId}`).emit('device_log', { deviceId, line, ts: Date.now() });
 }
 
+function emitDeviceEvent(deviceId, event, data) {
+  if (!io) return;
+  io.to(`device:${deviceId}`).emit('device_event', { deviceId, event, data, ts: Date.now() });
+}
+
 module.exports = {
   initSocket,
   emitDeviceLog,
+  emitDeviceEvent,
 };

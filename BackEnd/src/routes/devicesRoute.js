@@ -167,7 +167,7 @@ router.delete('/:id', requireSuperAdmin, asyncHandler(async (req, res) => {
 // =============================================
 // All valid commands across both device types
 const FINGERPRINT_COMMANDS = [
-  'enroll', 'delete_fp', 'clear_all', 'update_url', 'update_wifi',
+  'enroll', 'delete_fp', 'clear_all', 'list_fp', 'update_url', 'update_wifi',
   'reconnect_wifi', 'clear_settings', 'reboot', 'set_attendance_mode', 'get_status',
 ];
 const DOORLOCK_COMMANDS = [

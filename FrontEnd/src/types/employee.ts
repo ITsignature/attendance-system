@@ -82,6 +82,7 @@ export interface CreateEmployeeData {
 
 export interface UpdateEmployeeData {
   employee_code?: string;
+  fingerprint_id?: number | null;
   first_name?: string;
   last_name?: string;
   email?: string;

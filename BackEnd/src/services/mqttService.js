@@ -1,6 +1,6 @@
 const mqtt = require('mqtt');
 const { getDB } = require('../config/database');
-const { emitDeviceLog } = require('./socketService');
+const { emitDeviceLog, emitDeviceEvent } = require('./socketService');
 
 let mqttClient = null;
 let isConnected = false;
@@ -196,12 +196,22 @@ async function handleResultMessage(deviceId, payload) {
       ]
     );
 
+    // Fingerprint enrollment completed (asynchronous, after "enroll" command already resolved)
+    if (payload.enroll_done) {
+      emitDeviceEvent(deviceId, 'enroll_done', {
+        success: payload.success,
+        message: payload.message,
+        enroll_id: payload.enroll_id,
+      });
+      return;
+    }
+
     // Resolve pending promise if any
     if (pendingCommands.has(deviceId)) {
       const { resolve, timer } = pendingCommands.get(deviceId);
       clearTimeout(timer);
       pendingCommands.delete(deviceId);
-      resolve({ success: payload.success, message: payload.message, mode: payload.mode });
+      resolve({ success: payload.success, message: payload.message, mode: payload.mode, used_ids: payload.used_ids });
     }
   } catch (err) {
     console.error('MQTT handleResultMessage DB error:', err.message);
