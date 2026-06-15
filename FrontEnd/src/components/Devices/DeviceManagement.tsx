@@ -320,10 +320,13 @@ const DeviceManagement: React.FC = () => {
     setShowControlPanel(true);
   };
 
-  // Lowest unused fingerprint ID (1-127)
+  // Lowest fingerprint ID (1-127) not used on the device sensor AND not already
+  // assigned to an employee in the database (covers cases where the device's
+  // used-ID list is stale or unavailable).
   const suggestedFpId = (() => {
+    const assignedIds = new Set(allEmployees.map(e => e.fingerprint_id).filter((id): id is number => id != null));
     for (let id = 1; id <= 127; id++) {
-      if (!usedFpIds.includes(id)) return id;
+      if (!usedFpIds.includes(id) && !assignedIds.has(id)) return id;
     }
     return null;
   })();
