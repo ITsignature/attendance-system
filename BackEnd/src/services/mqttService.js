@@ -1,5 +1,6 @@
 const mqtt = require('mqtt');
 const { getDB } = require('../config/database');
+const { emitDeviceLog } = require('./socketService');
 
 let mqttClient = null;
 let isConnected = false;
@@ -43,6 +44,8 @@ function connectMQTT() {
     mqttClient.subscribe('devices/+/result', { qos: 1 });
     // Door lock enroll progress topic
     mqttClient.subscribe('devices/+/enroll/progress', { qos: 1 });
+    // Live serial log streaming
+    mqttClient.subscribe('devices/+/log', { qos: 0 });
     console.log('📡 MQTT subscribed to device topics');
   });
 
@@ -61,12 +64,18 @@ function connectMQTT() {
 
   mqttClient.on('message', async (topic, message) => {
     try {
-      const payload = JSON.parse(message.toString());
       const parts = topic.split('/');
       if (parts[0] !== 'devices') return;
 
       const deviceId = parts[1];
       const type = parts[2];
+
+      if (type === 'log') {
+        emitDeviceLog(deviceId, message.toString());
+        return;
+      }
+
+      const payload = JSON.parse(message.toString());
 
       if (type === 'status') {
         await handleStatusMessage(deviceId, payload);

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Modal, TextInput, Label, Badge } from 'flowbite-react';
 import {
   HiDesktopComputer, HiPlus, HiRefresh, HiTrash, HiPencil,
   HiWifi, HiChip, HiLightningBolt, HiCog, HiCheck, HiX,
-  HiFingerPrint, HiStatusOnline, HiStatusOffline
+  HiFingerPrint, HiStatusOnline, HiStatusOffline, HiTerminal
 } from 'react-icons/hi';
+import { io, Socket } from 'socket.io-client';
 import { useDynamicRBAC } from '../RBACSystem/rbacSystem';
 import apiService from '../../services/api';
 
@@ -99,6 +100,11 @@ const DeviceManagement: React.FC = () => {
   // Selected device for control panel
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [showControlPanel, setShowControlPanel] = useState(false);
+
+  // Live serial console
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const socketRef = useRef<Socket | null>(null);
+  const consoleEndRef = useRef<HTMLDivElement | null>(null);
 
   // Register device modal (super admin only)
   const [showRegisterModal, setShowRegisterModal] = useState(false);
@@ -247,8 +253,48 @@ const DeviceManagement: React.FC = () => {
     setNewBaseUrl(device.last_command === 'update_url' ? '' : '');
     setNewWifiSSID('');
     setNewWifiPass('');
+    setLogLines([]);
     setShowControlPanel(true);
   };
+
+  // ── Live serial console via Socket.io ──────────────────────────────────────
+
+  useEffect(() => {
+    if (!showControlPanel || !selectedDevice) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      return;
+    }
+
+    const token = localStorage.getItem('accessToken');
+    const baseURL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+    const socket = io(baseURL, { auth: { token } });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('join_device_log', selectedDevice.device_id);
+    });
+
+    socket.on('device_log', (data: { deviceId: string; line: string }) => {
+      if (data.deviceId !== selectedDevice.device_id) return;
+      setLogLines(prev => {
+        const next = [...prev, data.line];
+        return next.length > 500 ? next.slice(-500) : next;
+      });
+    });
+
+    return () => {
+      socket.emit('leave_device_log', selectedDevice.device_id);
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [showControlPanel, selectedDevice?.device_id]);
+
+  useEffect(() => {
+    consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logLines]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -582,6 +628,18 @@ const DeviceManagement: React.FC = () => {
 
                 </>)}
               </div>
+
+              {/* ── Live Serial Console ── */}
+              <Section title="Live Serial Console" icon={<HiTerminal className="w-4 h-4" />}>
+                <div className="bg-gray-900 text-green-400 font-mono text-xs rounded-lg p-3 h-48 overflow-y-auto">
+                  {logLines.length === 0 ? (
+                    <div className="text-gray-500">Waiting for device log output...</div>
+                  ) : (
+                    logLines.map((line, i) => <div key={i} className="whitespace-pre-wrap break-all">{line}</div>)
+                  )}
+                  <div ref={consoleEndRef} />
+                </div>
+              </Section>
             </div>
           )}
         </Modal.Body>

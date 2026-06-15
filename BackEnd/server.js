@@ -26,6 +26,8 @@ const employeePortalRoutes = require('./src/routes/employeePortalRoute');
 const sessionCleanup = require('./src/services/sessionCleanup');
 const devicesRoutes = require('./src/routes/devicesRoute');
 const { connectMQTT, markStaleDevicesOffline } = require('./src/services/mqttService');
+const { initSocket } = require('./src/services/socketService');
+const http = require('http');
 
 const { errorHandler } = require('./src/middleware/errorHandlerMiddleware');
 const { requestLogger } = require('./src/middleware/requestLoggerMiddleware');
@@ -299,7 +301,10 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // =============================================
 // START SERVER
 // =============================================
-const server = app.listen(PORT, () => {
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+
+const server = httpServer.listen(PORT, () => {
   console.log(`
 🚀 HRMS Backend Server Started Successfully!
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
