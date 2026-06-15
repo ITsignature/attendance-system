@@ -25,6 +25,7 @@ const holidaysRoutes = require('./src/routes/holidaysRoute');
 const employeePortalRoutes = require('./src/routes/employeePortalRoute');
 const sessionCleanup = require('./src/services/sessionCleanup');
 const devicesRoutes = require('./src/routes/devicesRoute');
+const firmwareRoutes = require('./src/routes/firmwareRoute');
 const { connectMQTT, markStaleDevicesOffline } = require('./src/services/mqttService');
 const { initSocket } = require('./src/services/socketService');
 const http = require('http');
@@ -255,6 +256,7 @@ app.use('/api/rbac', rbacRoutes);
 
 app.use('/api/clients', clientRoutes);
 app.use('/api/devices', devicesRoutes);
+app.use('/api/firmware', firmwareRoutes);
 app.use('/api/departments', departments);
 app.use('/api/designations', designations);
 app.use('/api/settings', settingsRoutes);

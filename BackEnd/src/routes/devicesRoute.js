@@ -169,6 +169,7 @@ router.delete('/:id', requireSuperAdmin, asyncHandler(async (req, res) => {
 const FINGERPRINT_COMMANDS = [
   'enroll', 'delete_fp', 'clear_all', 'list_fp', 'update_url', 'update_wifi',
   'reconnect_wifi', 'clear_settings', 'reboot', 'set_attendance_mode', 'get_status',
+  'ota_update',
 ];
 const DOORLOCK_COMMANDS = [
   'unlock', 'lock', 'status', 'restart',

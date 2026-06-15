@@ -139,6 +139,13 @@ const DeviceManagement: React.FC = () => {
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeeTableSearch, setEmployeeTableSearch] = useState('');
 
+  // OTA firmware update
+  const [otaFile, setOtaFile] = useState<File | null>(null);
+  const [isOtaUploading, setIsOtaUploading] = useState(false);
+  const [otaResult, setOtaResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [firmwareInfo, setFirmwareInfo] = useState<{ exists: boolean; size_bytes?: number; uploaded_at?: string } | null>(null);
+  const otaInputRef = useRef<HTMLInputElement | null>(null);
+
   // ── Data fetching ───────────────────────────────────────────────────────────
 
   const fetchDevices = useCallback(async () => {
@@ -317,6 +324,9 @@ const DeviceManagement: React.FC = () => {
     setEnrollingEmployeeId(null);
     setAllEmployees([]);
     setEmployeeTableSearch('');
+    setOtaFile(null);
+    setOtaResult(null);
+    setFirmwareInfo(null);
     setShowControlPanel(true);
   };
 
@@ -344,6 +354,66 @@ const DeviceManagement: React.FC = () => {
       setIsLoadingFpList(false);
     }
   }, [selectedDevice]);
+
+  // ── OTA firmware ───────────────────────────────────────────────────────────
+
+  const fetchFirmwareInfo = useCallback(async () => {
+    if (!selectedDevice) return;
+    try {
+      const res = await apiService.apiCall<any>(`/api/firmware/${selectedDevice.device_id}/info`);
+      setFirmwareInfo(res.data as any);
+    } catch {
+      setFirmwareInfo(null);
+    }
+  }, [selectedDevice]);
+
+  useEffect(() => {
+    if (showControlPanel && selectedDevice?.device_type === 'fingerprint') {
+      fetchFirmwareInfo();
+    }
+  }, [showControlPanel, selectedDevice?.id, fetchFirmwareInfo]);
+
+  const handleOtaUpload = async () => {
+    if (!otaFile || !selectedDevice) return;
+    setIsOtaUploading(true);
+    setOtaResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('firmware', otaFile);
+      const token = localStorage.getItem('accessToken');
+      const apiURL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+      const resp = await fetch(`${apiURL}/firmware/${selectedDevice.device_id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const json = await resp.json();
+      setOtaResult({ success: json.success, message: json.message });
+      if (json.success) {
+        setOtaFile(null);
+        if (otaInputRef.current) otaInputRef.current.value = '';
+        fetchFirmwareInfo();
+      }
+    } catch (e: any) {
+      setOtaResult({ success: false, message: e?.message || 'Upload failed' });
+    } finally {
+      setIsOtaUploading(false);
+    }
+  };
+
+  const handleOtaTrigger = async () => {
+    if (!selectedDevice) return;
+    setIsOtaUploading(true);
+    setOtaResult(null);
+    try {
+      const res = await apiService.apiCall<any>(`/api/firmware/${selectedDevice.device_id}/trigger`, { method: 'POST' });
+      setOtaResult({ success: res.success, message: res.message });
+    } catch (e: any) {
+      setOtaResult({ success: false, message: e?.message || 'OTA trigger failed' });
+    } finally {
+      setIsOtaUploading(false);
+    }
+  };
 
   // ── Live serial console via Socket.io ──────────────────────────────────────
 
@@ -837,6 +907,49 @@ const DeviceManagement: React.FC = () => {
                     <button disabled={isSendingCommand || !newWifiSSID || !newWifiPass} onClick={() => sendCommand('update_wifi', { ssid: newWifiSSID, password: newWifiPass })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
                       Update WiFi
                     </button>
+                  </Section>
+
+                  <Section title="Firmware OTA Update" icon={<HiChip className="w-4 h-4" />}>
+                    {firmwareInfo?.exists && (
+                      <div className="text-xs text-gray-500 mb-2">
+                        Last upload: {firmwareInfo.uploaded_at ? new Date(firmwareInfo.uploaded_at).toLocaleString() : 'unknown'}
+                        {firmwareInfo.size_bytes && ` · ${(firmwareInfo.size_bytes / 1024).toFixed(1)} KB`}
+                      </div>
+                    )}
+                    {otaResult && (
+                      <div className={`mb-2 p-2 rounded-lg text-xs flex items-start gap-1.5 ${otaResult.success ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                        {otaResult.success ? <HiCheck className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> : <HiX className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />}
+                        {otaResult.message}
+                      </div>
+                    )}
+                    <div className="flex gap-2 items-center">
+                      <input
+                        ref={otaInputRef}
+                        type="file"
+                        accept=".bin"
+                        onChange={e => setOtaFile(e.target.files?.[0] || null)}
+                        className="flex-1 text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      <button
+                        disabled={isOtaUploading || !otaFile}
+                        onClick={handleOtaUpload}
+                        className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap disabled:opacity-50"
+                      >
+                        {isOtaUploading ? 'Uploading...' : 'Upload & Flash'}
+                      </button>
+                    </div>
+                    {firmwareInfo?.exists && !otaFile && (
+                      <button
+                        disabled={isOtaUploading || !selectedDevice?.is_online}
+                        onClick={handleOtaTrigger}
+                        className="cmd-btn bg-orange-500 text-white hover:bg-orange-600 w-full mt-2 disabled:opacity-50"
+                      >
+                        Re-flash Last Uploaded Firmware
+                      </button>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">
+                      Select a .bin compiled from Arduino IDE. Device will reboot automatically after flashing.
+                    </p>
                   </Section>
 
                   <Section title="System" icon={<HiCog className="w-4 h-4" />}>

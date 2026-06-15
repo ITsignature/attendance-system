@@ -13,3 +13,4 @@ yarn-error.log*
 *.pdf
 BackEnd/logs/
 coverage/
+BackEnd/firmware/*.bin
