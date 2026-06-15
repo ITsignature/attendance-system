@@ -269,8 +269,15 @@ const DeviceManagement: React.FC = () => {
     }
 
     const token = localStorage.getItem('accessToken');
-    const baseURL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
-    const socket = io(baseURL, { auth: { token } });
+    const apiURL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+    // Connect to the server origin, but use the /api-prefixed socket.io path
+    // so nginx's /api/ proxy (which strips the prefix) forwards to the
+    // backend's default /socket.io/ endpoint.
+    const socketOrigin = apiURL.replace(/\/api\/?$/, '');
+    const socketPath = apiURL.endsWith('/api') || apiURL.endsWith('/api/')
+      ? '/api/socket.io/'
+      : '/socket.io/';
+    const socket = io(socketOrigin, { auth: { token }, path: socketPath });
     socketRef.current = socket;
 
     socket.on('connect', () => {
