@@ -257,6 +257,7 @@ app.use('/api/rbac', rbacRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/devices', devicesRoutes);
 app.use('/api/firmware', firmwareRoutes);
+app.use('/firmware', firmwareRoutes);
 app.use('/api/departments', departments);
 app.use('/api/designations', designations);
 app.use('/api/settings', settingsRoutes);
