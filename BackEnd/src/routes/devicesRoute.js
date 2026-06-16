@@ -18,10 +18,10 @@ router.use(authenticate);
 
 // Helper: get client_id scope for the request
 function getClientScope(req) {
-  if (req.user.is_super_admin) {
+  if (req.user.isSuperAdmin) {
     return req.query.client_id || null; // super admin can filter by client or see all
   }
-  return req.user.client_id; // client admin sees only their own
+  return req.user.clientId; // client admin sees only their own
 }
 
 // =============================================
