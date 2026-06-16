@@ -76,9 +76,11 @@ router.post('/:deviceId',
       return res.status(400).json({ success: false, message: 'OTA upload is only supported for fingerprint devices' });
     }
 
-    // Build the public URL the ESP32 will fetch
-    const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-    const host  = req.headers['x-forwarded-host'] || req.headers.host;
+    // Build the public URL the ESP32 will fetch.
+    // Always use https (nginx terminates TLS) and /api/firmware/ so the
+    // browser-facing URL works; nginx strips /api/ before forwarding to Node.
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const proto = req.headers['x-forwarded-proto']?.split(',')[0].trim() || 'https';
     const otaUrl = `${proto}://${host}/api/firmware/${req.params.deviceId}`;
 
     // Trigger OTA via MQTT if device is expected to be online
@@ -117,8 +119,8 @@ router.post('/:deviceId/trigger',
       return res.status(503).json({ success: false, message: 'MQTT broker not connected' });
     }
 
-    const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-    const host  = req.headers['x-forwarded-host'] || req.headers.host;
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const proto = req.headers['x-forwarded-proto']?.split(',')[0].trim() || 'https';
     const otaUrl = `${proto}://${host}/api/firmware/${req.params.deviceId}`;
 
     try {
