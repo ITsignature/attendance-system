@@ -551,6 +551,17 @@ async getPayrollLiveAll(params?: GetLiveDataParams): Promise<ApiResponse> {
     return this.apiCall(url);
   }
 
+  /** Get flagged attendance records (missing checkout, invalid order, instant checkout) */
+  async getAttendanceAnomalies(filters: {
+    startDate: string;
+    endDate: string;
+    employeeName?: string;
+  }): Promise<ApiResponse<{ anomalies: any[] }>> {
+    const qs = ApiService.toQueryString(filters);
+    const url = `/api/attendance/anomalies${qs ? `?${qs}` : ''}`;
+    return this.apiCall(url);
+  }
+
   /** Create attendance record (dual statuses supported) */
   async createAttendanceRecord(data: AttendanceFormData): Promise<ApiResponse> {
     return this.apiCall('/api/attendance', { method: 'POST', body: JSON.stringify(data) });

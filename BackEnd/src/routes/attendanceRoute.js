@@ -221,12 +221,6 @@ router.get('/fingerprint', [
       console.log(proceedingLog);
       logToFile(proceedingLog);
 
-      // Get employee's schedule (handles weekdays & weekends automatically)
-      const schedule = await getEmployeeSchedule(employeeId, clientId, db, today);
-      const scheduleLog = `   Schedule retrieved: ${JSON.stringify(schedule, null, 2)}`;
-      console.log(scheduleLog);
-      logToFile(scheduleLog);
-
       // Helper function to normalize time to HH:MM:SS format
       const normalizeTime = (timeStr) => {
         if (!timeStr) return null;
@@ -236,6 +230,35 @@ router.get('/fingerprint', [
         const ss = parts[2]?.padStart(2, '0') || '00';
         return `${hh}:${mm}:${ss}`;
       };
+
+      // ===== DUPLICATE SCAN GUARD =====
+      // Fingerprint devices occasionally fire two HTTP requests for a single physical
+      // scan a fraction of a second apart. Reject any "checkout" within 60s of the
+      // check-in on the same record, unconditionally — independent of schedule/minimum
+      // work hours, which otherwise only catch this in most (not all) cases.
+      const DUPLICATE_SCAN_THRESHOLD_SECONDS = 60;
+      const checkInForGuard = new Date(`2000-01-01T${normalizeTime(record.check_in_time)}`);
+      const currentForGuard = new Date(`2000-01-01T${normalizeTime(currentTime)}`);
+      const secondsSinceCheckIn = (currentForGuard - checkInForGuard) / 1000;
+
+      if (!isNaN(secondsSinceCheckIn) && secondsSinceCheckIn < DUPLICATE_SCAN_THRESHOLD_SECONDS) {
+        const dupLog1 = `   ⚠️  Duplicate scan guard triggered - only ${secondsSinceCheckIn}s since check-in (threshold ${DUPLICATE_SCAN_THRESHOLD_SECONDS}s)`;
+        const dupLog2 = `========== END CHECKOUT VALIDATION ==========\n`;
+        console.log(dupLog1);
+        logToFile(dupLog1);
+        console.log(dupLog2);
+        logToFile(dupLog2);
+
+        return res.status(200).json({
+          message: 'Already marked attendance for today'
+        });
+      }
+
+      // Get employee's schedule (handles weekdays & weekends automatically)
+      const schedule = await getEmployeeSchedule(employeeId, clientId, db, today);
+      const scheduleLog = `   Schedule retrieved: ${JSON.stringify(schedule, null, 2)}`;
+      console.log(scheduleLog);
+      logToFile(scheduleLog);
 
       // Calculate employee's scheduled work duration in hours
       let scheduledHours = 8; // Default to 8 hours
@@ -1924,9 +1947,92 @@ const recalculateSaturdayCoveringForMonth = async (clientId, db, yearMonth) => {
   }));
 
 // =============================================
+// GET ATTENDANCE ANOMALIES (missing checkout, invalid order, instant checkout)
+// =============================================
+router.get('/anomalies',
+  checkPermission('attendance.view'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+
+    const {
+      startDate = '',
+      endDate = '',
+      employeeName = ''
+    } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    let whereClause = `
+      WHERE e.client_id = ?
+        AND a.date >= ?
+        AND a.date <= ?
+        AND a.is_auto_covered = 0
+        AND (a.work_duration IS NULL OR a.work_duration != 'on_leave')
+        AND (
+          a.check_out_time IS NULL
+          OR a.check_out_time <= a.check_in_time
+          OR TIMESTAMPDIFF(SECOND, a.check_in_time, a.check_out_time) < 1800
+        )
+    `;
+    const queryParams = [req.user.clientId, startDate, endDate];
+
+    if (employeeName) {
+      whereClause += ` AND CONCAT(e.first_name, ' ', e.last_name) LIKE ?`;
+      queryParams.push(`%${employeeName}%`);
+    }
+
+    const query = `
+      SELECT
+        a.id,
+        a.employee_id,
+        a.date,
+        a.check_in_time,
+        a.check_out_time,
+        a.total_hours,
+        a.scheduled_in_time,
+        a.scheduled_out_time,
+        a.arrival_status,
+        a.work_duration,
+        a.work_type,
+        CONCAT_WS(' ', e.first_name, e.last_name) AS employee_name,
+        e.employee_code,
+        e.work_location,
+        d.name AS department_name,
+        de.title AS designation_name,
+        CASE
+          WHEN a.check_out_time IS NULL THEN 'missing_checkout'
+          WHEN a.check_out_time <= a.check_in_time THEN 'invalid_order'
+          ELSE 'instant_checkout'
+        END AS anomaly_type
+      FROM attendance a
+      JOIN employees e ON a.employee_id = e.id
+      LEFT JOIN departments d ON e.department_id = d.id
+      LEFT JOIN designations de ON e.designation_id = de.id
+      ${whereClause}
+      ORDER BY a.date DESC, a.check_in_time DESC
+      LIMIT 200
+    `;
+
+    const [anomalies] = await db.execute(query, queryParams);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        anomalies
+      }
+    });
+  })
+);
+
+// =============================================
 // GET ATTENDANCE RECORDS
 // =============================================
-router.get('/', 
+router.get('/',
   checkPermission('attendance.view'),
   asyncHandler(async (req, res) => {
     const db = getDB();

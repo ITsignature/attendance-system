@@ -1,75 +1,86 @@
-import { Badge, Table, Spinner } from "flowbite-react";
+import { Badge, Table, Spinner, TextInput, Button } from "flowbite-react";
+import { HiCheck, HiPencil, HiTrash, HiX } from "react-icons/hi";
 import SimpleBar from "simplebar-react";
 import { useEffect, useState } from "react";
 import { apiService } from "../../services/api";
 
-interface AttendanceRecord {
+interface AttendanceAnomaly {
+  id: string;
   employee_id: string;
   employee_code: string;
   employee_name: string;
   department_name: string;
   designation_name: string;
+  date: string;
   check_in_time: string | null;
   scheduled_in_time: string | null;
   check_out_time: string | null;
   scheduled_out_time: string | null;
-  status: string;
   total_hours: number | null;
   work_location: string;
+  anomaly_type: 'missing_checkout' | 'invalid_order' | 'instant_checkout';
 }
 
+const dayOffset = (offset: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 const TodayEmployeeAttendance = () => {
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [anomalies, setAnomalies] = useState<AttendanceAnomaly[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchTodayAttendance();
-  }, []);
+  const [startDate, setStartDate] = useState(dayOffset(-1));
+  const [endDate, setEndDate] = useState(dayOffset(-1));
+  const [employeeName, setEmployeeName] = useState('');
 
-  const fetchTodayAttendance = async () => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCheckIn, setEditCheckIn] = useState('');
+  const [editCheckOut, setEditCheckOut] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchAnomalies();
+  }, [startDate, endDate, employeeName]);
+
+  const fetchAnomalies = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Get today's date in YYYY-MM-DD format
-      const today = new Date().toISOString().split('T')[0];
-
-      const response = await apiService.getAttendanceRecords({
-        startDate: today,
-        endDate: today,
-        limit: 20,
-        page: 1
+      const response = await apiService.getAttendanceAnomalies({
+        startDate,
+        endDate,
+        employeeName: employeeName || undefined
       });
 
       if (response.success && response.data) {
-        setAttendanceRecords(response.data.attendance || []);
+        setAnomalies(response.data.anomalies || []);
       }
     } catch (err: any) {
-      console.error('Error fetching today\'s attendance:', err);
-      setError(err.message || 'Failed to load attendance data');
+      console.error('Error fetching attendance anomalies:', err);
+      setError(err.message || 'Failed to load attendance issues');
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { color: string; text: string }> = {
-      'on_time': { color: 'success', text: 'On Time' },
-      'present': { color: 'success', text: 'On Time' },
-      'late': { color: 'warning', text: 'Late' },
-      'absent': { color: 'failure', text: 'Absent' },
-      'on_leave': { color: 'info', text: 'On Leave' },
+  const getAnomalyBadge = (type: AttendanceAnomaly['anomaly_type']) => {
+    const config: Record<string, { color: string; text: string }> = {
+      missing_checkout: { color: 'failure', text: 'Missing Checkout' },
+      invalid_order: { color: 'warning', text: 'Invalid Order' },
+      instant_checkout: { color: 'warning', text: 'Instant Checkout' },
     };
-
-    const config = statusConfig[status] || { color: 'gray', text: status };
-    return <Badge color={config.color}>{config.text}</Badge>;
+    const c = config[type] || { color: 'gray', text: type };
+    return <Badge color={c.color}>{c.text}</Badge>;
   };
 
   const formatTime = (time: string | null) => {
     if (!time) return '-';
 
-    // If time is already in HH:MM:SS or HH:MM format
     if (time.includes(':')) {
       const parts = time.split(':');
       const hour = parseInt(parts[0]);
@@ -80,7 +91,6 @@ const TodayEmployeeAttendance = () => {
       return `${displayHour}:${minutes}:${seconds} ${ampm}`;
     }
 
-    // Otherwise treat as full datetime
     const date = new Date(time);
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -95,40 +105,107 @@ const TodayEmployeeAttendance = () => {
     return `${hours.toFixed(2)}h`;
   };
 
+  const toTimeInputValue = (time: string | null) => {
+    if (!time) return '';
+    return time.split(':').slice(0, 2).join(':');
+  };
+
+  const startEdit = (record: AttendanceAnomaly) => {
+    setEditingId(record.id);
+    setEditCheckIn(toTimeInputValue(record.check_in_time));
+    setEditCheckOut(toTimeInputValue(record.check_out_time));
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditCheckIn('');
+    setEditCheckOut('');
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      setSaving(true);
+      const response = await apiService.updateAttendanceRecord(id, {
+        check_in_time: editCheckIn || undefined,
+        check_out_time: editCheckOut || undefined
+      });
+
+      if (response.success) {
+        cancelEdit();
+        fetchAnomalies();
+      }
+    } catch (err) {
+      console.error('Failed to update attendance record:', err);
+      alert('Could not save changes, please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteRecord = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this attendance record?')) return;
+
+    try {
+      const response = await apiService.apiCall(`/api/attendance/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.success) {
+        fetchAnomalies();
+      }
+    } catch (err) {
+      console.error('Failed to delete attendance record:', err);
+    }
+  };
+
   return (
     <>
       <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray pt-6 px-0 relative w-full break-words">
-        <div className="px-6 flex justify-between items-center mb-6">
+        <div className="px-6 flex justify-between items-center mb-4 flex-wrap gap-3">
           <div>
-            <h5 className="card-title text-xl font-semibold">Today's Attendance</h5>
+            <h5 className="card-title text-xl font-semibold">Attendance Issues to Review</h5>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
+              Missing checkouts and suspicious time records
             </p>
           </div>
           {!loading && (
             <Badge color="info" size="sm">
-              {attendanceRecords.length} Records
+              {anomalies.length} Records
             </Badge>
           )}
+        </div>
+
+        <div className="px-6 mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <TextInput
+            type="text"
+            placeholder="Search by employee name"
+            value={employeeName}
+            onChange={(e) => setEmployeeName(e.target.value)}
+          />
+          <TextInput
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+          <TextInput
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Spinner size="lg" />
-            <span className="ml-3 text-gray-600 dark:text-gray-400">Loading attendance records...</span>
+            <span className="ml-3 text-gray-600 dark:text-gray-400">Loading attendance issues...</span>
           </div>
         ) : error ? (
           <div className="px-6 py-12 text-center">
             <p className="text-red-500">{error}</p>
           </div>
-        ) : attendanceRecords.length === 0 ? (
+        ) : anomalies.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-gray-500 dark:text-gray-400">No attendance records for today</p>
+            <p className="text-gray-500 dark:text-gray-400">No attendance issues found for this range</p>
           </div>
         ) : (
           <SimpleBar className="max-h-[500px]">
@@ -139,10 +216,7 @@ const TodayEmployeeAttendance = () => {
                     Employee
                   </Table.HeadCell>
                   <Table.HeadCell className="text-gray-500 dark:text-gray-400 font-medium">
-                    Department
-                  </Table.HeadCell>
-                  <Table.HeadCell className="text-gray-500 dark:text-gray-400 font-medium">
-                    Type
+                    Date
                   </Table.HeadCell>
                   <Table.HeadCell className="text-gray-500 dark:text-gray-400 font-medium">
                     Check In
@@ -154,80 +228,95 @@ const TodayEmployeeAttendance = () => {
                     Hours
                   </Table.HeadCell>
                   <Table.HeadCell className="text-gray-500 dark:text-gray-400 font-medium">
-                    Status
+                    Issue
+                  </Table.HeadCell>
+                  <Table.HeadCell className="text-gray-500 dark:text-gray-400 font-medium">
+                    Actions
                   </Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y divide-border dark:divide-darkborder">
-                  {attendanceRecords.map((record, index) => (
-                    <Table.Row
-                      key={`${record.employee_id}-${index}`}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <Table.Cell className="whitespace-nowrap ps-6">
-                        <div className="flex flex-col">
-                          <h6 className="text-sm font-medium text-gray-900 dark:text-white">
-                            {record.employee_name}
-                          </h6>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {record.employee_code}
-                          </span>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="me-5">
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {record.department_name || 'N/A'}
+                  {anomalies.map((record) => {
+                    const isEditing = editingId === record.id;
+                    return (
+                      <Table.Row
+                        key={record.id}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <Table.Cell className="whitespace-nowrap ps-6">
+                          <div className="flex flex-col">
+                            <h6 className="text-sm font-medium text-gray-900 dark:text-white">
+                              {record.employee_name}
+                            </h6>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {record.employee_code}
+                            </span>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                            {record.date}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-500">
-                            {record.designation_name || ''}
-                          </p>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="me-5">
-                          <Badge color={record.work_location === 'remote' ? 'purple' : 'gray'} size="sm">
-                            {record.work_location || 'Office'}
-                          </Badge>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="relative group me-5 cursor-pointer">
-                          <p className="text-sm text-gray-900 dark:text-white font-medium">
-                            {formatTime(record.check_in_time)}
-                          </p>
-                            {record.scheduled_in_time &&(
-                              <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-10
-                                  bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
-                                    Scheduled : {formatTime(record.scheduled_in_time)}
-                              </div>
-                            )}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="relative group me-5 cursor-pointer">
-                          <p className="text-sm text-gray-900 dark:text-white font-medium">
-                            {formatTime(record.check_out_time)}
-                          </p>
-                            {record.scheduled_out_time &&(
-                              <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-10
-                                  bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
-                                    Scheduled : {formatTime(record.scheduled_out_time)}
-                              </div>
-                            )}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="me-5">
+                        </Table.Cell>
+                        <Table.Cell>
+                          {isEditing ? (
+                            <TextInput
+                              type="time"
+                              value={editCheckIn}
+                              onChange={(e) => setEditCheckIn(e.target.value)}
+                              sizing="sm"
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-white font-medium whitespace-nowrap">
+                              {formatTime(record.check_in_time)}
+                            </p>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {isEditing ? (
+                            <TextInput
+                              type="time"
+                              value={editCheckOut}
+                              onChange={(e) => setEditCheckOut(e.target.value)}
+                              sizing="sm"
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-white font-medium whitespace-nowrap">
+                              {formatTime(record.check_out_time)}
+                            </p>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>
                           <p className="text-sm text-gray-900 dark:text-white font-medium">
                             {formatHours(record.total_hours)}
                           </p>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {getStatusBadge(record.status)}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {getAnomalyBadge(record.anomaly_type)}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {isEditing ? (
+                            <div className="flex items-center gap-2">
+                              <Button size="xs" color="success" disabled={saving} onClick={() => saveEdit(record.id)}>
+                                <HiCheck className="h-4 w-4" />
+                              </Button>
+                              <Button size="xs" color="gray" disabled={saving} onClick={cancelEdit}>
+                                <HiX className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <Button size="xs" color="light" onClick={() => startEdit(record)}>
+                                <HiPencil className="h-4 w-4" />
+                              </Button>
+                              <Button size="xs" color="failure" onClick={() => deleteRecord(record.id)}>
+                                <HiTrash className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
                 </Table.Body>
               </Table>
             </div>
