@@ -654,8 +654,10 @@ class PayrollRunService {
 
         const baseSalary = parseFloat(employee.base_salary) || 0;
 
-        // Fixed 30-day month divisor
-        const dailySalary = baseSalary / 30;
+        // Daily divisor = actual number of days in the period's month (not always 30)
+        const periodStartDateObj = new Date(periodStart);
+        const daysInPeriodMonth = new Date(periodStartDateObj.getFullYear(), periodStartDateObj.getMonth() + 1, 0).getDate();
+        const dailySalary = baseSalary / daysInPeriodMonth;
 
         // Fetch break duration so hourly rate divisor matches payable_duration (which already deducts break)
         let breakDurationHours = 0;
@@ -679,13 +681,13 @@ class PayrollRunService {
         const periodStartStr = PayrollCycleService.formatDate(periodStart);
         const periodEndStr = PayrollCycleService.formatDate(periodEnd);
 
-        console.log(`📊 Pre-calculated values (fixed/30) for ${employee.first_name} ${employee.last_name}:`);
+        console.log(`📊 Pre-calculated values (fixed/${daysInPeriodMonth}) for ${employee.first_name} ${employee.last_name}:`);
         console.log(`   Period: ${periodStartStr} to ${periodEndStr} ${employeePeriod.usesCustomCycle ? '(Custom Cycle)' : '(Default)'}`);
         console.log(`   Working Days - Weekdays: ${weekdayWorkingDays}, Saturdays: ${workingSaturdays}, Sundays: ${workingSundays}`);
         console.log(`   Daily Hours - Weekdays: ${weekdayDailyHours}h, Saturday: ${saturdayDailyHours}h, Sunday: ${sundayDailyHours}h`);
         console.log(`   Break Duration: ${breakDurationHours}h → Payable Hours - Weekday: ${weekdayPayableHours}h, Saturday: ${saturdayPayableHours}h, Sunday: ${sundayPayableHours}h`);
         console.log(`   Base Salary: Rs. ${baseSalary.toLocaleString()}`);
-        console.log(`   Daily Salary: Rs. ${dailySalary.toFixed(2)} (${baseSalary} ÷ 30)`);
+        console.log(`   Daily Salary: Rs. ${dailySalary.toFixed(2)} (${baseSalary} ÷ ${daysInPeriodMonth})`);
         console.log(`   Hourly Rates - Weekday: Rs. ${weekdayHourlyRate.toFixed(2)}, Saturday: Rs. ${saturdayHourlyRate.toFixed(2)}, Sunday: Rs. ${sundayHourlyRate.toFixed(2)}`);
 
         await db.execute(`
@@ -1773,6 +1775,12 @@ class PayrollRunService {
         let leaveSaturdayHours = 0;
         let leaveSundayHours = 0;
 
+        // Per-date leave hours (paid + unpaid) so Time Variance can exclude hours already covered by leave
+        const leaveHoursByDate = new Map();
+        const addLeaveHoursForDate = (dateStr, hours) => {
+            leaveHoursByDate.set(dateStr, (leaveHoursByDate.get(dateStr) || 0) + hours);
+        };
+
         if (leaveRequests.length > 0) {
             console.log(`\n      📅 Processing ${leaveRequests.length} approved paid leave request(s) for ${employeeName} (${employeeCode}):`);
 
@@ -1861,6 +1869,8 @@ class PayrollRunService {
                     } else {
                         tempSundayHours += dailyHours;
                     }
+
+                    addLeaveHoursForDate(currentDateStr, dailyHours);
 
                     // Move to next day
                     currentDate.setDate(currentDate.getDate() + 1);
@@ -2260,6 +2270,8 @@ class PayrollRunService {
                         unpaidLeaveSundayHours += dailyHours;
                     }
 
+                    addLeaveHoursForDate(getLocalDateString(currentDate), dailyHours);
+
                     currentDate.setDate(currentDate.getDate() + 1);
                 }
             }
@@ -2309,6 +2321,12 @@ class PayrollRunService {
             } else if (record.is_weekend === 1) {
                 expectedDailyHours = sundayDailyHours;
             }
+
+            // Hours already covered by an approved leave (paid or unpaid) on this date are not
+            // "missing" — they're accounted for separately (leave credit / unpaid leave deduction),
+            // so they shouldn't also count toward the time-variance shortfall.
+            const leaveHoursThisDate = leaveHoursByDate.get(recDateStr) || 0;
+            expectedDailyHours = Math.max(0, expectedDailyHours - leaveHoursThisDate);
 
             // payable_duration is stored in SECONDS, convert to hours
             const actualSeconds = parseFloat(record.payable_duration) || 0;
