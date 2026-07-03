@@ -4,6 +4,16 @@
  * to enable fast, real-time salary calculations without database operations
  */
 
+interface PaidLeaveDetail {
+  start_date: string;
+  end_date: string;
+  duration_type: 'full_day' | 'half_day' | 'short_leave';
+  short_leave_start: string | null;
+  short_leave_end: string | null;
+  hours: number;
+  earned: number;
+}
+
 interface EarningsBySource {
   attendance: {
     hours: number;
@@ -12,6 +22,7 @@ interface EarningsBySource {
   paid_leaves: {
     hours: number;
     earned: number;
+    details?: PaidLeaveDetail[];
   };
   live_session: {
     hours: number;
@@ -29,22 +40,57 @@ interface EarningsBySource {
       non_working_sundays: number;
       daily_rate: number;
     };
+    dates?: {
+      holidays: string[];
+      non_working_saturdays: string[];
+      non_working_sundays: string[];
+    };
   };
+}
+
+export type { PaidLeaveDetail };
+
+interface UnpaidTimeOffDetail {
+  start_date: string;
+  end_date: string;
+  duration_type: 'full_day' | 'half_day' | 'short_leave';
+  short_leave_start: string | null;
+  short_leave_end: string | null;
+  hours: number;
+  deduction: number;
+}
+
+interface TimeVarianceDetail {
+  date: string;
+  expected_hours: number;
+  actual_hours: number;
+  shortfall_hours: number;
+  deduction: number;
+}
+
+interface AbsentDayDetail {
+  date: string;
+  deduction: number;
 }
 
 interface ShortfallByCause {
   unpaid_time_off: {
     hours: number;
     deduction: number;
+    details?: UnpaidTimeOffDetail[];
   };
   time_variance: {
     hours: number;
     deduction: number;
+    details?: TimeVarianceDetail[];
   };
   absent_days: {
     deduction: number;
+    details?: AbsentDayDetail[];
   };
 }
+
+export type { UnpaidTimeOffDetail, TimeVarianceDetail, AbsentDayDetail };
 
 interface EmployeeData {
   record_id: string;
@@ -148,6 +194,18 @@ interface CalculatedPayroll {
   net_salary: number;
   earnings_by_source?: EarningsBySource | null;
   shortfall_by_cause?: ShortfallByCause | null;
+  overtime_records?: Array<{
+    date: string;
+    day_type: string;
+    total_minutes: number;
+    pre_shift_minutes: number;
+    post_shift_minutes: number;
+    pre_shift_enabled: boolean;
+    post_shift_enabled: boolean;
+    hourly_rate: number;
+    multiplier: number;
+    amount: number;
+  }>;
 }
 
 class LivePayrollCalculationService {
@@ -355,7 +413,8 @@ class LivePayrollCalculationService {
       financial_deductions_breakdown: financial_deductions_breakdown,
       net_salary: Math.round(net_salary * 100) / 100,
       earnings_by_source: earnings_by_source || null,
-      shortfall_by_cause: employee.attendance.shortfall_by_cause || null
+      shortfall_by_cause: employee.attendance.shortfall_by_cause || null,
+      overtime_records: employee.overtime?.records || []
     };
   }
 

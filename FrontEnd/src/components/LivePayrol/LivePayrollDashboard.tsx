@@ -8,7 +8,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Table, Card, Alert, Spinner, Button, Badge, Modal } from "flowbite-react";
 import { payrollRunApiService } from '../../services/payrollRunService';
-import { livePayrollCalculationService, type CalculatedPayroll, type EmployeeData } from '../../services/livePayrollCalculationService';
+import { livePayrollCalculationService, type CalculatedPayroll, type EmployeeData, type UnpaidTimeOffDetail, type TimeVarianceDetail, type AbsentDayDetail, type PaidLeaveDetail } from '../../services/livePayrollCalculationService';
 import { HiRefresh, HiClock, HiUsers, HiArrowLeft, HiDownload } from 'react-icons/hi';
 import { exportLivePayrollToExcel } from '../../services/payrollExcelExport';
 
@@ -42,6 +42,47 @@ const LivePayrollDashboard: React.FC = () => {
     employeeName: string | null;
     data: any | null;
   }>({ show: false, loading: false, employeeId: null, employeeName: null, data: null });
+
+  const [shortfallModal, setShortfallModal] = useState<{
+    show: boolean;
+    employee: CalculatedPayroll | null;
+  }>({ show: false, employee: null });
+
+  const openShortfallModal = (e: React.MouseEvent, employee: CalculatedPayroll) => {
+    e.stopPropagation();
+    setShortfallModal({ show: true, employee });
+  };
+
+  const closeShortfallModal = () => {
+    setShortfallModal({ show: false, employee: null });
+  };
+
+  const [earningsModal, setEarningsModal] = useState<{
+    show: boolean;
+    employee: CalculatedPayroll | null;
+  }>({ show: false, employee: null });
+
+  const openEarningsModal = (e: React.MouseEvent, employee: CalculatedPayroll) => {
+    e.stopPropagation();
+    setEarningsModal({ show: true, employee });
+  };
+
+  const closeEarningsModal = () => {
+    setEarningsModal({ show: false, employee: null });
+  };
+
+  const formatHours = (h: number) => {
+    const hrs = Math.floor(h);
+    const mins = Math.round((h - hrs) * 60);
+    if (hrs === 0) return `${mins}m`;
+    if (mins === 0) return `${hrs}h`;
+    return `${hrs}h ${mins}m`;
+  };
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
 
   const handleExportExcel = async () => {
     if (!rawData || calculatedResults.length === 0) return;
@@ -402,106 +443,21 @@ const LivePayrollDashboard: React.FC = () => {
                         {formatCurrency(result.expected_base_salary)}
                       </Table.Cell> */}
                       <Table.Cell className="text-green-600 font-medium">
-                        <div className="relative group inline-block">
-                          <span className="cursor-help">
-                            {formatCurrency(result.actual_earned_base)}
-                          </span>
-                          {result.earnings_by_source && (
-                            <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
-                              <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Earnings Breakdown</div>
-                              <div className="space-y-1.5">
-                                {result.earnings_by_source.attendance.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Work Hours:</span>
-                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.attendance.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.paid_leaves.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Paid Time Off:</span>
-                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.paid_leaves.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.live_session.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Active Session:</span>
-                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.live_session.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.overtime && result.earnings_by_source.overtime.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Overtime ({result.earnings_by_source.overtime.minutes}min):</span>
-                                    <span className="font-medium text-red-600">{formatCurrency(result.earnings_by_source.overtime.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.extra_time_ot && result.earnings_by_source.extra_time_ot.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Extra weekday work ({result.earnings_by_source.extra_time_ot.minutes}min):</span>
-                                    <span className="font-medium text-orange-600">{formatCurrency(result.earnings_by_source.extra_time_ot.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.non_working_day_credit && result.earnings_by_source.non_working_day_credit.earned > 0 && (
-                                  <>
-                                    <div className="border-t border-gray-100 pt-1 mt-1">
-                                      <span className="text-gray-500 font-medium">Non-Working Days:</span>
-                                    </div>
-                                    {result.earnings_by_source.non_working_day_credit.breakdown.holidays > 0 && (
-                                      <div className="flex justify-between pl-2">
-                                        <span className="text-gray-600">Holidays ({result.earnings_by_source.non_working_day_credit.breakdown.holidays}):</span>
-                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.holidays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
-                                      </div>
-                                    )}
-                                    {result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays > 0 && (
-                                      <div className="flex justify-between pl-2">
-                                        <span className="text-gray-600">Non-Working Sat ({result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays}):</span>
-                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
-                                      </div>
-                                    )}
-                                    {result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays > 0 && (
-                                      <div className="flex justify-between pl-2">
-                                        <span className="text-gray-600">Sundays ({result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays}):</span>
-                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={(e) => openEarningsModal(e, result)}
+                          className="text-green-600 hover:text-green-700 hover:underline cursor-pointer font-medium"
+                        >
+                          {formatCurrency(result.actual_earned_base)}
+                        </button>
                       </Table.Cell>
                       <Table.Cell>
                         {result.attendance_shortfall > 0 ? (
-                          <div className="relative group inline-block">
-                            <span className="text-orange-600 font-medium cursor-help">
-                              {formatCurrency(result.attendance_shortfall)}
-                            </span>
-                            {result.shortfall_by_cause && (
-                              <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
-                                <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Shortfall Breakdown</div>
-                                <div className="space-y-1.5">
-                                  {result.shortfall_by_cause.unpaid_time_off.deduction > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Unpaid Time Off:</span>
-                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.unpaid_time_off.deduction)}</span>
-                                    </div>
-                                  )}
-                                  {result.shortfall_by_cause.time_variance.deduction > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Time Variance:</span>
-                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.time_variance.deduction)}</span>
-                                    </div>
-                                  )}
-                                  {result.shortfall_by_cause.absent_days.deduction > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Absent Days:</span>
-                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.absent_days.deduction)}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            onClick={(e) => openShortfallModal(e, result)}
+                            className="text-orange-600 hover:text-orange-700 hover:underline cursor-pointer font-medium"
+                          >
+                            {formatCurrency(result.attendance_shortfall)}
+                          </button>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
@@ -750,6 +706,313 @@ const LivePayrollDashboard: React.FC = () => {
           <Button color="gray" onClick={closeModal}>
             Close
           </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Earnings Breakdown Modal */}
+      <Modal show={earningsModal.show} onClose={closeEarningsModal} size="3xl">
+        <Modal.Header>
+          Earnings Breakdown
+          {earningsModal.employee && (
+            <div className="text-sm font-normal text-gray-500 mt-1">
+              {earningsModal.employee.employee_name} ({earningsModal.employee.employee_code})
+            </div>
+          )}
+        </Modal.Header>
+        <Modal.Body className="space-y-6 max-h-[70vh] overflow-y-auto">
+          {earningsModal.employee && (() => {
+            const emp = earningsModal.employee!;
+            const ebs = emp.earnings_by_source;
+            const dailyRate = ebs?.non_working_day_credit?.breakdown?.daily_rate ?? 0;
+
+            return (
+              <>
+                {/* Overtime Section */}
+                {emp.overtime_records && emp.overtime_records.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+                      Overtime
+                      <span className="ml-auto text-red-600 font-medium">{formatCurrency(ebs?.overtime?.earned ?? 0)}</span>
+                    </h3>
+                    <div className="overflow-x-auto rounded border border-gray-100">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 text-gray-600">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium">Date</th>
+                            <th className="text-left px-3 py-2 font-medium">Day Type</th>
+                            <th className="text-right px-3 py-2 font-medium">Pre-shift</th>
+                            <th className="text-right px-3 py-2 font-medium">Post-shift</th>
+                            <th className="text-right px-3 py-2 font-medium">Total</th>
+                            <th className="text-right px-3 py-2 font-medium">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {emp.overtime_records.map((rec, i) => (
+                            <tr key={i} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-gray-700">{formatDate(rec.date)}</td>
+                              <td className="px-3 py-2 capitalize text-gray-600">{rec.day_type.replace(/_/g, ' ')}</td>
+                              <td className="px-3 py-2 text-right text-gray-600">
+                                {rec.pre_shift_enabled ? `${rec.pre_shift_minutes}m` : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right text-gray-600">
+                                {rec.post_shift_enabled ? `${rec.post_shift_minutes}m` : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right font-medium text-gray-700">{rec.total_minutes}m</td>
+                              <td className="px-3 py-2 text-right font-semibold text-red-600">{formatCurrency(rec.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-red-50 border-t border-red-100">
+                          <tr>
+                            <td colSpan={5} className="px-3 py-2 text-xs font-semibold text-red-700">Total Overtime</td>
+                            <td className="px-3 py-2 text-right text-xs font-bold text-red-700">{formatCurrency(ebs?.overtime?.earned ?? 0)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Paid Time Off Section */}
+                {ebs?.paid_leaves && ebs.paid_leaves.earned > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                      Paid Time Off
+                      <span className="ml-auto text-blue-600 font-medium">{formatCurrency(ebs.paid_leaves.earned)}</span>
+                    </h3>
+                    {ebs.paid_leaves.details && ebs.paid_leaves.details.length > 0 ? (
+                      <div className="space-y-2">
+                        {ebs.paid_leaves.details.map((leave, i) => (
+                          <div key={i} className="bg-blue-50 rounded-lg p-3 flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-gray-700">
+                                {leave.start_date === leave.end_date
+                                  ? formatDate(leave.start_date)
+                                  : `${formatDate(leave.start_date)} — ${formatDate(leave.end_date)}`}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {leave.duration_type === 'full_day' && 'Full Day'}
+                                {leave.duration_type === 'half_day' && 'Half Day'}
+                                {leave.duration_type === 'short_leave' && leave.short_leave_start && leave.short_leave_end
+                                  ? `Short Leave (${leave.short_leave_start} – ${leave.short_leave_end})`
+                                  : leave.duration_type === 'short_leave' ? 'Short Leave' : ''}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-xs text-gray-500">{formatHours(leave.hours)}</div>
+                              <div className="text-sm font-semibold text-blue-700">{formatCurrency(leave.earned)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No leave detail breakdown available.</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Non-Working Days Credit Section */}
+                {ebs?.non_working_day_credit && ebs.non_working_day_credit.earned > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-purple-500 inline-block"></span>
+                      Non-Working Day Credit
+                      <span className="ml-auto text-purple-600 font-medium">{formatCurrency(ebs.non_working_day_credit.earned)}</span>
+                    </h3>
+                    <div className="space-y-3">
+                      {/* Holidays */}
+                      {ebs.non_working_day_credit.dates?.holidays && ebs.non_working_day_credit.dates.holidays.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-600 mb-1.5">
+                            Holidays ({ebs.non_working_day_credit.dates.holidays.length})
+                            <span className="ml-2 text-purple-600">{formatCurrency(ebs.non_working_day_credit.dates.holidays.length * dailyRate)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ebs.non_working_day_credit.dates.holidays.map((d, i) => (
+                              <span key={i} className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-medium">{formatDate(d)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Non-working Saturdays */}
+                      {ebs.non_working_day_credit.dates?.non_working_saturdays && ebs.non_working_day_credit.dates.non_working_saturdays.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-600 mb-1.5">
+                            Non-Working Saturdays ({ebs.non_working_day_credit.dates.non_working_saturdays.length})
+                            <span className="ml-2 text-purple-600">{formatCurrency(ebs.non_working_day_credit.dates.non_working_saturdays.length * dailyRate)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ebs.non_working_day_credit.dates.non_working_saturdays.map((d, i) => (
+                              <span key={i} className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium">{formatDate(d)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Non-working Sundays */}
+                      {ebs.non_working_day_credit.dates?.non_working_sundays && ebs.non_working_day_credit.dates.non_working_sundays.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-600 mb-1.5">
+                            Non-Working Sundays ({ebs.non_working_day_credit.dates.non_working_sundays.length})
+                            <span className="ml-2 text-purple-600">{formatCurrency(ebs.non_working_day_credit.dates.non_working_sundays.length * dailyRate)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ebs.non_working_day_credit.dates.non_working_sundays.map((d, i) => (
+                              <span key={i} className="bg-pink-100 text-pink-700 text-xs px-2 py-0.5 rounded-full font-medium">{formatDate(d)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attendance (Work Hours) section */}
+                {ebs?.attendance && ebs.attendance.earned > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+                      Work Hours Earned
+                      <span className="ml-auto text-green-600 font-medium">{formatCurrency(ebs.attendance.earned)}</span>
+                    </h3>
+                    <p className="text-xs text-gray-500">{formatHours(ebs.attendance.hours)} of attended time</p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </Modal.Body>
+        <Modal.Footer className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-gray-700">
+            Total Actual Earned:
+            <span className="ml-2 text-green-600 text-base">{earningsModal.employee ? formatCurrency(earningsModal.employee.actual_earned_base) : ''}</span>
+          </div>
+          <Button color="gray" onClick={closeEarningsModal}>Close</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Shortfall Breakdown Modal */}
+      <Modal show={shortfallModal.show} onClose={closeShortfallModal} size="2xl">
+        <Modal.Header>
+          Shortfall Breakdown
+          {shortfallModal.employee && (
+            <div className="text-sm font-normal text-gray-500 mt-1">
+              {shortfallModal.employee.employee_name} ({shortfallModal.employee.employee_code})
+            </div>
+          )}
+        </Modal.Header>
+        <Modal.Body>
+          {shortfallModal.employee?.shortfall_by_cause && (() => {
+            const sbc = shortfallModal.employee.shortfall_by_cause!;
+            return (
+              <div className="space-y-5">
+
+                {/* Time Variance */}
+                {sbc.time_variance.deduction > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-3 border-b pb-2">
+                      <h3 className="text-base font-semibold text-orange-700">Late Arrivals / Early Departures</h3>
+                      <span className="text-orange-700 font-bold">{formatCurrency(sbc.time_variance.deduction)}</span>
+                    </div>
+                    {sbc.time_variance.details && sbc.time_variance.details.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-gray-500 text-xs border-b">
+                              <th className="pb-2 font-medium">Date</th>
+                              <th className="pb-2 font-medium text-right">Expected</th>
+                              <th className="pb-2 font-medium text-right">Actual</th>
+                              <th className="pb-2 font-medium text-right">Shortfall</th>
+                              <th className="pb-2 font-medium text-right">Deduction</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {sbc.time_variance.details.map((d: TimeVarianceDetail, i: number) => (
+                              <tr key={i} className="py-1.5">
+                                <td className="py-1.5 text-gray-700">{formatDate(d.date)}</td>
+                                <td className="py-1.5 text-right text-gray-600">{formatHours(d.expected_hours)}</td>
+                                <td className="py-1.5 text-right text-gray-600">{formatHours(d.actual_hours)}</td>
+                                <td className="py-1.5 text-right text-orange-600 font-medium">{formatHours(d.shortfall_hours)}</td>
+                                <td className="py-1.5 text-right text-red-600 font-semibold">{formatCurrency(d.deduction)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No per-day detail available (recalculate to get details).</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Unpaid Time Off */}
+                {sbc.unpaid_time_off.deduction > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-3 border-b pb-2">
+                      <h3 className="text-base font-semibold text-orange-700">Unpaid Time Off</h3>
+                      <span className="text-orange-700 font-bold">{formatCurrency(sbc.unpaid_time_off.deduction)}</span>
+                    </div>
+                    {sbc.unpaid_time_off.details && sbc.unpaid_time_off.details.length > 0 ? (
+                      <div className="space-y-2">
+                        {sbc.unpaid_time_off.details.map((d: UnpaidTimeOffDetail, i: number) => (
+                          <div key={i} className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                            <div>
+                              <div className="font-medium text-gray-800 text-sm">
+                                {d.start_date === d.end_date ? formatDate(d.start_date) : `${formatDate(d.start_date)} – ${formatDate(d.end_date)}`}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {d.duration_type === 'full_day' && 'Full Day'}
+                                {d.duration_type === 'half_day' && 'Half Day'}
+                                {d.duration_type === 'short_leave' && `Short Leave${d.short_leave_start && d.short_leave_end ? ` (${d.short_leave_start} – ${d.short_leave_end})` : ''}`}
+                                {' · '}{formatHours(d.hours)}
+                              </div>
+                            </div>
+                            <span className="text-red-600 font-semibold">{formatCurrency(d.deduction)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No per-leave detail available (recalculate to get details).</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Absent Days */}
+                {sbc.absent_days.deduction > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-3 border-b pb-2">
+                      <h3 className="text-base font-semibold text-red-700">Absent Days</h3>
+                      <span className="text-red-700 font-bold">{formatCurrency(sbc.absent_days.deduction)}</span>
+                    </div>
+                    {sbc.absent_days.details && sbc.absent_days.details.length > 0 ? (
+                      <div className="space-y-2">
+                        {sbc.absent_days.details.map((d: AbsentDayDetail, i: number) => (
+                          <div key={i} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                            <span className="text-gray-800 text-sm font-medium">{formatDate(d.date)}</span>
+                            <span className="text-red-600 font-semibold">{formatCurrency(d.deduction)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No per-day detail available (recalculate to get details).</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Total */}
+                <div className="bg-orange-100 p-4 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-base font-bold text-gray-800">Total Shortfall:</span>
+                    <span className="text-orange-700 font-bold text-xl">{formatCurrency(shortfallModal.employee!.attendance_shortfall)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={closeShortfallModal}>Close</Button>
         </Modal.Footer>
       </Modal>
 
