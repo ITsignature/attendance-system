@@ -590,6 +590,7 @@ router.put('/:id',
       // Overtime Calculation Settings
       'overtime_enabled', 'pre_shift_overtime_enabled', 'post_shift_overtime_enabled',
       'weekday_ot_multiplier', 'saturday_ot_multiplier', 'sunday_ot_multiplier', 'holiday_ot_multiplier',
+      'statutory_holiday_ot_multiplier',
 
       // Payable Hours Policy
       'payable_hours_policy',
@@ -871,6 +872,11 @@ router.post('/',
       .isFloat({ min: 1.0, max: 5.0 })
       .withMessage('holiday_ot_multiplier must be between 1.0 and 5.0'),
 
+    body('statutory_holiday_ot_multiplier')
+      .optional({ nullable: true })
+      .isFloat({ min: 1.0, max: 5.0 })
+      .withMessage('statutory_holiday_ot_multiplier must be between 1.0 and 5.0'),
+
     // Payable Hours Policy Validation
     body('payable_hours_policy')
       .optional({ nullable: true })
@@ -970,6 +976,7 @@ router.post('/',
         saturday_ot_multiplier = null,
         sunday_ot_multiplier = null,
         holiday_ot_multiplier = null,
+        statutory_holiday_ot_multiplier = null,
 
         // Payable Hours Policy
         payable_hours_policy = 'strict_schedule'
@@ -1127,9 +1134,10 @@ router.post('/',
           in_time, out_time, break_start_time, break_end_time, follows_company_schedule, weekend_working_config,
           overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
           weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,
+          statutory_holiday_ot_multiplier,
           payable_hours_policy,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, fingerprint_id || null, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
@@ -1140,6 +1148,7 @@ router.post('/',
         weekend_working_config ? JSON.stringify(weekend_working_config) : null,
         overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
         weekday_ot_multiplier, saturday_ot_multiplier, sunday_ot_multiplier, holiday_ot_multiplier,
+        statutory_holiday_ot_multiplier,
         payable_hours_policy
       ]);
 

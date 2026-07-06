@@ -245,6 +245,7 @@ CREATE TABLE `employees` (
   `post_shift_overtime_enabled` tinyint(1) DEFAULT 1 COMMENT 'Enable overtime calculation for hours worked after shift end time',
   `weekday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Weekday overtime rate multiplier (Monday-Friday)',
   `holiday_ot_multiplier` decimal(4,2) DEFAULT 2.50 COMMENT 'Holiday overtime rate multiplier',
+  `statutory_holiday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Statutory holiday overtime rate multiplier',
   `saturday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Saturday overtime rate multiplier',
   `sunday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Sunday overtime rate multiplier',
   `payable_hours_policy` enum('strict_schedule','actual_worked') DEFAULT 'strict_schedule' COMMENT 'Payable hours policy: strict_schedule (cap to scheduled hours) or actual_worked (allow time shifting if total duration met)'
@@ -485,6 +486,7 @@ CREATE TABLE `holidays` (
   `date` date NOT NULL,
   `description` text DEFAULT NULL,
   `is_optional` tinyint(1) DEFAULT 0,
+  `is_statutory` tinyint(1) DEFAULT 0,
   `applies_to_all` tinyint(1) DEFAULT 1,
   `department_ids` longtext DEFAULT NULL CHECK (json_valid(`department_ids`)),
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),

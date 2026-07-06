@@ -34,6 +34,7 @@ class HolidayService {
                 h.date,
                 h.description,
                 h.is_optional,
+                h.is_statutory,
                 h.applies_to_all,
                 h.department_ids
             FROM holidays h
@@ -216,7 +217,8 @@ class HolidayService {
             holidays: relevantHolidays.map(h => ({
                 date: typeof h.date === 'string' ? h.date : h.date.toISOString().split('T')[0],
                 name: h.name,
-                is_optional: h.is_optional
+                is_optional: h.is_optional,
+                is_statutory: h.is_statutory
             }))
         };
     }
@@ -252,6 +254,7 @@ class HolidayService {
                 h.date,
                 h.description,
                 h.is_optional,
+                h.is_statutory,
                 h.applies_to_all
             FROM holidays h
             ${whereClause}

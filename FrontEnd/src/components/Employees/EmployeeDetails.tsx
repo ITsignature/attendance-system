@@ -49,6 +49,7 @@ interface Employee {
   saturday_ot_multiplier?: number | null;
   sunday_ot_multiplier?: number | null;
   holiday_ot_multiplier?: number | null;
+  statutory_holiday_ot_multiplier?: number | null;
 
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
@@ -1361,7 +1362,7 @@ const EmployeeDetails: React.FC = () => {
                           </div>
 
                           {/* Overtime Multipliers */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
                             <div>
                               <p className="text-xs text-gray-600 dark:text-gray-400">Weekday OT</p>
                               <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
@@ -1389,6 +1390,13 @@ const EmployeeDetails: React.FC = () => {
                                 {employee.holiday_ot_multiplier ? `${employee.holiday_ot_multiplier}x` : 'Not set'}
                               </p>
                               <p className="text-xs text-gray-500 dark:text-gray-400">Holidays</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Statutory Holiday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.statutory_holiday_ot_multiplier ? `${employee.statutory_holiday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Statutory Holidays</p>
                             </div>
                           </div>
                         </div>

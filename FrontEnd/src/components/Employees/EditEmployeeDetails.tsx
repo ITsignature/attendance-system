@@ -75,6 +75,7 @@ interface Employee {
   saturday_ot_multiplier?: number | null;
   sunday_ot_multiplier?: number | null;
   holiday_ot_multiplier?: number | null;
+  statutory_holiday_ot_multiplier?: number | null;
 
   emergency_contact_name: string;
   emergency_contact_phone: string;
@@ -1211,7 +1212,7 @@ const EditEmployeeDetails: React.FC = () => {
                     </div>
 
                     {/* Overtime Multipliers */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
                       <div>
                         <Label htmlFor="weekday_ot_multiplier" value="Weekday OT Multiplier" />
                         <TextInput
@@ -1269,6 +1270,21 @@ const EditEmployeeDetails: React.FC = () => {
                           onChange={(e) => handleChange('holiday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
                           placeholder="e.g., 3.0"
                           helperText="Holiday overtime rate"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="statutory_holiday_ot_multiplier" value="Statutory Holiday OT Multiplier" />
+                        <TextInput
+                          id="statutory_holiday_ot_multiplier"
+                          type="number"
+                          step="0.1"
+                          min="1.0"
+                          max="5.0"
+                          value={formData.statutory_holiday_ot_multiplier || ''}
+                          onChange={(e) => handleChange('statutory_holiday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="e.g., 3.5"
+                          helperText="Statutory holiday overtime rate"
                         />
                       </div>
                     </div>

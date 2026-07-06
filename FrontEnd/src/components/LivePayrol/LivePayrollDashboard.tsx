@@ -748,20 +748,30 @@ const LivePayrollDashboard: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                          {emp.overtime_records.map((rec, i) => (
-                            <tr key={i} className="hover:bg-gray-50">
-                              <td className="px-3 py-2 text-gray-700">{formatDate(rec.date)}</td>
-                              <td className="px-3 py-2 capitalize text-gray-600">{rec.day_type.replace(/_/g, ' ')}</td>
-                              <td className="px-3 py-2 text-right text-gray-600">
-                                {rec.pre_shift_enabled ? `${rec.pre_shift_minutes}m` : <span className="text-gray-300">—</span>}
-                              </td>
-                              <td className="px-3 py-2 text-right text-gray-600">
-                                {rec.post_shift_enabled ? `${rec.post_shift_minutes}m` : <span className="text-gray-300">—</span>}
-                              </td>
-                              <td className="px-3 py-2 text-right font-medium text-gray-700">{rec.total_minutes}m</td>
-                              <td className="px-3 py-2 text-right font-semibold text-red-600">{formatCurrency(rec.amount)}</td>
-                            </tr>
-                          ))}
+                          {emp.overtime_records.filter(rec => rec.amount > 0).map((rec, i) => {
+                            const isUnconfiguredSat = rec.date === 'unconfigured-saturday';
+                            const isUnconfiguredSun = rec.date === 'unconfigured-sunday';
+                            const dateLabel = isUnconfiguredSat
+                              ? 'Non-working Saturdays (total)'
+                              : isUnconfiguredSun
+                              ? 'Non-working Sundays (total)'
+                              : formatDate(rec.date);
+                            const isAggregated = isUnconfiguredSat || isUnconfiguredSun;
+                            return (
+                              <tr key={i} className={isAggregated ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-gray-50'}>
+                                <td className="px-3 py-2 text-gray-700 font-medium">{dateLabel}</td>
+                                <td className="px-3 py-2 capitalize text-gray-600">{rec.day_type.replace(/_/g, ' ')}</td>
+                                <td className="px-3 py-2 text-right text-gray-600">
+                                  {isAggregated ? <span className="text-gray-300">—</span> : rec.pre_shift_enabled ? `${rec.pre_shift_minutes}m` : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right text-gray-600">
+                                  {isAggregated ? <span className="text-gray-300">—</span> : rec.post_shift_enabled ? `${rec.post_shift_minutes}m` : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium text-gray-700">{rec.total_minutes}m</td>
+                                <td className="px-3 py-2 text-right font-semibold text-red-600">{formatCurrency(rec.amount)}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                         <tfoot className="bg-red-50 border-t border-red-100">
                           <tr>

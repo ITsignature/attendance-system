@@ -65,6 +65,7 @@ interface EmployeeFormData {
   saturday_ot_multiplier: number | '';
   sunday_ot_multiplier: number | '';
   holiday_ot_multiplier: number | '';
+  statutory_holiday_ot_multiplier: number | '';
 
   // Work Schedule Information
   in_time: string;
@@ -211,6 +212,7 @@ const AddEmployees: React.FC = () => {
     saturday_ot_multiplier: '',
     sunday_ot_multiplier: '',
     holiday_ot_multiplier: '',
+    statutory_holiday_ot_multiplier: '',
 
     // Work Schedule Information
     in_time: '',
@@ -591,6 +593,7 @@ const AddEmployees: React.FC = () => {
         saturday_ot_multiplier: formData.saturday_ot_multiplier ? Number(formData.saturday_ot_multiplier) : null,
         sunday_ot_multiplier: formData.sunday_ot_multiplier ? Number(formData.sunday_ot_multiplier) : null,
         holiday_ot_multiplier: formData.holiday_ot_multiplier ? Number(formData.holiday_ot_multiplier) : null,
+        statutory_holiday_ot_multiplier: formData.statutory_holiday_ot_multiplier ? Number(formData.statutory_holiday_ot_multiplier) : null,
 
         // Work Schedule Information
         in_time: formData.in_time,
@@ -737,6 +740,7 @@ const debugAuth = () => {
       saturday_ot_multiplier: '',
       sunday_ot_multiplier: '',
       holiday_ot_multiplier: '',
+      statutory_holiday_ot_multiplier: '',
 
       // Work Schedule Information
       in_time: '',
@@ -1374,7 +1378,7 @@ const debugAuth = () => {
                           </div>
 
                           {/* Overtime Multipliers */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
                             <div>
                               <Label htmlFor="weekday_ot_multiplier" value="Weekday OT Multiplier" />
                               <TextInput
@@ -1432,6 +1436,21 @@ const debugAuth = () => {
                                 onChange={(e) => handleInputChange('holiday_ot_multiplier', e.target.value)}
                                 placeholder="e.g., 3.0"
                                 helperText="Holiday overtime rate"
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor="statutory_holiday_ot_multiplier" value="Statutory Holiday OT Multiplier" />
+                              <TextInput
+                                id="statutory_holiday_ot_multiplier"
+                                type="number"
+                                step="0.1"
+                                min="1.0"
+                                max="5.0"
+                                value={formData.statutory_holiday_ot_multiplier}
+                                onChange={(e) => handleInputChange('statutory_holiday_ot_multiplier', e.target.value)}
+                                placeholder="e.g., 3.5"
+                                helperText="Statutory holiday overtime rate"
                               />
                             </div>
                           </div>

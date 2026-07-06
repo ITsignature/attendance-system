@@ -1688,6 +1688,8 @@ class PayrollRunService {
         let unconfiguredSaturdaySeconds = 0;
         let configuredSundaySeconds = 0;
         let unconfiguredSundaySeconds = 0;
+        const unconfiguredSaturdayByDate = {};
+        const unconfiguredSundayByDate = {};
 
         for (const rec of weekendRows) {
             const dateStr = rec.date instanceof Date
@@ -1709,6 +1711,7 @@ class PayrollRunService {
                         }
                     }
                     unconfiguredSaturdaySeconds += actualSecs;
+                    unconfiguredSaturdayByDate[dateStr] = (unconfiguredSaturdayByDate[dateStr] || 0) + actualSecs;
                 }
             } else if (rec.is_weekend === 1) { // Sunday
                 if (isConfiguredWorkingDay(dateStr, 'sunday')) {
@@ -1725,6 +1728,7 @@ class PayrollRunService {
                         }
                     }
                     unconfiguredSundaySeconds += actualSecs;
+                    unconfiguredSundayByDate[dateStr] = (unconfiguredSundayByDate[dateStr] || 0) + actualSecs;
                 }
             }
         }
@@ -2686,7 +2690,9 @@ class PayrollRunService {
             },
             unconfigured_weekend_overtime: {
                 saturday_seconds: unconfiguredSaturdaySeconds,
-                sunday_seconds:   unconfiguredSundaySeconds
+                sunday_seconds:   unconfiguredSundaySeconds,
+                saturday_by_date: unconfiguredSaturdayByDate,
+                sunday_by_date:   unconfiguredSundayByDate
             }
         };
     }
@@ -3124,6 +3130,7 @@ class PayrollRunService {
                     e.saturday_ot_multiplier,
                     e.sunday_ot_multiplier,
                     e.holiday_ot_multiplier,
+                    e.statutory_holiday_ot_multiplier,
                     SUM(a.overtime_hours) OVER() as total_overtime_hours
                 FROM attendance a
                 JOIN payroll_runs pr ON pr.id = ?
@@ -3161,18 +3168,24 @@ class PayrollRunService {
                             // Get day of week (JavaScript: 0=Sunday, 1=Monday, ..., 6=Saturday)
                             const dayOfWeek = new Date(dateStr).getDay();
 
-                            // Check if this date is a holiday
-                            const isHoliday = await HolidayService.getHolidayOvertimeMultiplier(
+                            // Check if this date is a holiday (and whether it's statutory)
+                            const holidayInfo = await HolidayService.isHoliday(
                                 clientId,
                                 dateStr,
                                 departmentId
                             );
+                            const isHoliday = !!holidayInfo;
+                            const isStatutoryHoliday = !!holidayInfo?.is_statutory;
 
                             // Determine multiplier based on day type using EMPLOYEE-SPECIFIC multipliers
                             let multiplier = 1.0;
                             let dayType = 'weekday';
 
-                            if (isHoliday && record.holiday_ot_multiplier) {
+                            if (isStatutoryHoliday && record.statutory_holiday_ot_multiplier) {
+                                // Statutory holiday takes top priority
+                                multiplier = parseFloat(record.statutory_holiday_ot_multiplier);
+                                dayType = 'statutory_holiday';
+                            } else if (isHoliday && record.holiday_ot_multiplier) {
                                 // Holiday takes priority
                                 multiplier = parseFloat(record.holiday_ot_multiplier);
                                 dayType = 'holiday';
@@ -3204,7 +3217,8 @@ class PayrollRunService {
                                 post_shift_overtime_enabled: postShiftEnabled,
                                 multiplier: multiplier,
                                 day_type: dayType,
-                                is_holiday: !!isHoliday
+                                is_holiday: isHoliday,
+                                is_statutory_holiday: isStatutoryHoliday
                             });
                         }
                     }
@@ -4782,6 +4796,12 @@ class PayrollRunService {
                     console.log(`   Pre-shift OT enabled: ${preShiftEnabled}`);
                     console.log(`   Post-shift OT enabled: ${postShiftEnabled}`);
 
+                    // Build sets of unconfigured weekend dates so we can skip them in the
+                    // pre/post-shift OT loop — those days are fully handled by the unconfigured
+                    // weekend block below and must not appear twice in overtimeDetailsWithAmount.
+                    const unconfiguredSatDatesSet = new Set(Object.keys(attendanceData.unconfigured_weekend_overtime?.saturday_by_date || {}));
+                    const unconfiguredSunDatesSet = new Set(Object.keys(attendanceData.unconfigured_weekend_overtime?.sunday_by_date || {}));
+
                     for (const otRecord of employeeOvertime) {
                         const dateStr = typeof otRecord.date === 'string' ? otRecord.date : otRecord.date.toISOString().split('T')[0];
 
@@ -4791,6 +4811,11 @@ class PayrollRunService {
                         }
 
                         const dayOfWeek = new Date(dateStr).getDay(); // 0=Sunday, 6=Saturday
+
+                        // Skip unconfigured weekend days — their OT is computed from full worked hours
+                        // in the unconfigured weekend block; adding pre/post-shift OT on top would double-count.
+                        if (dayOfWeek === 6 && unconfiguredSatDatesSet.has(dateStr)) continue;
+                        if (dayOfWeek === 0 && unconfiguredSunDatesSet.has(dateStr)) continue;
 
                         // Get pre/post shift seconds
                         const preShiftSeconds = parseInt(otRecord.pre_shift_overtime_seconds) || 0;
@@ -4891,36 +4916,79 @@ class PayrollRunService {
                     if (uncOT.saturday_seconds > 0) {
                         const satOTAmount = (uncOT.saturday_seconds / 3600) * satRate * satMult;
                         overtimeAmount += satOTAmount;
-                        overtimeDetailsWithAmount.push({
-                            date: 'unconfigured-saturday',
-                            day_type: 'saturday',
-                            total_minutes: Math.round(uncOT.saturday_seconds / 60),
-                            pre_shift_minutes: 0,
-                            post_shift_minutes: 0,
-                            pre_shift_enabled: false,
-                            post_shift_enabled: false,
-                            hourly_rate: satRate,
-                            multiplier: satMult,
-                            amount: satOTAmount
-                        });
+                        // Expand per-date if available, else fall back to single aggregate row
+                        const satByDate = uncOT.saturday_by_date || {};
+                        const satDates = Object.keys(satByDate).sort();
+                        if (satDates.length > 0) {
+                            for (const ds of satDates) {
+                                const secs = satByDate[ds];
+                                const amt = (secs / 3600) * satRate * satMult;
+                                overtimeDetailsWithAmount.push({
+                                    date: ds,
+                                    day_type: 'saturday',
+                                    total_minutes: Math.round(secs / 60),
+                                    pre_shift_minutes: 0,
+                                    post_shift_minutes: 0,
+                                    pre_shift_enabled: false,
+                                    post_shift_enabled: false,
+                                    hourly_rate: satRate,
+                                    multiplier: satMult,
+                                    amount: amt
+                                });
+                            }
+                        } else {
+                            overtimeDetailsWithAmount.push({
+                                date: 'unconfigured-saturday',
+                                day_type: 'saturday',
+                                total_minutes: Math.round(uncOT.saturday_seconds / 60),
+                                pre_shift_minutes: 0,
+                                post_shift_minutes: 0,
+                                pre_shift_enabled: false,
+                                post_shift_enabled: false,
+                                hourly_rate: satRate,
+                                multiplier: satMult,
+                                amount: satOTAmount
+                            });
+                        }
                         console.log(`   Unconfigured Saturday OT: ${(uncOT.saturday_seconds/3600).toFixed(2)}h × Rs.${satRate} × ${satMult}x = Rs.${satOTAmount.toFixed(2)}`);
                     }
 
                     if (uncOT.sunday_seconds > 0) {
                         const sunOTAmount = (uncOT.sunday_seconds / 3600) * sunRate * sunMult;
                         overtimeAmount += sunOTAmount;
-                        overtimeDetailsWithAmount.push({
-                            date: 'unconfigured-sunday',
-                            day_type: 'sunday',
-                            total_minutes: Math.round(uncOT.sunday_seconds / 60),
-                            pre_shift_minutes: 0,
-                            post_shift_minutes: 0,
-                            pre_shift_enabled: false,
-                            post_shift_enabled: false,
-                            hourly_rate: sunRate,
-                            multiplier: sunMult,
-                            amount: sunOTAmount
-                        });
+                        const sunByDate = uncOT.sunday_by_date || {};
+                        const sunDates = Object.keys(sunByDate).sort();
+                        if (sunDates.length > 0) {
+                            for (const ds of sunDates) {
+                                const secs = sunByDate[ds];
+                                const amt = (secs / 3600) * sunRate * sunMult;
+                                overtimeDetailsWithAmount.push({
+                                    date: ds,
+                                    day_type: 'sunday',
+                                    total_minutes: Math.round(secs / 60),
+                                    pre_shift_minutes: 0,
+                                    post_shift_minutes: 0,
+                                    pre_shift_enabled: false,
+                                    post_shift_enabled: false,
+                                    hourly_rate: sunRate,
+                                    multiplier: sunMult,
+                                    amount: amt
+                                });
+                            }
+                        } else {
+                            overtimeDetailsWithAmount.push({
+                                date: 'unconfigured-sunday',
+                                day_type: 'sunday',
+                                total_minutes: Math.round(uncOT.sunday_seconds / 60),
+                                pre_shift_minutes: 0,
+                                post_shift_minutes: 0,
+                                pre_shift_enabled: false,
+                                post_shift_enabled: false,
+                                hourly_rate: sunRate,
+                                multiplier: sunMult,
+                                amount: sunOTAmount
+                            });
+                        }
                         console.log(`   Unconfigured Sunday OT: ${(uncOT.sunday_seconds/3600).toFixed(2)}h × Rs.${sunRate} × ${sunMult}x = Rs.${sunOTAmount.toFixed(2)}`);
                     }
                 }
