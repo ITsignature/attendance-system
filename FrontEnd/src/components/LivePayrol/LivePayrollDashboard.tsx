@@ -4,13 +4,15 @@
 // Calculates payroll in the browser - 100x faster!
 // Updates every 30 seconds with live session data
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Table, Card, Alert, Spinner, Button, Badge, Modal } from "flowbite-react";
 import { payrollRunApiService } from '../../services/payrollRunService';
 import { livePayrollCalculationService, type CalculatedPayroll, type EmployeeData, type UnpaidTimeOffDetail, type TimeVarianceDetail, type AbsentDayDetail, type PaidLeaveDetail } from '../../services/livePayrollCalculationService';
 import { HiRefresh, HiClock, HiUsers, HiArrowLeft, HiDownload } from 'react-icons/hi';
 import { exportLivePayrollToExcel } from '../../services/payrollExcelExport';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const LivePayrollDashboard: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
@@ -34,6 +36,8 @@ const LivePayrollDashboard: React.FC = () => {
     show: boolean;
     employee: CalculatedPayroll | null;
   }>({ show: false, employee: null });
+  const [payslipDownloading, setPayslipDownloading] = useState(false);
+  const payslipContentRef = useRef<HTMLDivElement>(null);
 
   const [dailyDetailsModal, setDailyDetailsModal] = useState<{
     show: boolean;
@@ -109,6 +113,55 @@ const LivePayrollDashboard: React.FC = () => {
 
   const closePayslipModal = () => {
     setPayslipModal({ show: false, employee: null });
+  };
+
+  const handleDownloadPayslip = async () => {
+    const node = payslipContentRef.current;
+    const employee = payslipModal.employee;
+    if (!node || !employee) return;
+
+    try {
+      setPayslipDownloading(true);
+
+      const canvas = await html2canvas(node, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const safeName = employee.employee_name.replace(/[^a-z0-9]+/gi, '_');
+      const periodLabel = rawData?.period
+        ? `${new Date(rawData.period.start_date).toISOString().slice(0, 10)}_${new Date(rawData.period.end_date).toISOString().slice(0, 10)}`
+        : new Date().toISOString().slice(0, 10);
+
+      pdf.save(`Payslip_${safeName}_${periodLabel}.pdf`);
+    } catch (err) {
+      console.error('Error generating payslip PDF:', err);
+      setError('Failed to generate payslip PDF');
+    } finally {
+      setPayslipDownloading(false);
+    }
   };
 
   const openDailyDetailsModal = async (employeeId: string, employeeName: string) => {
@@ -1252,7 +1305,7 @@ const LivePayrollDashboard: React.FC = () => {
             );
 
             return (
-              <div className="space-y-6 text-sm">
+              <div ref={payslipContentRef} className="space-y-6 text-sm bg-white p-2">
 
                 {/* Employee Details */}
                 <div>
@@ -1442,6 +1495,18 @@ const LivePayrollDashboard: React.FC = () => {
           })()}
         </Modal.Body>
         <Modal.Footer>
+          <Button
+            color="blue"
+            onClick={handleDownloadPayslip}
+            disabled={payslipDownloading || !payslipModal.employee}
+          >
+            {payslipDownloading ? (
+              <Spinner size="sm" className="mr-2" />
+            ) : (
+              <HiDownload className="w-4 h-4 mr-2" />
+            )}
+            {payslipDownloading ? 'Generating...' : 'Download Payslip'}
+          </Button>
           <Button color="gray" onClick={closePayslipModal}>Close</Button>
         </Modal.Footer>
       </Modal>

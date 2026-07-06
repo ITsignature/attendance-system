@@ -2225,6 +2225,15 @@ class PayrollRunService {
             const allNonWorkingSatDates = [];
             const allNonWorkingSunDates = [];
 
+            // Build a set of all dates the employee actually worked (checked in + out)
+            // so we can skip holiday credit for days they came to work (they get OT instead)
+            const workedDatesSet = new Set([
+                ...detailedAttendance.map(r =>
+                    r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0]),
+                ...weekendRows.map(r =>
+                    r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0])
+            ]);
+
             const calcStart = parseLocalDate(period.period_start_date);
             const calcEnd   = parseLocalDate(attendanceEndDateStr);
             let cur = new Date(calcStart);
@@ -2234,8 +2243,12 @@ class PayrollRunService {
                 const dow = cur.getDay();
 
                 if (holidaySet.has(ds)) {
-                    // Holiday — employee is paid but not counted in expected working hours
-                    // Do NOT double-count if it's also a Saturday/Sunday
+                    // Holiday — only give credit if employee did NOT work that day
+                    // (if they worked, they get OT pay instead — no double credit)
+                    if (workedDatesSet.has(ds)) {
+                        cur.setDate(cur.getDate() + 1);
+                        continue;
+                    }
                     fixed30NonWorkingDayCredit += dailySalaryFixed30;
                     holidayCreditDays++;
                     holidayCreditDates.push(ds);
@@ -4376,8 +4389,8 @@ class PayrollRunService {
                   AND ea.client_id = ?
                   AND ea.is_active = 1
                   AND (ea.effective_to IS NULL OR ea.effective_to >= ?)
-                  AND ea.effective_from <= CURDATE()
-            `, [...employeeIds, clientId, calculationEndDate]);
+                  AND ea.effective_from <= ?
+            `, [...employeeIds, clientId, period.period_start_date, calculationEndDate]);
 
             console.log('allowances: ',allAllowances);
 
@@ -4399,8 +4412,8 @@ class PayrollRunService {
                   AND ed.client_id = ?
                   AND ed.is_active = 1
                   AND (ed.effective_to IS NULL OR ed.effective_to >= ?)
-                  AND ed.effective_from <= CURDATE()
-            `, [...employeeIds, clientId, calculationEndDate]);
+                  AND ed.effective_from <= ?
+            `, [...employeeIds, clientId, period.period_start_date, calculationEndDate]);
 
             console.log('deductions: ',allDeductions);
 
