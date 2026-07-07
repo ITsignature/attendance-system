@@ -2296,20 +2296,20 @@ class PayrollRunService {
             fixed30NonWorkingDayCredit += nonWorkingSatCreditDays * dailySalaryFixed30;
             fixed30NonWorkingDayCredit += sundayCreditDays        * dailySalaryFixed30;
 
-            // Build credited date lists for frontend modal — exclude worked OT days and configured working days
-            const configuredSatSet = new Set();
-            const configuredSunSet = new Set();
-            for (const rec of weekendRows) {
-                const ds = rec.date instanceof Date ? rec.date.toISOString().split('T')[0] : String(rec.date).split('T')[0];
-                if (rec.is_weekend === 7 && isConfiguredWorkingDay(ds, 'saturday')) configuredSatSet.add(ds);
-                if (rec.is_weekend === 1  && isConfiguredWorkingDay(ds, 'sunday'))  configuredSunSet.add(ds);
-            }
+            // Build credited date lists for the frontend modal.
+            // A Saturday/Sunday gets non-working credit only if ALL three are true:
+            //   1. It is NOT a configured working day for this employee
+            //   2. The employee did NOT voluntarily work on it (unconfigured OT)
+            //   3. It is NOT already credited as a holiday
+            // We derive the list directly from the calendar dates using isConfiguredWorkingDay,
+            // not from attendance records — so days the employee didn't attend are still
+            // correctly excluded when they're configured working days.
             nonWorkingSatCreditDates = allNonWorkingSatDates.filter(ds =>
-                !configuredSatSet.has(ds) && !workedUnconfiguredSatDates.has(ds)
-            ).slice(0, nonWorkingSatCreditDays);
+                !isConfiguredWorkingDay(ds, 'saturday') && !workedUnconfiguredSatDates.has(ds)
+            );
             nonWorkingSunCreditDates = allNonWorkingSunDates.filter(ds =>
-                !configuredSunSet.has(ds) && !workedUnconfiguredSunDates.has(ds)
-            ).slice(0, sundayCreditDays);
+                !isConfiguredWorkingDay(ds, 'sunday') && !workedUnconfiguredSunDates.has(ds)
+            );
 
             console.log(`\n   🗓️  FIXED-30 Non-Working Day Credit for ${employeeName} (${employeeCode}):`);
             console.log(`      Holidays: ${holidayCreditDays} × Rs.${dailySalaryFixed30.toFixed(2)} = Rs.${(holidayCreditDays * dailySalaryFixed30).toFixed(2)}`);

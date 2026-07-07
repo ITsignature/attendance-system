@@ -13,6 +13,8 @@ import { HiRefresh, HiClock, HiUsers, HiArrowLeft, HiDownload } from 'react-icon
 import { exportLivePayrollToExcel } from '../../services/payrollExcelExport';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { createRoot } from 'react-dom/client';
+import PayslipCard from './PayslipCard';
 
 const LivePayrollDashboard: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
@@ -38,6 +40,9 @@ const LivePayrollDashboard: React.FC = () => {
   }>({ show: false, employee: null });
   const [payslipDownloading, setPayslipDownloading] = useState(false);
   const payslipContentRef = useRef<HTMLDivElement>(null);
+
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
 
   const [dailyDetailsModal, setDailyDetailsModal] = useState<{
     show: boolean;
@@ -124,13 +129,13 @@ const LivePayrollDashboard: React.FC = () => {
       setPayslipDownloading(true);
 
       const canvas = await html2canvas(node, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         backgroundColor: '#ffffff',
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/jpeg', 0.75);
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
@@ -140,13 +145,13 @@ const LivePayrollDashboard: React.FC = () => {
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
         heightLeft -= pageHeight;
       }
 
@@ -161,6 +166,150 @@ const LivePayrollDashboard: React.FC = () => {
       setError('Failed to generate payslip PDF');
     } finally {
       setPayslipDownloading(false);
+    }
+  };
+
+  const handleBulkDownloadPayslips = async () => {
+    if (calculatedResults.length === 0) return;
+
+    const PAGE_SIZE = 4; // 2x2 grid per PDF page
+
+    // Offscreen render container sized to the exact A4 aspect ratio, split into a fixed
+    // 2x2 grid so each page is always fully used (no leftover blank space at the bottom)
+    // regardless of how short an individual payslip's content is.
+    const A4_RATIO = 297 / 210; // height / width
+    const CONTAINER_WIDTH = 1000;
+    const CONTAINER_HEIGHT = Math.round(CONTAINER_WIDTH * A4_RATIO);
+    const OUTER_PADDING = 16;
+    const CELL_GAP = 16;
+    const CELL_WIDTH = (CONTAINER_WIDTH - OUTER_PADDING * 2 - CELL_GAP) / 2;
+    const CELL_HEIGHT = (CONTAINER_HEIGHT - OUTER_PADDING * 2 - CELL_GAP) / 2;
+
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.top = '-10000px';
+    container.style.left = '-10000px';
+    container.style.width = `${CONTAINER_WIDTH}px`;
+    container.style.height = `${CONTAINER_HEIGHT}px`;
+    container.style.backgroundColor = '#ffffff';
+    container.style.padding = `${OUTER_PADDING}px`;
+    container.style.boxSizing = 'border-box';
+    container.style.overflow = 'hidden';
+    document.body.appendChild(container);
+
+    const root = createRoot(container);
+
+    // Offscreen measuring container: same cell width, unconstrained height, so we can
+    // measure each card's natural (unscaled) height before deciding how much to shrink it.
+    const measureEl = document.createElement('div');
+    measureEl.style.position = 'fixed';
+    measureEl.style.top = '-10000px';
+    measureEl.style.left = '-10000px';
+    measureEl.style.width = `${CELL_WIDTH}px`;
+    document.body.appendChild(measureEl);
+    const measureRoot = createRoot(measureEl);
+
+    try {
+      setBulkDownloading(true);
+      const total = calculatedResults.length;
+      setBulkProgress({ done: 0, total });
+
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      for (let i = 0; i < total; i += PAGE_SIZE) {
+        const batch = calculatedResults.slice(i, i + PAGE_SIZE);
+
+        // Determine the right fontScale for each card by iterating: measure height at the
+        // current candidate scale, and if it still overflows the cell, shrink further and
+        // re-measure. Font-size changes shift how flex-wrap rows/grids reflow, so scale and
+        // height are not linearly related - a single measure-then-scale pass isn't reliable.
+        const scales: number[] = [];
+        for (const emp of batch) {
+          let scale = 1;
+          for (let attempt = 0; attempt < 4; attempt++) {
+            const measuredHeight = await new Promise<number>(resolve => {
+              measureRoot.render(
+                <PayslipCard employee={emp} period={rawData?.period} lastCalculated={lastCalculated} fontScale={scale} />
+              );
+              setTimeout(() => {
+                resolve(measureEl.firstElementChild?.getBoundingClientRect().height ?? CELL_HEIGHT);
+              }, 30);
+            });
+
+            if (measuredHeight <= CELL_HEIGHT || scale < 0.3) break;
+            // Shrink proportionally to the overflow ratio (with a little extra margin) and re-measure.
+            scale = Math.max(0.3, scale * (CELL_HEIGHT / measuredHeight) * 0.98);
+          }
+          scales.push(scale);
+        }
+
+        await new Promise<void>(resolve => {
+          root.render(
+            <>
+              {batch.map((emp, idx) => {
+                const col = idx % 2;
+                const row = Math.floor(idx / 2);
+                const scale = scales[idx] ?? 1;
+                return (
+                  <div
+                    key={emp.employee_id}
+                    style={{
+                      position: 'absolute',
+                      left: `${OUTER_PADDING + col * (CELL_WIDTH + CELL_GAP)}px`,
+                      top: `${OUTER_PADDING + row * (CELL_HEIGHT + CELL_GAP)}px`,
+                      width: `${CELL_WIDTH}px`,
+                      height: `${CELL_HEIGHT}px`,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <PayslipCard
+                      employee={emp}
+                      period={rawData?.period}
+                      lastCalculated={lastCalculated}
+                      fontScale={scale}
+                    />
+                  </div>
+                );
+              })}
+            </>
+          );
+          // Let React commit and layout settle before capturing.
+          setTimeout(resolve, 80);
+        });
+
+        const canvas = await html2canvas(container, {
+          scale: 1.5,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight), undefined, 'FAST');
+
+        setBulkProgress({ done: Math.min(i + PAGE_SIZE, total), total });
+      }
+
+      const periodLabel = rawData?.period
+        ? `${new Date(rawData.period.start_date).toISOString().slice(0, 10)}_${new Date(rawData.period.end_date).toISOString().slice(0, 10)}`
+        : new Date().toISOString().slice(0, 10);
+
+      pdf.save(`Payslips_Bulk_${periodLabel}.pdf`);
+    } catch (err) {
+      console.error('Error generating bulk payslips PDF:', err);
+      setError('Failed to generate bulk payslips PDF');
+    } finally {
+      root.unmount();
+      document.body.removeChild(container);
+      measureRoot.unmount();
+      document.body.removeChild(measureEl);
+      setBulkDownloading(false);
+      setBulkProgress({ done: 0, total: 0 });
     }
   };
 
@@ -385,6 +534,21 @@ const LivePayrollDashboard: React.FC = () => {
           >
             <HiDownload className="w-4 h-4 mr-2" />
             Export Excel
+          </Button>
+          <Button
+            color="indigo"
+            size="sm"
+            onClick={handleBulkDownloadPayslips}
+            disabled={bulkDownloading || !rawData || calculatedResults.length === 0}
+          >
+            {bulkDownloading ? (
+              <Spinner size="sm" className="mr-2" />
+            ) : (
+              <HiDownload className="w-4 h-4 mr-2" />
+            )}
+            {bulkDownloading
+              ? `Generating (${bulkProgress.done}/${bulkProgress.total})...`
+              : 'Bulk Download Payslips'}
           </Button>
         </div>
       </div>
