@@ -1313,10 +1313,14 @@ const LivePayrollDashboard: React.FC = () => {
                         const isHoliday = record.record_type === 'holiday';
                         const isWeekendOff = record.record_type === 'weekend_off';
                         const isUnscheduledWeekend = record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)';
+                        const hasPartialLeave = record.record_type === 'attendance' &&
+                                            (record.leave_duration === 'half_day' || record.leave_duration === 'short_leave');
 
                         const rowBg = isAbsent ? 'bg-red-50 dark:bg-red-900/10' :
                                       isLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
                                       isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
+                                      hasPartialLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
+                                      hasPartialLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
                                       isHoliday ? 'bg-blue-50 dark:bg-blue-900/10' :
                                       isWeekendOff ? 'bg-gray-50 dark:bg-gray-800/50' : '';
 
@@ -1333,6 +1337,11 @@ const LivePayrollDashboard: React.FC = () => {
                                             record.status === 'holiday' ? 'Holiday' :
                                             record.status === 'weekend_off' ? 'Weekend Off' :
                                             record.status;
+
+                        const partialLeaveLabel = record.leave_duration === 'half_day' ? 'Half Day' :
+                                            record.leave_duration === 'short_leave'
+                                              ? `Short Leave${record.leave_start_time && record.leave_end_time ? ` (${record.leave_start_time} - ${record.leave_end_time})` : ''}`
+                                              : '';
 
                         return (
                           <Table.Row key={index} className={`hover:brightness-95 ${rowBg}`}>
@@ -1368,6 +1377,11 @@ const LivePayrollDashboard: React.FC = () => {
                                   <span className="text-blue-600">{record.working_minutes.toLocaleString()} mins</span>
                                   <div className="text-xs text-gray-500">({record.working_hours} hrs)</div>
                                   {record.overtime_minutes > 0 && <div className="text-xs text-red-600 font-medium">+{record.overtime_minutes} OT mins</div>}
+                                  {hasPartialLeave && (
+                                    <div className={`text-xs font-medium mt-1 ${record.is_paid_leave ? 'text-yellow-700' : 'text-orange-600'}`}>
+                                      {partialLeaveLabel} {record.leave_type_name ? `(${record.leave_type_name})` : ''} · {record.is_paid_leave ? 'Paid' : 'Unpaid'}
+                                    </div>
+                                  )}
                                 </>
                               )}
                             </Table.Cell>
@@ -1390,11 +1404,24 @@ const LivePayrollDashboard: React.FC = () => {
                                 <>
                                   <span className="text-green-600">{formatCurrency(record.daily_salary)}</span>
                                   {record.overtime_amount > 0 && <div className="text-xs text-red-600 font-medium">+{formatCurrency(record.overtime_amount)} OT</div>}
+                                  {hasPartialLeave && record.is_paid_leave && (
+                                    <div className="text-xs text-yellow-700 font-normal">(incl. {formatCurrency(record.leave_daily_salary)} leave pay)</div>
+                                  )}
                                 </>
                               )}
                             </Table.Cell>
                             <Table.Cell>
-                              <Badge color={statusColor as any}>{statusLabel}</Badge>
+                              <div className="flex flex-col items-start gap-1">
+                                <Badge color={statusColor as any}>{statusLabel}</Badge>
+                                {hasPartialLeave && (
+                                  <Badge color={record.is_paid_leave ? 'warning' : 'pink'}>
+                                    {partialLeaveLabel}
+                                  </Badge>
+                                )}
+                              </div>
+                              {hasPartialLeave && record.leave_type_name && (
+                                <div className="text-xs text-gray-500 mt-1">{record.leave_type_name}</div>
+                              )}
                             </Table.Cell>
                           </Table.Row>
                         );

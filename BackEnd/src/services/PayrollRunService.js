@@ -5461,6 +5461,8 @@ class PayrollRunService {
                     DATE(lr.end_date) as end_date,
                     lr.leave_duration,
                     lr.is_paid,
+                    lr.start_time,
+                    lr.end_time,
                     lt.name as leave_type_name
                 FROM leave_requests lr
                 JOIN leave_types lt ON lr.leave_type_id = lt.id
@@ -5516,14 +5518,16 @@ class PayrollRunService {
                         leave_type_name: lr.leave_type_name,
                         is_paid: lr.is_paid,
                         leave_duration: lr.leave_duration,
-                        daily_salary: parseFloat(leaveDailySalary.toFixed(2))
+                        daily_salary: parseFloat(leaveDailySalary.toFixed(2)),
+                        start_time: lr.start_time,
+                        end_time: lr.end_time
                     };
                     cur.setDate(cur.getDate() + 1);
                 }
             }
 
             // Helper: process an attendance record into a detail object
-            const processAttendance = (record) => {
+            const processAttendance = (record, leaveInfo) => {
                 const payableDurationSeconds = parseFloat(record.payable_duration) || 0;
                 const totalHours = payableDurationSeconds / 3600;
                 const totalMinutes = Math.round(payableDurationSeconds / 60);
@@ -5569,7 +5573,7 @@ class PayrollRunService {
                         overtimeAmount = totalOvertimeSeconds * (hourlyRate / 3600) * otMultiplier;
                     }
                 }
-                return {
+                const detail = {
                     date: workDateStr,
                     day_type: dayType,
                     check_in: record.check_in_time,
@@ -5583,6 +5587,18 @@ class PayrollRunService {
                     status: record.status,
                     record_type: 'attendance'
                 };
+
+                if (leaveInfo && (leaveInfo.leave_duration === 'half_day' || leaveInfo.leave_duration === 'short_leave')) {
+                    detail.leave_duration = leaveInfo.leave_duration;
+                    detail.leave_type_name = leaveInfo.leave_type_name;
+                    detail.is_paid_leave = !!leaveInfo.is_paid;
+                    detail.leave_start_time = leaveInfo.start_time;
+                    detail.leave_end_time = leaveInfo.end_time;
+                    detail.leave_daily_salary = leaveInfo.daily_salary;
+                    detail.daily_salary = parseFloat((dailySalary + leaveInfo.daily_salary).toFixed(2));
+                }
+
+                return detail;
             };
 
             // Iterate over every calendar day in the period
@@ -5597,7 +5613,7 @@ class PayrollRunService {
                 const dayTypeLabel = dow === 0 ? 'Sunday' : dow === 6 ? 'Saturday' : 'Weekday';
 
                 if (attendanceMap[ds]) {
-                    allDailyDetails.push(processAttendance(attendanceMap[ds]));
+                    allDailyDetails.push(processAttendance(attendanceMap[ds], leaveMap[ds]));
                 } else if (leaveMap[ds]) {
                     const lv = leaveMap[ds];
                     allDailyDetails.push({
@@ -5614,7 +5630,10 @@ class PayrollRunService {
                         status: lv.is_paid ? 'paid_leave' : 'unpaid_leave',
                         record_type: 'leave',
                         leave_type_name: lv.leave_type_name,
-                        is_paid_leave: lv.is_paid
+                        is_paid_leave: lv.is_paid,
+                        leave_duration: lv.leave_duration,
+                        leave_start_time: lv.start_time,
+                        leave_end_time: lv.end_time
                     });
                 } else if (holidayMap[ds]) {
                     allDailyDetails.push({
