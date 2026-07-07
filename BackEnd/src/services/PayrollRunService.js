@@ -914,15 +914,33 @@ class PayrollRunService {
         // =============================================
         // STEP 6: Calculate NET SALARY
         // =============================================
-        // Tax calculation removed - calculate net salary without taxes
-        const totalTaxes = 0;
+        // APIT (Advance Personal Income Tax) — only for employees with apit_enabled flag
         const taxComponents = { total: 0, components: [] };
 
-        const netSalary = grossSalary - totalDeductions;
+        if (employeeData.apitEnabled) {
+            const apitAmount = this.calculateAPIT(grossSalary);
+            if (apitAmount > 0) {
+                taxComponents.components.push({
+                    code: 'APIT',
+                    name: 'APIT (Income Tax)',
+                    type: 'tax',
+                    category: 'tax',
+                    amount: apitAmount
+                });
+                taxComponents.total = apitAmount;
+            }
+            console.log(`   APIT enabled: Rs.${apitAmount.toFixed(2)} on gross Rs.${grossSalary.toFixed(2)}`);
+        } else {
+            console.log(`   APIT disabled for this employee - no income tax applied`);
+        }
+
+        const totalTaxes = taxComponents.total;
+        const netSalary = grossSalary - totalDeductions - totalTaxes;
 
         console.log(`\n✅ Step 6: Net Salary Calculation:`);
         console.log(`   Gross Salary: Rs.${grossSalary.toFixed(2)}`);
         console.log(`   - Total Deductions: Rs.${totalDeductions.toFixed(2)}`);
+        console.log(`   - APIT: Rs.${totalTaxes.toFixed(2)}`);
         console.log(`   = NET SALARY: Rs.${netSalary.toFixed(2)}`);
 
         // Calculate total earnings and deductions from all components for display
@@ -3065,6 +3083,15 @@ class PayrollRunService {
         const db = getDB();
 
         // =============================================
+        // FETCH EMPLOYEE-LEVEL PAYROLL FLAGS
+        // =============================================
+        const [employeeFlags] = await db.execute(`
+            SELECT apit_enabled FROM employees WHERE id = ? AND client_id = ?
+        `, [employeeId, clientId]);
+
+        const apitEnabled = !!employeeFlags[0]?.apit_enabled;
+
+        // =============================================
         // FETCH CONFIGURED PAYROLL COMPONENTS
         // =============================================
 
@@ -3255,6 +3282,8 @@ class PayrollRunService {
             },
             employeeAllowances: employeeAllowances || [],
             employeeDeductions: employeeDeductions || [],
+
+            apitEnabled: apitEnabled,
 
             overtimeHours: overtimeHours,
             overtimeDetails: overtimeDetails
@@ -3810,6 +3839,27 @@ class PayrollRunService {
     }
 
     /**
+     * APIT (Advance Personal Income Tax) — Sri Lanka Summarized Tax Table
+     * for Regular Profits from Employment.
+     * Quick formula per band: tax = rate × monthly regular profits − relief.
+     */
+    calculateAPIT(monthlyRegularProfits) {
+        const income = parseFloat(monthlyRegularProfits) || 0;
+
+        const bands = [
+            { upTo: 150000,   rate: 0,    relief: 0 },      // Band 1: relief from tax
+            { upTo: 233333,   rate: 0.06, relief: 9000 },   // Band 2
+            { upTo: 275000,   rate: 0.18, relief: 37000 },  // Band 3
+            { upTo: 316667,   rate: 0.24, relief: 53500 },  // Band 4
+            { upTo: 358333,   rate: 0.30, relief: 72500 },  // Band 5
+            { upTo: Infinity, rate: 0.36, relief: 94000 }   // Band 6
+        ];
+
+        const band = bands.find(b => income <= b.upTo);
+        return Math.max(0, income * band.rate - band.relief);
+    }
+
+    /**
      * Progressive tax calculation (Sri Lankan tax slabs)
      */
     calculateProgressiveTax(grossSalary) {
@@ -4358,6 +4408,7 @@ class PayrollRunService {
                     e.base_salary,
                     e.department_id,
                     e.hire_date,
+                    e.apit_enabled,
                     e.weekday_ot_multiplier,
                     e.saturday_ot_multiplier,
                     e.sunday_ot_multiplier,

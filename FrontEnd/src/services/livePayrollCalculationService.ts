@@ -101,6 +101,7 @@ interface EmployeeData {
   designation_name: string;
   base_salary: number;
   department_id: string;
+  apit_enabled?: boolean | number;
   attendance: {
     expected_salary: number;
     earned_salary: number;
@@ -188,6 +189,7 @@ interface CalculatedPayroll {
   gross_salary: number;
   epf_employee: number;
   etf_employer: number;
+  apit: number;
   deductions_total: number;
   deductions_breakdown: DeductionBreakdown[];
   financial_deductions_breakdown: FinancialBreakdown[];
@@ -326,6 +328,27 @@ class LivePayrollCalculationService {
   }
 
   /**
+   * APIT (Advance Personal Income Tax) — Sri Lanka Summarized Tax Table
+   * for Regular Profits from Employment.
+   * Quick formula per band: tax = rate × monthly regular profits − relief.
+   */
+  calculateAPIT(monthlyRegularProfits: number): number {
+    const income = monthlyRegularProfits || 0;
+
+    const bands = [
+      { upTo: 150000,   rate: 0,    relief: 0 },      // Band 1: relief from tax
+      { upTo: 233333,   rate: 0.06, relief: 9000 },   // Band 2
+      { upTo: 275000,   rate: 0.18, relief: 37000 },  // Band 3
+      { upTo: 316667,   rate: 0.24, relief: 53500 },  // Band 4
+      { upTo: 358333,   rate: 0.30, relief: 72500 },  // Band 5
+      { upTo: Infinity, rate: 0.36, relief: 94000 }   // Band 6
+    ];
+
+    const band = bands.find(b => income <= b.upTo)!;
+    return Math.max(0, income * band.rate - band.relief);
+  }
+
+  /**
    * Calculate payroll for a single employee
    */
   calculateEmployee(employee: EmployeeData): CalculatedPayroll {
@@ -387,7 +410,22 @@ class LivePayrollCalculationService {
     // Step 6: Calculate totals
     const total_earnings = allowancesResult.total + bonuses_total; // Excludes base salary
     const gross_salary = actual_earned_base + allowancesResult.total + bonuses_total;
-    const deductions_total = statutoryDeductions.total + financial_deductions;
+
+    // Step 6.5: APIT (income tax) — only for employees with apit_enabled flag
+    const apitEnabled = employee.apit_enabled === true || employee.apit_enabled === 1;
+    const apit = apitEnabled ? Math.round(this.calculateAPIT(gross_salary) * 100) / 100 : 0;
+
+    const deductions_breakdown = [...statutoryDeductions.breakdown];
+    if (apit > 0) {
+      deductions_breakdown.push({
+        id: 'apit',
+        name: 'APIT (Income Tax)',
+        amount: apit,
+        category: 'tax'
+      });
+    }
+
+    const deductions_total = statutoryDeductions.total + financial_deductions + apit;
     const net_salary = gross_salary - deductions_total;
 
     return {
@@ -408,8 +446,9 @@ class LivePayrollCalculationService {
       gross_salary: Math.round(gross_salary * 100) / 100,
       epf_employee: statutoryDeductions.epf_employee,
       etf_employer: statutoryDeductions.etf_employer,
+      apit: apit,
       deductions_total: Math.round(deductions_total * 100) / 100,
-      deductions_breakdown: statutoryDeductions.breakdown,
+      deductions_breakdown: deductions_breakdown,
       financial_deductions_breakdown: financial_deductions_breakdown,
       net_salary: Math.round(net_salary * 100) / 100,
       earnings_by_source: earnings_by_source || null,

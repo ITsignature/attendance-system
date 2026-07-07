@@ -420,6 +420,9 @@ router.put('/:id',
     body('follows_company_schedule').optional().isBoolean().withMessage('follows_company_schedule must be true or false'),
     body('attendance_affects_salary').optional().isBoolean().withMessage('attendance_affects_salary must be true or false'),
 
+    // APIT (Income Tax) Settings
+    body('apit_enabled').optional().isBoolean().withMessage('apit_enabled must be true or false'),
+
     // Overtime Calculation Settings
     body('overtime_enabled').optional().isBoolean().withMessage('overtime_enabled must be true or false'),
     body('overtime_rate_multiplier').optional({ nullable: true }).isFloat({ min: 1.0, max: 5.0 }).withMessage('overtime_rate_multiplier must be between 1.0 and 5.0'),
@@ -586,6 +589,9 @@ router.put('/:id',
 
       // Salary Calculation Settings
       'attendance_affects_salary',
+
+      // APIT (Income Tax) Settings
+      'apit_enabled',
 
       // Overtime Calculation Settings
       'overtime_enabled', 'pre_shift_overtime_enabled', 'post_shift_overtime_enabled',
@@ -836,6 +842,12 @@ router.post('/',
       .isBoolean()
       .withMessage('attendance_affects_salary must be a boolean value'),
 
+    // APIT (Income Tax) Settings
+    body('apit_enabled')
+      .optional({ checkFalsy: true })
+      .isBoolean()
+      .withMessage('apit_enabled must be a boolean value'),
+
     // Overtime Calculation Settings
     body('overtime_enabled')
       .optional({ checkFalsy: true })
@@ -967,6 +979,9 @@ router.post('/',
 
         // Salary Calculation Settings
         attendance_affects_salary = true,
+
+        // APIT (Income Tax) Settings
+        apit_enabled = false,
 
         // Overtime Calculation Settings
         overtime_enabled = false,
@@ -1129,7 +1144,7 @@ router.post('/',
           id, client_id, employee_code, fingerprint_id, first_name, last_name, email, phone,
           date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
           hire_date, department_id, designation_id, manager_id, employee_type,
-          employment_status, base_salary, attendance_affects_salary,
+          employment_status, base_salary, attendance_affects_salary, apit_enabled,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
           in_time, out_time, break_start_time, break_end_time, follows_company_schedule, weekend_working_config,
           overtime_enabled, pre_shift_overtime_enabled, post_shift_overtime_enabled,
@@ -1137,12 +1152,13 @@ router.post('/',
           statutory_holiday_ot_multiplier,
           payable_hours_policy,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, fingerprint_id || null, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
         nationality || null, marital_status || null, hire_date, department_id, designation_id,
         manager_id || null, employee_type, employment_status, base_salary || null, attendance_affects_salary,
+        apit_enabled,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
         finalInTime, finalOutTime, break_start_time, break_end_time, follows_company_schedule,
         weekend_working_config ? JSON.stringify(weekend_working_config) : null,

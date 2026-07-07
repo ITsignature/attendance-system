@@ -57,6 +57,9 @@ interface EmployeeFormData {
   attendance_affects_salary: boolean;
   payable_hours_policy: 'strict_schedule' | 'actual_worked';
 
+  // APIT (Income Tax) Configuration
+  apit_enabled: boolean;
+
   // Overtime Configuration
   overtime_enabled: boolean;
   pre_shift_overtime_enabled: boolean;
@@ -203,6 +206,9 @@ const AddEmployees: React.FC = () => {
     salary: '',
     attendance_affects_salary: true,
     payable_hours_policy: 'strict_schedule',
+
+    // APIT (Income Tax) Configuration
+    apit_enabled: false,
 
     // Overtime Configuration
     overtime_enabled: false,
@@ -415,7 +421,7 @@ const AddEmployees: React.FC = () => {
   };
 
   // Handle input changes
-  const handleInputChange = useCallback((field: keyof EmployeeFormData, value: string | number) => {
+  const handleInputChange = useCallback((field: keyof EmployeeFormData, value: string | number | boolean) => {
     console.log(`🔄 handleInputChange called:`, { field, value, type: typeof value });
 
     setFormData(prev => ({
@@ -580,6 +586,9 @@ const AddEmployees: React.FC = () => {
         base_salary: formData.salary ? Number(formData.salary) : undefined,
         attendance_affects_salary: formData.attendance_affects_salary,
 
+        // APIT (Income Tax) Configuration
+        apit_enabled: formData.apit_enabled,
+
         // Emergency Contact
         emergency_contact_name: formData.emergency_contact_name,
         emergency_contact_phone: formData.emergency_contact_phone,
@@ -731,6 +740,9 @@ const debugAuth = () => {
       salary: '',
       attendance_affects_salary: true,
       payable_hours_policy: 'strict_schedule',
+
+      // APIT (Income Tax) Configuration
+      apit_enabled: false,
 
       // Overtime Configuration
       overtime_enabled: false,
@@ -1318,6 +1330,31 @@ const debugAuth = () => {
                           : "Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid full 8 hours."
                         }
                       </p>
+                    </div>
+
+                    {/* APIT (Income Tax) Configuration */}
+                    <div className="border-t pt-6 mt-6">
+                      <h5 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
+                        APIT (Income Tax) Settings
+                      </h5>
+
+                      <div className="mb-4">
+                        <div className="flex items-center">
+                          <input
+                            id="apit_enabled"
+                            type="checkbox"
+                            checked={formData.apit_enabled}
+                            onChange={(e) => handleInputChange('apit_enabled', e.target.checked)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                          />
+                          <label htmlFor="apit_enabled" className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                            Enable APIT (Advance Personal Income Tax)
+                          </label>
+                        </div>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Deduct APIT from this employee's salary per the Sri Lankan tax table. Monthly income up to Rs. 150,000 is tax free.
+                        </p>
+                      </div>
                     </div>
 
                     {/* Overtime Configuration */}

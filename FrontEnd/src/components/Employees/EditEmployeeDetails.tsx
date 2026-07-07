@@ -67,6 +67,9 @@ interface Employee {
   attendance_affects_salary?: boolean;
   payable_hours_policy?: 'strict_schedule' | 'actual_worked';
 
+  // APIT (Income Tax) Configuration
+  apit_enabled?: boolean | number;
+
   // Overtime Configuration
   overtime_enabled?: boolean;
   pre_shift_overtime_enabled?: boolean;
@@ -1156,6 +1159,31 @@ const EditEmployeeDetails: React.FC = () => {
                     : "Pay for actual hours worked if employee completes scheduled duration (allows time shifting). Example: Schedule 9AM-5PM, Actual 10AM-6PM → Paid full 8 hours."
                   }
                 </p>
+              </div>
+
+              {/* APIT (Income Tax) Configuration */}
+              <div className="border-t pt-6 mt-6">
+                <h5 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
+                  APIT (Income Tax) Settings
+                </h5>
+
+                <div className="mb-4">
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <Checkbox
+                      id="apit_enabled"
+                      checked={formData.apit_enabled === true || formData.apit_enabled === 1}
+                      onChange={(e) => handleChange('apit_enabled', e.target.checked)}
+                    />
+                    <div>
+                      <Label htmlFor="apit_enabled" className="font-medium">
+                        Enable APIT (Advance Personal Income Tax)
+                      </Label>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Deduct APIT from this employee's salary per the Sri Lankan tax table. Monthly income up to Rs. 150,000 is tax free.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Overtime Configuration */}
