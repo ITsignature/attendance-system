@@ -480,6 +480,7 @@ router.get('/employee-allowances',
             const [allowances] = await db.execute(`
                 SELECT
                     ea.id,
+                    ea.batch_id,
                     ea.employee_id,
                     e.employee_code,
                     COALESCE(NULLIF(CONCAT(TRIM(e.first_name), ' ', TRIM(e.last_name)), ' '), e.employee_code) as employee_name,
@@ -487,6 +488,7 @@ router.get('/employee-allowances',
                     ea.allowance_name,
                     ea.amount,
                     ea.is_percentage,
+                    ea.deduct_from_base_salary,
                     ea.is_taxable,
                     ea.is_active,
                     ea.effective_from,
@@ -525,6 +527,7 @@ router.post('/employee-allowances',
         body('allowance_name').notEmpty().withMessage('Allowance name is required'),
         body('amount').isNumeric().withMessage('Amount must be numeric'),
         body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
         body('is_taxable').optional().isBoolean(),
         body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
         body('effective_to').optional().custom((value) => {
@@ -555,6 +558,7 @@ router.post('/employee-allowances',
             allowance_name,
             amount,
             is_percentage = false,
+            deduct_from_base_salary = false,
             is_taxable = true,
             effective_from,
             effective_to = null
@@ -564,12 +568,12 @@ router.post('/employee-allowances',
             await db.execute(`
                 INSERT INTO employee_allowances (
                     id, client_id, employee_id, allowance_type, allowance_name,
-                    amount, is_percentage, is_taxable, is_active,
+                    amount, is_percentage, deduct_from_base_salary, is_taxable, is_active,
                     effective_from, effective_to, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             `, [
                 allowanceId, clientId, employee_id, allowance_type, allowance_name,
-                amount, is_percentage, is_taxable, true,
+                amount, is_percentage, deduct_from_base_salary, is_taxable, true,
                 effective_from, effective_to, userId
             ]);
 
@@ -600,6 +604,7 @@ router.put('/employee-allowances/:id',
         body('allowance_name').optional().notEmpty(),
         body('amount').optional().isNumeric(),
         body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
         body('is_taxable').optional().isBoolean(),
         body('effective_from').optional().isISO8601(),
         body('effective_to').optional().custom((value) => {
@@ -720,6 +725,333 @@ router.delete('/employee-allowances/:id',
     })
 );
 
+// =============================================
+// EMPLOYEE ALLOWANCE BATCHES (bulk create/edit)
+// =============================================
+// Mirrors employee_deduction_batches: one editable record holds shared values,
+// each selected employee still gets its own employee_allowances row tagged with batch_id.
+
+/**
+ * GET /api/payroll-runs/employee-allowance-batches/:id
+ * Get an allowance batch with its member employees
+ */
+router.get('/employee-allowance-batches/:id',
+    checkPermission('settings.employee_allowances.view'),
+    param('id').isUUID().withMessage('Valid batch ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const clientId = req.user.clientId;
+        const db = await getDB();
+
+        const [batches] = await db.execute(
+            `SELECT * FROM employee_allowance_batches WHERE id = ? AND client_id = ?`,
+            [req.params.id, clientId]
+        );
+
+        if (batches.length === 0) {
+            return res.status(404).json({ success: false, message: 'Allowance batch not found' });
+        }
+
+        const [members] = await db.execute(`
+            SELECT ea.id, ea.employee_id, e.employee_code,
+                   COALESCE(NULLIF(CONCAT(TRIM(e.first_name), ' ', TRIM(e.last_name)), ' '), e.employee_code) as employee_name,
+                   ea.is_active
+            FROM employee_allowances ea
+            JOIN employees e ON ea.employee_id = e.id
+            WHERE ea.batch_id = ? AND ea.client_id = ?
+            ORDER BY e.employee_code
+        `, [req.params.id, clientId]);
+
+        res.json({ success: true, data: { ...batches[0], members } });
+    })
+);
+
+/**
+ * POST /api/payroll-runs/employee-allowance-batches
+ * Bulk-create an allowance for multiple employees as a single editable batch
+ */
+router.post('/employee-allowance-batches',
+    checkPermission('settings.employee_allowances.add'),
+    [
+        body('employee_ids').isArray({ min: 1 }).withMessage('At least one employee is required'),
+        body('employee_ids.*').isUUID().withMessage('Valid employee IDs are required'),
+        body('allowance_type').notEmpty().withMessage('Allowance type is required'),
+        body('allowance_name').notEmpty().withMessage('Allowance name is required'),
+        body('amount').isNumeric().withMessage('Amount must be numeric'),
+        body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
+        body('is_taxable').optional().isBoolean(),
+        body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
+        body('effective_to').optional().custom((value) => {
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        })
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+
+        const {
+            employee_ids,
+            allowance_type,
+            allowance_name,
+            amount,
+            is_percentage = false,
+            deduct_from_base_salary = false,
+            is_taxable = true,
+            effective_from,
+            effective_to = null
+        } = req.body;
+
+        const uniqueEmployeeIds = Array.from(new Set(employee_ids));
+        const batchId = uuidv4();
+        const connection = await db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            await connection.execute(`
+                INSERT INTO employee_allowance_batches (
+                    id, client_id, allowance_type, allowance_name, amount, is_percentage,
+                    deduct_from_base_salary, is_taxable, is_active, effective_from, effective_to, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `, [
+                batchId, clientId, allowance_type, allowance_name, amount, is_percentage,
+                deduct_from_base_salary, is_taxable, true, effective_from, effective_to, userId
+            ]);
+
+            for (const employeeId of uniqueEmployeeIds) {
+                await connection.execute(`
+                    INSERT INTO employee_allowances (
+                        id, client_id, batch_id, employee_id, allowance_type, allowance_name,
+                        amount, is_percentage, deduct_from_base_salary, is_taxable, is_active,
+                        effective_from, effective_to, created_by, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                `, [
+                    uuidv4(), clientId, batchId, employeeId, allowance_type, allowance_name,
+                    amount, is_percentage, deduct_from_base_salary, is_taxable, true,
+                    effective_from, effective_to, userId
+                ]);
+            }
+
+            await connection.commit();
+
+            res.status(201).json({
+                success: true,
+                message: `Allowance batch created for ${uniqueEmployeeIds.length} employee(s)`,
+                data: { id: batchId, member_count: uniqueEmployeeIds.length }
+            });
+        } catch (error) {
+            await connection.rollback();
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create employee allowance batch',
+                error: error.message
+            });
+        } finally {
+            connection.release();
+        }
+    })
+);
+
+/**
+ * PUT /api/payroll-runs/employee-allowance-batches/:id
+ * Update shared values (cascades to all member rows) and/or membership (employee_ids)
+ */
+router.put('/employee-allowance-batches/:id',
+    checkPermission('settings.employee_allowances.edit'),
+    [
+        param('id').isUUID().withMessage('Valid batch ID is required'),
+        body('allowance_type').optional().notEmpty(),
+        body('allowance_name').optional().notEmpty(),
+        body('amount').optional().isNumeric(),
+        body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
+        body('is_taxable').optional().isBoolean(),
+        body('effective_from').optional().isISO8601(),
+        body('effective_to').optional().custom((value) => {
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        }),
+        body('employee_ids').optional().isArray({ min: 1 }).withMessage('At least one employee is required'),
+        body('employee_ids.*').optional().isUUID()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const batchId = req.params.id;
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+        const { employee_ids, ...rawFields } = req.body;
+
+        const ALLOWED_BATCH_FIELDS = [
+            'allowance_type', 'allowance_name', 'amount', 'is_percentage',
+            'deduct_from_base_salary', 'is_taxable', 'effective_from', 'effective_to'
+        ];
+        const sharedFields = {};
+        for (const key of ALLOWED_BATCH_FIELDS) {
+            if (rawFields[key] !== undefined) sharedFields[key] = rawFields[key];
+        }
+
+        const [existingBatch] = await db.execute(
+            `SELECT id FROM employee_allowance_batches WHERE id = ? AND client_id = ?`,
+            [batchId, clientId]
+        );
+        if (existingBatch.length === 0) {
+            return res.status(404).json({ success: false, message: 'Allowance batch not found' });
+        }
+
+        const connection = await db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            const updateFields = [];
+            const updateValues = [];
+            Object.keys(sharedFields).forEach(key => {
+                if (sharedFields[key] !== undefined) {
+                    updateFields.push(`${key} = ?`);
+                    updateValues.push(sharedFields[key]);
+                }
+            });
+
+            if (updateFields.length > 0) {
+                updateFields.push('updated_at = NOW()');
+
+                await connection.execute(`
+                    UPDATE employee_allowance_batches SET ${updateFields.join(', ')} WHERE id = ? AND client_id = ?
+                `, [...updateValues, batchId, clientId]);
+
+                await connection.execute(`
+                    UPDATE employee_allowances SET ${updateFields.join(', ')} WHERE batch_id = ? AND client_id = ?
+                `, [...updateValues, batchId, clientId]);
+            }
+
+            if (employee_ids) {
+                const uniqueEmployeeIds = Array.from(new Set(employee_ids));
+
+                const [currentMembers] = await connection.execute(
+                    `SELECT id, employee_id FROM employee_allowances WHERE batch_id = ? AND client_id = ?`,
+                    [batchId, clientId]
+                );
+                const currentEmployeeIds = currentMembers.map(m => m.employee_id);
+
+                const toRemove = currentMembers.filter(m => !uniqueEmployeeIds.includes(m.employee_id));
+                const toAdd = uniqueEmployeeIds.filter(id => !currentEmployeeIds.includes(id));
+
+                for (const member of toRemove) {
+                    await connection.execute(`
+                        UPDATE employee_allowances SET is_active = false, batch_id = NULL, updated_at = NOW()
+                        WHERE id = ? AND client_id = ?
+                    `, [member.id, clientId]);
+                }
+
+                if (toAdd.length > 0) {
+                    const [batchRow] = await connection.execute(
+                        `SELECT * FROM employee_allowance_batches WHERE id = ?`,
+                        [batchId]
+                    );
+                    const b = batchRow[0];
+                    for (const employeeId of toAdd) {
+                        await connection.execute(`
+                            INSERT INTO employee_allowances (
+                                id, client_id, batch_id, employee_id, allowance_type, allowance_name,
+                                amount, is_percentage, deduct_from_base_salary, is_taxable, is_active,
+                                effective_from, effective_to, created_by, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                        `, [
+                            uuidv4(), clientId, batchId, employeeId, b.allowance_type, b.allowance_name,
+                            b.amount, b.is_percentage, b.deduct_from_base_salary, b.is_taxable, true,
+                            b.effective_from, b.effective_to, userId
+                        ]);
+                    }
+                }
+            }
+
+            await connection.commit();
+            res.json({ success: true, message: 'Allowance batch updated successfully' });
+        } catch (error) {
+            await connection.rollback();
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update employee allowance batch',
+                error: error.message
+            });
+        } finally {
+            connection.release();
+        }
+    })
+);
+
+/**
+ * DELETE /api/payroll-runs/employee-allowance-batches/:id
+ * Deactivate the batch and remove its member allowance rows (history is preserved elsewhere, not deleted)
+ */
+router.delete('/employee-allowance-batches/:id',
+    checkPermission('settings.employee_allowances.delete'),
+    param('id').isUUID().withMessage('Valid batch ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const batchId = req.params.id;
+        const clientId = req.user.clientId;
+        const db = await getDB();
+        const connection = await db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            const [batchRows] = await connection.execute(
+                `SELECT id FROM employee_allowance_batches WHERE id = ? AND client_id = ?`,
+                [batchId, clientId]
+            );
+            if (batchRows.length === 0) {
+                await connection.rollback();
+                return res.status(404).json({ success: false, message: 'Allowance batch not found' });
+            }
+
+            await connection.execute(`
+                DELETE FROM employee_allowances WHERE batch_id = ? AND client_id = ?
+            `, [batchId, clientId]);
+
+            await connection.execute(`
+                DELETE FROM employee_allowance_batches WHERE id = ? AND client_id = ?
+            `, [batchId, clientId]);
+
+            await connection.commit();
+            res.json({ success: true, message: 'Allowance batch deleted successfully' });
+        } catch (error) {
+            await connection.rollback();
+            res.status(500).json({
+                success: false,
+                message: 'Failed to delete employee allowance batch',
+                error: error.message
+            });
+        } finally {
+            connection.release();
+        }
+    })
+);
+
 /**
  * GET /api/payroll-runs/employee-deductions
  * Get employee deductions
@@ -751,6 +1083,7 @@ router.get('/employee-deductions',
             const [deductions] = await db.execute(`
                 SELECT
                     ed.id,
+                    ed.batch_id,
                     ed.employee_id,
                     e.employee_code,
                     COALESCE(NULLIF(CONCAT(TRIM(e.first_name), ' ', TRIM(e.last_name)), ' '), e.employee_code) as employee_name,
@@ -758,6 +1091,7 @@ router.get('/employee-deductions',
                     ed.deduction_name,
                     ed.amount,
                     ed.is_percentage,
+                    ed.deduct_from_base_salary,
                     ed.is_recurring,
                     ed.remaining_installments,
                     ed.is_active,
@@ -796,6 +1130,7 @@ router.post('/employee-deductions',
         body('deduction_name').notEmpty().withMessage('Deduction name is required'),
         body('amount').isNumeric().withMessage('Amount must be numeric'),
         body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 1 }).withMessage('Remaining installments must be at least 1'),
         body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
@@ -829,6 +1164,7 @@ router.post('/employee-deductions',
             deduction_name,
             amount,
             is_percentage = false,
+            deduct_from_base_salary = false,
             is_recurring = false,
             remaining_installments = 1,
             effective_from,
@@ -839,12 +1175,12 @@ router.post('/employee-deductions',
             await db.execute(`
                 INSERT INTO employee_deductions (
                     id, client_id, employee_id, deduction_type, deduction_name,
-                    amount, is_percentage, is_recurring, remaining_installments,
+                    amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
                     is_active, effective_from, effective_to, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             `, [
                 deductionId, clientId, employee_id, deduction_type, deduction_name,
-                amount, is_percentage, is_recurring, remaining_installments,
+                amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
                 true, effective_from, effective_to, userId
             ]);
 
@@ -876,6 +1212,7 @@ router.put('/employee-deductions/:id',
         body('deduction_name').optional().notEmpty(),
         body('amount').optional().isNumeric(),
         body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 0 }).withMessage('Remaining installments cannot be negative'),
         body('effective_from').optional().isISO8601(),
@@ -1002,6 +1339,339 @@ router.delete('/employee-deductions/:id',
                 message: 'Failed to delete employee deduction',
                 error: error.message
             });
+        }
+    })
+);
+
+// =============================================
+// EMPLOYEE DEDUCTION BATCHES (bulk create/edit)
+// =============================================
+// A batch holds one shared set of values; each selected employee gets its own row in
+// employee_deductions tagged with batch_id, so per-employee installment/active-state
+// tracking in PayrollRunService keeps working unchanged.
+
+/**
+ * GET /api/payroll-runs/employee-deduction-batches/:id
+ * Get a deduction batch with its member employees
+ */
+router.get('/employee-deduction-batches/:id',
+    checkPermission('settings.employee_deductions.view'),
+    param('id').isUUID().withMessage('Valid batch ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const clientId = req.user.clientId;
+        const db = await getDB();
+
+        const [batches] = await db.execute(
+            `SELECT * FROM employee_deduction_batches WHERE id = ? AND client_id = ?`,
+            [req.params.id, clientId]
+        );
+
+        if (batches.length === 0) {
+            return res.status(404).json({ success: false, message: 'Deduction batch not found' });
+        }
+
+        const [members] = await db.execute(`
+            SELECT ed.id, ed.employee_id, e.employee_code,
+                   COALESCE(NULLIF(CONCAT(TRIM(e.first_name), ' ', TRIM(e.last_name)), ' '), e.employee_code) as employee_name,
+                   ed.remaining_installments, ed.is_active
+            FROM employee_deductions ed
+            JOIN employees e ON ed.employee_id = e.id
+            WHERE ed.batch_id = ? AND ed.client_id = ?
+            ORDER BY e.employee_code
+        `, [req.params.id, clientId]);
+
+        res.json({ success: true, data: { ...batches[0], members } });
+    })
+);
+
+/**
+ * POST /api/payroll-runs/employee-deduction-batches
+ * Bulk-create a deduction for multiple employees as a single editable batch
+ */
+router.post('/employee-deduction-batches',
+    checkPermission('settings.employee_deductions.add'),
+    [
+        body('employee_ids').isArray({ min: 1 }).withMessage('At least one employee is required'),
+        body('employee_ids.*').isUUID().withMessage('Valid employee IDs are required'),
+        body('deduction_type').notEmpty().withMessage('Deduction type is required'),
+        body('deduction_name').notEmpty().withMessage('Deduction name is required'),
+        body('amount').isNumeric().withMessage('Amount must be numeric'),
+        body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
+        body('is_recurring').optional().isBoolean(),
+        body('remaining_installments').optional().isInt({ min: 1 }).withMessage('Remaining installments must be at least 1'),
+        body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
+        body('effective_to').optional().custom((value) => {
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        })
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+
+        const {
+            employee_ids,
+            deduction_type,
+            deduction_name,
+            amount,
+            is_percentage = false,
+            deduct_from_base_salary = false,
+            is_recurring = false,
+            remaining_installments = 1,
+            effective_from,
+            effective_to = null
+        } = req.body;
+
+        const uniqueEmployeeIds = Array.from(new Set(employee_ids));
+        const batchId = uuidv4();
+        const connection = await db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            await connection.execute(`
+                INSERT INTO employee_deduction_batches (
+                    id, client_id, deduction_type, deduction_name, amount, is_percentage,
+                    deduct_from_base_salary, is_recurring, remaining_installments, is_active, effective_from,
+                    effective_to, created_by, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `, [
+                batchId, clientId, deduction_type, deduction_name, amount, is_percentage,
+                deduct_from_base_salary, is_recurring, remaining_installments, true, effective_from, effective_to, userId
+            ]);
+
+            for (const employeeId of uniqueEmployeeIds) {
+                await connection.execute(`
+                    INSERT INTO employee_deductions (
+                        id, client_id, batch_id, employee_id, deduction_type, deduction_name,
+                        amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                        is_active, effective_from, effective_to, created_by, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                `, [
+                    uuidv4(), clientId, batchId, employeeId, deduction_type, deduction_name,
+                    amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                    true, effective_from, effective_to, userId
+                ]);
+            }
+
+            await connection.commit();
+
+            res.status(201).json({
+                success: true,
+                message: `Deduction batch created for ${uniqueEmployeeIds.length} employee(s)`,
+                data: { id: batchId, member_count: uniqueEmployeeIds.length }
+            });
+        } catch (error) {
+            await connection.rollback();
+            res.status(500).json({
+                success: false,
+                message: 'Failed to create employee deduction batch',
+                error: error.message
+            });
+        } finally {
+            connection.release();
+        }
+    })
+);
+
+/**
+ * PUT /api/payroll-runs/employee-deduction-batches/:id
+ * Update shared values (cascades to all member rows) and/or membership (employee_ids)
+ */
+router.put('/employee-deduction-batches/:id',
+    checkPermission('settings.employee_deductions.edit'),
+    [
+        param('id').isUUID().withMessage('Valid batch ID is required'),
+        body('deduction_type').optional().notEmpty(),
+        body('deduction_name').optional().notEmpty(),
+        body('amount').optional().isNumeric(),
+        body('is_percentage').optional().isBoolean(),
+        body('deduct_from_base_salary').optional().isBoolean(),
+        body('is_recurring').optional().isBoolean(),
+        body('remaining_installments').optional().isInt({ min: 0 }),
+        body('effective_from').optional().isISO8601(),
+        body('effective_to').optional().custom((value) => {
+            if (value === null || value === undefined) return true;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) return true;
+            throw new Error('effective_to must be a valid date or null');
+        }),
+        body('employee_ids').optional().isArray({ min: 1 }).withMessage('At least one employee is required'),
+        body('employee_ids.*').optional().isUUID()
+    ],
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const batchId = req.params.id;
+        const clientId = req.user.clientId;
+        const userId = req.user.userId;
+        const db = await getDB();
+        const { employee_ids, ...rawFields } = req.body;
+
+        const ALLOWED_BATCH_FIELDS = [
+            'deduction_type', 'deduction_name', 'amount', 'is_percentage',
+            'deduct_from_base_salary', 'is_recurring', 'remaining_installments',
+            'effective_from', 'effective_to'
+        ];
+        const sharedFields = {};
+        for (const key of ALLOWED_BATCH_FIELDS) {
+            if (rawFields[key] !== undefined) sharedFields[key] = rawFields[key];
+        }
+
+        const [existingBatch] = await db.execute(
+            `SELECT id FROM employee_deduction_batches WHERE id = ? AND client_id = ?`,
+            [batchId, clientId]
+        );
+        if (existingBatch.length === 0) {
+            return res.status(404).json({ success: false, message: 'Deduction batch not found' });
+        }
+
+        const connection = await db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            const updateFields = [];
+            const updateValues = [];
+            Object.keys(sharedFields).forEach(key => {
+                if (sharedFields[key] !== undefined) {
+                    updateFields.push(`${key} = ?`);
+                    updateValues.push(sharedFields[key]);
+                }
+            });
+
+            if (updateFields.length > 0) {
+                updateFields.push('updated_at = NOW()');
+
+                await connection.execute(`
+                    UPDATE employee_deduction_batches SET ${updateFields.join(', ')} WHERE id = ? AND client_id = ?
+                `, [...updateValues, batchId, clientId]);
+
+                await connection.execute(`
+                    UPDATE employee_deductions SET ${updateFields.join(', ')} WHERE batch_id = ? AND client_id = ?
+                `, [...updateValues, batchId, clientId]);
+            }
+
+            if (employee_ids) {
+                const uniqueEmployeeIds = Array.from(new Set(employee_ids));
+
+                const [currentMembers] = await connection.execute(
+                    `SELECT id, employee_id FROM employee_deductions WHERE batch_id = ? AND client_id = ?`,
+                    [batchId, clientId]
+                );
+                const currentEmployeeIds = currentMembers.map(m => m.employee_id);
+
+                const toRemove = currentMembers.filter(m => !uniqueEmployeeIds.includes(m.employee_id));
+                const toAdd = uniqueEmployeeIds.filter(id => !currentEmployeeIds.includes(id));
+
+                for (const member of toRemove) {
+                    await connection.execute(`
+                        UPDATE employee_deductions SET is_active = false, batch_id = NULL, updated_at = NOW()
+                        WHERE id = ? AND client_id = ?
+                    `, [member.id, clientId]);
+                }
+
+                if (toAdd.length > 0) {
+                    const [batchRow] = await connection.execute(
+                        `SELECT * FROM employee_deduction_batches WHERE id = ?`,
+                        [batchId]
+                    );
+                    const b = batchRow[0];
+                    for (const employeeId of toAdd) {
+                        await connection.execute(`
+                            INSERT INTO employee_deductions (
+                                id, client_id, batch_id, employee_id, deduction_type, deduction_name,
+                                amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                                is_active, effective_from, effective_to, created_by, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                        `, [
+                            uuidv4(), clientId, batchId, employeeId, b.deduction_type, b.deduction_name,
+                            b.amount, b.is_percentage, b.deduct_from_base_salary, b.is_recurring, b.remaining_installments,
+                            true, b.effective_from, b.effective_to, userId
+                        ]);
+                    }
+                }
+            }
+
+            await connection.commit();
+            res.json({ success: true, message: 'Deduction batch updated successfully' });
+        } catch (error) {
+            await connection.rollback();
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update employee deduction batch',
+                error: error.message
+            });
+        } finally {
+            connection.release();
+        }
+    })
+);
+
+/**
+ * DELETE /api/payroll-runs/employee-deduction-batches/:id
+ * Deactivate the batch and all its member deduction rows (history is preserved, not deleted)
+ */
+router.delete('/employee-deduction-batches/:id',
+    checkPermission('settings.employee_deductions.delete'),
+    param('id').isUUID().withMessage('Valid batch ID is required'),
+    asyncHandler(async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+        }
+
+        const batchId = req.params.id;
+        const clientId = req.user.clientId;
+        const db = await getDB();
+        const connection = await db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            const [batchRows] = await connection.execute(
+                `SELECT id FROM employee_deduction_batches WHERE id = ? AND client_id = ?`,
+                [batchId, clientId]
+            );
+            if (batchRows.length === 0) {
+                await connection.rollback();
+                return res.status(404).json({ success: false, message: 'Deduction batch not found' });
+            }
+
+            await connection.execute(`
+                DELETE FROM employee_deductions WHERE batch_id = ? AND client_id = ?
+            `, [batchId, clientId]);
+
+            await connection.execute(`
+                DELETE FROM employee_deduction_batches WHERE id = ? AND client_id = ?
+            `, [batchId, clientId]);
+
+            await connection.commit();
+            res.json({ success: true, message: 'Deduction batch deleted successfully' });
+        } catch (error) {
+            await connection.rollback();
+            res.status(500).json({
+                success: false,
+                message: 'Failed to delete employee deduction batch',
+                error: error.message
+            });
+        } finally {
+            connection.release();
         }
     })
 );

@@ -3124,6 +3124,7 @@ class PayrollRunService {
                 ea.allowance_name,
                 ea.amount,
                 ea.is_percentage,
+                ea.deduct_from_base_salary,
                 ea.is_taxable,
                 ea.effective_from,
                 ea.effective_to
@@ -3141,6 +3142,7 @@ class PayrollRunService {
                 ed.deduction_name,
                 ed.amount,
                 ed.is_percentage,
+                ed.deduct_from_base_salary,
                 ed.is_recurring,
                 ed.remaining_installments,
                 ed.effective_from,
@@ -3569,12 +3571,6 @@ class PayrollRunService {
                     const dateStr = otRecord.date;
                     const dayOfWeek = new Date(dateStr).getDay(); // 0=Sunday, 6=Saturday
 
-                    // Skip holiday overtime calculation (to be implemented)
-                    if (otRecord.is_holiday) {
-                        console.log(`     ${dateStr} (holiday): ⚠️  Holiday overtime calculation - TO BE IMPLEMENTED`);
-                        continue;
-                    }
-
                     // Determine applicable overtime seconds based on enable flags
                     const preShiftSeconds = parseInt(otRecord.pre_shift_overtime_seconds) || 0;
                     const postShiftSeconds = parseInt(otRecord.post_shift_overtime_seconds) || 0;
@@ -3590,22 +3586,23 @@ class PayrollRunService {
 
                     if (totalOvertimeSeconds === 0) continue;
 
-                    // Get the correct hourly rate based on day of week
+                    // Get the correct hourly rate based on day type.
+                    // Holiday / statutory holiday (otRecord.day_type, resolved upstream) always
+                    // uses the weekday hourly rate as its base; otherwise use the day-of-week rate.
                     let hourlyRate = 0;
-                    let dayType = 'weekday';
+                    const dayType = otRecord.day_type || 'weekday';
 
-                    if (dayOfWeek === 0) {
+                    if (dayType === 'holiday' || dayType === 'statutory_holiday') {
+                        hourlyRate = parseFloat(record.weekday_hourly_rate) || 0;
+                    } else if (dayOfWeek === 0) {
                         // Sunday
                         hourlyRate = parseFloat(record.sunday_hourly_rate) || 0;
-                        dayType = 'sunday';
                     } else if (dayOfWeek === 6) {
                         // Saturday
                         hourlyRate = parseFloat(record.saturday_hourly_rate) || 0;
-                        dayType = 'saturday';
                     } else {
                         // Weekday (Monday-Friday)
                         hourlyRate = parseFloat(record.weekday_hourly_rate) || 0;
-                        dayType = 'weekday';
                     }
 
                     // Calculate per-second rate
@@ -3748,9 +3745,10 @@ class PayrollRunService {
             for (const deduction of employeeData.employeeDeductions) {
                 let amount = parseFloat(deduction.amount) || 0;
 
-                // Handle percentage-based deductions (calculated on gross salary)
+                // Handle percentage-based deductions (on base salary if flagged, otherwise gross salary)
+                const deductionBase = deduction.deduct_from_base_salary ? baseForStatutory : baseForEmployee;
                 if (deduction.is_percentage) {
-                    amount = (baseForEmployee * amount) / 100;
+                    amount = (deductionBase * amount) / 100;
                 }
 
                 if (amount > 0) {
@@ -3766,7 +3764,7 @@ class PayrollRunService {
                     });
                     total += amount;
 
-                    console.log(`   ✅ ${deduction.deduction_name}: ${amount} ${deduction.is_percentage ? `(${deduction.amount}% of ${baseForEmployee.toFixed(2)})` : ''}`);
+                    console.log(`   ✅ ${deduction.deduction_name}: ${amount} ${deduction.is_percentage ? `(${deduction.amount}% of ${deductionBase.toFixed(2)})` : ''}`);
 
                     // Update remaining installments if it's a recurring deduction
                     if (deduction.is_recurring && deduction.remaining_installments > 0) {
@@ -4412,7 +4410,8 @@ class PayrollRunService {
                     e.weekday_ot_multiplier,
                     e.saturday_ot_multiplier,
                     e.sunday_ot_multiplier,
-                    e.holiday_ot_multiplier
+                    e.holiday_ot_multiplier,
+                    e.statutory_holiday_ot_multiplier
                 FROM payroll_records pr
                 JOIN employees e ON pr.employee_id = e.id
                 WHERE pr.run_id = ?
@@ -4434,6 +4433,7 @@ class PayrollRunService {
                     ea.allowance_name,
                     ea.amount,
                     ea.is_percentage,
+                    ea.deduct_from_base_salary,
                     ea.is_taxable
                 FROM employee_allowances ea
                 WHERE ea.employee_id IN (${employeeIds.map(() => '?').join(',')})
@@ -4456,6 +4456,7 @@ class PayrollRunService {
                     ed.deduction_name,
                     ed.amount,
                     ed.is_percentage,
+                    ed.deduct_from_base_salary,
                     ed.is_recurring,
                     ed.remaining_installments
                 FROM employee_deductions ed
@@ -4598,7 +4599,8 @@ class PayrollRunService {
                     e.weekday_ot_multiplier,
                     e.saturday_ot_multiplier,
                     e.sunday_ot_multiplier,
-                    e.holiday_ot_multiplier
+                    e.holiday_ot_multiplier,
+                    e.statutory_holiday_ot_multiplier
                 FROM attendance a
                 JOIN employees e ON a.employee_id = e.id
                 WHERE a.employee_id IN (${employeeIds.map(() => '?').join(',')})
@@ -4643,6 +4645,38 @@ class PayrollRunService {
                     saturday_covering_is_completed: row.saturday_covering_is_completed ? true : false
                 };
             });
+
+            // ========================================
+            // BULK FETCH: Holidays in period (for holiday/statutory-holiday OT classification)
+            // ========================================
+            const [allHolidays] = await db.execute(`
+                SELECT h.date, h.is_statutory, h.applies_to_all, h.department_ids
+                FROM holidays h
+                WHERE h.client_id = ?
+                  AND h.date BETWEEN ? AND ?
+                  AND h.is_optional = 0
+            `, [clientId, minPeriodStart, maxPeriodEnd]);
+
+            const holidaysByDate = new Map();
+            allHolidays.forEach(h => {
+                const dateStr = typeof h.date === 'string' ? h.date : h.date.toISOString().split('T')[0];
+                const deptIds = h.department_ids ? JSON.parse(h.department_ids) : null;
+                if (!holidaysByDate.has(dateStr)) holidaysByDate.set(dateStr, []);
+                holidaysByDate.get(dateStr).push({
+                    is_statutory: !!h.is_statutory,
+                    applies_to_all: !!h.applies_to_all,
+                    department_ids: deptIds
+                });
+            });
+
+            function getHolidayForDate(dateStr, departmentId) {
+                const entries = holidaysByDate.get(dateStr);
+                if (!entries) return null;
+                return entries.find(h =>
+                    h.applies_to_all ||
+                    (departmentId && Array.isArray(h.department_ids) && h.department_ids.includes(departmentId))
+                ) || null;
+            }
 
             // ========================================
             // BULK FETCH #5: Actual Attended Days
@@ -4897,21 +4931,23 @@ class PayrollRunService {
 
                         if (totalOvertimeSeconds === 0) continue;
 
-                        // TODO: Holiday overtime calculation to be implemented
-                        // For now, skip holiday overtime
-                        // Future: Need to determine holiday-specific hourly rate and multiplier
-                        const isHoliday = false; // Placeholder - holiday check to be added
-                        if (isHoliday) {
-                            console.log(`     ${dateStr} (holiday): ⚠️  Holiday overtime calculation - TO BE IMPLEMENTED`);
-                            continue;
-                        }
-
-                        // Get the correct hourly rate based on day of week (from payroll_records)
+                        // Determine the correct hourly rate and multiplier.
+                        // Holiday / statutory holiday takes priority over day-of-week,
+                        // and always uses the weekday hourly rate as its base.
+                        const holidayInfo = getHolidayForDate(dateStr, emp.department_id);
                         let hourlyRate = 0;
                         let dayType = 'weekday';
                         let multiplier = 1.0;
 
-                        if (dayOfWeek === 0) {
+                        if (holidayInfo && holidayInfo.is_statutory && otRecord.statutory_holiday_ot_multiplier) {
+                            hourlyRate = parseFloat(emp.weekday_hourly_rate) || 0;
+                            multiplier = parseFloat(otRecord.statutory_holiday_ot_multiplier) || 1.0;
+                            dayType = 'statutory_holiday';
+                        } else if (holidayInfo && otRecord.holiday_ot_multiplier) {
+                            hourlyRate = parseFloat(emp.weekday_hourly_rate) || 0;
+                            multiplier = parseFloat(otRecord.holiday_ot_multiplier) || 1.0;
+                            dayType = 'holiday';
+                        } else if (dayOfWeek === 0) {
                             // Sunday
                             hourlyRate = parseFloat(emp.sunday_hourly_rate) || 0;
                             multiplier = parseFloat(otRecord.sunday_ot_multiplier) || 1.0;
@@ -4977,30 +5013,53 @@ class PayrollRunService {
                     const satMult = parseFloat(emp.saturday_ot_multiplier) || 1;
                     const sunMult = parseFloat(emp.sunday_ot_multiplier)   || 1;
 
+                    // Resolve the day_type/rate/multiplier for a weekend OT date, giving
+                    // holiday / statutory holiday priority over the plain Saturday/Sunday rate.
+                    const resolveWeekendOT = (ds, fallbackType, fallbackRate, fallbackMult) => {
+                        const holidayInfo = getHolidayForDate(ds, emp.department_id);
+                        if (holidayInfo && holidayInfo.is_statutory && emp.statutory_holiday_ot_multiplier) {
+                            return {
+                                dayType: 'statutory_holiday',
+                                rate: parseFloat(emp.weekday_hourly_rate) || 0,
+                                mult: parseFloat(emp.statutory_holiday_ot_multiplier) || 1.0
+                            };
+                        }
+                        if (holidayInfo && emp.holiday_ot_multiplier) {
+                            return {
+                                dayType: 'holiday',
+                                rate: parseFloat(emp.weekday_hourly_rate) || 0,
+                                mult: parseFloat(emp.holiday_ot_multiplier) || 1.0
+                            };
+                        }
+                        return { dayType: fallbackType, rate: fallbackRate, mult: fallbackMult };
+                    };
+
                     if (uncOT.saturday_seconds > 0) {
-                        const satOTAmount = (uncOT.saturday_seconds / 3600) * satRate * satMult;
-                        overtimeAmount += satOTAmount;
                         // Expand per-date if available, else fall back to single aggregate row
                         const satByDate = uncOT.saturday_by_date || {};
                         const satDates = Object.keys(satByDate).sort();
+                        let satOTAmount = 0;
                         if (satDates.length > 0) {
                             for (const ds of satDates) {
                                 const secs = satByDate[ds];
-                                const amt = (secs / 3600) * satRate * satMult;
+                                const { dayType, rate, mult } = resolveWeekendOT(ds, 'saturday', satRate, satMult);
+                                const amt = (secs / 3600) * rate * mult;
+                                satOTAmount += amt;
                                 overtimeDetailsWithAmount.push({
                                     date: ds,
-                                    day_type: 'saturday',
+                                    day_type: dayType,
                                     total_minutes: Math.round(secs / 60),
                                     pre_shift_minutes: 0,
                                     post_shift_minutes: 0,
                                     pre_shift_enabled: false,
                                     post_shift_enabled: false,
-                                    hourly_rate: satRate,
-                                    multiplier: satMult,
+                                    hourly_rate: rate,
+                                    multiplier: mult,
                                     amount: amt
                                 });
                             }
                         } else {
+                            satOTAmount = (uncOT.saturday_seconds / 3600) * satRate * satMult;
                             overtimeDetailsWithAmount.push({
                                 date: 'unconfigured-saturday',
                                 day_type: 'saturday',
@@ -5014,32 +5073,35 @@ class PayrollRunService {
                                 amount: satOTAmount
                             });
                         }
-                        console.log(`   Unconfigured Saturday OT: ${(uncOT.saturday_seconds/3600).toFixed(2)}h × Rs.${satRate} × ${satMult}x = Rs.${satOTAmount.toFixed(2)}`);
+                        overtimeAmount += satOTAmount;
+                        console.log(`   Unconfigured Saturday OT: ${(uncOT.saturday_seconds/3600).toFixed(2)}h → Rs.${satOTAmount.toFixed(2)}`);
                     }
 
                     if (uncOT.sunday_seconds > 0) {
-                        const sunOTAmount = (uncOT.sunday_seconds / 3600) * sunRate * sunMult;
-                        overtimeAmount += sunOTAmount;
                         const sunByDate = uncOT.sunday_by_date || {};
                         const sunDates = Object.keys(sunByDate).sort();
+                        let sunOTAmount = 0;
                         if (sunDates.length > 0) {
                             for (const ds of sunDates) {
                                 const secs = sunByDate[ds];
-                                const amt = (secs / 3600) * sunRate * sunMult;
+                                const { dayType, rate, mult } = resolveWeekendOT(ds, 'sunday', sunRate, sunMult);
+                                const amt = (secs / 3600) * rate * mult;
+                                sunOTAmount += amt;
                                 overtimeDetailsWithAmount.push({
                                     date: ds,
-                                    day_type: 'sunday',
+                                    day_type: dayType,
                                     total_minutes: Math.round(secs / 60),
                                     pre_shift_minutes: 0,
                                     post_shift_minutes: 0,
                                     pre_shift_enabled: false,
                                     post_shift_enabled: false,
-                                    hourly_rate: sunRate,
-                                    multiplier: sunMult,
+                                    hourly_rate: rate,
+                                    multiplier: mult,
                                     amount: amt
                                 });
                             }
                         } else {
+                            sunOTAmount = (uncOT.sunday_seconds / 3600) * sunRate * sunMult;
                             overtimeDetailsWithAmount.push({
                                 date: 'unconfigured-sunday',
                                 day_type: 'sunday',
@@ -5053,7 +5115,8 @@ class PayrollRunService {
                                 amount: sunOTAmount
                             });
                         }
-                        console.log(`   Unconfigured Sunday OT: ${(uncOT.sunday_seconds/3600).toFixed(2)}h × Rs.${sunRate} × ${sunMult}x = Rs.${sunOTAmount.toFixed(2)}`);
+                        overtimeAmount += sunOTAmount;
+                        console.log(`   Unconfigured Sunday OT: ${(uncOT.sunday_seconds/3600).toFixed(2)}h → Rs.${sunOTAmount.toFixed(2)}`);
                     }
                 }
 
