@@ -172,18 +172,17 @@ const LivePayrollDashboard: React.FC = () => {
   const handleBulkDownloadPayslips = async () => {
     if (calculatedResults.length === 0) return;
 
-    const PAGE_SIZE = 4; // 2x2 grid per PDF page
-
-    // Offscreen render container sized to the exact A4 aspect ratio, split into a fixed
-    // 2x2 grid so each page is always fully used (no leftover blank space at the bottom)
-    // regardless of how short an individual payslip's content is.
+    // Every slip renders at FULL size (fontScale = 1) - identical to how a short payslip
+    // like one with few line items looks. Instead of shrinking dense slips to fit a fixed
+    // 2x2 grid, pages are packed: 2 slips per row at natural height, and as many rows as
+    // truly fit on an A4 page; rows that don't fit flow onto the next page.
     const A4_RATIO = 297 / 210; // height / width
     const CONTAINER_WIDTH = 1000;
     const CONTAINER_HEIGHT = Math.round(CONTAINER_WIDTH * A4_RATIO);
     const OUTER_PADDING = 16;
     const CELL_GAP = 16;
     const CELL_WIDTH = (CONTAINER_WIDTH - OUTER_PADDING * 2 - CELL_GAP) / 2;
-    const CELL_HEIGHT = (CONTAINER_HEIGHT - OUTER_PADDING * 2 - CELL_GAP) / 2;
+    const USABLE_HEIGHT = CONTAINER_HEIGHT - OUTER_PADDING * 2;
 
     const container = document.createElement('div');
     container.style.position = 'fixed';
@@ -192,15 +191,14 @@ const LivePayrollDashboard: React.FC = () => {
     container.style.width = `${CONTAINER_WIDTH}px`;
     container.style.height = `${CONTAINER_HEIGHT}px`;
     container.style.backgroundColor = '#ffffff';
-    container.style.padding = `${OUTER_PADDING}px`;
     container.style.boxSizing = 'border-box';
     container.style.overflow = 'hidden';
     document.body.appendChild(container);
 
     const root = createRoot(container);
 
-    // Offscreen measuring container: same cell width, unconstrained height, so we can
-    // measure each card's natural (unscaled) height before deciding how much to shrink it.
+    // Offscreen measuring container: same card width, unconstrained height, to get each
+    // card's natural full-size height for page packing.
     const measureEl = document.createElement('div');
     measureEl.style.position = 'fixed';
     measureEl.style.top = '-10000px';
@@ -218,61 +216,69 @@ const LivePayrollDashboard: React.FC = () => {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      for (let i = 0; i < total; i += PAGE_SIZE) {
-        const batch = calculatedResults.slice(i, i + PAGE_SIZE);
+      // Measure every card's natural height at full size.
+      const heights: number[] = [];
+      for (const emp of calculatedResults) {
+        const h = await new Promise<number>(resolve => {
+          measureRoot.render(
+            <PayslipCard employee={emp} period={rawData?.period} lastCalculated={lastCalculated} />
+          );
+          setTimeout(() => {
+            resolve(measureEl.firstElementChild?.getBoundingClientRect().height ?? USABLE_HEIGHT);
+          }, 30);
+        });
+        heights.push(h);
+      }
 
-        // Determine the right fontScale for each card by iterating: measure height at the
-        // current candidate scale, and if it still overflows the cell, shrink further and
-        // re-measure. Font-size changes shift how flex-wrap rows/grids reflow, so scale and
-        // height are not linearly related - a single measure-then-scale pass isn't reliable.
-        const scales: number[] = [];
-        for (const emp of batch) {
-          let scale = 1;
-          for (let attempt = 0; attempt < 4; attempt++) {
-            const measuredHeight = await new Promise<number>(resolve => {
-              measureRoot.render(
-                <PayslipCard employee={emp} period={rawData?.period} lastCalculated={lastCalculated} fontScale={scale} />
-              );
-              setTimeout(() => {
-                resolve(measureEl.firstElementChild?.getBoundingClientRect().height ?? CELL_HEIGHT);
-              }, 30);
-            });
-
-            if (measuredHeight <= CELL_HEIGHT || scale < 0.3) break;
-            // Shrink proportionally to the overflow ratio (with a little extra margin) and re-measure.
-            scale = Math.max(0.3, scale * (CELL_HEIGHT / measuredHeight) * 0.98);
-          }
-          scales.push(scale);
+      // Pack rows of 2 slips onto pages: a row's height is its taller slip; start a new
+      // page when the next row would overflow the usable page height.
+      type Placement = { emp: CalculatedPayroll; left: number; top: number };
+      const pages: Placement[][] = [];
+      let currentPage: Placement[] = [];
+      let cursorY = 0;
+      for (let i = 0; i < total; i += 2) {
+        const rowEmps = calculatedResults.slice(i, i + 2);
+        const rowHeight = Math.max(...rowEmps.map((_, j) => heights[i + j]));
+        if (currentPage.length > 0 && cursorY + rowHeight > USABLE_HEIGHT) {
+          pages.push(currentPage);
+          currentPage = [];
+          cursorY = 0;
         }
+        rowEmps.forEach((emp, j) => {
+          currentPage.push({
+            emp,
+            left: OUTER_PADDING + j * (CELL_WIDTH + CELL_GAP),
+            top: OUTER_PADDING + cursorY,
+          });
+        });
+        cursorY += rowHeight + CELL_GAP;
+      }
+      if (currentPage.length > 0) pages.push(currentPage);
+
+      let done = 0;
+      for (let p = 0; p < pages.length; p++) {
+        const placements = pages[p];
 
         await new Promise<void>(resolve => {
           root.render(
             <>
-              {batch.map((emp, idx) => {
-                const col = idx % 2;
-                const row = Math.floor(idx / 2);
-                const scale = scales[idx] ?? 1;
-                return (
-                  <div
-                    key={emp.employee_id}
-                    style={{
-                      position: 'absolute',
-                      left: `${OUTER_PADDING + col * (CELL_WIDTH + CELL_GAP)}px`,
-                      top: `${OUTER_PADDING + row * (CELL_HEIGHT + CELL_GAP)}px`,
-                      width: `${CELL_WIDTH}px`,
-                      height: `${CELL_HEIGHT}px`,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <PayslipCard
-                      employee={emp}
-                      period={rawData?.period}
-                      lastCalculated={lastCalculated}
-                      fontScale={scale}
-                    />
-                  </div>
-                );
-              })}
+              {placements.map(({ emp, left, top }) => (
+                <div
+                  key={emp.employee_id}
+                  style={{
+                    position: 'absolute',
+                    left: `${left}px`,
+                    top: `${top}px`,
+                    width: `${CELL_WIDTH}px`,
+                  }}
+                >
+                  <PayslipCard
+                    employee={emp}
+                    period={rawData?.period}
+                    lastCalculated={lastCalculated}
+                  />
+                </div>
+              ))}
             </>
           );
           // Let React commit and layout settle before capturing.
@@ -289,10 +295,11 @@ const LivePayrollDashboard: React.FC = () => {
         const imgWidth = pageWidth;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-        if (i > 0) pdf.addPage();
+        if (p > 0) pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight), undefined, 'FAST');
 
-        setBulkProgress({ done: Math.min(i + PAGE_SIZE, total), total });
+        done += placements.length;
+        setBulkProgress({ done, total });
       }
 
       const periodLabel = rawData?.period
