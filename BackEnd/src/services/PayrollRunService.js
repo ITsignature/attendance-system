@@ -4862,7 +4862,8 @@ class PayrollRunService {
                     component_name: ded.deduction_name,
                     calculation_type: ded.is_percentage ? 'percentage' : 'fixed',
                     calculation_value: ded.amount,
-                    category: 'employee_specific'
+                    category: 'employee_specific',
+                    deduct_from_base_salary: ded.deduct_from_base_salary ? true : false
                 }));
 
                 console.log(`💸 Calculated employee deductions for employee ${emp.employee_code}:`, specificDeductions)
