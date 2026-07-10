@@ -67,6 +67,9 @@ interface Employee {
   attendance_affects_salary?: boolean;
   payable_hours_policy?: 'strict_schedule' | 'actual_worked';
 
+  // APIT (Income Tax) Configuration
+  apit_enabled?: boolean | number;
+
   // Overtime Configuration
   overtime_enabled?: boolean;
   pre_shift_overtime_enabled?: boolean;
@@ -75,6 +78,7 @@ interface Employee {
   saturday_ot_multiplier?: number | null;
   sunday_ot_multiplier?: number | null;
   holiday_ot_multiplier?: number | null;
+  statutory_holiday_ot_multiplier?: number | null;
 
   emergency_contact_name: string;
   emergency_contact_phone: string;
@@ -1157,6 +1161,31 @@ const EditEmployeeDetails: React.FC = () => {
                 </p>
               </div>
 
+              {/* APIT (Income Tax) Configuration */}
+              <div className="border-t pt-6 mt-6">
+                <h5 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
+                  APIT (Income Tax) Settings
+                </h5>
+
+                <div className="mb-4">
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <Checkbox
+                      id="apit_enabled"
+                      checked={formData.apit_enabled === true || formData.apit_enabled === 1}
+                      onChange={(e) => handleChange('apit_enabled', e.target.checked)}
+                    />
+                    <div>
+                      <Label htmlFor="apit_enabled" className="font-medium">
+                        Enable APIT (Advance Personal Income Tax)
+                      </Label>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Deduct APIT from this employee's salary per the Sri Lankan tax table. Monthly income up to Rs. 150,000 is tax free.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Overtime Configuration */}
               <div className="border-t pt-6 mt-6">
                 <h5 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
@@ -1211,7 +1240,7 @@ const EditEmployeeDetails: React.FC = () => {
                     </div>
 
                     {/* Overtime Multipliers */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
                       <div>
                         <Label htmlFor="weekday_ot_multiplier" value="Weekday OT Multiplier" />
                         <TextInput
@@ -1269,6 +1298,21 @@ const EditEmployeeDetails: React.FC = () => {
                           onChange={(e) => handleChange('holiday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
                           placeholder="e.g., 3.0"
                           helperText="Holiday overtime rate"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="statutory_holiday_ot_multiplier" value="Statutory Holiday OT Multiplier" />
+                        <TextInput
+                          id="statutory_holiday_ot_multiplier"
+                          type="number"
+                          step="0.1"
+                          min="1.0"
+                          max="5.0"
+                          value={formData.statutory_holiday_ot_multiplier || ''}
+                          onChange={(e) => handleChange('statutory_holiday_ot_multiplier', e.target.value ? parseFloat(e.target.value) : null)}
+                          placeholder="e.g., 3.5"
+                          helperText="Statutory holiday overtime rate"
                         />
                       </div>
                     </div>

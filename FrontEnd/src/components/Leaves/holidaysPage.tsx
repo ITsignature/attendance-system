@@ -26,7 +26,8 @@ const HolidayPage = () => {
     date: "",
     name: "",
     description: "",
-    is_optional: false
+    is_optional: false,
+    is_statutory: false
   });
 
   // Load holidays when year changes
@@ -72,7 +73,7 @@ const HolidayPage = () => {
       await loadHolidays();
       
       // Reset form
-      setNewHoliday({ date: "", name: "", description: "", is_optional: false });
+      setNewHoliday({ date: "", name: "", description: "", is_optional: false, is_statutory: false });
       setEditingHoliday(null);
       setModalOpen(false);
     } catch (err: any) {
@@ -89,7 +90,8 @@ const HolidayPage = () => {
       date: holiday.date,
       name: holiday.name,
       description: holiday.description || "",
-      is_optional: holiday.is_optional || false
+      is_optional: holiday.is_optional || false,
+      is_statutory: holiday.is_statutory || false
     });
     setModalOpen(true);
   };
@@ -129,7 +131,7 @@ const HolidayPage = () => {
   const handleCloseModal = () => {
     setModalOpen(false);
     setEditingHoliday(null);
-    setNewHoliday({ date: "", name: "", description: "", is_optional: false });
+    setNewHoliday({ date: "", name: "", description: "", is_optional: false, is_statutory: false });
   };
 
   const formatDate = (dateStr: string) => {
@@ -229,12 +231,13 @@ const HolidayPage = () => {
               <Table.HeadCell>Day</Table.HeadCell>
               <Table.HeadCell>Holiday Name</Table.HeadCell>
               <Table.HeadCell>Type</Table.HeadCell>
+              <Table.HeadCell>Statutory</Table.HeadCell>
               <Table.HeadCell>Actions</Table.HeadCell>
             </Table.Head>
             <Table.Body className="divide-y divide-gray-200">
               {filteredHolidays.length === 0 ? (
                 <Table.Row>
-                  <Table.Cell colSpan={5} className="text-center py-8 text-gray-500">
+                  <Table.Cell colSpan={6} className="text-center py-8 text-gray-500">
                     {holidays.length === 0 ? "No holidays found. Try importing Sri Lankan holidays." : "No holidays match your search."}
                   </Table.Cell>
                 </Table.Row>
@@ -255,6 +258,13 @@ const HolidayPage = () => {
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${getHolidayTypeColor(holiday.is_optional)}`}>
                         {getHolidayTypeName(holiday.is_optional)}
                       </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {holiday.is_statutory && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white bg-green-600">
+                          Statutory
+                        </span>
+                      )}
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex gap-2">
@@ -295,6 +305,9 @@ const HolidayPage = () => {
         </div>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-orange-500"></span> Optional Holidays
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-600"></span> Statutory Holidays
         </div>
       </div>
 
@@ -352,6 +365,19 @@ const HolidayPage = () => {
                 disabled={loading}
               />
               <Label htmlFor="holiday-optional" value="Optional Holiday" />
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="holiday-statutory"
+                checked={newHoliday.is_statutory}
+                onChange={(e) =>
+                  setNewHoliday((prev) => ({ ...prev, is_statutory: e.target.checked }))
+                }
+                className="mr-2"
+                disabled={loading}
+              />
+              <Label htmlFor="holiday-statutory" value="Statutory Holiday" />
             </div>
           </div>
         </Modal.Body>

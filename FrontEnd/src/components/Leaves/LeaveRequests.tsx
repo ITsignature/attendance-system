@@ -207,8 +207,8 @@ const handleConfirmAction = async () => {
       start_date: request.start_date ? request.start_date.substring(0, 10) : '',
       end_date: request.end_date ? request.end_date.substring(0, 10) : '',
       leave_duration: request.leave_duration || 'full_day',
-      start_time: request.start_time || '',
-      end_time: request.end_time || '',
+      start_time: request.start_time ? request.start_time.substring(0, 5) : '',
+      end_time: request.end_time ? request.end_time.substring(0, 5) : '',
       reason: request.reason || ''
     });
     setEditModal({ isOpen: true, request });

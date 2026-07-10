@@ -53,6 +53,7 @@ export interface Holiday {
   date: string;
   description?: string;
   is_optional?: boolean;
+  is_statutory?: boolean;
   applies_to_all?: boolean;
   department_ids?: string[] | null;
   department_names?: string;

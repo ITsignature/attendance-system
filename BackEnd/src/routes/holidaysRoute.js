@@ -20,6 +20,7 @@ const validateHoliday = [
   body('date').isISO8601().withMessage('Valid date is required'),
   body('description').optional().trim().isLength({ max: 500 }).withMessage('Description too long (max 500 characters)'),
   body('is_optional').optional().isBoolean().withMessage('is_optional must be boolean'),
+  body('is_statutory').optional().isBoolean().withMessage('is_statutory must be boolean'),
   body('applies_to_all').optional().isBoolean().withMessage('applies_to_all must be boolean'),
   body('department_ids').optional().isArray().withMessage('department_ids must be an array'),
 ];
@@ -80,6 +81,7 @@ router.get('/',
           h.date,
           h.description,
           h.is_optional,
+          h.is_statutory,
           h.applies_to_all,
           h.department_ids,
           h.created_at,
@@ -200,6 +202,7 @@ router.post('/',
       date,
       description = null,
       is_optional = false,
+      is_statutory = false,
       applies_to_all = true,
       department_ids = null
     } = req.body;
@@ -233,12 +236,12 @@ router.post('/',
       // Create holiday
       await db.execute(`
         INSERT INTO holidays (
-          id, client_id, name, date, description, 
-          is_optional, applies_to_all, department_ids
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          id, client_id, name, date, description,
+          is_optional, is_statutory, applies_to_all, department_ids
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         holidayId, clientId, name, date, description,
-        is_optional, applies_to_all,
+        is_optional, is_statutory, applies_to_all,
         (!applies_to_all && department_ids) ? JSON.stringify(department_ids) : null
       ]);
 
@@ -277,6 +280,7 @@ router.post('/',
           date,
           description,
           is_optional,
+          is_statutory,
           applies_to_all,
           department_ids: (!applies_to_all && department_ids) ? department_ids : null
         }
@@ -318,6 +322,7 @@ router.put('/:id',
       date,
       description = null,
       is_optional = false,
+      is_statutory = false,
       applies_to_all = true,
       department_ids = null
     } = req.body;
@@ -368,12 +373,13 @@ router.put('/:id',
           date = ?,
           description = ?,
           is_optional = ?,
+          is_statutory = ?,
           applies_to_all = ?,
           department_ids = ?,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND client_id = ?
       `, [
-        name, date, description, is_optional, applies_to_all,
+        name, date, description, is_optional, is_statutory, applies_to_all,
         (!applies_to_all && department_ids) ? JSON.stringify(department_ids) : null,
         id, clientId
       ]);
@@ -430,6 +436,7 @@ router.put('/:id',
           date,
           description,
           is_optional,
+          is_statutory,
           applies_to_all,
           department_ids: (!applies_to_all && department_ids) ? department_ids : null
         }
@@ -660,6 +667,7 @@ router.post('/bulk',
             date,
             description = null,
             is_optional = false,
+            is_statutory = false,
             applies_to_all = true,
             department_ids = null
           } = holiday;
@@ -682,12 +690,12 @@ router.post('/bulk',
           // Create holiday
           await db.execute(`
             INSERT INTO holidays (
-              id, client_id, name, date, description, 
-              is_optional, applies_to_all, department_ids
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              id, client_id, name, date, description,
+              is_optional, is_statutory, applies_to_all, department_ids
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             holidayId, clientId, name, date, description,
-            is_optional, applies_to_all,
+            is_optional, is_statutory, applies_to_all,
             (!applies_to_all && department_ids) ? JSON.stringify(department_ids) : null
           ]);
 

@@ -245,6 +245,7 @@ CREATE TABLE `employees` (
   `post_shift_overtime_enabled` tinyint(1) DEFAULT 1 COMMENT 'Enable overtime calculation for hours worked after shift end time',
   `weekday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Weekday overtime rate multiplier (Monday-Friday)',
   `holiday_ot_multiplier` decimal(4,2) DEFAULT 2.50 COMMENT 'Holiday overtime rate multiplier',
+  `statutory_holiday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Statutory holiday overtime rate multiplier',
   `saturday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Saturday overtime rate multiplier',
   `sunday_ot_multiplier` decimal(4,2) DEFAULT NULL COMMENT 'Sunday overtime rate multiplier',
   `payable_hours_policy` enum('strict_schedule','actual_worked') DEFAULT 'strict_schedule' COMMENT 'Payable hours policy: strict_schedule (cap to scheduled hours) or actual_worked (allow time shifting if total duration met)'
@@ -327,11 +328,38 @@ CREATE TABLE `employee_advances` (
 CREATE TABLE `employee_allowances` (
   `id` varchar(36) NOT NULL,
   `client_id` varchar(36) NOT NULL,
+  `batch_id` varchar(36) DEFAULT NULL,
   `employee_id` varchar(36) NOT NULL,
   `allowance_type` varchar(50) NOT NULL,
   `allowance_name` varchar(100) NOT NULL,
   `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
   `is_percentage` tinyint(1) DEFAULT 0,
+  `deduct_from_base_salary` tinyint(1) DEFAULT 0,
+  `is_taxable` tinyint(1) DEFAULT 1,
+  `is_active` tinyint(1) DEFAULT 1,
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `created_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `employee_allowance_batches`
+-- Holds shared values for a bulk-created group of employee_allowances rows so the
+-- group can be edited as a single record (see employee_deduction_batches for rationale).
+--
+
+CREATE TABLE `employee_allowance_batches` (
+  `id` varchar(36) NOT NULL,
+  `client_id` varchar(36) NOT NULL,
+  `allowance_type` varchar(50) NOT NULL,
+  `allowance_name` varchar(100) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `is_percentage` tinyint(1) DEFAULT 0,
+  `deduct_from_base_salary` tinyint(1) DEFAULT 0,
   `is_taxable` tinyint(1) DEFAULT 1,
   `is_active` tinyint(1) DEFAULT 1,
   `effective_from` date NOT NULL,
@@ -379,11 +407,42 @@ CREATE TABLE `employee_bonuses` (
 CREATE TABLE `employee_deductions` (
   `id` varchar(36) NOT NULL,
   `client_id` varchar(36) NOT NULL,
+  `batch_id` varchar(36) DEFAULT NULL,
   `employee_id` varchar(36) NOT NULL,
   `deduction_type` varchar(50) NOT NULL,
   `deduction_name` varchar(100) NOT NULL,
   `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
   `is_percentage` tinyint(1) DEFAULT 0,
+  `deduct_from_base_salary` tinyint(1) DEFAULT 0,
+  `is_recurring` tinyint(1) DEFAULT 1,
+  `remaining_installments` int(11) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `created_by` varchar(36) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `employee_deduction_batches`
+-- Holds shared values (type/name/amount/dates/etc.) for a bulk-created group of
+-- employee_deductions rows. Each selected employee still gets its own row in
+-- employee_deductions (tagged via batch_id) so PayrollRunService's per-employee
+-- remaining_installments/is_active logic is untouched; editing the batch cascades
+-- the shared fields to all member rows.
+--
+
+CREATE TABLE `employee_deduction_batches` (
+  `id` varchar(36) NOT NULL,
+  `client_id` varchar(36) NOT NULL,
+  `deduction_type` varchar(50) NOT NULL,
+  `deduction_name` varchar(100) NOT NULL,
+  `amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `is_percentage` tinyint(1) DEFAULT 0,
+  `deduct_from_base_salary` tinyint(1) DEFAULT 0,
   `is_recurring` tinyint(1) DEFAULT 1,
   `remaining_installments` int(11) DEFAULT NULL,
   `is_active` tinyint(1) DEFAULT 1,
@@ -485,6 +544,7 @@ CREATE TABLE `holidays` (
   `date` date NOT NULL,
   `description` text DEFAULT NULL,
   `is_optional` tinyint(1) DEFAULT 0,
+  `is_statutory` tinyint(1) DEFAULT 0,
   `applies_to_all` tinyint(1) DEFAULT 1,
   `department_ids` longtext DEFAULT NULL CHECK (json_valid(`department_ids`)),
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -975,7 +1035,15 @@ ALTER TABLE `employee_allowances`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_emp_allowances_client_employee` (`client_id`,`employee_id`),
   ADD KEY `idx_emp_allowances_active` (`is_active`,`effective_from`,`effective_to`),
-  ADD KEY `fk_allowances_employee` (`employee_id`);
+  ADD KEY `fk_allowances_employee` (`employee_id`),
+  ADD KEY `idx_allowances_batch` (`batch_id`);
+
+--
+-- Indexes for table `employee_allowance_batches`
+--
+ALTER TABLE `employee_allowance_batches`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_allowance_batches_client` (`client_id`);
 
 --
 -- Indexes for table `employee_bonuses`
@@ -1000,7 +1068,15 @@ ALTER TABLE `employee_deductions`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_emp_deductions_client_employee` (`client_id`,`employee_id`),
   ADD KEY `idx_emp_deductions_active` (`is_active`,`effective_from`,`effective_to`),
-  ADD KEY `fk_deductions_employee` (`employee_id`);
+  ADD KEY `fk_deductions_employee` (`employee_id`),
+  ADD KEY `idx_deductions_batch` (`batch_id`);
+
+--
+-- Indexes for table `employee_deduction_batches`
+--
+ALTER TABLE `employee_deduction_batches`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_deduction_batches_client` (`client_id`);
 
 --
 -- Indexes for table `employee_documents`
@@ -1196,7 +1272,8 @@ ALTER TABLE `employee_advances`
 -- Constraints for table `employee_allowances`
 --
 ALTER TABLE `employee_allowances`
-  ADD CONSTRAINT `fk_allowances_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+  ADD CONSTRAINT `fk_allowances_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_allowances_batch` FOREIGN KEY (`batch_id`) REFERENCES `employee_allowance_batches` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `employee_bonuses`
@@ -1211,7 +1288,8 @@ ALTER TABLE `employee_bonuses`
 -- Constraints for table `employee_deductions`
 --
 ALTER TABLE `employee_deductions`
-  ADD CONSTRAINT `fk_deductions_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+  ADD CONSTRAINT `fk_deductions_employee` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_deductions_batch` FOREIGN KEY (`batch_id`) REFERENCES `employee_deduction_batches` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `employee_documents`

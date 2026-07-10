@@ -41,6 +41,9 @@ interface Employee {
   attendance_affects_salary?: boolean;
   payable_hours_policy?: 'strict_schedule' | 'actual_worked';
 
+  // APIT (Income Tax) Configuration
+  apit_enabled?: boolean | number;
+
   // Overtime Configuration
   overtime_enabled?: boolean;
   pre_shift_overtime_enabled?: boolean;
@@ -49,6 +52,7 @@ interface Employee {
   saturday_ot_multiplier?: number | null;
   sunday_ot_multiplier?: number | null;
   holiday_ot_multiplier?: number | null;
+  statutory_holiday_ot_multiplier?: number | null;
 
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
@@ -1361,7 +1365,7 @@ const EmployeeDetails: React.FC = () => {
                           </div>
 
                           {/* Overtime Multipliers */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
                             <div>
                               <p className="text-xs text-gray-600 dark:text-gray-400">Weekday OT</p>
                               <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
@@ -1390,6 +1394,13 @@ const EmployeeDetails: React.FC = () => {
                               </p>
                               <p className="text-xs text-gray-500 dark:text-gray-400">Holidays</p>
                             </div>
+                            <div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">Statutory Holiday OT</p>
+                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                                {employee.statutory_holiday_ot_multiplier ? `${employee.statutory_holiday_ot_multiplier}x` : 'Not set'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Statutory Holidays</p>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -1397,6 +1408,37 @@ const EmployeeDetails: React.FC = () => {
                           <Badge color="gray" icon={FaTimes}>Overtime Disabled</Badge>
                           <p className="text-xs text-gray-600 dark:text-gray-400">
                             No overtime pay calculated for this employee
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* APIT (Income Tax) Configuration Display */}
+                    <div className={`md:col-span-2 p-6 rounded-lg border-2 shadow-md ${
+                      (employee.apit_enabled === true || employee.apit_enabled === 1)
+                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h4 className={`text-sm font-bold ${
+                          (employee.apit_enabled === true || employee.apit_enabled === 1)
+                            ? 'text-red-800 dark:text-red-200'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}>APIT (Income Tax)</h4>
+                      </div>
+
+                      {(employee.apit_enabled === true || employee.apit_enabled === 1) ? (
+                        <div className="flex items-center gap-2">
+                          <Badge color="success" icon={FaCheck}>APIT Enabled</Badge>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            APIT is deducted per the Sri Lankan tax table (income up to Rs. 150,000/month is tax free)
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge color="gray" icon={FaTimes}>APIT Disabled</Badge>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            No income tax deducted for this employee
                           </p>
                         </div>
                       )}

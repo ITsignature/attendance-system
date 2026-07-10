@@ -111,16 +111,16 @@ export async function exportLivePayrollToExcel(
 
   // ── Column positions (1-based for ExcelJS) ────────────────────────────────
   // cols: 1=EmpCode 2=Name 3=Desig 4=DOJ 5=WorkMonth 6=ExpBase 7=WorkDays 8=NormRate
-  // OT: 9-13  (5 cols)
-  // Allow: 14..14+N-1
-  // Bonus: 14+N
-  // Gross: 14+N+1
-  // Unpaid(Hr): 14+N+2
-  // Unpaid: 14+N+3
-  // Advances: 14+N+4 .. +4+M-1
-  // Loans: 14+N+4+M .. +3+M+K
-  // Ded: 14+N+4+M+K .. +3+M+K+D
-  // TotalDed: 14+N+4+M+K+D
+  // OT: 9-19  (11 cols: 5x [rate, hours] pairs + OT Amount)
+  // Allow: 20..20+N-1
+  // Bonus: 20+N
+  // Gross: 20+N+1
+  // Unpaid(Hr): 20+N+2
+  // Unpaid: 20+N+3
+  // Advances: 20+N+4 .. +4+M-1
+  // Loans: 20+N+4+M .. +3+M+K
+  // Ded: 20+N+4+M+K .. +3+M+K+D
+  // TotalDed: 20+N+4+M+K+D
   // Ajt: +1  Net: +2  Remarks: +3  RoundUp: +4
   // gap gap  CoExp: +7 +8 +9
 
@@ -130,7 +130,19 @@ export async function exportLivePayrollToExcel(
   const D = deductionNames.length;
 
   const OT_S    = 9;
-  const AL_S    = 14;
+  // OT sub-columns: Weekday[R,H], Saturday[R,H], Sunday[R,H], Holiday[R,H], StatHoliday[R,H], Amount
+  const OT_WD_RATE   = OT_S;
+  const OT_WD_HRS    = OT_S + 1;
+  const OT_SAT_RATE  = OT_S + 2;
+  const OT_SAT_HRS   = OT_S + 3;
+  const OT_SUN_RATE  = OT_S + 4;
+  const OT_SUN_HRS   = OT_S + 5;
+  const OT_HOL_RATE  = OT_S + 6;
+  const OT_HOL_HRS   = OT_S + 7;
+  const OT_STAT_RATE = OT_S + 8;
+  const OT_STAT_HRS  = OT_S + 9;
+  const OT_AMOUNT    = OT_S + 10;
+  const AL_S    = OT_AMOUNT + 1;
   const BONUS   = AL_S + N;
   const GROSS   = BONUS + 1;
   const UNP_HR  = GROSS + 1;
@@ -186,20 +198,39 @@ export async function exportLivePayrollToExcel(
     const whRate = parseFloat(raw.weekday_hourly_rate) || 0;
     row[7] = whRate;
 
-    const wkOTRate = round2(whRate * (parseFloat(raw.weekday_ot_multiplier) || 1));
+    const satBase = (parseFloat(raw.saturday_hourly_rate) || 0) > 0
+                     ? parseFloat(raw.saturday_hourly_rate)
+                     : whRate;
     const sunBase  = (parseFloat(raw.sunday_hourly_rate) || 0) > 0
                      ? parseFloat(raw.sunday_hourly_rate)
                      : whRate;
-    const sunOTRate = round2(sunBase * (parseFloat(raw.sunday_ot_multiplier) || 1));
-    const otRecs: any[] = raw.overtime?.records || [];
-    const wkSatHolMin = otRecs.filter((r:any)=>r.day_type!=='sunday').reduce((s:number,r:any)=>s+(r.total_minutes||0),0);
-    const sunMin      = otRecs.filter((r:any)=>r.day_type==='sunday').reduce((s:number,r:any)=>s+(r.total_minutes||0),0);
 
-    row[OT_S-1]   = wkOTRate;
-    row[OT_S]     = round2(wkSatHolMin/60);
-    row[OT_S+1]   = sunOTRate;
-    row[OT_S+2]   = round2(sunMin/60);
-    row[OT_S+3]   = result.overtime_amount || 0;
+    const wkOTRate   = round2(whRate  * (parseFloat(raw.weekday_ot_multiplier) || 1));
+    const satOTRate  = round2(satBase * (parseFloat(raw.saturday_ot_multiplier) || 1));
+    const sunOTRate  = round2(sunBase * (parseFloat(raw.sunday_ot_multiplier) || 1));
+    const holOTRate  = round2(whRate  * (parseFloat(raw.holiday_ot_multiplier) || 1));
+    const statOTRate = round2(whRate  * (parseFloat(raw.statutory_holiday_ot_multiplier) || 1));
+
+    const otRecs: any[] = raw.overtime?.records || [];
+    const minutesFor = (dt: string) =>
+      otRecs.filter((r: any) => r.day_type === dt).reduce((s: number, r: any) => s + (r.total_minutes || 0), 0);
+    const wkMin   = minutesFor('weekday');
+    const satMin  = minutesFor('saturday');
+    const sunMin  = minutesFor('sunday');
+    const holMin  = minutesFor('holiday');
+    const statMin = minutesFor('statutory_holiday');
+
+    row[OT_WD_RATE-1]   = wkOTRate;
+    row[OT_WD_HRS-1]    = round2(wkMin/60);
+    row[OT_SAT_RATE-1]  = satOTRate;
+    row[OT_SAT_HRS-1]   = round2(satMin/60);
+    row[OT_SUN_RATE-1]  = sunOTRate;
+    row[OT_SUN_HRS-1]   = round2(sunMin/60);
+    row[OT_HOL_RATE-1]  = holOTRate;
+    row[OT_HOL_HRS-1]   = round2(holMin/60);
+    row[OT_STAT_RATE-1] = statOTRate;
+    row[OT_STAT_HRS-1]  = round2(statMin/60);
+    row[OT_AMOUNT-1]    = result.overtime_amount || 0;
 
     const allowMap: Record<string,number> = {};
     (result.allowances_breakdown||[]).forEach(a => { allowMap[a.name]=(allowMap[a.name]||0)+a.amount; });
@@ -256,7 +287,7 @@ export async function exportLivePayrollToExcel(
   // ── Totals row ────────────────────────────────────────────────────────────
   const numSumCols = new Set([
     6, GROSS, UNP_AMT, BONUS, NET, TOT_DED,
-    OT_S+4,  // OT Amount (not OT hours)
+    OT_AMOUNT,  // OT Amount (not OT hours/rates)
     ...allowanceNames.map((_,i)=>AL_S+i),
     ...advanceTypes.map((_,i)=>ADV_S+i),
     ...loanTypes.map((_,i)=>LOAN_S+i),
@@ -323,7 +354,7 @@ export async function exportLivePayrollToExcel(
 
   addGroupHeader(1, 8, '', C.hdrInfo);       // fixed info — label set per sub-header
   grpRow.getCell(1).value = 'Employee Info';
-  addGroupHeader(OT_S, OT_S+4, 'OT', C.hdrOT);
+  addGroupHeader(OT_S, OT_AMOUNT, 'OT', C.hdrOT);
   if (N > 0) addGroupHeader(AL_S, AL_S+N-1, 'Allowances', C.hdrAllow);
   addGroupHeader(BONUS, BONUS, 'Bonus', C.hdrAllow);
   addGroupHeader(GROSS, GROSS, 'Gross Salary', C.hdrAllow);
@@ -342,8 +373,12 @@ export async function exportLivePayrollToExcel(
   const subHeaders: [number, string][] = [
     [1, 'Emp. Code'], [2, 'Name'], [3, 'Designation'], [4, 'DOJ'],
     [5, 'Work Month'], [6, 'Base Salary'], [7, 'No. of Working Days'], [8, 'Normal Hourly Rate'],
-    [OT_S,   'Weekday OT Rate'], [OT_S+1, 'OT Hours\n(Wkday+Sat+Hol)'],
-    [OT_S+2, 'Sunday OT Rate'], [OT_S+3, 'OT Hours\n(Sunday)'], [OT_S+4, 'OT Amount'],
+    [OT_WD_RATE,   'Weekday OT Rate'],   [OT_WD_HRS,   'Weekday OT Hours'],
+    [OT_SAT_RATE,  'Sat OT Rate'],       [OT_SAT_HRS,  'Sat OT Hours'],
+    [OT_SUN_RATE,  'Sun OT Rate'],       [OT_SUN_HRS,  'Sun OT Hours'],
+    [OT_HOL_RATE,  'Holiday OT Rate'],   [OT_HOL_HRS,  'Holiday OT Hours'],
+    [OT_STAT_RATE, 'Statutory Holiday\nOT Rate'], [OT_STAT_HRS, 'Statutory Holiday\nOT Hours'],
+    [OT_AMOUNT,    'OT Amount'],
     ...allowanceNames.map((nm, i): [number,string] => [AL_S+i, nm]),
     [BONUS, 'Bonus'], [GROSS, 'Gross Salary'],
     [UNP_HR, 'Unpaid (Hr)'], [UNP_AMT, 'Unpaid'],
@@ -364,7 +399,8 @@ export async function exportLivePayrollToExcel(
   // ── Data rows (rows 6+) ───────────────────────────────────────────────────
   const numberCols = new Set<number>([
     6, 7, 8,
-    OT_S, OT_S+1, OT_S+2, OT_S+3, OT_S+4,
+    OT_WD_RATE, OT_WD_HRS, OT_SAT_RATE, OT_SAT_HRS, OT_SUN_RATE, OT_SUN_HRS,
+    OT_HOL_RATE, OT_HOL_HRS, OT_STAT_RATE, OT_STAT_HRS, OT_AMOUNT,
     ...allowanceNames.map((_,i)=>AL_S+i),
     BONUS, GROSS, UNP_HR, UNP_AMT,
     ...advanceTypes.map((_,i)=>ADV_S+i),

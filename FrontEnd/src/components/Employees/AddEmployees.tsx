@@ -57,6 +57,9 @@ interface EmployeeFormData {
   attendance_affects_salary: boolean;
   payable_hours_policy: 'strict_schedule' | 'actual_worked';
 
+  // APIT (Income Tax) Configuration
+  apit_enabled: boolean;
+
   // Overtime Configuration
   overtime_enabled: boolean;
   pre_shift_overtime_enabled: boolean;
@@ -65,6 +68,7 @@ interface EmployeeFormData {
   saturday_ot_multiplier: number | '';
   sunday_ot_multiplier: number | '';
   holiday_ot_multiplier: number | '';
+  statutory_holiday_ot_multiplier: number | '';
 
   // Work Schedule Information
   in_time: string;
@@ -203,6 +207,9 @@ const AddEmployees: React.FC = () => {
     attendance_affects_salary: true,
     payable_hours_policy: 'strict_schedule',
 
+    // APIT (Income Tax) Configuration
+    apit_enabled: false,
+
     // Overtime Configuration
     overtime_enabled: false,
     pre_shift_overtime_enabled: false,
@@ -211,6 +218,7 @@ const AddEmployees: React.FC = () => {
     saturday_ot_multiplier: '',
     sunday_ot_multiplier: '',
     holiday_ot_multiplier: '',
+    statutory_holiday_ot_multiplier: '',
 
     // Work Schedule Information
     in_time: '',
@@ -413,7 +421,7 @@ const AddEmployees: React.FC = () => {
   };
 
   // Handle input changes
-  const handleInputChange = useCallback((field: keyof EmployeeFormData, value: string | number) => {
+  const handleInputChange = useCallback((field: keyof EmployeeFormData, value: string | number | boolean) => {
     console.log(`🔄 handleInputChange called:`, { field, value, type: typeof value });
 
     setFormData(prev => ({
@@ -578,6 +586,9 @@ const AddEmployees: React.FC = () => {
         base_salary: formData.salary ? Number(formData.salary) : undefined,
         attendance_affects_salary: formData.attendance_affects_salary,
 
+        // APIT (Income Tax) Configuration
+        apit_enabled: formData.apit_enabled,
+
         // Emergency Contact
         emergency_contact_name: formData.emergency_contact_name,
         emergency_contact_phone: formData.emergency_contact_phone,
@@ -591,6 +602,7 @@ const AddEmployees: React.FC = () => {
         saturday_ot_multiplier: formData.saturday_ot_multiplier ? Number(formData.saturday_ot_multiplier) : null,
         sunday_ot_multiplier: formData.sunday_ot_multiplier ? Number(formData.sunday_ot_multiplier) : null,
         holiday_ot_multiplier: formData.holiday_ot_multiplier ? Number(formData.holiday_ot_multiplier) : null,
+        statutory_holiday_ot_multiplier: formData.statutory_holiday_ot_multiplier ? Number(formData.statutory_holiday_ot_multiplier) : null,
 
         // Work Schedule Information
         in_time: formData.in_time,
@@ -729,6 +741,9 @@ const debugAuth = () => {
       attendance_affects_salary: true,
       payable_hours_policy: 'strict_schedule',
 
+      // APIT (Income Tax) Configuration
+      apit_enabled: false,
+
       // Overtime Configuration
       overtime_enabled: false,
       pre_shift_overtime_enabled: false,
@@ -737,6 +752,7 @@ const debugAuth = () => {
       saturday_ot_multiplier: '',
       sunday_ot_multiplier: '',
       holiday_ot_multiplier: '',
+      statutory_holiday_ot_multiplier: '',
 
       // Work Schedule Information
       in_time: '',
@@ -1316,6 +1332,31 @@ const debugAuth = () => {
                       </p>
                     </div>
 
+                    {/* APIT (Income Tax) Configuration */}
+                    <div className="border-t pt-6 mt-6">
+                      <h5 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
+                        APIT (Income Tax) Settings
+                      </h5>
+
+                      <div className="mb-4">
+                        <div className="flex items-center">
+                          <input
+                            id="apit_enabled"
+                            type="checkbox"
+                            checked={formData.apit_enabled}
+                            onChange={(e) => handleInputChange('apit_enabled', e.target.checked)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                          />
+                          <label htmlFor="apit_enabled" className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+                            Enable APIT (Advance Personal Income Tax)
+                          </label>
+                        </div>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Deduct APIT from this employee's salary per the Sri Lankan tax table. Monthly income up to Rs. 150,000 is tax free.
+                        </p>
+                      </div>
+                    </div>
+
                     {/* Overtime Configuration */}
                     <div className="border-t pt-6 mt-6">
                       <h5 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
@@ -1374,7 +1415,7 @@ const debugAuth = () => {
                           </div>
 
                           {/* Overtime Multipliers */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-4">
                             <div>
                               <Label htmlFor="weekday_ot_multiplier" value="Weekday OT Multiplier" />
                               <TextInput
@@ -1432,6 +1473,21 @@ const debugAuth = () => {
                                 onChange={(e) => handleInputChange('holiday_ot_multiplier', e.target.value)}
                                 placeholder="e.g., 3.0"
                                 helperText="Holiday overtime rate"
+                              />
+                            </div>
+
+                            <div>
+                              <Label htmlFor="statutory_holiday_ot_multiplier" value="Statutory Holiday OT Multiplier" />
+                              <TextInput
+                                id="statutory_holiday_ot_multiplier"
+                                type="number"
+                                step="0.1"
+                                min="1.0"
+                                max="5.0"
+                                value={formData.statutory_holiday_ot_multiplier}
+                                onChange={(e) => handleInputChange('statutory_holiday_ot_multiplier', e.target.value)}
+                                placeholder="e.g., 3.5"
+                                helperText="Statutory holiday overtime rate"
                               />
                             </div>
                           </div>

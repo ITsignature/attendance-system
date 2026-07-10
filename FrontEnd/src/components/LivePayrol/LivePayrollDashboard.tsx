@@ -4,13 +4,17 @@
 // Calculates payroll in the browser - 100x faster!
 // Updates every 30 seconds with live session data
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Table, Card, Alert, Spinner, Button, Badge, Modal } from "flowbite-react";
 import { payrollRunApiService } from '../../services/payrollRunService';
-import { livePayrollCalculationService, type CalculatedPayroll, type EmployeeData } from '../../services/livePayrollCalculationService';
+import { livePayrollCalculationService, type CalculatedPayroll, type EmployeeData, type UnpaidTimeOffDetail, type TimeVarianceDetail, type AbsentDayDetail, type PaidLeaveDetail } from '../../services/livePayrollCalculationService';
 import { HiRefresh, HiClock, HiUsers, HiArrowLeft, HiDownload } from 'react-icons/hi';
 import { exportLivePayrollToExcel } from '../../services/payrollExcelExport';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { createRoot } from 'react-dom/client';
+import PayslipCard from './PayslipCard';
 
 const LivePayrollDashboard: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
@@ -34,6 +38,11 @@ const LivePayrollDashboard: React.FC = () => {
     show: boolean;
     employee: CalculatedPayroll | null;
   }>({ show: false, employee: null });
+  const [payslipDownloading, setPayslipDownloading] = useState(false);
+  const payslipContentRef = useRef<HTMLDivElement>(null);
+
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
 
   const [dailyDetailsModal, setDailyDetailsModal] = useState<{
     show: boolean;
@@ -42,6 +51,47 @@ const LivePayrollDashboard: React.FC = () => {
     employeeName: string | null;
     data: any | null;
   }>({ show: false, loading: false, employeeId: null, employeeName: null, data: null });
+
+  const [shortfallModal, setShortfallModal] = useState<{
+    show: boolean;
+    employee: CalculatedPayroll | null;
+  }>({ show: false, employee: null });
+
+  const openShortfallModal = (e: React.MouseEvent, employee: CalculatedPayroll) => {
+    e.stopPropagation();
+    setShortfallModal({ show: true, employee });
+  };
+
+  const closeShortfallModal = () => {
+    setShortfallModal({ show: false, employee: null });
+  };
+
+  const [earningsModal, setEarningsModal] = useState<{
+    show: boolean;
+    employee: CalculatedPayroll | null;
+  }>({ show: false, employee: null });
+
+  const openEarningsModal = (e: React.MouseEvent, employee: CalculatedPayroll) => {
+    e.stopPropagation();
+    setEarningsModal({ show: true, employee });
+  };
+
+  const closeEarningsModal = () => {
+    setEarningsModal({ show: false, employee: null });
+  };
+
+  const formatHours = (h: number) => {
+    const hrs = Math.floor(h);
+    const mins = Math.round((h - hrs) * 60);
+    if (hrs === 0) return `${mins}m`;
+    if (mins === 0) return `${hrs}h`;
+    return `${hrs}h ${mins}m`;
+  };
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
 
   const handleExportExcel = async () => {
     if (!rawData || calculatedResults.length === 0) return;
@@ -68,6 +118,206 @@ const LivePayrollDashboard: React.FC = () => {
 
   const closePayslipModal = () => {
     setPayslipModal({ show: false, employee: null });
+  };
+
+  const handleDownloadPayslip = async () => {
+    const node = payslipContentRef.current;
+    const employee = payslipModal.employee;
+    if (!node || !employee) return;
+
+    try {
+      setPayslipDownloading(true);
+
+      const canvas = await html2canvas(node, {
+        scale: 1.5,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.75);
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+      }
+
+      const safeName = employee.employee_name.replace(/[^a-z0-9]+/gi, '_');
+      const periodLabel = rawData?.period
+        ? `${new Date(rawData.period.start_date).toISOString().slice(0, 10)}_${new Date(rawData.period.end_date).toISOString().slice(0, 10)}`
+        : new Date().toISOString().slice(0, 10);
+
+      pdf.save(`Payslip_${safeName}_${periodLabel}.pdf`);
+    } catch (err) {
+      console.error('Error generating payslip PDF:', err);
+      setError('Failed to generate payslip PDF');
+    } finally {
+      setPayslipDownloading(false);
+    }
+  };
+
+  const handleBulkDownloadPayslips = async () => {
+    if (calculatedResults.length === 0) return;
+
+    // Every slip renders at FULL size (fontScale = 1) - identical to how a short payslip
+    // like one with few line items looks. Instead of shrinking dense slips to fit a fixed
+    // 2x2 grid, pages are packed: 2 slips per row at natural height, and as many rows as
+    // truly fit on an A4 page; rows that don't fit flow onto the next page.
+    const A4_RATIO = 297 / 210; // height / width
+    const CONTAINER_WIDTH = 1000;
+    const CONTAINER_HEIGHT = Math.round(CONTAINER_WIDTH * A4_RATIO);
+    const OUTER_PADDING = 16;
+    const CELL_GAP = 16;
+    const CELL_WIDTH = (CONTAINER_WIDTH - OUTER_PADDING * 2 - CELL_GAP) / 2;
+    const USABLE_HEIGHT = CONTAINER_HEIGHT - OUTER_PADDING * 2;
+
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.top = '-10000px';
+    container.style.left = '-10000px';
+    container.style.width = `${CONTAINER_WIDTH}px`;
+    container.style.height = `${CONTAINER_HEIGHT}px`;
+    container.style.backgroundColor = '#ffffff';
+    container.style.boxSizing = 'border-box';
+    container.style.overflow = 'hidden';
+    document.body.appendChild(container);
+
+    const root = createRoot(container);
+
+    // Offscreen measuring container: same card width, unconstrained height, to get each
+    // card's natural full-size height for page packing.
+    const measureEl = document.createElement('div');
+    measureEl.style.position = 'fixed';
+    measureEl.style.top = '-10000px';
+    measureEl.style.left = '-10000px';
+    measureEl.style.width = `${CELL_WIDTH}px`;
+    document.body.appendChild(measureEl);
+    const measureRoot = createRoot(measureEl);
+
+    try {
+      setBulkDownloading(true);
+      const total = calculatedResults.length;
+      setBulkProgress({ done: 0, total });
+
+      const pdf = new jsPDF('p', 'mm', 'a4', true);
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      // Measure every card's natural height at full size.
+      const heights: number[] = [];
+      for (const emp of calculatedResults) {
+        const h = await new Promise<number>(resolve => {
+          measureRoot.render(
+            <PayslipCard employee={emp} period={rawData?.period} lastCalculated={lastCalculated} />
+          );
+          setTimeout(() => {
+            resolve(measureEl.firstElementChild?.getBoundingClientRect().height ?? USABLE_HEIGHT);
+          }, 30);
+        });
+        heights.push(h);
+      }
+
+      // Pack rows of 2 slips onto pages: a row's height is its taller slip; start a new
+      // page when the next row would overflow the usable page height.
+      type Placement = { emp: CalculatedPayroll; left: number; top: number };
+      const pages: Placement[][] = [];
+      let currentPage: Placement[] = [];
+      let cursorY = 0;
+      for (let i = 0; i < total; i += 2) {
+        const rowEmps = calculatedResults.slice(i, i + 2);
+        const rowHeight = Math.max(...rowEmps.map((_, j) => heights[i + j]));
+        if (currentPage.length > 0 && cursorY + rowHeight > USABLE_HEIGHT) {
+          pages.push(currentPage);
+          currentPage = [];
+          cursorY = 0;
+        }
+        rowEmps.forEach((emp, j) => {
+          currentPage.push({
+            emp,
+            left: OUTER_PADDING + j * (CELL_WIDTH + CELL_GAP),
+            top: OUTER_PADDING + cursorY,
+          });
+        });
+        cursorY += rowHeight + CELL_GAP;
+      }
+      if (currentPage.length > 0) pages.push(currentPage);
+
+      let done = 0;
+      for (let p = 0; p < pages.length; p++) {
+        const placements = pages[p];
+
+        await new Promise<void>(resolve => {
+          root.render(
+            <>
+              {placements.map(({ emp, left, top }) => (
+                <div
+                  key={emp.employee_id}
+                  style={{
+                    position: 'absolute',
+                    left: `${left}px`,
+                    top: `${top}px`,
+                    width: `${CELL_WIDTH}px`,
+                  }}
+                >
+                  <PayslipCard
+                    employee={emp}
+                    period={rawData?.period}
+                    lastCalculated={lastCalculated}
+                  />
+                </div>
+              ))}
+            </>
+          );
+          // Let React commit and layout settle before capturing.
+          setTimeout(resolve, 80);
+        });
+
+        const canvas = await html2canvas(container, {
+          scale: 1.5,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (p > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, Math.min(imgHeight, pageHeight), undefined, 'FAST');
+
+        done += placements.length;
+        setBulkProgress({ done, total });
+      }
+
+      const periodLabel = rawData?.period
+        ? `${new Date(rawData.period.start_date).toISOString().slice(0, 10)}_${new Date(rawData.period.end_date).toISOString().slice(0, 10)}`
+        : new Date().toISOString().slice(0, 10);
+
+      pdf.save(`Payslips_Bulk_${periodLabel}.pdf`);
+    } catch (err) {
+      console.error('Error generating bulk payslips PDF:', err);
+      setError('Failed to generate bulk payslips PDF');
+    } finally {
+      root.unmount();
+      document.body.removeChild(container);
+      measureRoot.unmount();
+      document.body.removeChild(measureEl);
+      setBulkDownloading(false);
+      setBulkProgress({ done: 0, total: 0 });
+    }
   };
 
   const openDailyDetailsModal = async (employeeId: string, employeeName: string) => {
@@ -292,6 +542,21 @@ const LivePayrollDashboard: React.FC = () => {
             <HiDownload className="w-4 h-4 mr-2" />
             Export Excel
           </Button>
+          <Button
+            color="indigo"
+            size="sm"
+            onClick={handleBulkDownloadPayslips}
+            disabled={bulkDownloading || !rawData || calculatedResults.length === 0}
+          >
+            {bulkDownloading ? (
+              <Spinner size="sm" className="mr-2" />
+            ) : (
+              <HiDownload className="w-4 h-4 mr-2" />
+            )}
+            {bulkDownloading
+              ? `Generating (${bulkProgress.done}/${bulkProgress.total})...`
+              : 'Bulk Download Payslips'}
+          </Button>
         </div>
       </div>
 
@@ -402,106 +667,21 @@ const LivePayrollDashboard: React.FC = () => {
                         {formatCurrency(result.expected_base_salary)}
                       </Table.Cell> */}
                       <Table.Cell className="text-green-600 font-medium">
-                        <div className="relative group inline-block">
-                          <span className="cursor-help">
-                            {formatCurrency(result.actual_earned_base)}
-                          </span>
-                          {result.earnings_by_source && (
-                            <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
-                              <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Earnings Breakdown</div>
-                              <div className="space-y-1.5">
-                                {result.earnings_by_source.attendance.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Work Hours:</span>
-                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.attendance.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.paid_leaves.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Paid Time Off:</span>
-                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.paid_leaves.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.live_session.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Active Session:</span>
-                                    <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.live_session.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.overtime && result.earnings_by_source.overtime.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Overtime ({result.earnings_by_source.overtime.minutes}min):</span>
-                                    <span className="font-medium text-red-600">{formatCurrency(result.earnings_by_source.overtime.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.extra_time_ot && result.earnings_by_source.extra_time_ot.earned > 0 && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Extra weekday work ({result.earnings_by_source.extra_time_ot.minutes}min):</span>
-                                    <span className="font-medium text-orange-600">{formatCurrency(result.earnings_by_source.extra_time_ot.earned)}</span>
-                                  </div>
-                                )}
-                                {result.earnings_by_source.non_working_day_credit && result.earnings_by_source.non_working_day_credit.earned > 0 && (
-                                  <>
-                                    <div className="border-t border-gray-100 pt-1 mt-1">
-                                      <span className="text-gray-500 font-medium">Non-Working Days:</span>
-                                    </div>
-                                    {result.earnings_by_source.non_working_day_credit.breakdown.holidays > 0 && (
-                                      <div className="flex justify-between pl-2">
-                                        <span className="text-gray-600">Holidays ({result.earnings_by_source.non_working_day_credit.breakdown.holidays}):</span>
-                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.holidays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
-                                      </div>
-                                    )}
-                                    {result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays > 0 && (
-                                      <div className="flex justify-between pl-2">
-                                        <span className="text-gray-600">Non-Working Sat ({result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays}):</span>
-                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.non_working_saturdays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
-                                      </div>
-                                    )}
-                                    {result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays > 0 && (
-                                      <div className="flex justify-between pl-2">
-                                        <span className="text-gray-600">Sundays ({result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays}):</span>
-                                        <span className="font-medium text-gray-900">{formatCurrency(result.earnings_by_source.non_working_day_credit.breakdown.non_working_sundays * result.earnings_by_source.non_working_day_credit.breakdown.daily_rate)}</span>
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={(e) => openEarningsModal(e, result)}
+                          className="text-green-600 hover:text-green-700 hover:underline cursor-pointer font-medium"
+                        >
+                          {formatCurrency(result.actual_earned_base)}
+                        </button>
                       </Table.Cell>
                       <Table.Cell>
                         {result.attendance_shortfall > 0 ? (
-                          <div className="relative group inline-block">
-                            <span className="text-orange-600 font-medium cursor-help">
-                              {formatCurrency(result.attendance_shortfall)}
-                            </span>
-                            {result.shortfall_by_cause && (
-                              <div className="absolute left-0 top-full mt-2 z-50 hidden group-hover:block w-64 p-3 bg-white border border-gray-200 text-xs rounded-lg shadow-xl">
-                                <div className="font-semibold mb-2 text-gray-800 border-b border-gray-200 pb-1.5">Shortfall Breakdown</div>
-                                <div className="space-y-1.5">
-                                  {result.shortfall_by_cause.unpaid_time_off.deduction > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Unpaid Time Off:</span>
-                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.unpaid_time_off.deduction)}</span>
-                                    </div>
-                                  )}
-                                  {result.shortfall_by_cause.time_variance.deduction > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Time Variance:</span>
-                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.time_variance.deduction)}</span>
-                                    </div>
-                                  )}
-                                  {result.shortfall_by_cause.absent_days.deduction > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-gray-600">Absent Days:</span>
-                                      <span className="font-medium text-gray-900">{formatCurrency(result.shortfall_by_cause.absent_days.deduction)}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            onClick={(e) => openShortfallModal(e, result)}
+                            className="text-orange-600 hover:text-orange-700 hover:underline cursor-pointer font-medium"
+                          >
+                            {formatCurrency(result.attendance_shortfall)}
+                          </button>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
@@ -753,6 +933,323 @@ const LivePayrollDashboard: React.FC = () => {
         </Modal.Footer>
       </Modal>
 
+      {/* Earnings Breakdown Modal */}
+      <Modal show={earningsModal.show} onClose={closeEarningsModal} size="3xl">
+        <Modal.Header>
+          Earnings Breakdown
+          {earningsModal.employee && (
+            <div className="text-sm font-normal text-gray-500 mt-1">
+              {earningsModal.employee.employee_name} ({earningsModal.employee.employee_code})
+            </div>
+          )}
+        </Modal.Header>
+        <Modal.Body className="space-y-6 max-h-[70vh] overflow-y-auto">
+          {earningsModal.employee && (() => {
+            const emp = earningsModal.employee!;
+            const ebs = emp.earnings_by_source;
+            const dailyRate = ebs?.non_working_day_credit?.breakdown?.daily_rate ?? 0;
+
+            return (
+              <>
+                {/* Overtime Section */}
+                {emp.overtime_records && emp.overtime_records.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+                      Overtime
+                      <span className="ml-auto text-red-600 font-medium">{formatCurrency(ebs?.overtime?.earned ?? 0)}</span>
+                    </h3>
+                    <div className="overflow-x-auto rounded border border-gray-100">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 text-gray-600">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium">Date</th>
+                            <th className="text-left px-3 py-2 font-medium">Day Type</th>
+                            <th className="text-right px-3 py-2 font-medium">Pre-shift</th>
+                            <th className="text-right px-3 py-2 font-medium">Post-shift</th>
+                            <th className="text-right px-3 py-2 font-medium">Total</th>
+                            <th className="text-right px-3 py-2 font-medium">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {emp.overtime_records.filter(rec => rec.amount > 0).map((rec, i) => {
+                            const isUnconfiguredSat = rec.date === 'unconfigured-saturday';
+                            const isUnconfiguredSun = rec.date === 'unconfigured-sunday';
+                            const dateLabel = isUnconfiguredSat
+                              ? 'Non-working Saturdays (total)'
+                              : isUnconfiguredSun
+                              ? 'Non-working Sundays (total)'
+                              : formatDate(rec.date);
+                            const isAggregated = isUnconfiguredSat || isUnconfiguredSun;
+                            return (
+                              <tr key={i} className={isAggregated ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-gray-50'}>
+                                <td className="px-3 py-2 text-gray-700 font-medium">{dateLabel}</td>
+                                <td className="px-3 py-2 capitalize text-gray-600">{rec.day_type.replace(/_/g, ' ')}</td>
+                                <td className="px-3 py-2 text-right text-gray-600">
+                                  {isAggregated ? <span className="text-gray-300">—</span> : rec.pre_shift_enabled ? `${rec.pre_shift_minutes}m` : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right text-gray-600">
+                                  {isAggregated ? <span className="text-gray-300">—</span> : rec.post_shift_enabled ? `${rec.post_shift_minutes}m` : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium text-gray-700">{rec.total_minutes}m</td>
+                                <td className="px-3 py-2 text-right font-semibold text-red-600">{formatCurrency(rec.amount)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-red-50 border-t border-red-100">
+                          <tr>
+                            <td colSpan={5} className="px-3 py-2 text-xs font-semibold text-red-700">Total Overtime</td>
+                            <td className="px-3 py-2 text-right text-xs font-bold text-red-700">{formatCurrency(ebs?.overtime?.earned ?? 0)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Paid Time Off Section */}
+                {ebs?.paid_leaves && ebs.paid_leaves.earned > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                      Paid Time Off
+                      <span className="ml-auto text-blue-600 font-medium">{formatCurrency(ebs.paid_leaves.earned)}</span>
+                    </h3>
+                    {ebs.paid_leaves.details && ebs.paid_leaves.details.length > 0 ? (
+                      <div className="space-y-2">
+                        {ebs.paid_leaves.details.map((leave, i) => (
+                          <div key={i} className="bg-blue-50 rounded-lg p-3 flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-gray-700">
+                                {leave.start_date === leave.end_date
+                                  ? formatDate(leave.start_date)
+                                  : `${formatDate(leave.start_date)} — ${formatDate(leave.end_date)}`}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {leave.duration_type === 'full_day' && 'Full Day'}
+                                {leave.duration_type === 'half_day' && 'Half Day'}
+                                {leave.duration_type === 'short_leave' && leave.short_leave_start && leave.short_leave_end
+                                  ? `Short Leave (${leave.short_leave_start} – ${leave.short_leave_end})`
+                                  : leave.duration_type === 'short_leave' ? 'Short Leave' : ''}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-xs text-gray-500">{formatHours(leave.hours)}</div>
+                              <div className="text-sm font-semibold text-blue-700">{formatCurrency(leave.earned)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No leave detail breakdown available.</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Non-Working Days Credit Section */}
+                {ebs?.non_working_day_credit && ebs.non_working_day_credit.earned > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-purple-500 inline-block"></span>
+                      Non-Working Day Credit
+                      <span className="ml-auto text-purple-600 font-medium">{formatCurrency(ebs.non_working_day_credit.earned)}</span>
+                    </h3>
+                    <div className="space-y-3">
+                      {/* Holidays */}
+                      {ebs.non_working_day_credit.dates?.holidays && ebs.non_working_day_credit.dates.holidays.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-600 mb-1.5">
+                            Holidays ({ebs.non_working_day_credit.dates.holidays.length})
+                            <span className="ml-2 text-purple-600">{formatCurrency(ebs.non_working_day_credit.dates.holidays.length * dailyRate)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ebs.non_working_day_credit.dates.holidays.map((d, i) => (
+                              <span key={i} className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-medium">{formatDate(d)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Non-working Saturdays */}
+                      {ebs.non_working_day_credit.dates?.non_working_saturdays && ebs.non_working_day_credit.dates.non_working_saturdays.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-600 mb-1.5">
+                            Non-Working Saturdays ({ebs.non_working_day_credit.dates.non_working_saturdays.length})
+                            <span className="ml-2 text-purple-600">{formatCurrency(ebs.non_working_day_credit.dates.non_working_saturdays.length * dailyRate)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ebs.non_working_day_credit.dates.non_working_saturdays.map((d, i) => (
+                              <span key={i} className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium">{formatDate(d)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Non-working Sundays */}
+                      {ebs.non_working_day_credit.dates?.non_working_sundays && ebs.non_working_day_credit.dates.non_working_sundays.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-600 mb-1.5">
+                            Non-Working Sundays ({ebs.non_working_day_credit.dates.non_working_sundays.length})
+                            <span className="ml-2 text-purple-600">{formatCurrency(ebs.non_working_day_credit.dates.non_working_sundays.length * dailyRate)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ebs.non_working_day_credit.dates.non_working_sundays.map((d, i) => (
+                              <span key={i} className="bg-pink-100 text-pink-700 text-xs px-2 py-0.5 rounded-full font-medium">{formatDate(d)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attendance (Work Hours) section */}
+                {ebs?.attendance && ebs.attendance.earned > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+                      Work Hours Earned
+                      <span className="ml-auto text-green-600 font-medium">{formatCurrency(ebs.attendance.earned)}</span>
+                    </h3>
+                    <p className="text-xs text-gray-500">{formatHours(ebs.attendance.hours)} of attended time</p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </Modal.Body>
+        <Modal.Footer className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-gray-700">
+            Total Actual Earned:
+            <span className="ml-2 text-green-600 text-base">{earningsModal.employee ? formatCurrency(earningsModal.employee.actual_earned_base) : ''}</span>
+          </div>
+          <Button color="gray" onClick={closeEarningsModal}>Close</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Shortfall Breakdown Modal */}
+      <Modal show={shortfallModal.show} onClose={closeShortfallModal} size="2xl">
+        <Modal.Header>
+          Shortfall Breakdown
+          {shortfallModal.employee && (
+            <div className="text-sm font-normal text-gray-500 mt-1">
+              {shortfallModal.employee.employee_name} ({shortfallModal.employee.employee_code})
+            </div>
+          )}
+        </Modal.Header>
+        <Modal.Body>
+          {shortfallModal.employee?.shortfall_by_cause && (() => {
+            const sbc = shortfallModal.employee.shortfall_by_cause!;
+            return (
+              <div className="space-y-5">
+
+                {/* Time Variance */}
+                {sbc.time_variance.deduction > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-3 border-b pb-2">
+                      <h3 className="text-base font-semibold text-orange-700">Late Arrivals / Early Departures</h3>
+                      <span className="text-orange-700 font-bold">{formatCurrency(sbc.time_variance.deduction)}</span>
+                    </div>
+                    {sbc.time_variance.details && sbc.time_variance.details.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-gray-500 text-xs border-b">
+                              <th className="pb-2 font-medium">Date</th>
+                              <th className="pb-2 font-medium text-right">Expected</th>
+                              <th className="pb-2 font-medium text-right">Actual</th>
+                              <th className="pb-2 font-medium text-right">Shortfall</th>
+                              <th className="pb-2 font-medium text-right">Deduction</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {sbc.time_variance.details.map((d: TimeVarianceDetail, i: number) => (
+                              <tr key={i} className="py-1.5">
+                                <td className="py-1.5 text-gray-700">{formatDate(d.date)}</td>
+                                <td className="py-1.5 text-right text-gray-600">{formatHours(d.expected_hours)}</td>
+                                <td className="py-1.5 text-right text-gray-600">{formatHours(d.actual_hours)}</td>
+                                <td className="py-1.5 text-right text-orange-600 font-medium">{formatHours(d.shortfall_hours)}</td>
+                                <td className="py-1.5 text-right text-red-600 font-semibold">{formatCurrency(d.deduction)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No per-day detail available (recalculate to get details).</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Unpaid Time Off */}
+                {sbc.unpaid_time_off.deduction > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-3 border-b pb-2">
+                      <h3 className="text-base font-semibold text-orange-700">Unpaid Time Off</h3>
+                      <span className="text-orange-700 font-bold">{formatCurrency(sbc.unpaid_time_off.deduction)}</span>
+                    </div>
+                    {sbc.unpaid_time_off.details && sbc.unpaid_time_off.details.length > 0 ? (
+                      <div className="space-y-2">
+                        {sbc.unpaid_time_off.details.map((d: UnpaidTimeOffDetail, i: number) => (
+                          <div key={i} className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+                            <div>
+                              <div className="font-medium text-gray-800 text-sm">
+                                {d.start_date === d.end_date ? formatDate(d.start_date) : `${formatDate(d.start_date)} – ${formatDate(d.end_date)}`}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {d.duration_type === 'full_day' && 'Full Day'}
+                                {d.duration_type === 'half_day' && 'Half Day'}
+                                {d.duration_type === 'short_leave' && `Short Leave${d.short_leave_start && d.short_leave_end ? ` (${d.short_leave_start} – ${d.short_leave_end})` : ''}`}
+                                {' · '}{formatHours(d.hours)}
+                              </div>
+                            </div>
+                            <span className="text-red-600 font-semibold">{formatCurrency(d.deduction)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No per-leave detail available (recalculate to get details).</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Absent Days */}
+                {sbc.absent_days.deduction > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-3 border-b pb-2">
+                      <h3 className="text-base font-semibold text-red-700">Absent Days</h3>
+                      <span className="text-red-700 font-bold">{formatCurrency(sbc.absent_days.deduction)}</span>
+                    </div>
+                    {sbc.absent_days.details && sbc.absent_days.details.length > 0 ? (
+                      <div className="space-y-2">
+                        {sbc.absent_days.details.map((d: AbsentDayDetail, i: number) => (
+                          <div key={i} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                            <span className="text-gray-800 text-sm font-medium">{formatDate(d.date)}</span>
+                            <span className="text-red-600 font-semibold">{formatCurrency(d.deduction)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No per-day detail available (recalculate to get details).</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Total */}
+                <div className="bg-orange-100 p-4 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-base font-bold text-gray-800">Total Shortfall:</span>
+                    <span className="text-orange-700 font-bold text-xl">{formatCurrency(shortfallModal.employee!.attendance_shortfall)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={closeShortfallModal}>Close</Button>
+        </Modal.Footer>
+      </Modal>
+
       {/* Daily Work Details Modal */}
       <Modal show={dailyDetailsModal.show} onClose={closeDailyDetailsModal} size="4xl">
         <Modal.Header>
@@ -823,10 +1320,14 @@ const LivePayrollDashboard: React.FC = () => {
                         const isHoliday = record.record_type === 'holiday';
                         const isWeekendOff = record.record_type === 'weekend_off';
                         const isUnscheduledWeekend = record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)';
+                        const hasPartialLeave = record.record_type === 'attendance' &&
+                                            (record.leave_duration === 'half_day' || record.leave_duration === 'short_leave');
 
                         const rowBg = isAbsent ? 'bg-red-50 dark:bg-red-900/10' :
                                       isLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
                                       isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
+                                      hasPartialLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
+                                      hasPartialLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
                                       isHoliday ? 'bg-blue-50 dark:bg-blue-900/10' :
                                       isWeekendOff ? 'bg-gray-50 dark:bg-gray-800/50' : '';
 
@@ -843,6 +1344,11 @@ const LivePayrollDashboard: React.FC = () => {
                                             record.status === 'holiday' ? 'Holiday' :
                                             record.status === 'weekend_off' ? 'Weekend Off' :
                                             record.status;
+
+                        const partialLeaveLabel = record.leave_duration === 'half_day' ? 'Half Day' :
+                                            record.leave_duration === 'short_leave'
+                                              ? `Short Leave${record.leave_start_time && record.leave_end_time ? ` (${record.leave_start_time} - ${record.leave_end_time})` : ''}`
+                                              : '';
 
                         return (
                           <Table.Row key={index} className={`hover:brightness-95 ${rowBg}`}>
@@ -878,6 +1384,11 @@ const LivePayrollDashboard: React.FC = () => {
                                   <span className="text-blue-600">{record.working_minutes.toLocaleString()} mins</span>
                                   <div className="text-xs text-gray-500">({record.working_hours} hrs)</div>
                                   {record.overtime_minutes > 0 && <div className="text-xs text-red-600 font-medium">+{record.overtime_minutes} OT mins</div>}
+                                  {hasPartialLeave && (
+                                    <div className={`text-xs font-medium mt-1 ${record.is_paid_leave ? 'text-yellow-700' : 'text-orange-600'}`}>
+                                      {partialLeaveLabel} {record.leave_type_name ? `(${record.leave_type_name})` : ''} · {record.is_paid_leave ? 'Paid' : 'Unpaid'}
+                                    </div>
+                                  )}
                                 </>
                               )}
                             </Table.Cell>
@@ -900,11 +1411,24 @@ const LivePayrollDashboard: React.FC = () => {
                                 <>
                                   <span className="text-green-600">{formatCurrency(record.daily_salary)}</span>
                                   {record.overtime_amount > 0 && <div className="text-xs text-red-600 font-medium">+{formatCurrency(record.overtime_amount)} OT</div>}
+                                  {hasPartialLeave && record.is_paid_leave && (
+                                    <div className="text-xs text-yellow-700 font-normal">(incl. {formatCurrency(record.leave_daily_salary)} leave pay)</div>
+                                  )}
                                 </>
                               )}
                             </Table.Cell>
                             <Table.Cell>
-                              <Badge color={statusColor as any}>{statusLabel}</Badge>
+                              <div className="flex flex-col items-start gap-1">
+                                <Badge color={statusColor as any}>{statusLabel}</Badge>
+                                {hasPartialLeave && (
+                                  <Badge color={record.is_paid_leave ? 'warning' : 'pink'}>
+                                    {partialLeaveLabel}
+                                  </Badge>
+                                )}
+                              </div>
+                              {hasPartialLeave && record.leave_type_name && (
+                                <div className="text-xs text-gray-500 mt-1">{record.leave_type_name}</div>
+                              )}
                             </Table.Cell>
                           </Table.Row>
                         );
@@ -979,7 +1503,7 @@ const LivePayrollDashboard: React.FC = () => {
             );
 
             return (
-              <div className="space-y-6 text-sm">
+              <div ref={payslipContentRef} className="space-y-6 text-sm bg-white p-2">
 
                 {/* Employee Details */}
                 <div>
@@ -1169,6 +1693,18 @@ const LivePayrollDashboard: React.FC = () => {
           })()}
         </Modal.Body>
         <Modal.Footer>
+          <Button
+            color="blue"
+            onClick={handleDownloadPayslip}
+            disabled={payslipDownloading || !payslipModal.employee}
+          >
+            {payslipDownloading ? (
+              <Spinner size="sm" className="mr-2" />
+            ) : (
+              <HiDownload className="w-4 h-4 mr-2" />
+            )}
+            {payslipDownloading ? 'Generating...' : 'Download Payslip'}
+          </Button>
           <Button color="gray" onClick={closePayslipModal}>Close</Button>
         </Modal.Footer>
       </Modal>

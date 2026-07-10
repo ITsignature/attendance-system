@@ -24,6 +24,7 @@ export interface PayrollComponent {
 
 export interface EmployeeAllowance {
   id: string;
+  batch_id?: string | null;
   employee_id: string;
   employee_name?: string;
   employee_code?: string;
@@ -40,6 +41,7 @@ export interface EmployeeAllowance {
 
 export interface EmployeeDeduction {
   id: string;
+  batch_id?: string | null;
   employee_id: string;
   employee_name?: string;
   employee_code?: string;
@@ -47,12 +49,81 @@ export interface EmployeeDeduction {
   deduction_name: string;
   amount: number;
   is_percentage: boolean;
+  deduct_from_base_salary?: boolean;
   is_recurring: boolean;
   remaining_installments?: number;
   is_active: boolean;
   effective_from: string;
   effective_to?: string;
   created_at: string;
+}
+
+export interface BatchMember {
+  id: string;
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  is_active: boolean;
+}
+
+export interface DeductionBatchMember extends BatchMember {
+  remaining_installments?: number;
+}
+
+export interface EmployeeDeductionBatch {
+  id: string;
+  client_id: string;
+  deduction_type: string;
+  deduction_name: string;
+  amount: number;
+  is_percentage: boolean;
+  deduct_from_base_salary?: boolean;
+  is_recurring: boolean;
+  remaining_installments?: number;
+  is_active: boolean;
+  effective_from: string;
+  effective_to?: string;
+  created_at: string;
+  members: DeductionBatchMember[];
+}
+
+export interface EmployeeAllowanceBatch {
+  id: string;
+  client_id: string;
+  allowance_type: string;
+  allowance_name: string;
+  amount: number;
+  is_percentage: boolean;
+  is_taxable: boolean;
+  is_active: boolean;
+  effective_from: string;
+  effective_to?: string;
+  created_at: string;
+  members: BatchMember[];
+}
+
+export interface CreateDeductionBatchRequest {
+  employee_ids: string[];
+  deduction_type: string;
+  deduction_name: string;
+  amount: number;
+  is_percentage?: boolean;
+  deduct_from_base_salary?: boolean;
+  is_recurring?: boolean;
+  remaining_installments?: number;
+  effective_from: string;
+  effective_to?: string | null;
+}
+
+export interface CreateAllowanceBatchRequest {
+  employee_ids: string[];
+  allowance_type: string;
+  allowance_name: string;
+  amount: number;
+  is_percentage?: boolean;
+  is_taxable?: boolean;
+  effective_from: string;
+  effective_to?: string | null;
 }
 
 export interface CreatePayrollComponentRequest {
@@ -86,6 +157,7 @@ export interface CreateEmployeeDeductionRequest {
   deduction_name: string;
   amount: number;
   is_percentage?: boolean;
+  deduct_from_base_salary?: boolean;
   is_recurring?: boolean;
   remaining_installments?: number;
   effective_from: string;
@@ -161,6 +233,35 @@ class PayrollConfigApiService {
   }
 
   // =============================================
+  // EMPLOYEE ALLOWANCE BATCHES (bulk)
+  // =============================================
+
+  async getEmployeeAllowanceBatch(id: string): Promise<EmployeeAllowanceBatch> {
+    const response = await apiService.apiCall<EmployeeAllowanceBatch>(`/api/payroll-runs/employee-allowance-batches/${id}`);
+    return response.data as EmployeeAllowanceBatch;
+  }
+
+  async createEmployeeAllowanceBatch(data: CreateAllowanceBatchRequest): Promise<any> {
+    return apiService.apiCall('/api/payroll-runs/employee-allowance-batches', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateEmployeeAllowanceBatch(id: string, data: Partial<CreateAllowanceBatchRequest>): Promise<any> {
+    return apiService.apiCall(`/api/payroll-runs/employee-allowance-batches/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEmployeeAllowanceBatch(id: string): Promise<any> {
+    return apiService.apiCall(`/api/payroll-runs/employee-allowance-batches/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // =============================================
   // EMPLOYEE DEDUCTIONS
   // =============================================
 
@@ -189,6 +290,35 @@ class PayrollConfigApiService {
 
   async deleteEmployeeDeduction(id: string): Promise<any> {
     return apiService.apiCall(`/api/payroll-runs/employee-deductions/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // =============================================
+  // EMPLOYEE DEDUCTION BATCHES (bulk)
+  // =============================================
+
+  async getEmployeeDeductionBatch(id: string): Promise<EmployeeDeductionBatch> {
+    const response = await apiService.apiCall<EmployeeDeductionBatch>(`/api/payroll-runs/employee-deduction-batches/${id}`);
+    return response.data as EmployeeDeductionBatch;
+  }
+
+  async createEmployeeDeductionBatch(data: CreateDeductionBatchRequest): Promise<any> {
+    return apiService.apiCall('/api/payroll-runs/employee-deduction-batches', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateEmployeeDeductionBatch(id: string, data: Partial<CreateDeductionBatchRequest>): Promise<any> {
+    return apiService.apiCall(`/api/payroll-runs/employee-deduction-batches/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEmployeeDeductionBatch(id: string): Promise<any> {
+    return apiService.apiCall(`/api/payroll-runs/employee-deduction-batches/${id}`, {
       method: 'DELETE',
     });
   }
