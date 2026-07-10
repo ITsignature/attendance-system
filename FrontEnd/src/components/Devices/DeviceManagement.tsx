@@ -146,6 +146,11 @@ const DeviceManagement: React.FC = () => {
   const [firmwareInfo, setFirmwareInfo] = useState<{ exists: boolean; size_bytes?: number; uploaded_at?: string } | null>(null);
   const otaInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [isExporting, setIsExporting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [backupResult, setBackupResult] = useState<{ success: boolean; message: string } | null>(null);
+  const restoreInputRef = useRef<HTMLInputElement | null>(null);
+
   // ── Data fetching ───────────────────────────────────────────────────────────
 
   const fetchDevices = useCallback(async () => {
@@ -412,6 +417,60 @@ const DeviceManagement: React.FC = () => {
       setOtaResult({ success: false, message: e?.message || 'OTA trigger failed' });
     } finally {
       setIsOtaUploading(false);
+    }
+  };
+
+  const handleExportBackup = async () => {
+    if (!selectedDevice) return;
+    setIsExporting(true);
+    setBackupResult(null);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const apiURL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+      const res = await fetch(`${apiURL}/fingerprint-backup/${selectedDevice.device_id}/export`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message);
+      // Download as JSON file
+      const blob = new Blob([JSON.stringify(json.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `FPBackup_${selectedDevice.device_id}_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setBackupResult({ success: true, message: `Exported ${json.data.fingerprints.length} templates` });
+    } catch (e: any) {
+      setBackupResult({ success: false, message: e?.message || 'Export failed' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleRestoreBackup = async (file: File) => {
+    if (!selectedDevice) return;
+    setIsRestoring(true);
+    setBackupResult(null);
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      if (!Array.isArray(backup.fingerprints)) throw new Error('Invalid backup file format');
+      const token = localStorage.getItem('accessToken');
+      const apiURL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+      const res = await fetch(`${apiURL}/fingerprint-backup/${selectedDevice.device_id}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprints: backup.fingerprints }),
+      });
+      const json = await res.json();
+      setBackupResult({ success: json.success, message: json.message });
+    } catch (e: any) {
+      setBackupResult({ success: false, message: e?.message || 'Restore failed' });
+    } finally {
+      setIsRestoring(false);
+      if (restoreInputRef.current) restoreInputRef.current.value = '';
     }
   };
 
@@ -907,6 +966,37 @@ const DeviceManagement: React.FC = () => {
                     <button disabled={isSendingCommand || !newWifiSSID || !newWifiPass} onClick={() => sendCommand('update_wifi', { ssid: newWifiSSID, password: newWifiPass })} className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full mt-2">
                       Update WiFi
                     </button>
+                  </Section>
+
+                  <Section title="Fingerprint Backup" icon={<HiChip className="w-4 h-4" />}>
+                    {backupResult && (
+                      <div className={`mb-2 p-2 rounded-lg text-xs flex items-start gap-1.5 ${backupResult.success ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                        {backupResult.success ? <HiCheck className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> : <HiX className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />}
+                        {backupResult.message}
+                      </div>
+                    )}
+                    <button
+                      disabled={isExporting || isRestoring || !selectedDevice?.is_online}
+                      onClick={handleExportBackup}
+                      className="cmd-btn bg-blue-600 text-white hover:bg-blue-700 w-full disabled:opacity-50"
+                    >
+                      {isExporting ? 'Exporting...' : 'Backup All Templates'}
+                    </button>
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-500 mb-1">Restore from backup file:</p>
+                      <input
+                        ref={restoreInputRef}
+                        type="file"
+                        accept=".json"
+                        disabled={isRestoring || isExporting}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleRestoreBackup(f); }}
+                        className="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-green-50 file:text-green-700 hover:file:bg-green-100 disabled:opacity-50"
+                      />
+                      {isRestoring && <p className="text-xs text-blue-600 mt-1">Restoring templates one by one, please wait...</p>}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Export saves all templates as a JSON file. Restore imports them back to a replacement sensor.
+                    </p>
                   </Section>
 
                   <Section title="Firmware OTA Update" icon={<HiChip className="w-4 h-4" />}>

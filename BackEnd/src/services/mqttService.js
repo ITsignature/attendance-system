@@ -8,6 +8,9 @@ let isConnected = false;
 // pending command resolvers: device_id -> { resolve, reject, timer }
 const pendingCommands = new Map();
 
+// template_data listeners: device_id -> callback(data)
+const templateListeners = new Map();
+
 const MQTT_BROKER = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
 const MQTT_USERNAME = process.env.MQTT_USERNAME || '';
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD || '';
@@ -42,6 +45,7 @@ function connectMQTT() {
     // Fingerprint device topics
     mqttClient.subscribe('devices/+/status', { qos: 1 });
     mqttClient.subscribe('devices/+/result', { qos: 1 });
+    mqttClient.subscribe('devices/+/template_data', { qos: 1 });
     // Door lock enroll progress topic
     mqttClient.subscribe('devices/+/enroll/progress', { qos: 1 });
     // Live serial log streaming
@@ -72,6 +76,12 @@ function connectMQTT() {
 
       if (type === 'log') {
         emitDeviceLog(deviceId, message.toString());
+        return;
+      }
+
+      if (type === 'template_data') {
+        const cb = templateListeners.get(deviceId);
+        if (cb) cb(JSON.parse(message.toString()));
         return;
       }
 
@@ -319,10 +329,20 @@ async function markStaleDevicesOffline() {
   }
 }
 
+function onTemplateData(deviceId, cb) {
+  templateListeners.set(deviceId, cb);
+}
+
+function offTemplateData(deviceId) {
+  templateListeners.delete(deviceId);
+}
+
 module.exports = {
   connectMQTT,
   getMqttClient,
   isMqttConnected,
   sendCommand,
   markStaleDevicesOffline,
+  onTemplateData,
+  offTemplateData,
 };

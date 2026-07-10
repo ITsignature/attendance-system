@@ -1,0 +1,1632 @@
+#include <HardwareSerial.h>
+#include <Adafruit_Fingerprint.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
+#include <WiFiClientSecure.h>
+#include <WebServer.h>
+#include <PubSubClient.h>
+#include <Update.h>
+#include <HTTPUpdate.h>
+
+// ============================================================
+// PIN DEFINITIONS (ESP32)
+// ============================================================
+#define FP_RX_PIN  16   // GPIO16 → Fingerprint TX
+#define FP_TX_PIN  17   // GPIO17 → Fingerprint RX
+#define LCD_SDA    21   // GPIO21 → LCD SDA
+#define LCD_SCL    19   // GPIO22 → LCD SCL
+#define BUZZER_PIN  23   // GPIO4  → Buzzer
+
+// ESP32 Hardware Serial2 for fingerprint
+HardwareSerial fpSerial(2);
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&fpSerial);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+WebServer server(80);
+Preferences prefs;
+WiFiClient mqttWifiClient;
+PubSubClient mqttClient(mqttWifiClient);
+
+// ============================================================
+// CONFIG
+// ============================================================
+String stationSSID     = "";
+String stationPassword = "";
+String lastError       = "";
+String BASE_URL        = "https://attendance2.itsignaturesolutions.com/test_http.php?uid=";
+String DEVICE_ID       = "";   // loaded from Preferences, set via local dashboard
+
+// ============================================================
+// MQTT CONFIG
+// ============================================================
+const char* MQTT_BROKER   = "attendance.itsignaturesolutions.com";
+const int   MQTT_PORT     = 1883;
+
+// Topics (filled after DEVICE_ID loaded)
+String topicCommands = "";
+String topicStatus   = "";
+String topicResult   = "";
+String topicLog      = "";
+
+unsigned long lastMqttReconnect = 0;
+unsigned long lastStatusPublish = 0;
+const unsigned long MQTT_RECONNECT_INTERVAL = 5000;
+const unsigned long STATUS_PUBLISH_INTERVAL = 30000;  // heartbeat every 30s
+
+const String AP_SSID     = "IT-Signature-Setup";
+const String AP_PASSWORD = "admin123";
+
+// ============================================================
+// AUTH
+// ============================================================
+const String ADMIN_USERNAME = "admin";
+const String ADMIN_PASSWORD = "admin123";
+String currentSessionToken  = "";
+unsigned long sessionStartTime = 0;
+const unsigned long SESSION_TIMEOUT = 3600000UL;
+
+// ============================================================
+// TIMING & STATE
+// ============================================================
+unsigned long lastScanTime       = 0;
+unsigned long backlightOnTime    = 0;
+unsigned long lastStationCheck   = 0;
+unsigned long wifiReconnectStart = 0;
+
+const unsigned long SCAN_DEBOUNCE          = 1000;
+const unsigned long BACKLIGHT_DURATION     = 5000;
+const unsigned long STATION_CHECK_INTERVAL = 30000;
+
+bool backlightActive     = false;
+bool stationConnected    = false;
+bool fingerprintSensorOK = false;
+bool wifiReconnecting    = false;
+
+// ============================================================
+// OPERATION MODE
+// ============================================================
+enum OperationMode { MODE_ATTENDANCE, MODE_ENROLL, MODE_DELETE };
+OperationMode currentMode = MODE_ATTENDANCE;
+int enrollID = 0;
+
+// ============================================================
+// PREFERENCES (replaces EEPROM on ESP32)
+// ============================================================
+void saveWiFiToPrefs(const String& ssid, const String& pass) {
+  prefs.begin("wifi", false);
+  prefs.putString("ssid", ssid);
+  prefs.putString("pass", pass);
+  prefs.end();
+}
+
+bool loadWiFiFromPrefs(String& ssid, String& pass) {
+  prefs.begin("wifi", true);
+  ssid = prefs.getString("ssid", "");
+  pass = prefs.getString("pass", "");
+  prefs.end();
+  return ssid.length() > 0;
+}
+
+void saveBaseURLToPrefs(const String& url) {
+  prefs.begin("config", false);
+  prefs.putString("baseurl", url);
+  prefs.end();
+}
+
+bool loadBaseURLFromPrefs(String& url) {
+  prefs.begin("config", true);
+  url = prefs.getString("baseurl", "");
+  prefs.end();
+  return url.length() > 10;
+}
+
+void clearAllPrefs() {
+  prefs.begin("wifi", false);   prefs.clear(); prefs.end();
+  prefs.begin("config", false); prefs.clear(); prefs.end();
+  prefs.begin("device", false); prefs.clear(); prefs.end();
+}
+
+// Clears WiFi + BASE_URL only, keeps Device ID so device stays MQTT-manageable
+void clearWiFiAndConfigPrefs() {
+  prefs.begin("wifi", false);   prefs.clear(); prefs.end();
+  prefs.begin("config", false); prefs.clear(); prefs.end();
+}
+
+void saveDeviceIDToPrefs(const String& devId) {
+  prefs.begin("device", false);
+  prefs.putString("device_id", devId);
+  prefs.end();
+}
+
+bool loadDeviceIDFromPrefs(String& devId) {
+  prefs.begin("device", true);
+  devId = prefs.getString("device_id", "");
+  prefs.end();
+  return devId.length() > 0;
+}
+
+// ============================================================
+// FINGERPRINT LIST STATE (declared early for use in MQTT callback)
+// ============================================================
+uint16_t fpIDs[127];
+uint16_t fpCount = 0;
+void refreshFingerprintList(); // forward declaration
+
+// ============================================================
+// AS608 RAW UART — template download/upload
+// The Adafruit library does not expose GetChar/UpChar/DownChar,
+// so we talk to the sensor directly using the R30X packet protocol.
+// ============================================================
+#define AS608_STARTCODE  0xEF01
+#define AS608_ADDR       0xFFFFFFFF
+#define AS608_CMD        0x01
+#define AS608_DATA       0x02
+#define AS608_ACK        0x07
+
+#define CMD_LOADCHAR     0x07  // LoadChar: flash → CharBuffer
+#define CMD_UPCHAR       0x08  // UpChar:   CharBuffer → host (download from sensor)
+#define CMD_DOWNCHAR     0x09  // DownChar: host → CharBuffer (upload to sensor)
+#define CMD_STORE        0x06  // StoreChar: CharBuffer → flash
+
+#define TEMPLATE_SIZE    512   // AS608 template is always 512 bytes
+
+// Send a raw AS608 command packet and wait for ACK
+// Returns confirm code (0x00 = OK) or 0xFF on timeout
+uint8_t as608SendCmd(uint8_t cmd, const uint8_t* data, uint16_t dataLen) {
+  // Header: start(2) + addr(4) + pid(1) + len(2) + cmd(1) + data + checksum(2)
+  uint16_t pktLen = 1 + dataLen + 2; // cmd + data + checksum
+  uint16_t checksum = AS608_CMD + pktLen;
+  checksum += cmd;
+  for (uint16_t i = 0; i < dataLen; i++) checksum += data[i];
+
+  fpSerial.write(0xEF); fpSerial.write(0x01);
+  fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF);
+  fpSerial.write(AS608_CMD);
+  fpSerial.write((uint8_t)(pktLen >> 8)); fpSerial.write((uint8_t)(pktLen & 0xFF));
+  fpSerial.write(cmd);
+  for (uint16_t i = 0; i < dataLen; i++) fpSerial.write(data[i]);
+  fpSerial.write((uint8_t)(checksum >> 8)); fpSerial.write((uint8_t)(checksum & 0xFF));
+  fpSerial.flush();
+
+  // Wait for ACK packet: EF01 + addr(4) + 07 + len(2) + confirmCode(1) + chk(2)
+  unsigned long t = millis();
+  while (fpSerial.available() < 12 && millis() - t < 3000) delay(1);
+  if (fpSerial.available() < 12) return 0xFF; // timeout
+
+  uint8_t buf[12];
+  for (int i = 0; i < 12; i++) buf[i] = fpSerial.read();
+  // buf[9] is the confirm code
+  return buf[9];
+}
+
+// Download one template from the sensor (LoadChar then UpChar)
+// Fills templateBuf[512]. Returns true on success.
+bool as608DownloadTemplate(uint8_t slotId, uint8_t* templateBuf) {
+  // Step 1: LoadChar — load template from flash slot into CharBuffer1
+  uint8_t loadArgs[2] = { 0x01, slotId }; // buffer=1, pageID=slotId (1-byte for IDs ≤255)
+  // PageID is 2 bytes in the protocol
+  uint8_t loadArgs2[3] = { 0x01, 0x00, slotId };
+  uint8_t ack = as608SendCmd(CMD_LOADCHAR, loadArgs2, 3);
+  if (ack != 0x00) return false;
+
+  delay(20);
+
+  // Step 2: UpChar — stream CharBuffer1 bytes to host
+  // Command: UpChar with buffer number 1
+  uint16_t pktLen = 1 + 1 + 2; // pid(counted in len) = cmd + buf + checksum
+  uint16_t checksum = AS608_CMD + pktLen + CMD_UPCHAR + 0x01;
+  fpSerial.write(0xEF); fpSerial.write(0x01);
+  fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF);
+  fpSerial.write(AS608_CMD);
+  fpSerial.write((uint8_t)(pktLen >> 8)); fpSerial.write((uint8_t)(pktLen & 0xFF));
+  fpSerial.write(CMD_UPCHAR);
+  fpSerial.write((uint8_t)0x01); // CharBuffer 1
+  fpSerial.write((uint8_t)(checksum >> 8)); fpSerial.write((uint8_t)(checksum & 0xFF));
+  fpSerial.flush();
+
+  // Read ACK first (12 bytes)
+  unsigned long t = millis();
+  while (fpSerial.available() < 12 && millis() - t < 3000) delay(1);
+  if (fpSerial.available() < 12) return false;
+  uint8_t ackBuf[12];
+  for (int i = 0; i < 12; i++) ackBuf[i] = fpSerial.read();
+  if (ackBuf[9] != 0x00) return false;
+
+  // Read data packets — sensor sends 512 bytes in chunks of 128 bytes each
+  // Each chunk: header(9) + 128 data bytes + checksum(2) = 139 bytes
+  // Last chunk uses pid=0x08 (end packet), middle chunks use pid=0x02 (data packet)
+  uint16_t bytesRead = 0;
+  bool done = false;
+  t = millis();
+  while (!done && bytesRead < TEMPLATE_SIZE && millis() - t < 5000) {
+    // Wait for packet header (9 bytes minimum)
+    if (fpSerial.available() < 9) { delay(2); continue; }
+    uint8_t hdr[9];
+    for (int i = 0; i < 9; i++) hdr[i] = fpSerial.read();
+    // hdr[6] = PID, hdr[7..8] = length
+    uint8_t pid = hdr[6];
+    uint16_t len = ((uint16_t)hdr[7] << 8) | hdr[8];
+    uint16_t dataBytes = len - 2; // subtract checksum
+    // Wait for data + checksum
+    unsigned long t2 = millis();
+    while (fpSerial.available() < (int)len && millis() - t2 < 2000) delay(1);
+    if (fpSerial.available() < (int)len) return false;
+    for (uint16_t i = 0; i < dataBytes && bytesRead < TEMPLATE_SIZE; i++) {
+      templateBuf[bytesRead++] = fpSerial.read();
+    }
+    // Drain checksum
+    fpSerial.read(); fpSerial.read();
+    if (pid == 0x08) done = true; // end packet
+  }
+  return (bytesRead == TEMPLATE_SIZE);
+}
+
+// Upload a template to the sensor (DownChar then StoreChar)
+bool as608UploadTemplate(uint8_t slotId, const uint8_t* templateBuf) {
+  // Step 1: DownChar — stream 512 bytes to CharBuffer1
+  // Send in 4 packets of 128 bytes each (max data per packet = 128 for AS608)
+  const uint16_t CHUNK = 128;
+  const uint8_t  CHUNKS = TEMPLATE_SIZE / CHUNK; // 4
+
+  for (uint8_t chunk = 0; chunk < CHUNKS; chunk++) {
+    uint8_t pid = (chunk == CHUNKS - 1) ? 0x08 : 0x02; // last chunk = end packet
+    // First chunk carries the DownChar command byte + buffer number
+    bool isFirst = (chunk == 0);
+    uint16_t dataLen = isFirst ? CHUNK + 2 : CHUNK; // +cmd +bufNum for first
+    uint16_t pktLen  = dataLen + 2; // + checksum
+
+    uint16_t checksum = pid + pktLen;
+    if (isFirst) {
+      checksum += CMD_DOWNCHAR + 0x01;
+    }
+    const uint8_t* chunkData = templateBuf + chunk * CHUNK;
+    for (uint16_t i = 0; i < CHUNK; i++) checksum += chunkData[i];
+
+    fpSerial.write(0xEF); fpSerial.write(0x01);
+    fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF);
+    fpSerial.write(pid);
+    fpSerial.write((uint8_t)(pktLen >> 8)); fpSerial.write((uint8_t)(pktLen & 0xFF));
+    if (isFirst) {
+      fpSerial.write(CMD_DOWNCHAR);
+      fpSerial.write((uint8_t)0x01); // CharBuffer 1
+    }
+    for (uint16_t i = 0; i < CHUNK; i++) fpSerial.write(chunkData[i]);
+    fpSerial.write((uint8_t)(checksum >> 8)); fpSerial.write((uint8_t)(checksum & 0xFF));
+    fpSerial.flush();
+    delay(20);
+  }
+
+  // Read ACK
+  unsigned long t = millis();
+  while (fpSerial.available() < 12 && millis() - t < 3000) delay(1);
+  if (fpSerial.available() < 12) return false;
+  uint8_t ackBuf[12];
+  for (int i = 0; i < 12; i++) ackBuf[i] = fpSerial.read();
+  if (ackBuf[9] != 0x00) return false;
+
+  delay(20);
+
+  // Step 2: StoreChar — save CharBuffer1 to flash at slotId
+  uint8_t storeArgs[3] = { 0x01, 0x00, slotId };
+  uint8_t ack2 = as608SendCmd(CMD_STORE, storeArgs, 3);
+  return (ack2 == 0x00);
+}
+
+// Convert byte array to hex string
+String bytesToHex(const uint8_t* buf, uint16_t len) {
+  String s;
+  s.reserve(len * 2);
+  const char hex[] = "0123456789abcdef";
+  for (uint16_t i = 0; i < len; i++) {
+    s += hex[(buf[i] >> 4) & 0xF];
+    s += hex[buf[i] & 0xF];
+  }
+  return s;
+}
+
+// Convert hex string back to bytes. Returns number of bytes written.
+uint16_t hexToBytes(const String& hex, uint8_t* buf, uint16_t maxLen) {
+  uint16_t count = 0;
+  for (uint16_t i = 0; i + 1 < hex.length() && count < maxLen; i += 2) {
+    auto hexVal = [](char c) -> uint8_t {
+      if (c >= '0' && c <= '9') return c - '0';
+      if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+      if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+      return 0;
+    };
+    buf[count++] = (hexVal(hex[i]) << 4) | hexVal(hex[i+1]);
+  }
+  return count;
+}
+
+// ============================================================
+// MQTT HELPERS
+// ============================================================
+String topicTemplate = "";
+
+void buildMqttTopics() {
+  topicCommands = "devices/" + DEVICE_ID + "/commands";
+  topicStatus   = "devices/" + DEVICE_ID + "/status";
+  topicResult   = "devices/" + DEVICE_ID + "/result";
+  topicLog      = "devices/" + DEVICE_ID + "/log";
+  topicTemplate = "devices/" + DEVICE_ID + "/template_data";
+}
+
+// Mirrors a line to Serial and (if MQTT connected) to devices/{id}/log
+void mqttLog(const String& msg) {
+  Serial.println(msg);
+  if (mqttClient.connected() && DEVICE_ID.length() > 0) {
+    mqttClient.publish(topicLog.c_str(), msg.c_str(), false);
+  }
+}
+
+void publishStatus() {
+  if (!mqttClient.connected() || DEVICE_ID.length() == 0) return;
+
+  StaticJsonDocument<256> doc;
+  doc["ip"]             = stationConnected ? WiFi.localIP().toString() : "";
+  doc["rssi"]           = stationConnected ? WiFi.RSSI() : 0;
+  doc["ssid"]           = stationConnected ? WiFi.SSID() : "";
+  doc["free_heap"]      = ESP.getFreeHeap();
+  doc["uptime_minutes"] = millis() / 60000;
+  doc["mode"]           = (currentMode == MODE_ATTENDANCE) ? "attendance" :
+                          (currentMode == MODE_ENROLL)     ? "enroll" : "delete";
+  doc["firmware"]       = "1.0.0-esp32";
+
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(topicStatus.c_str(), payload.c_str(), false);
+}
+
+void publishResult(bool success, const String& message, const String& mode = "") {
+  if (!mqttClient.connected() || DEVICE_ID.length() == 0) return;
+
+  StaticJsonDocument<200> doc;
+  doc["success"] = success;
+  doc["message"] = message;
+  if (mode.length() > 0) doc["mode"] = mode;
+
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(topicResult.c_str(), payload.c_str(), false);
+}
+
+// Publishes the list of fingerprint IDs currently stored on the sensor
+void publishFingerprintList() {
+  if (!mqttClient.connected() || DEVICE_ID.length() == 0) return;
+
+  refreshFingerprintList();
+
+  StaticJsonDocument<1024> doc;
+  doc["success"] = true;
+  doc["message"] = "Fingerprint list";
+  JsonArray arr = doc.createNestedArray("used_ids");
+  for (uint16_t i = 0; i < fpCount; i++) arr.add(fpIDs[i]);
+
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(topicResult.c_str(), payload.c_str(), false);
+}
+
+// Publishes enroll completion status (success or failure) for ID
+void publishEnrollDone(bool success, int id, const String& message) {
+  if (!mqttClient.connected() || DEVICE_ID.length() == 0) return;
+
+  StaticJsonDocument<200> doc;
+  doc["success"]     = success;
+  doc["message"]     = message;
+  doc["enroll_done"] = true;
+  doc["enroll_id"]   = id;
+
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(topicResult.c_str(), payload.c_str(), false);
+}
+
+// ============================================================
+// MQTT COMMAND HANDLER
+// ============================================================
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String msg = "";
+  msg.reserve(length);
+  for (unsigned int i = 0; i < length; i++) msg += (char)payload[i];
+
+  mqttLog("MQTT command received: " + msg);
+
+  // import_fp carries a 1024-char hex template — needs a large document
+  DynamicJsonDocument doc(2048);
+  DeserializationError err = deserializeJson(doc, msg);
+  if (err) {
+    publishResult(false, "JSON parse error");
+    return;
+  }
+
+  String command = doc["command"].as<String>();
+
+  if (command == "get_status") {
+    publishStatus();
+    publishResult(true, "Status sent", currentMode == MODE_ATTENDANCE ? "attendance" : "enroll");
+
+  } else if (command == "set_attendance_mode") {
+    currentMode = MODE_ATTENDANCE;
+    displayWelcome();
+    publishResult(true, "Switched to attendance mode", "attendance");
+
+  } else if (command == "enroll") {
+    int id = doc["enroll_id"] | 0;
+    if (id < 1 || id > 127) { publishResult(false, "Invalid enroll ID"); return; }
+    enrollID = id;
+    currentMode = MODE_ENROLL;
+    lcd.clear();
+    lcd.setCursor(0, 0); lcd.print("Enroll Mode");
+    lcd.setCursor(0, 1); lcd.print("ID: " + String(enrollID));
+    activateBacklight();
+    publishResult(true, "Enrollment started for ID " + String(enrollID), "enroll");
+
+  } else if (command == "delete_fp") {
+    int id = doc["delete_id"] | 0;
+    if (id < 1 || id > 127 || !fingerprintSensorOK) {
+      publishResult(false, "Invalid ID or sensor unavailable"); return;
+    }
+    if (finger.deleteModel(id) == FINGERPRINT_OK) {
+      lcd.clear(); lcd.setCursor(0, 0); lcd.print("Deleted ID:" + String(id));
+      activateBacklight(); buzzerSound();
+      delay(1500); displayWelcome();
+      publishResult(true, "Deleted fingerprint ID " + String(id), "attendance");
+    } else {
+      publishResult(false, "Delete failed for ID " + String(id));
+    }
+
+  } else if (command == "clear_all") {
+    if (!fingerprintSensorOK) { publishResult(false, "Sensor unavailable"); return; }
+    finger.emptyDatabase();
+    fpCount = 0;
+    lcd.clear(); lcd.setCursor(0, 0); lcd.print("All Cleared");
+    activateBacklight(); delay(1500); displayWelcome();
+    publishResult(true, "All fingerprints cleared", "attendance");
+
+  } else if (command == "list_fp") {
+    if (!fingerprintSensorOK) { publishResult(false, "Sensor unavailable"); return; }
+    publishFingerprintList();
+
+  } else if (command == "update_url") {
+    String newUrl = doc["base_url"].as<String>();
+    if (newUrl.length() == 0) { publishResult(false, "base_url empty"); return; }
+    if (!newUrl.startsWith("http://") && !newUrl.startsWith("https://")) {
+      publishResult(false, "base_url must start with http:// or https://"); return;
+    }
+    BASE_URL = newUrl;
+    saveBaseURLToPrefs(newUrl);
+    lcd.clear(); lcd.setCursor(0, 0); lcd.print("URL Updated!");
+    activateBacklight();
+    publishResult(true, "BASE URL updated successfully");
+
+  } else if (command == "update_wifi") {
+    String newSSID = doc["ssid"].as<String>();
+    String newPass = doc["password"].as<String>();
+    if (newSSID.length() == 0) { publishResult(false, "SSID empty"); return; }
+    lcd.clear(); lcd.setCursor(0, 0); lcd.print("Updating WiFi");
+    lcd.setCursor(0, 1); lcd.print(newSSID);
+    activateBacklight();
+    connectToWiFi(newSSID, newPass, true);
+    if (stationConnected) {
+      publishResult(true, "WiFi updated, IP: " + WiFi.localIP().toString());
+    } else {
+      publishResult(false, "WiFi update failed: " + lastError);
+    }
+
+  } else if (command == "reconnect_wifi") {
+    if (stationSSID.length() > 0) {
+      connectToWiFi(stationSSID, stationPassword, false);
+    }
+    if (stationConnected) {
+      publishResult(true, "WiFi reconnected, IP: " + WiFi.localIP().toString());
+    } else {
+      publishResult(false, "Reconnect failed: " + lastError);
+    }
+
+  } else if (command == "clear_settings") {
+    publishResult(true, "WiFi and server settings cleared. Device ID kept — reconfigure WiFi via 192.168.4.1");
+    clearWiFiAndConfigPrefs();
+    stationSSID = stationPassword = lastError = "";
+    stationConnected = false;
+    BASE_URL = "https://attendance2.itsignaturesolutions.com/test_http.php?uid=";
+    lcd.clear(); lcd.setCursor(0, 0); lcd.print("Settings Cleared");
+    activateBacklight();
+
+  } else if (command == "ota_update") {
+    String url = doc["url"].as<String>();
+    if (url.length() == 0 || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+      publishResult(false, "ota_update: missing or invalid url"); return;
+    }
+    mqttLog("OTA update starting from: " + url);
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("OTA Updating...");
+    lcd.setCursor(0,1); lcd.print("Please wait");
+    activateBacklight();
+
+    // Disconnect MQTT cleanly before OTA so broker doesn't stall
+    mqttClient.disconnect();
+    delay(200);
+
+    WiFiClientSecure sc;
+    sc.setInsecure(); // skip cert check — same server as attendance API
+
+    t_httpUpdate_return ret = httpUpdate.update(sc, url);
+    // If we reach here the update failed (success causes auto-reboot)
+    switch (ret) {
+      case HTTP_UPDATE_FAILED:
+        mqttLog("OTA FAILED: " + String(httpUpdate.getLastErrorString()));
+        publishResult(false, "OTA failed: " + String(httpUpdate.getLastErrorString()));
+        break;
+      case HTTP_UPDATE_NO_UPDATES:
+        mqttLog("OTA: no update available");
+        publishResult(false, "OTA: no update available");
+        break;
+      default:
+        publishResult(false, "OTA: unexpected return code");
+    }
+
+  } else if (command == "export_fp") {
+    int id = doc["id"] | 0;
+    if (id < 1 || id > 127 || !fingerprintSensorOK) {
+      publishResult(false, "export_fp: invalid id or sensor unavailable"); return;
+    }
+    mqttLog("Exporting template ID: " + String(id));
+    // Clear serial buffer before raw comms
+    while (fpSerial.available()) fpSerial.read();
+    static uint8_t tplBuf[TEMPLATE_SIZE];
+    if (!as608DownloadTemplate((uint8_t)id, tplBuf)) {
+      publishResult(false, "export_fp: failed to read template " + String(id)); return;
+    }
+    String hexStr = bytesToHex(tplBuf, TEMPLATE_SIZE);
+    // Publish to template_data topic — backend listens and collects
+    StaticJsonDocument<2304> tdoc;
+    tdoc["id"]       = id;
+    tdoc["template"] = hexStr;
+    String tpayload;
+    serializeJson(tdoc, tpayload);
+    if (!mqttClient.publish(topicTemplate.c_str(), tpayload.c_str(), false)) {
+      publishResult(false, "export_fp: MQTT publish failed (buffer too small?)");
+    } else {
+      publishResult(true, "export_fp: template " + String(id) + " sent");
+    }
+
+  } else if (command == "import_fp") {
+    int id = doc["id"] | 0;
+    String hexStr = doc["template"].as<String>();
+    if (id < 1 || id > 127 || !fingerprintSensorOK) {
+      publishResult(false, "import_fp: invalid id or sensor unavailable"); return;
+    }
+    if (hexStr.length() != TEMPLATE_SIZE * 2) {
+      publishResult(false, "import_fp: template hex must be " + String(TEMPLATE_SIZE * 2) + " chars, got " + String(hexStr.length())); return;
+    }
+    mqttLog("Importing template to ID: " + String(id));
+    while (fpSerial.available()) fpSerial.read();
+    static uint8_t importBuf[TEMPLATE_SIZE];
+    uint16_t written = hexToBytes(hexStr, importBuf, TEMPLATE_SIZE);
+    if (written != TEMPLATE_SIZE) {
+      publishResult(false, "import_fp: hex decode error"); return;
+    }
+    if (!as608UploadTemplate((uint8_t)id, importBuf)) {
+      publishResult(false, "import_fp: failed to write template " + String(id)); return;
+    }
+    publishResult(true, "import_fp: template stored at ID " + String(id));
+
+  } else if (command == "reboot") {
+    publishResult(true, "Rebooting...");
+    delay(500);
+    ESP.restart();
+
+  } else {
+    publishResult(false, "Unknown command: " + command);
+  }
+}
+
+void reconnectMQTT() {
+  if (mqttClient.connected() || !stationConnected || DEVICE_ID.length() == 0) return;
+  if (millis() - lastMqttReconnect < MQTT_RECONNECT_INTERVAL) return;
+  lastMqttReconnect = millis();
+
+  Serial.println("Connecting to MQTT broker...");
+  String clientId = "esp-" + DEVICE_ID;
+
+  if (mqttClient.connect(clientId.c_str())) {
+    mqttClient.subscribe(topicCommands.c_str(), 1);
+    mqttLog("MQTT connected as: " + clientId);
+    publishStatus();
+  } else {
+    Serial.println("MQTT connect failed, rc=" + String(mqttClient.state()));
+  }
+}
+
+// ============================================================
+// SESSION AUTH
+// ============================================================
+String generateSessionToken() {
+  String t = "";
+  t.reserve(16);
+  for (int i = 0; i < 16; i++) t += String(random(16), HEX);
+  return t;
+}
+
+bool isAuthenticated() {
+  if (currentSessionToken.length() == 0) return false;
+  if (millis() - sessionStartTime > SESSION_TIMEOUT) {
+    currentSessionToken = "";
+    return false;
+  }
+  String s = server.arg("session");
+  if (s.length() == 0) s = server.arg("session_token");
+  if (s == currentSessionToken) {
+    sessionStartTime = millis();
+    return true;
+  }
+  return false;
+}
+
+void requireAuth() {
+  server.sendHeader("Location", "/login");
+  server.send(302, "text/plain", "");
+}
+
+// ============================================================
+// FINGERPRINT HELPERS
+// ============================================================
+bool fingerprintExists(uint16_t id) {
+  return (finger.loadModel(id) == FINGERPRINT_OK);
+}
+
+void refreshFingerprintList() {
+  fpCount = 0;
+  if (!fingerprintSensorOK) return;
+  for (uint16_t id = 1; id <= 127 && fpCount < 127; id++) {
+    if (fingerprintExists(id)) fpIDs[fpCount++] = id;
+    delay(1);
+  }
+}
+
+// ============================================================
+// CSS (PROGMEM not needed on ESP32 but kept for clarity)
+// ============================================================
+const char CSS[] =
+  "<style>"
+  "body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#1E9ADA,#6BC7F0);"
+  "margin:0;padding:10px;min-height:100vh;box-sizing:border-box}"
+  ".container{max-width:900px;margin:0 auto}"
+  ".card{background:#fff;padding:15px;border-radius:10px;"
+  "box-shadow:0 4px 12px rgba(0,0,0,.12);margin-bottom:12px}"
+  ".logo{font-size:26px;color:#1E9ADA;font-weight:700;text-align:center;margin-bottom:6px}"
+  ".btn{background:#1E9ADA;color:#fff;padding:9px 18px;border:none;"
+  "border-radius:5px;cursor:pointer;font-size:13px;margin:4px;text-decoration:none;display:inline-block}"
+  ".btn:hover{background:#0A7CB8}"
+  ".btn-danger{background:#f44336}.btn-success{background:#4CAF50}"
+  ".btn-warning{background:#FF9800}.btn-purple{background:#9C27B0}"
+  ".btn-teal{background:#009688}"
+  ".form-group{margin-bottom:12px}"
+  ".form-group label{display:block;margin-bottom:4px;font-weight:500;font-size:13px}"
+  ".form-group input{width:100%;padding:7px;border:2px solid #ddd;border-radius:5px;"
+  "box-sizing:border-box;font-size:13px}"
+  ".status{padding:7px 10px;border-radius:5px;margin:4px 0;word-wrap:break-word;font-size:13px}"
+  ".status-success{background:#e8f5e9;color:#2e7d32}"
+  ".status-error{background:#ffebee;color:#c62828}"
+  ".status-info{background:#f5f5f5;color:#555}"
+  ".status-warning{background:#fff8e1;color:#e65100}"
+  ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}"
+  ".fp-list{max-height:280px;overflow-y:auto;border:1px solid #ddd;padding:8px;border-radius:5px}"
+  ".fp-item{padding:7px;border-bottom:1px solid #eee;display:flex;"
+  "justify-content:space-between;align-items:center;font-size:13px}"
+  ".fp-item:last-child{border-bottom:none}"
+  ".pager{text-align:center;margin:8px 0}"
+  ".pager .btn{margin:2px;font-size:11px;padding:4px 9px}"
+  ".pager .cur{background:#FF9800}"
+  ".section-title{font-size:15px;font-weight:600;margin:0 0 10px 0;color:#333;"
+  "border-bottom:2px solid #1E9ADA;padding-bottom:5px}"
+  "@keyframes spin{to{transform:rotate(360deg)}}"
+  ".spin{animation:spin 1.5s linear infinite;display:inline-block}"
+  "@media(max-width:480px){.grid{grid-template-columns:1fr}}"
+  "</style>";
+
+// ============================================================
+// HTML HELPERS
+// ============================================================
+String hHead(const String& title = "IT Signature") {
+  String h = "<!DOCTYPE html><html><head>"
+             "<meta charset='UTF-8'>"
+             "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+             "<title>" + title + "</title>";
+  h += CSS;
+  h += "</head>";
+  return h;
+}
+
+String generateLoginPage(const String& err = "") {
+  String h = hHead("Login");
+  h += "<body><div class='container' style='max-width:420px'>"
+       "<div class='card'>"
+       "<div class='logo'>&#x1F4CD; IT Signature</div>"
+       "<p style='text-align:center;color:#888;margin:0 0 16px'>Admin Login</p>";
+  if (err.length()) h += "<div class='status status-error'>" + err + "</div>";
+  h += "<form method='POST' action='/login'>"
+       "<div class='form-group'><label>Username</label>"
+       "<input type='text' name='username' autofocus required></div>"
+       "<div class='form-group'><label>Password</label>"
+       "<input type='password' name='password' required></div>"
+       "<button type='submit' class='btn' style='width:100%'>Login</button>"
+       "</form></div></div></body></html>";
+  return h;
+}
+
+// ============================================================
+// DASHBOARD HTML
+// ============================================================
+String generateDashboard() {
+  String tok = currentSessionToken;
+  String h = hHead();
+  h += "<body><div class='container'>";
+
+  // ── Header ──────────────────────────────────────────────
+  h += "<div class='card'>"
+       "<div class='logo'>&#x1F4CD; IT Signature</div>"
+       "<p style='text-align:center;color:#888;margin:0 0 10px'>Fingerprint Attendance System (ESP32)</p>"
+       "<div style='text-align:center'>";
+  h += "<button onclick='location.reload()' class='btn btn-success'>&#x21BB; Refresh</button>";
+  h += "<form method='POST' action='/logout' style='display:inline'>"
+       "<input type='hidden' name='session_token' value='" + tok + "'>"
+       "<button type='submit' class='btn btn-danger'>Logout</button></form>";
+  h += "</div></div>";
+
+  // ── Current Mode ────────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>Current Mode</p>";
+  switch (currentMode) {
+    case MODE_ATTENDANCE:
+      h += "<div class='status status-success'>&#x2705; Attendance Scanning</div>";
+      break;
+    case MODE_ENROLL:
+      h += "<div class='status status-warning'>&#x270D; Enrollment Mode &mdash; ID: <b>" + String(enrollID) + "</b></div>"
+           "<form method='POST' action='/set-attendance-mode'>"
+           "<input type='hidden' name='session_token' value='" + tok + "'>"
+           "<button type='submit' class='btn btn-success'>&#x21A9; Return to Attendance</button></form>";
+      break;
+    case MODE_DELETE:
+      h += "<div class='status status-error'>&#x1F5D1; Delete Mode</div>";
+      break;
+  }
+  h += "</div>";
+
+  // ── Device Identity ─────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>Device Identity</p>";
+  h += "<div class='status status-info'>Device ID: <b>" + (DEVICE_ID.length() > 0 ? DEVICE_ID : "NOT SET") + "</b></div>";
+  h += "<div class='status " + String(mqttClient.connected() ? "status-success" : "status-error") + "'>MQTT: <b>" + String(mqttClient.connected() ? "Connected" : "Disconnected") + "</b></div>";
+  h += "<form method='POST' action='/update-deviceid'>"
+       "<input type='hidden' name='session_token' value='" + tok + "'>"
+       "<div class='form-group'><label>Device ID (e.g. DEV001)</label>"
+       "<input type='text' name='device_id' value='" + DEVICE_ID + "' required maxlength='47' placeholder='DEV001'></div>"
+       "<button type='submit' class='btn btn-success'>Save Device ID</button></form>";
+  h += "</div>";
+
+  // ── System Status ────────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>System Status</p><div class='grid'>";
+  h += "<div class='status status-success'>AP: " + AP_SSID + "</div>";
+  h += "<div class='status status-info'>AP IP: " + WiFi.softAPIP().toString() + "</div>";
+  if (stationConnected) {
+    h += "<div class='status status-success'>WiFi: " + stationSSID + "</div>";
+    h += "<div class='status status-info'>STA IP: " + WiFi.localIP().toString() + "</div>";
+  } else {
+    h += "<div class='status status-error'>WiFi: Disconnected</div>";
+    if (lastError.length())
+      h += "<div class='status status-error'>" + lastError + "</div>";
+  }
+  h += "<div class='status status-info'>Uptime: " + String(millis() / 60000) + " min</div>";
+  h += "<div class='status status-info'>Heap: " + String(ESP.getFreeHeap()) + " B</div>";
+  h += "<div class='status status-info'>Chip: ESP32</div>";
+  h += "<div class='status status-info'>CPU: " + String(ESP.getCpuFreqMHz()) + " MHz</div>";
+  h += "</div></div>";
+
+  // ── WiFi Signal Card ─────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>&#x1F4F6; WiFi Connection Status</p>";
+  if (stationConnected) {
+    int rssi = WiFi.RSSI();
+    int quality = rssi <= -100 ? 0 : rssi >= -50 ? 100 : 2 * (rssi + 100);
+
+    String barColor = "#f44336";
+    String qLabel   = "Poor";
+    if (quality >= 75)      { barColor = "#4CAF50"; qLabel = "Excellent"; }
+    else if (quality >= 50) { barColor = "#1E9ADA"; qLabel = "Good"; }
+    else if (quality >= 25) { barColor = "#FF9800"; qLabel = "Fair"; }
+
+    h += "<div style='margin-bottom:10px'>";
+    h += "<div style='display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px'>";
+    h += "<span>Signal Strength</span>";
+    h += "<span style='font-weight:600;color:" + barColor + "'>" + qLabel + " (" + String(quality) + "%)</span>";
+    h += "</div>";
+    h += "<div style='background:#e0e0e0;border-radius:5px;height:12px;overflow:hidden'>";
+    h += "<div style='width:" + String(quality) + "%;height:100%;background:" + barColor + ";border-radius:5px'></div>";
+    h += "</div></div>";
+
+    h += "<div class='grid'>";
+    h += "<div class='status status-info'>&#x1F4E1; RSSI: <b>" + String(rssi) + " dBm</b></div>";
+    h += "<div class='status status-info'>&#x1F4CD; Channel: <b>" + String(WiFi.channel()) + "</b></div>";
+    h += "<div class='status status-info'>&#x1F5A7; Gateway: <b>" + WiFi.gatewayIP().toString() + "</b></div>";
+    h += "<div class='status status-info'>&#x1F511; DNS: <b>" + WiFi.dnsIP().toString() + "</b></div>";
+    h += "<div class='status status-info'>&#x1F4BB; MAC: <b>" + WiFi.macAddress() + "</b></div>";
+    h += "<div class='status status-info'>&#x1F4E1; BSSID: <b>" + WiFi.BSSIDstr() + "</b></div>";
+    h += "<div class='status status-info'>&#x1F310; Subnet: <b>" + WiFi.subnetMask().toString() + "</b></div>";
+    h += "<div class='status status-info'>&#x1F4F6; Bars: <b>";
+    int bars = quality >= 75 ? 4 : quality >= 50 ? 3 : quality >= 25 ? 2 : 1;
+    for (int i = 1; i <= 4; i++) h += (i <= bars) ? "&#x2588;" : "&#x2591;";
+    h += "</b></div>";
+    h += "</div>";
+  } else {
+    h += "<div class='status status-error'>&#x274C; Not connected to any WiFi network.</div>";
+    h += "<div class='status status-warning'>Configure WiFi credentials below to connect.</div>";
+  }
+  h += "</div>";
+
+  // ── Sensor Status ─────────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>AS608 Sensor</p><div class='grid'>";
+  if (fingerprintSensorOK) {
+    finger.getParameters();
+    finger.getTemplateCount();
+    h += "<div class='status status-success'>&#x2705; Sensor Connected</div>";
+    h += "<div class='status status-info'>Capacity: " + String(finger.capacity) + "</div>";
+    h += "<div class='status status-info'>Stored: " + String(finger.templateCount) + "</div>";
+    h += "<div class='status status-info'>Security: " + String(finger.security_level) + "</div>";
+  } else {
+    h += "<div class='status status-error'>&#x274C; Sensor Not Found</div>"
+         "<div class='status status-error'>Check wiring &amp; restart</div>";
+  }
+  h += "</div></div>";
+
+  // ── Server Config ─────────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>Server Configuration</p>";
+  h += "<div class='status status-info' style='word-break:break-all;font-size:12px'>Current: " + BASE_URL + "</div>";
+  h += "<form method='POST' action='/update-baseurl'>"
+       "<input type='hidden' name='session_token' value='" + tok + "'>"
+       "<div class='form-group'><label>BASE URL</label>"
+       "<input type='text' name='baseurl' value='" + BASE_URL + "' required></div>"
+       "<div class='grid'><button type='submit' class='btn btn-success'>Update URL</button></form>";
+  h += "<form method='POST' action='/clear-baseurl'>"
+       "<input type='hidden' name='session_token' value='" + tok + "'>"
+       "<button type='submit' class='btn btn-danger'"
+       " onclick='return confirm(\"Reset to default?\")'>Reset Default</button></form>";
+  h += "</div></div>";
+
+  // ── Fingerprint Management ────────────────────────────────
+  if (fingerprintSensorOK) {
+    h += "<div class='card'><p class='section-title'>Fingerprint Management</p><div class='grid'>";
+    h += "<form method='POST' action='/start-enroll'>"
+         "<input type='hidden' name='session_token' value='" + tok + "'>"
+         "<input type='number' name='enroll_id' placeholder='ID (1-127)' min='1' max='127' required"
+         " style='margin-bottom:5px;width:100%;padding:7px;border:2px solid #ddd;border-radius:5px;box-sizing:border-box'>"
+         "<button type='submit' class='btn btn-success' style='width:100%'>&#x2795; Start Enroll</button></form>";
+    h += "<form method='POST' action='/clear-all-fingerprints'>"
+         "<input type='hidden' name='session_token' value='" + tok + "'>"
+         "<button type='submit' class='btn btn-danger' style='width:100%'"
+         " onclick='return confirm(\"Delete ALL fingerprints?\")'>&#x1F5D1; Clear All</button></form>";
+    h += "</div></div>";
+
+    // ── Stored Fingerprint List ───────────────────────────
+    int currentPage = 1;
+    String pp = server.arg("fp_page");
+    if (pp.length()) { currentPage = pp.toInt(); if (currentPage < 1) currentPage = 1; }
+
+    const int PER_PAGE = 8;
+    int totalPages = max(1, (int)((fpCount + PER_PAGE - 1) / PER_PAGE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    int startIdx = (currentPage - 1) * PER_PAGE;
+    int endIdx   = min(startIdx + PER_PAGE, (int)fpCount);
+
+    h += "<div class='card'><p class='section-title'>Stored Fingerprints</p>";
+    if (fpCount == 0) {
+      h += "<div class='status status-info'>No fingerprints stored.</div>";
+    } else {
+      if (totalPages > 1) {
+        h += "<div class='pager'>";
+        if (currentPage > 1)
+          h += "<a href='/?session=" + tok + "&fp_page=" + (currentPage-1) + "' class='btn'>&#x2039;</a>";
+        for (int p = 1; p <= totalPages; p++) {
+          if (p == currentPage)
+            h += "<span class='btn cur'>" + String(p) + "</span>";
+          else
+            h += "<a href='/?session=" + tok + "&fp_page=" + p + "' class='btn'>" + String(p) + "</a>";
+        }
+        if (currentPage < totalPages)
+          h += "<a href='/?session=" + tok + "&fp_page=" + (currentPage+1) + "' class='btn'>&#x203A;</a>";
+        h += "</div>";
+      }
+      h += "<div class='fp-list'>";
+      for (int i = startIdx; i < endIdx; i++) {
+        uint16_t id = fpIDs[i];
+        h += "<div class='fp-item'><span>&#x1F4BE; ID: <b>" + String(id) + "</b></span>";
+        h += "<form method='POST' action='/delete-fingerprint' style='margin:0'>"
+             "<input type='hidden' name='session_token' value='" + tok + "'>"
+             "<input type='hidden' name='delete_id' value='" + String(id) + "'>"
+             "<button type='submit' class='btn btn-danger' style='padding:4px 9px;font-size:11px'"
+             " onclick='return confirm(\"Delete ID " + String(id) + "?\")'>&#x1F5D1;</button>"
+             "</form></div>";
+      }
+      h += "</div>";
+      h += "<div class='status status-info' style='font-size:12px'>Showing " +
+           String(startIdx+1) + "-" + String(endIdx) + " of " + String(fpCount) +
+           " (Page " + String(currentPage) + "/" + String(totalPages) + ")</div>";
+    }
+    h += "</div>";
+  }
+
+  // ── WiFi Config ───────────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>WiFi Configuration</p>"
+       "<form method='POST' action='/update-wifi'>"
+       "<input type='hidden' name='session_token' value='" + tok + "'>"
+       "<div class='form-group'><label>SSID</label>"
+       "<input type='text' name='ssid' value='" + stationSSID + "' required></div>"
+       "<div class='form-group'><label>Password</label>"
+       "<input type='password' name='password' required></div>"
+       "<button type='submit' class='btn'>Update WiFi</button></form></div>";
+
+  // ── Quick Actions ─────────────────────────────────────────
+  h += "<div class='card'><p class='section-title'>Quick Actions</p><div class='grid'>";
+  h += "<form method='POST' action='/reconnect-wifi'><input type='hidden' name='session_token' value='" + tok + "'>"
+       "<button type='submit' class='btn btn-success'>&#x21BB; Reconnect WiFi</button></form>";
+  h += "<form method='POST' action='/clear-settings'><input type='hidden' name='session_token' value='" + tok + "'>"
+       "<button type='submit' class='btn btn-danger'"
+       " onclick='return confirm(\"Clear all saved settings?\")'>&#x1F5D1; Clear Settings</button></form>";
+  h += "<form method='POST' action='/reboot'><input type='hidden' name='session_token' value='" + tok + "'>"
+       "<button type='submit' class='btn btn-warning'"
+       " onclick='return confirm(\"Reboot device?\")'>&#x1F504; Reboot</button></form>";
+  h += "</div></div>";
+
+  h += "</div></body></html>";
+  return h;
+}
+
+// ============================================================
+// WEB SERVER HANDLERS
+// ============================================================
+void handleRoot() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  refreshFingerprintList();
+  server.send(200, "text/html", generateDashboard());
+}
+
+void handleLogin() {
+  if (server.method() == HTTP_POST) {
+    String u = server.arg("username");
+    String p = server.arg("password");
+    if (u == ADMIN_USERNAME && p == ADMIN_PASSWORD) {
+      currentSessionToken = generateSessionToken();
+      sessionStartTime    = millis();
+      server.sendHeader("Location", "/?session=" + currentSessionToken);
+      server.send(302, "text/plain", "");
+      return;
+    }
+    server.send(200, "text/html", generateLoginPage("Invalid credentials!"));
+    return;
+  }
+  server.send(200, "text/html", generateLoginPage());
+}
+
+void handleLogout() {
+  currentSessionToken = "";
+  sessionStartTime    = 0;
+  currentMode         = MODE_ATTENDANCE;
+  server.sendHeader("Location", "/login");
+  server.send(302, "text/plain", "");
+}
+
+void handleSetAttendanceMode() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  currentMode = MODE_ATTENDANCE;
+  displayWelcome();
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleStartEnroll() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  enrollID = server.arg("enroll_id").toInt();
+  if (enrollID < 1 || enrollID > 127) {
+    server.sendHeader("Location", "/?session=" + currentSessionToken);
+    server.send(302, "text/plain", "");
+    return;
+  }
+  currentMode = MODE_ENROLL;
+  lcd.clear();
+  lcd.setCursor(0,0); lcd.print("Enroll Mode");
+  lcd.setCursor(0,1); lcd.print("ID: " + String(enrollID));
+  activateBacklight();
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleDeleteFingerprint() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  int delId = server.arg("delete_id").toInt();
+  if (delId >= 1 && delId <= 127 && fingerprintSensorOK) {
+    lcd.clear(); lcd.setCursor(0,0);
+    if (finger.deleteModel(delId) == FINGERPRINT_OK) {
+      lcd.print("Deleted ID:" + String(delId));
+      buzzerSound();
+    } else {
+      lcd.print("Delete Failed");
+    }
+    activateBacklight();
+    delay(1500);
+    displayWelcome();
+  }
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleClearAllFingerprints() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  if (fingerprintSensorOK) {
+    finger.emptyDatabase();
+    fpCount = 0;
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("All Cleared");
+    activateBacklight();
+    delay(1500);
+    displayWelcome();
+  }
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleUpdateBaseURL() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  String url = server.arg("baseurl");
+  if (url.length() == 0) {
+    lastError = "URL cannot be empty";
+    server.sendHeader("Location", "/?session=" + currentSessionToken);
+    server.send(302, "text/plain", ""); return;
+  }
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    lastError = "URL must start with http:// or https://";
+    server.sendHeader("Location", "/?session=" + currentSessionToken);
+    server.send(302, "text/plain", ""); return;
+  }
+  BASE_URL = url;
+  saveBaseURLToPrefs(url);
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("URL Updated!");
+  activateBacklight();
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleClearBaseURL() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  BASE_URL = "https://attendance2.itsignaturesolutions.com/test_http.php?uid=";
+  prefs.begin("config", false); prefs.remove("baseurl"); prefs.end();
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("URL Reset");
+  activateBacklight();
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleUpdateWiFi() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  String newSSID = server.arg("ssid");
+  String newPass = server.arg("password");
+  if (newSSID.length() == 0) {
+    lastError = "SSID cannot be empty";
+    server.sendHeader("Location", "/?session=" + currentSessionToken);
+    server.send(302, "text/plain", ""); return;
+  }
+  String page = hHead("Updating WiFi");
+  page += "<body><div class='container' style='max-width:420px'>"
+          "<div class='card'>"
+          "<div class='logo'>&#x1F4CD; IT Signature</div>"
+          "<h3 style='text-align:center'>Connecting...</h3>"
+          "<div style='text-align:center;font-size:40px;margin:15px' class='spin'>&#x2699;</div>"
+          "<div class='status status-info'>Connecting to: " + newSSID + "</div>"
+          "<div class='status status-info'>Page will refresh in 12 seconds...</div>"
+          "</div></div>";
+  page += "<script>setTimeout(()=>{location.href='/?session=" + currentSessionToken + "';},12000);</script>";
+  page += "</body></html>";
+  server.send(200, "text/html", page);
+  delay(300);
+  connectToWiFi(newSSID, newPass, true);
+}
+
+void handleReconnectWiFi() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  if (stationSSID.length() > 0) {
+    WiFi.begin(stationSSID.c_str(), stationPassword.c_str());
+    wifiReconnecting   = true;
+    wifiReconnectStart = millis();
+  }
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleClearSettings() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  clearAllPrefs();
+  stationSSID = stationPassword = lastError = "";
+  stationConnected = false;
+  BASE_URL = "https://attendance2.itsignaturesolutions.com/test_http.php?uid=";
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Settings Cleared");
+  activateBacklight();
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+void handleReboot() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  String page = hHead("Rebooting");
+  page += "<body><div class='container' style='max-width:420px'>"
+          "<div class='card'>"
+          "<div class='logo'>&#x1F4CD; IT Signature</div>"
+          "<h3 style='text-align:center'>Rebooting...</h3>"
+          "<div style='text-align:center;font-size:40px;margin:15px' class='spin'>&#x1F504;</div>"
+          "<div class='status status-info'>Redirecting to login in 15 seconds...</div>"
+          "</div></div>"
+          "<script>setTimeout(()=>{location.href='/login';},15000);</script>"
+          "</body></html>";
+  server.send(200, "text/html", page);
+  delay(500);
+  ESP.restart();
+}
+
+void handleUpdateDeviceID() {
+  if (!isAuthenticated()) { requireAuth(); return; }
+  String newId = server.arg("device_id");
+  newId.trim();
+  if (newId.length() == 0) {
+    server.sendHeader("Location", "/?session=" + currentSessionToken);
+    server.send(302, "text/plain", ""); return;
+  }
+  saveDeviceIDToPrefs(newId);
+  DEVICE_ID = newId;
+  buildMqttTopics();
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Device ID Set:");
+  lcd.setCursor(0,1); lcd.print(DEVICE_ID);
+  activateBacklight();
+  // Reconnect MQTT with new ID
+  mqttClient.disconnect();
+  lastMqttReconnect = 0;
+  server.sendHeader("Location", "/?session=" + currentSessionToken);
+  server.send(302, "text/plain", "");
+}
+
+// ============================================================
+// WIFI CONNECT
+// ============================================================
+void connectToWiFi(const String& ssid, const String& pass, bool save) {
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  unsigned long t = millis();
+  bool ok = false;
+
+  while (millis() - t < 10000) {
+    if (WiFi.status() == WL_CONNECTED) { ok = true; break; }
+    delay(100);
+    server.handleClient();
+  }
+
+  if (ok) {
+    if (save) saveWiFiToPrefs(ssid, pass);
+    stationSSID      = ssid;
+    stationPassword  = pass;
+    stationConnected = true;
+    lastError        = "";
+    wifiReconnecting = false;
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("WiFi Connected");
+    lcd.setCursor(0,1); lcd.print(WiFi.localIP().toString());
+  } else {
+    stationConnected = false;
+    wifiReconnecting = false;
+    switch (WiFi.status()) {
+      case WL_CONNECT_FAILED: lastError = "Wrong password"; break;
+      case WL_NO_SSID_AVAIL:  lastError = "SSID not found"; break;
+      default:                lastError = "Timeout"; break;
+    }
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("WiFi Failed");
+    lcd.setCursor(0,1); lcd.print(lastError);
+  }
+  activateBacklight();
+}
+
+void setupWiFi() {
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(AP_SSID.c_str(), AP_PASSWORD.c_str(), 6, false, 4);
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("AP: IT-Signature");
+  lcd.setCursor(0,1); lcd.print(WiFi.softAPIP().toString());
+  delay(500);
+
+  if (loadWiFiFromPrefs(stationSSID, stationPassword)) {
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("Connecting WiFi");
+    lcd.setCursor(0,1); lcd.print(stationSSID);
+    activateBacklight();
+    connectToWiFi(stationSSID, stationPassword, false);
+  } else {
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("No WiFi Config");
+    lcd.setCursor(0,1); lcd.print("Use AP Setup");
+    activateBacklight();
+  }
+}
+
+// ============================================================
+// SETUP
+// ============================================================
+void setup() {
+  Wire.begin(LCD_SDA, LCD_SCL);
+  lcd.begin(16, 2);
+  lcd.noBacklight();
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  Serial.begin(115200);
+  Serial.println("\nIT Signature FP Attendance (ESP32) Starting...");
+
+  // ESP32 Hardware Serial2
+  fpSerial.begin(57600, SERIAL_8N1, FP_RX_PIN, FP_TX_PIN);
+  delay(100);
+
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Init Sensor...");
+  activateBacklight();
+
+  if (finger.verifyPassword()) {
+    fingerprintSensorOK = true;
+    finger.getParameters();
+    finger.getTemplateCount();
+    Serial.print("AS608 OK | Templates: ");
+    Serial.println(finger.templateCount);
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("FP Sensor OK");
+    lcd.setCursor(0,1); lcd.print("Tmpl: " + String(finger.templateCount));
+    delay(1500);
+  } else {
+    fingerprintSensorOK = false;
+    Serial.println("AS608 NOT FOUND");
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("FP Sensor ERROR");
+    lcd.setCursor(0,1); lcd.print("Check Wiring");
+    delay(2500);
+  }
+
+  // Load saved BASE_URL
+  String savedURL;
+  if (loadBaseURLFromPrefs(savedURL)) {
+    BASE_URL = savedURL;
+    Serial.println("BASE_URL from Prefs: " + BASE_URL);
+  }
+
+  // Load saved Device ID
+  String savedDevID;
+  if (loadDeviceIDFromPrefs(savedDevID)) {
+    DEVICE_ID = savedDevID;
+    Serial.println("Device ID: " + DEVICE_ID);
+  } else {
+    Serial.println("WARNING: Device ID not set. Set it via 192.168.4.1 dashboard.");
+  }
+  buildMqttTopics();
+
+  randomSeed(analogRead(0));
+  setupWiFi();
+
+  // Register routes
+  server.on("/",                       handleRoot);
+  server.on("/login",                  handleLogin);
+  server.on("/logout",                 handleLogout);
+  server.on("/update-wifi",            handleUpdateWiFi);
+  server.on("/reconnect-wifi",         handleReconnectWiFi);
+  server.on("/clear-settings",         handleClearSettings);
+  server.on("/reboot",                 handleReboot);
+  server.on("/set-attendance-mode",    handleSetAttendanceMode);
+  server.on("/start-enroll",           handleStartEnroll);
+  server.on("/delete-fingerprint",     handleDeleteFingerprint);
+  server.on("/clear-all-fingerprints", handleClearAllFingerprints);
+  server.on("/update-baseurl",         handleUpdateBaseURL);
+  server.on("/clear-baseurl",          handleClearBaseURL);
+  server.on("/update-deviceid",        handleUpdateDeviceID);
+  server.begin();
+  Serial.println("Web server started.");
+
+  // MQTT broker setup
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setCallback(mqttCallback);
+  mqttClient.setBufferSize(2048); // large enough for template_data (512 bytes hex = 1024 chars + JSON)
+
+  displayWelcome();
+  activateBacklight();
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+void loop() {
+  server.handleClient();
+
+  // MQTT loop
+  if (stationConnected) {
+    if (!mqttClient.connected()) {
+      reconnectMQTT();
+    } else {
+      mqttClient.loop();
+      if (millis() - lastStatusPublish > STATUS_PUBLISH_INTERVAL) {
+        lastStatusPublish = millis();
+        publishStatus();
+      }
+    }
+  }
+
+  // Non-blocking WiFi reconnect check
+  if (wifiReconnecting) {
+    if (WiFi.status() == WL_CONNECTED) {
+      stationConnected = true;
+      wifiReconnecting = false;
+      lastError        = "";
+    } else if (millis() - wifiReconnectStart > 12000) {
+      stationConnected = false;
+      wifiReconnecting = false;
+      lastError        = "Reconnect timeout";
+    }
+  }
+
+  // Periodic station check
+  if (millis() - lastStationCheck > STATION_CHECK_INTERVAL) {
+    lastStationCheck = millis();
+    if (stationSSID.length() > 0 && !wifiReconnecting) {
+      bool wasConnected = stationConnected;
+      stationConnected = (WiFi.status() == WL_CONNECTED);
+      if (!stationConnected && wasConnected) {
+        WiFi.begin(stationSSID.c_str(), stationPassword.c_str());
+        wifiReconnecting   = true;
+        wifiReconnectStart = millis();
+      }
+    }
+  }
+
+  handleBacklight();
+
+  if (fingerprintSensorOK && millis() - lastScanTime > SCAN_DEBOUNCE) {
+    if (currentMode == MODE_ATTENDANCE) {
+      handleAttendanceMode();
+    } else if (currentMode == MODE_ENROLL) {
+      handleEnrollMode();
+    }
+  }
+
+  delay(10); // ESP32 faster — 10ms ඇති
+}
+
+// ============================================================
+// ATTENDANCE MODE
+// ============================================================
+void handleAttendanceMode() {
+  uint8_t id = getFingerprintID();
+  if (id == 255) return;
+
+  lastScanTime = millis();
+  activateBacklight();
+  mqttLog("FP Match ID: " + String(id));
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Processing...");
+
+  if (stationConnected) {
+    sendAttendanceRequest(String(id));
+  } else {
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("No Internet");
+    lcd.setCursor(0,1); lcd.print("ID: " + String(id));
+  }
+  delay(1500);
+  displayWelcome();
+}
+
+// ============================================================
+// ENROLL MODE
+// ============================================================
+void handleEnrollMode() {
+  static int enrollStep = 0;
+  static unsigned long lastEnrollAction = 0;
+  if (millis() - lastEnrollAction < 400) return;
+
+  uint8_t p = finger.getImage();
+
+  if (p == FINGERPRINT_OK) {
+    lastEnrollAction = millis();
+    activateBacklight();
+
+    if (enrollStep == 0) {
+      p = finger.image2Tz(1);
+      if (p == FINGERPRINT_OK) {
+        enrollStep = 1;
+        lcd.clear(); lcd.setCursor(0,0); lcd.print("Remove Finger");
+        lcd.setCursor(0,1); lcd.print("Then place again");
+        buzzerSound();
+      } else {
+        lcd.clear(); lcd.setCursor(0,0); lcd.print("Image Error");
+        delay(800);
+        lcd.clear(); lcd.setCursor(0,0); lcd.print("Enroll Mode");
+        lcd.setCursor(0,1); lcd.print("ID: " + String(enrollID));
+      }
+    } else if (enrollStep == 2) {
+      p = finger.image2Tz(2);
+      if (p == FINGERPRINT_OK) {
+        p = finger.createModel();
+        if (p == FINGERPRINT_OK) {
+          p = finger.storeModel(enrollID);
+          if (p == FINGERPRINT_OK) {
+            lcd.clear(); lcd.setCursor(0,0); lcd.print("Enrolled OK!");
+            lcd.setCursor(0,1); lcd.print("ID: " + String(enrollID));
+            buzzerSound(); delay(1500);
+            publishEnrollDone(true, enrollID, "Enrolled fingerprint ID " + String(enrollID));
+            currentMode = MODE_ATTENDANCE;
+            enrollStep  = 0;
+            displayWelcome();
+          } else {
+            lcd.clear(); lcd.setCursor(0,0); lcd.print("Store Error");
+            delay(800);
+            publishEnrollDone(false, enrollID, "Store error for ID " + String(enrollID));
+            enrollStep = 0;
+          }
+        } else {
+          lcd.clear(); lcd.setCursor(0,0); lcd.print("No Match");
+          delay(800);
+          publishEnrollDone(false, enrollID, "Fingerprint did not match for ID " + String(enrollID));
+          enrollStep = 0;
+        }
+      } else {
+        lcd.clear(); lcd.setCursor(0,0); lcd.print("Image Error");
+        delay(800); enrollStep = 0;
+      }
+    }
+  } else if (p == FINGERPRINT_NOFINGER && enrollStep == 1) {
+    enrollStep = 2;
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("Place Same");
+    lcd.setCursor(0,1); lcd.print("Finger Again");
+  }
+}
+
+// ============================================================
+// GET FINGERPRINT ID
+// ============================================================
+uint8_t getFingerprintID() {
+  if (finger.getImage()         != FINGERPRINT_OK) return 255;
+  if (finger.image2Tz()         != FINGERPRINT_OK) return 255;
+  if (finger.fingerFastSearch() != FINGERPRINT_OK) {
+    if (finger.fingerFastSearch() == FINGERPRINT_NOTFOUND) {
+      lcd.clear(); lcd.setCursor(0,0); lcd.print("Not Registered");
+      activateBacklight();
+      delay(1500); displayWelcome();
+    }
+    return 255;
+  }
+  return finger.fingerID;
+}
+
+// ============================================================
+// HTTPS REQUEST — ESP32 optimized
+// ============================================================
+void sendAttendanceRequest(const String& fpID) {
+  String url = BASE_URL + fpID;
+  mqttLog("POST -> " + url);
+
+  unsigned long t1 = millis();
+
+  lcd.clear();
+  lcd.setCursor(0,0); lcd.print("Processing...");
+  lcd.setCursor(0,1); lcd.print("Please wait");
+
+  if (WiFi.status() != WL_CONNECTED) {
+    showError("No WiFi");
+    return;
+  }
+
+  bool success = false;
+
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    mqttLog("Attempt: " + String(attempt));
+    mqttLog("RSSI: " + String(WiFi.RSSI()));
+
+    unsigned long tGet = millis();
+
+    {
+      WiFiClientSecure sc;
+      sc.setInsecure();
+      sc.setTimeout(10);
+
+      HTTPClient http;
+      http.begin(sc, url);
+      http.setTimeout(10000);
+      http.addHeader("Connection", "close");
+      http.addHeader("User-Agent", "ESP32/FP");
+      http.setReuse(false);
+
+      int code = http.GET();
+      unsigned long t2 = millis();
+
+      mqttLog("GET time: " + String(t2 - tGet) + "ms");
+      mqttLog("Total: " + String(t2 - t1) + "ms");
+      mqttLog("Code: " + String(code) + " Heap: " + String(ESP.getFreeHeap()));
+
+      if (code == HTTP_CODE_OK) {
+        String payload = http.getString();
+        http.end();
+        sc.stop();
+        mqttLog("Response: " + payload);
+        processResponse(payload);
+        success = true;
+        break;
+      }
+
+      String payload = http.getString();
+      http.end();
+      sc.stop();
+
+      if (payload.length() > 0) {
+        processResponse(payload);
+        success = true;
+        break;
+      }
+    }
+
+    if (attempt < 3) {
+      delay(1000);
+    }
+  }
+
+  if (!success) {
+    showError("Net Unstable");
+  }
+}
+
+// ============================================================
+// PROCESS RESPONSE
+// ============================================================
+void processResponse(const String& payload) {
+  StaticJsonDocument<256> doc;
+  DeserializationError err = deserializeJson(doc, payload);
+  if (!err) {
+    String msg = doc["message"].as<String>();
+    lcd.clear(); lcd.setCursor(0,0);
+    if (msg.length() > 16) {
+      lcd.print(msg.substring(0, 16));
+      lcd.setCursor(0,1);
+      lcd.print(msg.substring(16, min((int)msg.length(), 32)));
+    } else {
+      lcd.print(msg);
+    }
+    if (msg != "Fingerprint not registered") buzzerSound();
+  } else {
+    showError("JSON Err");
+    mqttLog("JSON error: " + String(err.c_str()));
+  }
+}
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+void displayWelcome() {
+  lcd.clear();
+  if (currentMode == MODE_ATTENDANCE) {
+    lcd.setCursor(0,0); lcd.print("Place Finger");
+    lcd.setCursor(0,1); lcd.print("IT Signature");
+  } else if (currentMode == MODE_ENROLL) {
+    lcd.setCursor(0,0); lcd.print("Enroll Mode");
+    lcd.setCursor(0,1); lcd.print("ID: " + String(enrollID));
+  }
+}
+
+void handleBacklight() {
+  if (backlightActive && millis() - backlightOnTime > BACKLIGHT_DURATION) {
+    lcd.noBacklight();
+    backlightActive = false;
+  }
+}
+
+void activateBacklight() {
+  if (!backlightActive) { lcd.backlight(); backlightActive = true; }
+  backlightOnTime = millis();
+}
+
+void showError(const String& msg) {
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Error:");
+  lcd.setCursor(0,1); lcd.print(msg);
+  activateBacklight();
+}
+
+void buzzerSound() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(250);
+  digitalWrite(BUZZER_PIN, LOW);
+}
