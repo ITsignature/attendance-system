@@ -3086,10 +3086,11 @@ class PayrollRunService {
         // FETCH EMPLOYEE-LEVEL PAYROLL FLAGS
         // =============================================
         const [employeeFlags] = await db.execute(`
-            SELECT apit_enabled FROM employees WHERE id = ? AND client_id = ?
+            SELECT apit_enabled, weekday_ot_multiplier FROM employees WHERE id = ? AND client_id = ?
         `, [employeeId, clientId]);
 
         const apitEnabled = !!employeeFlags[0]?.apit_enabled;
+        const weekdayOtMultiplier = parseFloat(employeeFlags[0]?.weekday_ot_multiplier) || 1.5;
 
         // =============================================
         // FETCH CONFIGURED PAYROLL COMPONENTS
@@ -3272,6 +3273,28 @@ class PayrollRunService {
             }
         }
 
+        // Get Saturday-covering extra-time OT (surplus worked time left over after the
+        // month's Saturday covering obligation was fully met) — latest non-auto-covered
+        // record in the employee's payroll period
+        let extraTimeSeconds = 0;
+        if (runId) {
+            const [extraTimeRows] = await db.execute(`
+                SELECT a.extra_time_from_payable_duration
+                FROM attendance a
+                JOIN payroll_runs pr ON pr.id = ?
+                JOIN payroll_records prec ON prec.run_id = pr.id AND prec.employee_id = ?
+                WHERE a.employee_id = ?
+                  AND DATE(a.date) BETWEEN prec.employee_period_start_date AND prec.employee_period_end_date
+                  AND a.is_auto_covered = 0
+                  AND a.check_out_time IS NOT NULL
+                  AND a.extra_time_from_payable_duration IS NOT NULL
+                ORDER BY a.date DESC
+                LIMIT 1
+            `, [runId, employeeId, employeeId]);
+
+            extraTimeSeconds = parseInt(extraTimeRows[0]?.extra_time_from_payable_duration) || 0;
+        }
+
         console.log('employee allowancess:', employeeAllowances);
         console.log('employee deductions:', employeeDeductions);
         console.log('applicable components:', applicableComponents);
@@ -3288,7 +3311,9 @@ class PayrollRunService {
             apitEnabled: apitEnabled,
 
             overtimeHours: overtimeHours,
-            overtimeDetails: overtimeDetails
+            overtimeDetails: overtimeDetails,
+            extraTimeSeconds: extraTimeSeconds,
+            weekdayOtMultiplier: weekdayOtMultiplier
         };
     }
 
@@ -3649,9 +3674,32 @@ class PayrollRunService {
                 amount: overtimeAmount
             });
         }
-        
-        return { 
-            components, 
+
+        // Saturday covering extra-time OT — surplus worked time left over after the
+        // month's Saturday covering obligation was fully met (see computeSaturdayCovering
+        // in attendanceRoute.js). Paid at the weekday OT rate.
+        const extraTimeSeconds = employeeData.extraTimeSeconds || 0;
+        if (extraTimeSeconds > 0) {
+            const weekdayHourlyRate = parseFloat(record.weekday_hourly_rate) || 0;
+            const weekdayOtMultiplier = employeeData.weekdayOtMultiplier || 1.5;
+            const extraTimeOtAmount = (extraTimeSeconds / 3600) * weekdayHourlyRate * weekdayOtMultiplier;
+
+            console.log(`   Saturday-covering extra time OT: ${(extraTimeSeconds/3600).toFixed(2)}h → Rs.${extraTimeOtAmount.toFixed(2)}`);
+
+            total += extraTimeOtAmount;
+            additionsTotal += extraTimeOtAmount;
+
+            components.push({
+                code: 'EXTRA_TIME_OT',
+                name: 'Extra Time (Saturday Covering)',
+                type: 'earning',
+                category: 'earning',
+                amount: extraTimeOtAmount
+            });
+        }
+
+        return {
+            components,
             total,
             additionsTotal: additionsTotal // Keep raw precision, round only at final storage
         };
@@ -5130,17 +5178,34 @@ class PayrollRunService {
 
                 // Inject extra_time_ot into earnings_by_source
                 let enrichedEarningsBySource = attendanceData.earnings_by_source || null;
-                if (enrichedEarningsBySource && extraTimeData.extra_time_seconds > 0) {
-                    enrichedEarningsBySource = {
-                        ...enrichedEarningsBySource,
-                        extra_time_ot: {
-                            minutes: extraTimeMinutes,
-                            seconds: extraTimeData.extra_time_seconds,
-                            hourly_rate: weekdayHourlyRate,
-                            multiplier: weekdayOtMultiplier,
-                            earned: parseFloat(extraTimeOtAmount.toFixed(2))
-                        }
-                    };
+                if (extraTimeData.extra_time_seconds > 0) {
+                    if (enrichedEarningsBySource) {
+                        enrichedEarningsBySource = {
+                            ...enrichedEarningsBySource,
+                            extra_time_ot: {
+                                minutes: extraTimeMinutes,
+                                seconds: extraTimeData.extra_time_seconds,
+                                hourly_rate: weekdayHourlyRate,
+                                multiplier: weekdayOtMultiplier,
+                                earned: parseFloat(extraTimeOtAmount.toFixed(2))
+                            }
+                        };
+                    }
+
+                    overtimeAmount += extraTimeOtAmount;
+                    overtimeDetailsWithAmount.push({
+                        date: 'saturday-covering-extra-time',
+                        day_type: 'extra_time',
+                        total_minutes: extraTimeMinutes,
+                        pre_shift_minutes: 0,
+                        post_shift_minutes: 0,
+                        pre_shift_enabled: false,
+                        post_shift_enabled: false,
+                        hourly_rate: weekdayHourlyRate,
+                        multiplier: weekdayOtMultiplier,
+                        amount: parseFloat(extraTimeOtAmount.toFixed(2))
+                    });
+                    console.log(`   Saturday-covering extra time OT: ${(extraTimeData.extra_time_seconds/3600).toFixed(2)}h → Rs.${extraTimeOtAmount.toFixed(2)}`);
                 }
 
                 return {

@@ -975,12 +975,15 @@ const LivePayrollDashboard: React.FC = () => {
                           {emp.overtime_records.filter(rec => rec.amount > 0).map((rec, i) => {
                             const isUnconfiguredSat = rec.date === 'unconfigured-saturday';
                             const isUnconfiguredSun = rec.date === 'unconfigured-sunday';
+                            const isExtraTime = rec.date === 'saturday-covering-extra-time';
                             const dateLabel = isUnconfiguredSat
                               ? 'Non-working Saturdays (total)'
                               : isUnconfiguredSun
                               ? 'Non-working Sundays (total)'
+                              : isExtraTime
+                              ? 'Saturday Covering Extra Time'
                               : formatDate(rec.date);
-                            const isAggregated = isUnconfiguredSat || isUnconfiguredSun;
+                            const isAggregated = isUnconfiguredSat || isUnconfiguredSun || isExtraTime;
                             return (
                               <tr key={i} className={isAggregated ? 'bg-orange-50 hover:bg-orange-100' : 'hover:bg-gray-50'}>
                                 <td className="px-3 py-2 text-gray-700 font-medium">{dateLabel}</td>

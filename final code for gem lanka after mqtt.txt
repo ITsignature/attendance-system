@@ -266,22 +266,33 @@ bool as608DownloadTemplate(uint8_t slotId, uint8_t* templateBuf) {
 
 // Upload a template to the sensor (DownChar then StoreChar)
 bool as608UploadTemplate(uint8_t slotId, const uint8_t* templateBuf) {
-  // Step 1: DownChar — stream 512 bytes to CharBuffer1
-  // Send in 4 packets of 128 bytes each (max data per packet = 128 for AS608)
+  // Flush stale bytes
+  while (fpSerial.available()) fpSerial.read();
+
+  // Step 1: Send DownChar command packet (pid=0x01)
+  // pktLen = cmd(1) + bufNum(1) + checksum(2) = 4
+  {
+    uint16_t pktLen = 4;
+    uint16_t checksum = 0x01 + pktLen + CMD_DOWNCHAR + 0x01;
+    fpSerial.write(0xEF); fpSerial.write(0x01);
+    fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF);
+    fpSerial.write((uint8_t)0x01);
+    fpSerial.write((uint8_t)(pktLen >> 8)); fpSerial.write((uint8_t)(pktLen & 0xFF));
+    fpSerial.write(CMD_DOWNCHAR);
+    fpSerial.write((uint8_t)0x01); // CharBuffer1
+    fpSerial.write((uint8_t)(checksum >> 8)); fpSerial.write((uint8_t)(checksum & 0xFF));
+    fpSerial.flush();
+    delay(20);
+  }
+
+  // Step 2: Send 512 bytes as data packets (128 bytes each)
+  // Chunks 0-2: pid=0x02 (data), chunk 3: pid=0x08 (end)
   const uint16_t CHUNK = 128;
   const uint8_t  CHUNKS = TEMPLATE_SIZE / CHUNK; // 4
-
   for (uint8_t chunk = 0; chunk < CHUNKS; chunk++) {
-    uint8_t pid = (chunk == CHUNKS - 1) ? 0x08 : 0x02; // last chunk = end packet
-    // First chunk carries the DownChar command byte + buffer number
-    bool isFirst = (chunk == 0);
-    uint16_t dataLen = isFirst ? CHUNK + 2 : CHUNK; // +cmd +bufNum for first
-    uint16_t pktLen  = dataLen + 2; // + checksum
-
+    uint8_t pid = (chunk == CHUNKS - 1) ? 0x08 : 0x02;
+    uint16_t pktLen = CHUNK + 2; // data + checksum
     uint16_t checksum = pid + pktLen;
-    if (isFirst) {
-      checksum += CMD_DOWNCHAR + 0x01;
-    }
     const uint8_t* chunkData = templateBuf + chunk * CHUNK;
     for (uint16_t i = 0; i < CHUNK; i++) checksum += chunkData[i];
 
@@ -289,17 +300,13 @@ bool as608UploadTemplate(uint8_t slotId, const uint8_t* templateBuf) {
     fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF); fpSerial.write(0xFF);
     fpSerial.write(pid);
     fpSerial.write((uint8_t)(pktLen >> 8)); fpSerial.write((uint8_t)(pktLen & 0xFF));
-    if (isFirst) {
-      fpSerial.write(CMD_DOWNCHAR);
-      fpSerial.write((uint8_t)0x01); // CharBuffer 1
-    }
     for (uint16_t i = 0; i < CHUNK; i++) fpSerial.write(chunkData[i]);
     fpSerial.write((uint8_t)(checksum >> 8)); fpSerial.write((uint8_t)(checksum & 0xFF));
     fpSerial.flush();
     delay(20);
   }
 
-  // Read ACK
+  // Step 3: Read ACK (sent after end packet)
   unsigned long t = millis();
   while (fpSerial.available() < 12 && millis() - t < 3000) delay(1);
   if (fpSerial.available() < 12) return false;
@@ -309,7 +316,7 @@ bool as608UploadTemplate(uint8_t slotId, const uint8_t* templateBuf) {
 
   delay(20);
 
-  // Step 2: StoreChar — save CharBuffer1 to flash at slotId
+  // Step 4: StoreChar — save CharBuffer1 to flash at slotId
   uint8_t storeArgs[3] = { 0x01, 0x00, slotId };
   uint8_t ack2 = as608SendCmd(CMD_STORE, storeArgs, 3);
   return (ack2 == 0x00);

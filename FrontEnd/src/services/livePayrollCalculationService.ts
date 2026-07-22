@@ -32,6 +32,13 @@ interface EarningsBySource {
     minutes: number;
     earned: number;
   };
+  extra_time_ot?: {
+    minutes: number;
+    seconds: number;
+    hourly_rate: number;
+    multiplier: number;
+    earned: number;
+  };
   non_working_day_credit?: {
     earned: number;
     breakdown: {
