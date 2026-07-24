@@ -56,6 +56,9 @@ router.get('/payroll/live-preview', ensureOwnPayroll, getMyLivePayrollPreview);
 // Get my live payroll details for a specific run
 router.get('/payroll/live-preview/:runId', ensureOwnPayroll, getMyLivePayrollDetails);
 
+// Get my daily work details for a specific run
+router.get('/payroll/live-preview/:runId/daily-details', ensureOwnPayroll, getMyLivePayrollDailyDetails);
+
 // Get specific payslip
 router.get('/payroll/:id', ensureOwnPayroll, getMyPayslip);
 
@@ -85,7 +88,5 @@ router.post('/leaves/apply', ensureOwnLeaves, applyForLeave);
 
 // Get my financial records (loans, advances, bonuses)
 router.get('/financial-records', ensureOwnFinancialRecords, getMyFinancialRecords);
-
-router.get('/daily-details',ensureOwnPayroll, getMyLivePayrollDailyDetails);
 
 module.exports = router;
