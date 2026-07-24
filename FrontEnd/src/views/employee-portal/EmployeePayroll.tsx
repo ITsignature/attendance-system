@@ -199,34 +199,36 @@ const EmployeePayroll = () => {
           ← Back to Live Preview
         </button>
 
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8">
           {/* Header */}
-          <div className="text-center mb-8 border-b pb-6">
-            <h1 className="text-3xl font-bold text-gray-800">Live Payroll Preview</h1>
-            <p className="text-gray-600 mt-2">
+          <div className="text-center mb-6 sm:mb-8 border-b pb-5 sm:pb-6">
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-800">Live Payroll Preview</h1>
+            <p className="text-gray-600 mt-2 text-sm sm:text-base">
               {record.run_name} ({new Date(record.period_start_date).toLocaleDateString()} - {new Date(record.period_end_date).toLocaleDateString()})
-              {record.uses_custom_cycle && (
-                <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">Custom Cycle</span>
-              )}
             </p>
-            <span className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-medium capitalize ${getRunStatusColor(record.run_status)}`}>
-              {record.run_status}
-            </span>
+            {record.uses_custom_cycle && (
+              <span className="mt-2 inline-block text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">Custom Cycle</span>
+            )}
+            <div>
+              <span className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-medium capitalize ${getRunStatusColor(record.run_status)}`}>
+                {record.run_status}
+              </span>
+            </div>
           </div>
 
           {/* Employee Info */}
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             <h3 className="font-semibold text-gray-700 mb-3">Employee Details</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <p className="text-sm"><strong>Name:</strong> {record.employee_name}</p>
-              <p className="text-sm"><strong>ID:</strong> {record.employee_code}</p>
-              <p className="text-sm"><strong>Department:</strong> {record.department_name}</p>
-              <p className="text-sm"><strong>Designation:</strong> {record.designation_name}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              <p className="text-sm"><span className="text-gray-500">Name:</span> <span className="font-medium text-gray-800">{record.employee_name}</span></p>
+              <p className="text-sm"><span className="text-gray-500">ID:</span> <span className="font-medium text-gray-800">{record.employee_code}</span></p>
+              <p className="text-sm"><span className="text-gray-500">Department:</span> <span className="font-medium text-gray-800">{record.department_name}</span></p>
+              <p className="text-sm"><span className="text-gray-500">Designation:</span> <span className="font-medium text-gray-800">{record.designation_name}</span></p>
             </div>
           </div>
 
           {/* Work Summary */}
-          <div className="mb-8 bg-gray-50 p-6 rounded-lg">
+          <div className="mb-6 sm:mb-8 bg-gray-50 p-4 sm:p-6 rounded-lg">
             <h3 className="font-semibold text-gray-700 mb-3">Work Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
@@ -256,102 +258,96 @@ const EmployeePayroll = () => {
             </div>
           </div>
 
-{/* Earnings Calculation */}
+          {/* Earnings Calculation */}
           <div className="mb-6">
             <h3 className="font-semibold text-gray-700 mb-3 pb-2 border-b">Salary Calculation</h3>
             <div className="space-y-3">
               {/* Base Salary (Total) */}
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center gap-3">
                 <span className="text-gray-600 font-medium">Base Salary (Full Month)</span>
-                <span className="font-medium text-gray-600">Rs. {(record.base_salary || 0).toLocaleString()}</span>
+                <span className="font-medium text-gray-600 text-right shrink-0">Rs. {(record.base_salary || 0).toLocaleString()}</span>
               </div>
 
               {/* Attendance Shortfall - Why salary is less than base */}
               {attendance_details && (shortfallByCause.unpaid_time_off?.deduction > 0 || shortfallByCause.time_variance?.deduction > 0 || shortfallByCause.absent_days?.deduction > 0) && (
-                <div className="ml-4 bg-orange-50 p-3 rounded border border-orange-200">
-                  <div className="font-medium text-orange-800 mb-2">Salary Reduction (Shortfall)</div>
-                  <div className="ml-4 space-y-1 text-sm">
+                <div className="bg-orange-50 p-3 sm:p-4 rounded-lg border border-orange-200">
+                  <div className="font-medium text-orange-800 mb-2 text-sm">Salary Reduction (Shortfall)</div>
+                  <div className="space-y-2 text-sm">
                     {shortfallByCause.unpaid_time_off && shortfallByCause.unpaid_time_off.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
-                          Unpaid Leaves ({shortfallByCause.unpaid_time_off.hours.toFixed(2)}h)
+                      <div className="flex justify-between items-start gap-3 text-gray-700">
+                        <span className="flex items-start min-w-0">
+                          <span className="w-2 h-2 bg-orange-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
+                          <span>Unpaid Leaves ({shortfallByCause.unpaid_time_off.hours.toFixed(2)}h)</span>
                         </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
+                        <span className="text-orange-700 text-right shrink-0">-Rs. {(shortfallByCause.unpaid_time_off.deduction || 0).toLocaleString()}</span>
                       </div>
                     )}
                     {shortfallByCause.time_variance && shortfallByCause.time_variance.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                          Late Arrivals and Early Departures ({shortfallByCause.time_variance.hours.toFixed(2)}h)
+                      <div className="flex justify-between items-start gap-3 text-gray-700">
+                        <span className="flex items-start min-w-0">
+                          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
+                          <span>Late Arrivals &amp; Early Departures ({shortfallByCause.time_variance.hours.toFixed(2)}h)</span>
                         </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
+                        <span className="text-orange-700 text-right shrink-0">-Rs. {(shortfallByCause.time_variance.deduction || 0).toLocaleString()}</span>
                       </div>
                     )}
                     {shortfallByCause.absent_days && shortfallByCause.absent_days.deduction > 0 && (
-                      <div className="flex justify-between text-gray-700">
-                        <span className="flex items-center">
-                          <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                          Absent Days
+                      <div className="flex justify-between items-start gap-3 text-gray-700">
+                        <span className="flex items-start min-w-0">
+                          <span className="w-2 h-2 bg-red-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
+                          <span>Absent Days</span>
                         </span>
-                        <span className="text-orange-700">-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
+                        <span className="text-orange-700 text-right shrink-0">-Rs. {(shortfallByCause.absent_days.deduction || 0).toLocaleString()}</span>
                       </div>
                     )}
-                    </div>
-                </div>
-              )}
-
-              {earningsBySource.attendance && (
-              <div className="flex justify-between pt-1 border-t font-medium text-gray-600">
-                  <span></span>
-                  <span>
-                    <button
-                      onClick={() => openDailyDetailsModal()}
-                      className="px-6 py-2 bg-purple-100 text-purple-800 border border-purple-800 rounded-lg hover:bg-purple-100 transition-colors mr-2"
-                    >
-                     View Daily Salary
-                    </button>
-                    Rs. {(earningsBySource.attendance.earned || 0).toLocaleString()}
-                    </span>
+                  </div>
                 </div>
               )}
 
               {/* Base Salary Earned */}
-              <div className="flex justify-between bg-blue-50 p-2 rounded">
+              <div className="flex justify-between items-center gap-3 bg-blue-50 p-3 rounded-lg">
                 <span className="font-medium text-blue-800">Base Salary Earned</span>
-                <span className="font-medium text-blue-800">Rs. {(record.earned_salary || 0).toLocaleString()}</span>
+                <span className="font-medium text-blue-800 text-right shrink-0">Rs. {(record.earned_salary || 0).toLocaleString()}</span>
               </div>
 
+              {earningsBySource.attendance && (
+                <button
+                  onClick={() => openDailyDetailsModal()}
+                  className="w-full sm:w-auto px-4 py-2 bg-purple-100 text-purple-800 border border-purple-800 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium"
+                >
+                  View Daily Salary
+                </button>
+              )}
+
               {/* Earnings Breakdown */}
-              <div className="ml-4 bg-green-50 p-3 rounded">
-                <div className="font-medium text-green-800 mb-2">Earnings from Work</div>
-                <div className="ml-4 space-y-1 text-sm">
+              <div className="bg-green-50 p-3 sm:p-4 rounded-lg">
+                <div className="font-medium text-green-800 mb-2 text-sm">Earnings from Work</div>
+                <div className="space-y-2 text-sm">
                   {earningsBySource.paid_leaves && earningsBySource.paid_leaves.earned > 0 && (
-                    <div className="flex justify-between text-gray-700">
-                      <span className="flex items-center">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                        Paid Leaves ({paidLeaveHours.toFixed(2)}h)
+                    <div className="flex justify-between items-start gap-3 text-gray-700">
+                      <span className="flex items-start min-w-0">
+                        <span className="w-2 h-2 bg-blue-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
+                        <span>Paid Leaves ({paidLeaveHours.toFixed(2)}h)</span>
                       </span>
-                      <span>+Rs. {(earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
+                      <span className="text-right shrink-0">+Rs. {(earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
                     </div>
                   )}
                   {liveSessionHours > 0 && (
-                    <div className="flex justify-between text-gray-700">
-                      <span className="flex items-center">
-                        <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                        Live Session ({liveSessionHours.toFixed(2)}h)
+                    <div className="flex justify-between items-start gap-3 text-gray-700">
+                      <span className="flex items-start min-w-0">
+                        <span className="w-2 h-2 bg-yellow-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
+                        <span>Live Session ({liveSessionHours.toFixed(2)}h)</span>
                       </span>
-                      <span>Rs. {(earningsBySource.live_session?.earned || 0).toLocaleString()}</span>
+                      <span className="text-right shrink-0">Rs. {(earningsBySource.live_session?.earned || 0).toLocaleString()}</span>
                     </div>
                   )}
                   {earnings.filter((e: any) => e.component_name !== 'Base Salary (Earned)').map((earning: any) => (
-                    <div key={earning.component_name} className="flex justify-between text-gray-700">
-                      <span className="flex items-center">
-                        <span className="w-2 h-2 bg-teal-500 rounded-full mr-2"></span>
-                        {earning.component_name}
+                    <div key={earning.component_name} className="flex justify-between items-start gap-3 text-gray-700">
+                      <span className="flex items-start min-w-0">
+                        <span className="w-2 h-2 bg-teal-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
+                        <span>{earning.component_name}</span>
                       </span>
-                      <span>+Rs. {(earning.amount || 0).toLocaleString()}</span>
+                      <span className="text-right shrink-0">+Rs. {(earning.amount || 0).toLocaleString()}</span>
                     </div>
                   ))}
                   {!(earningsBySource.paid_leaves?.earned > 0) && !(liveSessionHours > 0) && earnings.filter((e: any) => e.component_name !== 'Base Salary (Earned)').length === 0 && (
@@ -360,9 +356,9 @@ const EmployeePayroll = () => {
                 </div>
               </div>
 
-              <div className="flex justify-between pt-2 border-t-2 border-blue-600 font-semibold text-lg">
+              <div className="flex justify-between items-center gap-3 pt-2 border-t-2 border-blue-600 font-semibold text-base sm:text-lg">
                 <span>Gross Salary</span>
-                <span className="text-blue-600">Rs. {(record.gross_salary || 0).toLocaleString()}</span>
+                <span className="text-blue-600 text-right shrink-0">Rs. {(record.gross_salary || 0).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -374,14 +370,14 @@ const EmployeePayroll = () => {
               {deductions.length > 0 ? (
                 <>
                   {deductions.map((deduction: any) => (
-                    <div key={deduction.component_name} className="flex justify-between">
+                    <div key={deduction.component_name} className="flex justify-between items-center gap-3">
                       <span className="text-gray-600">{deduction.component_name}</span>
-                      <span className="font-medium text-red-600">-Rs. {(deduction.amount || 0).toLocaleString()}</span>
+                      <span className="font-medium text-red-600 text-right shrink-0">-Rs. {(deduction.amount || 0).toLocaleString()}</span>
                     </div>
                   ))}
-                  <div className="flex justify-between pt-2 border-t font-semibold">
+                  <div className="flex justify-between items-center gap-3 pt-2 border-t font-semibold">
                     <span>Total Deductions</span>
-                    <span className="text-red-600">-Rs. {(record.total_deductions || 0).toLocaleString()}</span>
+                    <span className="text-red-600 text-right shrink-0">-Rs. {(record.total_deductions || 0).toLocaleString()}</span>
                   </div>
                 </>
               ) : (
@@ -391,19 +387,19 @@ const EmployeePayroll = () => {
           </div>
 
           {/* Net Salary */}
-          <div className="bg-blue-50 p-6 rounded-lg">
-            <div className="flex justify-between items-center">
-              <span className="text-xl font-bold text-gray-800">Net Salary</span>
-              <span className="text-3xl font-bold text-blue-600">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 sm:p-6 rounded-xl border border-blue-200">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
+              <span className="text-lg sm:text-xl font-bold text-gray-800">Net Salary</span>
+              <span className="text-2xl sm:text-3xl font-bold text-blue-600">
                 Rs. {(record.net_salary || 0).toLocaleString()}
               </span>
             </div>
-            <div className="mt-4 pt-4 border-t border-blue-200">
+            <div className="mt-4 pt-4 border-t border-blue-200 space-y-1">
               <p className="text-sm text-gray-600">
-                <strong>Status:</strong> <span className="capitalize">{record.status}</span>
+                <span className="text-gray-500">Status:</span> <span className="capitalize font-medium">{record.status}</span>
               </p>
-              <p className="text-sm text-gray-600 mt-1">
-                <strong>Calculated:</strong> {new Date(record.calculation_date).toLocaleString()}
+              <p className="text-sm text-gray-600">
+                <span className="text-gray-500">Calculated:</span> <span className="font-medium">{new Date(record.calculation_date).toLocaleString()}</span>
               </p>
             </div>
           </div>
