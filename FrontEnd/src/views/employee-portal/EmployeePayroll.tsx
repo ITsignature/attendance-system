@@ -298,10 +298,10 @@ const EmployeePayroll = () => {
                 </div>
               )}
 
-              {earningsBySource.attendance && (  
+              {earningsBySource.attendance && (
               <div className="flex justify-between pt-1 border-t font-medium text-gray-600">
                   <span></span>
-                  <span> 
+                  <span>
                     <button
                       onClick={() => openDailyDetailsModal(record)}
                       className="px-6 py-2 bg-purple-100 text-purple-800 border border-purple-800 rounded-lg hover:bg-purple-100 transition-colors mr-2"
@@ -310,22 +310,19 @@ const EmployeePayroll = () => {
                     </button>
                     Rs. {(earningsBySource.attendance.earned || 0).toLocaleString()}
                     </span>
-                </div>  
-              )}    
+                </div>
+              )}
+
+              {/* Base Salary Earned */}
+              <div className="flex justify-between bg-blue-50 p-2 rounded">
+                <span className="font-medium text-blue-800">Base Salary Earned</span>
+                <span className="font-medium text-blue-800">Rs. {(record.earned_salary || 0).toLocaleString()}</span>
+              </div>
 
               {/* Earnings Breakdown */}
               <div className="ml-4 bg-green-50 p-3 rounded">
                 <div className="font-medium text-green-800 mb-2">Earnings from Work</div>
                 <div className="ml-4 space-y-1 text-sm">
-                  {/* {earningsBySource.attendance && (
-                    <div className="flex justify-between text-gray-700">
-                      <span className="flex items-center">
-                        <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                        Work Hours ({attendanceHours.toFixed(2)}h)
-                      </span>
-                      <span>Rs. {(earningsBySource.attendance.earned || 0).toLocaleString()}</span>
-                    </div>
-                  )}  */}
                   {earningsBySource.paid_leaves && earningsBySource.paid_leaves.earned > 0 && (
                     <div className="flex justify-between text-gray-700">
                       <span className="flex items-center">
@@ -344,22 +341,20 @@ const EmployeePayroll = () => {
                       <span>Rs. {(earningsBySource.live_session?.earned || 0).toLocaleString()}</span>
                     </div>
                   )}
+                  {earnings.filter((e: any) => e.component_name !== 'Base Salary (Earned)').map((earning: any) => (
+                    <div key={earning.component_name} className="flex justify-between text-gray-700">
+                      <span className="flex items-center">
+                        <span className="w-2 h-2 bg-teal-500 rounded-full mr-2"></span>
+                        {earning.component_name}
+                      </span>
+                      <span>+Rs. {(earning.amount || 0).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  {!(earningsBySource.paid_leaves?.earned > 0) && !(liveSessionHours > 0) && earnings.filter((e: any) => e.component_name !== 'Base Salary (Earned)').length === 0 && (
+                    <div className="text-gray-400 italic">No additional earnings</div>
+                  )}
                 </div>
               </div>
-
-              {/* Base Salary Earned */}
-              <div className="flex justify-between bg-blue-50 p-2 rounded">
-                <span className="font-medium text-blue-800">Base Salary Earned</span>
-                <span className="font-medium text-blue-800">Rs. {(record.earned_salary || 0).toLocaleString()}</span>
-              </div>
-
-              {/* Additional Earnings (Overtime, etc.) */}
-              {earnings.filter((e: any) => e.component_name !== 'Base Salary (Earned)').map((earning: any) => (
-                <div key={earning.component_name} className="flex justify-between">
-                  <span className="text-gray-600">{earning.component_name}</span>
-                  <span className="font-medium text-green-600">+Rs. {(earning.amount || 0).toLocaleString()}</span>
-                </div>
-              ))}
 
               <div className="flex justify-between pt-2 border-t-2 border-blue-600 font-semibold text-lg">
                 <span>Gross Salary</span>

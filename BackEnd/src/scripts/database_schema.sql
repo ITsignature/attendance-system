@@ -190,7 +190,7 @@ CREATE TABLE `designations` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `employees`
+-- Table structure for table `  `
 --
 
 CREATE TABLE `employees` (

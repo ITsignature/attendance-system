@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useDynamicRBAC } from '../../components/RBACSystem/rbacSystem';
 import EmployeeSidebar from './EmployeeSidebar';
@@ -6,6 +6,7 @@ import EmployeeHeader from './EmployeeHeader';
 
 const EmployeePortalLayout = () => {
   const { currentUser, isLoading } = useDynamicRBAC();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -23,15 +24,15 @@ const EmployeePortalLayout = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <EmployeeSidebar />
+      <EmployeeSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Header */}
-        <EmployeeHeader />
+        <EmployeeHeader onMenuClick={() => setIsSidebarOpen(true)} />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 sm:p-6">
           <Outlet />
         </main>
       </div>
