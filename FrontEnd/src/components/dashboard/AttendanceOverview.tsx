@@ -44,18 +44,30 @@ const AttendanceOverview = () => {
     return `${day} ${month}`;
   }
 
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 640 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // Prepare data for chart - calculate percentages
   const calculatePercentages = () => {
+    const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const dayLabel = (day: string) => (isMobile ? day.slice(0, 3) : day);
+
     if (weeklyData.length === 0) {
       return {
-        categories: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(d =>[d,""]),
+        categories: dayOrder.map(d => [dayLabel(d), ""]),
         onTimeData: [0, 0, 0, 0, 0, 0, 0],
         lateData: [0, 0, 0, 0, 0, 0, 0],
         absentData: [0, 0, 0, 0, 0, 0, 0],
       };
     }
 
-    const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const dataMap = new Map(weeklyData.map(d => [d.day_name, d]));
 
     const categories: String[][] = [];
@@ -65,7 +77,7 @@ const AttendanceOverview = () => {
 
     dayOrder.forEach(day => {
       const dayData = dataMap.get(day);
-      categories.push([day,dayData? formatDate(dayData.date):""]);
+      categories.push([dayLabel(day), dayData && !isMobile ? formatDate(dayData.date) : ""]);
       if (dayData && dayData.total_records > 0) {
         const onTimePercent = Math.round((dayData.present_count / dayData.total_records) * 100);
         const latePercent = Math.round((dayData.late_count / dayData.total_records) * 100);
@@ -233,21 +245,56 @@ const AttendanceOverview = () => {
             position: "bottom",
             horizontalAlign: "center",
           },
+        },
+      },
+      {
+        breakpoint: 640,
+        options: {
+          chart: {
+            offsetX: -8,
+          },
+          plotOptions: {
+            bar: {
+              columnWidth: "70%",
+            },
+          },
+          dataLabels: {
+            style: {
+              fontSize: "9px",
+            },
+          },
           xaxis: {
             labels: {
-              rotate: -45,
-            }
-          }
+              rotate: 0,
+              style: {
+                fontSize: "10px",
+              },
+            },
+          },
+          yaxis: {
+            labels: {
+              style: {
+                fontSize: "10px",
+              },
+            },
+          },
+          legend: {
+            fontSize: "11px",
+            itemMargin: {
+              horizontal: 6,
+              vertical: 2,
+            },
+          },
         },
       },
     ],
   };
 
   return (
-    <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-6 relative w-full break-words">
+    <div className="rounded-xl dark:shadow-dark-md shadow-md bg-white dark:bg-darkgray p-3 sm:p-6 relative w-full break-words">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h5 className="card-title text-xl font-semibold">Employee Attendance Overview</h5>
+          <h5 className="card-title text-lg sm:text-xl font-semibold">Employee Attendance Overview</h5>
           {/* <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">This Week's Attendance Status</p> */}
         </div>
       </div>
@@ -258,29 +305,29 @@ const AttendanceOverview = () => {
         </div>
       ) : (
         <>
-          <div className="-ms-4 -me-3 mt-2">
+          <div className="-ms-3 sm:-ms-4 -me-3 sm:-me-3 mt-2">
             <Chart
               options={optionsBarChart}
               series={attendanceData.series}
               type="bar"
-              height="350px"
+              height={isMobile ? "300px" : "350px"}
               width="100%"
             />
           </div>
 
           {/* Summary stats */}
-          <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-500">{avgOnTime}%</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Average On Time</div>
+              <div className="text-lg sm:text-2xl font-bold text-green-500">{avgOnTime}%</div>
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Average On Time</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-500">{avgLate}%</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Average Late</div>
+              <div className="text-lg sm:text-2xl font-bold text-yellow-500">{avgLate}%</div>
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Average Late</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-red-500">{avgAbsent}%</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Average Absent</div>
+              <div className="text-lg sm:text-2xl font-bold text-red-500">{avgAbsent}%</div>
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Average Absent</div>
             </div>
           </div>
         </>

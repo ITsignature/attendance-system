@@ -35,12 +35,13 @@ const TodayAttendance = () => {
 
   return (
     <>
-      <div className="bg-white dark:bg-darkgray rounded-xl shadow-md dark:shadow-dark-md p-6 h-full">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="bg-lightsuccess text-success p-3 rounded-md">
-            <Icon icon="solar:user-check-rounded-linear" height={24} />
+      <div className="bg-white dark:bg-darkgray rounded-xl shadow-md dark:shadow-dark-md p-3 sm:p-6 h-full">
+        <div className="flex items-center gap-2 sm:gap-4 mb-3 sm:mb-6">
+          <div className="bg-lightsuccess text-success p-2 sm:p-3 rounded-md shrink-0">
+            <Icon icon="solar:user-check-rounded-linear" height={20} className="sm:hidden" />
+            <Icon icon="solar:user-check-rounded-linear" height={24} className="hidden sm:block" />
           </div>
-          <p className="text-base font-semibold text-dark dark:text-white">Present Today</p>
+          <p className="text-sm sm:text-base font-semibold text-dark dark:text-white">Present Today</p>
         </div>
         <div className="flex flex-col">
           <div className="flex-1">
@@ -50,7 +51,7 @@ const TodayAttendance = () => {
               </div>
             ) : (
               <>
-                <p className="text-3xl text-dark dark:text-white font-semibold mb-2">
+                <p className="text-2xl sm:text-3xl text-dark dark:text-white font-semibold mb-2">
                   {presentCount}
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">

@@ -7,18 +7,18 @@ import TodayEmployeeAttendance from 'src/components/dashboard/TodayEmployeeAtten
 
 const Dashboard = () => {
   return (
-    <div className="grid grid-cols-12 gap-6">
+    <div className="grid grid-cols-12 gap-3 sm:gap-6">
       {/* Key Metrics Row */}
-      <div className="col-span-12 lg:col-span-3">
+      <div className="col-span-6 lg:col-span-3">
         <TotalEmployees />
       </div>
-      <div className="col-span-12 lg:col-span-3">
+      <div className="col-span-6 lg:col-span-3">
         <TodayAttendance />
       </div>
-      <div className="col-span-12 lg:col-span-3">
+      <div className="col-span-6 lg:col-span-3">
         <AbsentToday />
       </div>
-      <div className="col-span-12 lg:col-span-3">
+      <div className="col-span-6 lg:col-span-3">
         <OnLeaveToday />
       </div>
 

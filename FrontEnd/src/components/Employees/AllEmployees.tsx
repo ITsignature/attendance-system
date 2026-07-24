@@ -716,143 +716,227 @@ const AllEmployees: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table hoverable>
-              <Table.Head>
-                <Table.HeadCell className="w-12">
-                  <Checkbox
-                    checked={selectAll}
-                    onChange={handleSelectAll}
-                  />
-                </Table.HeadCell>
-                <Table.HeadCell>Employee</Table.HeadCell>
-                <Table.HeadCell>Fingerprint ID</Table.HeadCell>
-                <Table.HeadCell>Department</Table.HeadCell>
-                <Table.HeadCell>Status</Table.HeadCell>
-                <Table.HeadCell>Type</Table.HeadCell>
-                <Table.HeadCell>Base Salary</Table.HeadCell>
-                <Table.HeadCell>Hire Date</Table.HeadCell>
-              </Table.Head>
-              <Table.Body className="divide-y">
-                {employees.length > 0 ? (
-                  employees.map((employee) => (
-                    <Table.Row 
-                      key={employee.id}
-                      className="bg-white dark:border-gray-700 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
-                      onClick={(e) => handleRowClick(employee.id, e)}
-                    >
-                      <Table.Cell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedEmployees.includes(employee.id)}
-                          onChange={() => handleEmployeeSelect(employee.id)}
-                        />
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 flex-shrink-0">
-                            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                {employee.first_name?.charAt(0)}{employee.last_name?.charAt(0)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {employee.first_name} {employee.last_name}
-                            </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {employee.email}
-                            </div>
-                            <div className="text-xs text-gray-400 dark:text-gray-500">
-                              ID: {employee.employee_code}
-                            </div>
-                          </div>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {employee.fingerprint_id != null ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                            #{employee.fingerprint_id}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">Not Set</span>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {employee.department_name || 'Not Assigned'}
-                        </div>
-                        {employee.designation_title && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {employee.designation_title}
-                          </div>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge 
-                          color={getStatusBadge(employee.employment_status)}
-                          size="sm"
-                        >
-                          {formatEmploymentStatus(employee.employment_status)}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge 
-                          color={getTypeBadge(employee.employee_type)}
-                          size="sm"
-                        >
-                          {formatEmployeeType(employee.employee_type)}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {employee.base_salary ? employee.base_salary.toLocaleString() : 'Not Set'}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {new Date(employee.hire_date).toLocaleDateString()}
-                        </div>
-                        {employee.years_of_service && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {employee.years_of_service} years
-                          </div>
-                        )}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))
-                ) : (
-                  <Table.Row>
-                    <Table.Cell colSpan={8} className="text-center py-8">
-                      <div className="flex flex-col items-center">
-                        <HiOutlineUsers className="h-12 w-12 text-gray-300 mb-4" />
-                        <p className="text-lg text-gray-500 dark:text-gray-400">No employees found</p>
-                        <p className="text-sm text-gray-400">
-                          {hasActiveFilters 
-                            ? 'Try adjusting your filters or search terms'
-                            : 'Get started by adding your first employee'
-                          }
-                        </p>
-                        {!hasActiveFilters && (
-                          <DynamicProtectedComponent permission="employees.create">
-                            <Button
-                              color="blue"
-                              size="sm"
-                              className="mt-4"
-                              onClick={() => navigate('/employees/add')}
-                            >
-                              <HiOutlinePlus className="mr-2 h-4 w-4" />
-                              Add First Employee
-                            </Button>
-                          </DynamicProtectedComponent>
-                        )}
+          {employees.length === 0 ? (
+            <div className="flex flex-col items-center py-8">
+              <HiOutlineUsers className="h-12 w-12 text-gray-300 mb-4" />
+              <p className="text-lg text-gray-500 dark:text-gray-400">No employees found</p>
+              <p className="text-sm text-gray-400">
+                {hasActiveFilters
+                  ? 'Try adjusting your filters or search terms'
+                  : 'Get started by adding your first employee'
+                }
+              </p>
+              {!hasActiveFilters && (
+                <DynamicProtectedComponent permission="employees.create">
+                  <Button
+                    color="blue"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => navigate('/employees/add')}
+                  >
+                    <HiOutlinePlus className="mr-2 h-4 w-4" />
+                    Add First Employee
+                  </Button>
+                </DynamicProtectedComponent>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Mobile: card list */}
+              <div className="lg:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                {employees.map((employee) => (
+                  <div
+                    key={employee.id}
+                    className="p-4 flex items-start gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                    onClick={(e) => handleRowClick(employee.id, e)}
+                  >
+                    <div onClick={(e) => e.stopPropagation()} className="pt-1">
+                      <Checkbox
+                        checked={selectedEmployees.includes(employee.id)}
+                        onChange={() => handleEmployeeSelect(employee.id)}
+                      />
+                    </div>
+                    <div className="h-10 w-10 flex-shrink-0">
+                      <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {employee.first_name?.charAt(0)}{employee.last_name?.charAt(0)}
+                        </span>
                       </div>
-                    </Table.Cell>
-                  </Table.Row>
-                )}
-              </Table.Body>
-            </Table>
-          </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {employee.first_name} {employee.last_name}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {employee.email}
+                          </div>
+                          <div className="text-xs text-gray-400 dark:text-gray-500">
+                            ID: {employee.employee_code}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge color={getStatusBadge(employee.employment_status)} size="sm">
+                            {formatEmploymentStatus(employee.employment_status)}
+                          </Badge>
+                          <Badge color={getTypeBadge(employee.employee_type)} size="sm">
+                            {formatEmployeeType(employee.employee_type)}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">Department</p>
+                          <p className="text-gray-900 dark:text-white">
+                            {employee.department_name || 'Not Assigned'}
+                          </p>
+                          {employee.designation_title && (
+                            <p className="text-gray-500 dark:text-gray-400">{employee.designation_title}</p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">Fingerprint ID</p>
+                          {employee.fingerprint_id != null ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                              #{employee.fingerprint_id}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500">Not Set</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">Base Salary</p>
+                          <p className="text-gray-900 dark:text-white font-medium">
+                            {employee.base_salary ? employee.base_salary.toLocaleString() : 'Not Set'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">Hire Date</p>
+                          <p className="text-gray-900 dark:text-white">
+                            {new Date(employee.hire_date).toLocaleDateString()}
+                          </p>
+                          {employee.years_of_service && (
+                            <p className="text-gray-500 dark:text-gray-400">{employee.years_of_service} years</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden lg:block overflow-x-auto">
+                <Table hoverable>
+                  <Table.Head>
+                    <Table.HeadCell className="w-12">
+                      <Checkbox
+                        checked={selectAll}
+                        onChange={handleSelectAll}
+                      />
+                    </Table.HeadCell>
+                    <Table.HeadCell>Employee</Table.HeadCell>
+                    <Table.HeadCell>Fingerprint ID</Table.HeadCell>
+                    <Table.HeadCell>Department</Table.HeadCell>
+                    <Table.HeadCell>Status</Table.HeadCell>
+                    <Table.HeadCell>Type</Table.HeadCell>
+                    <Table.HeadCell>Base Salary</Table.HeadCell>
+                    <Table.HeadCell>Hire Date</Table.HeadCell>
+                  </Table.Head>
+                  <Table.Body className="divide-y">
+                    {employees.map((employee) => (
+                      <Table.Row
+                        key={employee.id}
+                        className="bg-white dark:border-gray-700 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+                        onClick={(e) => handleRowClick(employee.id, e)}
+                      >
+                        <Table.Cell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedEmployees.includes(employee.id)}
+                            onChange={() => handleEmployeeSelect(employee.id)}
+                          />
+                        </Table.Cell>
+                        <Table.Cell className="whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="h-10 w-10 flex-shrink-0">
+                              <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  {employee.first_name?.charAt(0)}{employee.last_name?.charAt(0)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {employee.first_name} {employee.last_name}
+                              </div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {employee.email}
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                ID: {employee.employee_code}
+                              </div>
+                            </div>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {employee.fingerprint_id != null ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                              #{employee.fingerprint_id}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">Not Set</span>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {employee.department_name || 'Not Assigned'}
+                          </div>
+                          {employee.designation_title && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {employee.designation_title}
+                            </div>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Badge
+                            color={getStatusBadge(employee.employment_status)}
+                            size="sm"
+                          >
+                            {formatEmploymentStatus(employee.employment_status)}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Badge
+                            color={getTypeBadge(employee.employee_type)}
+                            size="sm"
+                          >
+                            {formatEmployeeType(employee.employee_type)}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            {employee.base_salary ? employee.base_salary.toLocaleString() : 'Not Set'}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {new Date(employee.hire_date).toLocaleDateString()}
+                          </div>
+                          {employee.years_of_service && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {employee.years_of_service} years
+                            </div>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table>
+              </div>
+            </>
+          )}
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (

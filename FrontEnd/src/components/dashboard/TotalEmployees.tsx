@@ -33,12 +33,13 @@ const TotalEmployees = () => {
 
   return (
     <>
-      <div className="bg-white dark:bg-darkgray rounded-xl shadow-md dark:shadow-dark-md p-6 h-full">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="bg-lightprimary text-primary p-3 rounded-md">
-            <Icon icon="solar:users-group-rounded-linear" height={24} />
+      <div className="bg-white dark:bg-darkgray rounded-xl shadow-md dark:shadow-dark-md p-3 sm:p-6 h-full">
+        <div className="flex items-center gap-2 sm:gap-4 mb-3 sm:mb-6">
+          <div className="bg-lightprimary text-primary p-2 sm:p-3 rounded-md shrink-0">
+            <Icon icon="solar:users-group-rounded-linear" height={20} className="sm:hidden" />
+            <Icon icon="solar:users-group-rounded-linear" height={24} className="hidden sm:block" />
           </div>
-          <p className="text-base font-semibold text-dark dark:text-white">Active Employees</p>
+          <p className="text-sm sm:text-base font-semibold text-dark dark:text-white">Active Employees</p>
         </div>
         <div className="flex flex-col">
           <div className="flex-1">
@@ -48,10 +49,10 @@ const TotalEmployees = () => {
               </div>
             ) : (
               <>
-                <p className="text-3xl text-dark dark:text-white font-semibold mb-2">
+                <p className="text-2xl sm:text-3xl text-dark dark:text-white font-semibold mb-2">
                   {activeEmployees}
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge className="bg-lightsuccess text-success inline-flex">
                     {totalEmployees} Total
                   </Badge>

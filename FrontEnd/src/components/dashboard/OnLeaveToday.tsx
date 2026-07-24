@@ -29,12 +29,13 @@ const OnLeaveToday = () => {
 
   return (
     <>
-      <div className="bg-white dark:bg-darkgray rounded-xl shadow-md dark:shadow-dark-md p-6 h-full">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="bg-lightinfo text-info p-3 rounded-md">
-            <Icon icon="solar:calendar-mark-linear" height={24} />
+      <div className="bg-white dark:bg-darkgray rounded-xl shadow-md dark:shadow-dark-md p-3 sm:p-6 h-full">
+        <div className="flex items-center gap-2 sm:gap-4 mb-3 sm:mb-6">
+          <div className="bg-lightinfo text-info p-2 sm:p-3 rounded-md shrink-0">
+            <Icon icon="solar:calendar-mark-linear" height={20} className="sm:hidden" />
+            <Icon icon="solar:calendar-mark-linear" height={24} className="hidden sm:block" />
           </div>
-          <p className="text-base font-semibold text-dark dark:text-white">On Leave Today</p>
+          <p className="text-sm sm:text-base font-semibold text-dark dark:text-white">On Leave Today</p>
         </div>
         <div className="flex flex-col">
           <div className="flex-1">
@@ -44,7 +45,7 @@ const OnLeaveToday = () => {
               </div>
             ) : (
               <>
-                <p className="text-3xl text-dark dark:text-white font-semibold mb-2">
+                <p className="text-2xl sm:text-3xl text-dark dark:text-white font-semibold mb-2">
                   {onLeaveCount}
                 </p>
                 {pendingRequests > 0 && (
