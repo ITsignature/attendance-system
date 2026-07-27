@@ -1,5 +1,5 @@
 import { Badge, Table, Spinner, TextInput, Button } from "flowbite-react";
-import { HiCheck, HiPencil, HiTrash, HiX } from "react-icons/hi";
+import { HiCheck, HiPencil, HiTrash, HiX, HiChevronDown, HiChevronUp } from "react-icons/hi";
 import SimpleBar from "simplebar-react";
 import { useEffect, useState } from "react";
 import { apiService } from "../../services/api";
@@ -41,6 +41,7 @@ const TodayEmployeeAttendance = () => {
   const [editCheckIn, setEditCheckIn] = useState('');
   const [editCheckOut, setEditCheckOut] = useState('');
   const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAnomalies();
@@ -210,81 +211,97 @@ const TodayEmployeeAttendance = () => {
         ) : (
           <>
             {/* Mobile: card list */}
-            <div className="lg:hidden px-3 sm:px-6 pb-4 sm:pb-6 space-y-3 max-h-[500px] overflow-y-auto">
+            <div className="lg:hidden px-3 sm:px-6 pb-4 sm:pb-6 space-y-2 max-h-[500px] overflow-y-auto">
               {anomalies.map((record) => {
                 const isEditing = editingId === record.id;
+                const isExpanded = expandedId === record.id || isEditing;
                 return (
                   <div
                     key={record.id}
-                    className="border border-gray-200 dark:border-darkborder rounded-lg p-3 sm:p-4"
+                    className="border border-gray-200 dark:border-darkborder rounded-lg overflow-hidden"
                   >
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <h6 className="text-sm font-medium text-gray-900 dark:text-white">
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between gap-3 p-3 text-left"
+                      onClick={() => setExpandedId(isExpanded ? null : record.id)}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <h6 className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {record.employee_name}
                         </h6>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {record.employee_code} &middot; {record.date}
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {record.date}
                         </span>
                       </div>
-                      {getAnomalyBadge(record.anomaly_type)}
-                    </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {getAnomalyBadge(record.anomaly_type)}
+                        {isExpanded ? (
+                          <HiChevronUp className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <HiChevronDown className="h-4 w-4 text-gray-400" />
+                        )}
+                      </div>
+                    </button>
 
-                    {isEditing ? (
-                      <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div>
-                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Check In</label>
-                          <TextInput
-                            type="time"
-                            value={editCheckIn}
-                            onChange={(e) => setEditCheckIn(e.target.value)}
-                            sizing="sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Check Out</label>
-                          <TextInput
-                            type="time"
-                            value={editCheckOut}
-                            onChange={(e) => setEditCheckOut(e.target.value)}
-                            sizing="sm"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-2 text-sm mb-3">
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Check In</p>
-                          <p className="text-gray-900 dark:text-white font-medium">{formatTime(record.check_in_time)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Check Out</p>
-                          <p className="text-gray-900 dark:text-white font-medium">{formatTime(record.check_out_time)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Hours</p>
-                          <p className="text-gray-900 dark:text-white font-medium">{formatHours(record.total_hours)}</p>
-                        </div>
-                      </div>
-                    )}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 border-t border-gray-200 dark:border-darkborder pt-3">
+                        {isEditing ? (
+                          <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                              <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Check In</label>
+                              <TextInput
+                                type="time"
+                                value={editCheckIn}
+                                onChange={(e) => setEditCheckIn(e.target.value)}
+                                sizing="sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Check Out</label>
+                              <TextInput
+                                type="time"
+                                value={editCheckOut}
+                                onChange={(e) => setEditCheckOut(e.target.value)}
+                                sizing="sm"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Check In</p>
+                              <p className="text-gray-900 dark:text-white font-medium">{formatTime(record.check_in_time)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Check Out</p>
+                              <p className="text-gray-900 dark:text-white font-medium">{formatTime(record.check_out_time)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Hours</p>
+                              <p className="text-gray-900 dark:text-white font-medium">{formatHours(record.total_hours)}</p>
+                            </div>
+                          </div>
+                        )}
 
-                    {isEditing ? (
-                      <div className="flex items-center gap-2">
-                        <Button size="xs" color="success" disabled={saving} onClick={() => saveEdit(record.id)}>
-                          <HiCheck className="h-4 w-4 mr-1" /> Save
-                        </Button>
-                        <Button size="xs" color="gray" disabled={saving} onClick={cancelEdit}>
-                          <HiX className="h-4 w-4 mr-1" /> Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Button size="xs" color="light" onClick={() => startEdit(record)}>
-                          <HiPencil className="h-4 w-4 mr-1" /> Edit
-                        </Button>
-                        <Button size="xs" color="failure" onClick={() => deleteRecord(record.id)}>
-                          <HiTrash className="h-4 w-4 mr-1" /> Delete
-                        </Button>
+                        {isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <Button size="xs" color="success" disabled={saving} onClick={() => saveEdit(record.id)}>
+                              <HiCheck className="h-4 w-4 mr-1" /> Save
+                            </Button>
+                            <Button size="xs" color="gray" disabled={saving} onClick={cancelEdit}>
+                              <HiX className="h-4 w-4 mr-1" /> Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Button size="xs" color="light" onClick={() => startEdit(record)}>
+                              <HiPencil className="h-4 w-4 mr-1" /> Edit
+                            </Button>
+                            <Button size="xs" color="failure" onClick={() => deleteRecord(record.id)}>
+                              <HiTrash className="h-4 w-4 mr-1" /> Delete
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

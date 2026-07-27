@@ -178,6 +178,7 @@ interface FieldProps {
   label: string;
   value: string | number | undefined;
   icon?: React.ReactNode;
+  className?: string;
 }
 
 interface AttendanceFilters {
@@ -193,14 +194,14 @@ interface LeaveFilters {
   month: string;
 }
 
-const Field: React.FC<FieldProps> = ({ label, value, icon }) => (
-  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-    <div className="flex items-center gap-2 mb-1">
+const Field: React.FC<FieldProps> = ({ label, value, icon, className }) => (
+  <div className={`bg-gray-50 dark:bg-gray-700 p-2.5 sm:p-4 rounded-lg ${className || ''}`}>
+    <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
       {icon}
-      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
+      <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{label}</p>
     </div>
     <p
-      className={`text-base font-medium ${
+      className={`text-sm sm:text-base font-medium truncate ${
         value ? "text-gray-900 dark:text-white" : "text-gray-300"
       }`}
     >
@@ -1125,9 +1126,9 @@ const EmployeeDetails: React.FC = () => {
 
   return (
     <DynamicProtectedComponent permission="employees.view">
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-3 sm:p-6">
         {/* Breadcrumb */}
-        <Breadcrumb className="mb-6">
+        <Breadcrumb className="mb-4 sm:mb-6">
           <Breadcrumb.Item href="/dashboard" icon={HiHome}>
             Dashboard
           </Breadcrumb.Item>
@@ -1138,40 +1139,40 @@ const EmployeeDetails: React.FC = () => {
         </Breadcrumb>
 
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <img
-                src="https://via.placeholder.com/80"
-                alt="Employee Avatar"
-                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg"
-              />
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+              <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full border-4 border-white shadow-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center shrink-0">
+                <span className="text-lg sm:text-2xl font-semibold text-purple-700 dark:text-purple-200">
+                  {employee.first_name?.charAt(0)}{employee.last_name?.charAt(0)}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1 sm:mb-2 truncate">
                   {employee.first_name} {employee.last_name}
                 </h1>
-                <div className="flex items-center gap-4 mb-2">
-                  <p className="text-gray-600 dark:text-gray-400 text-lg">
+                <div className="flex items-center flex-wrap gap-2 sm:gap-4 mb-2">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-lg truncate">
                     {employee.designation_title || 'No designation'}
                   </p>
-                  <Badge 
+                  <Badge
                     color={getStatusBadgeColor(employee.employment_status)}
                     size="sm"
                   >
                     {employee.employment_status.charAt(0).toUpperCase() + employee.employment_status.slice(1)}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <HiMail className="w-4 h-4 text-gray-500" />
-                    <span className="text-gray-600 dark:text-gray-400">{employee.email}</span>
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <HiMail className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-gray-600 dark:text-gray-400 text-sm sm:text-base truncate">{employee.email}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <HiIdentification className="w-4 h-4 text-gray-500" />
                     <Badge color="gray" size="sm">{employee.employee_code}</Badge>
                   </div>
                   {employee.fingerprint_id && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className="text-gray-500 text-sm">Fingerprint ID:</span>
                       <Badge color="info" size="sm">{employee.fingerprint_id}</Badge>
                     </div>
@@ -1179,19 +1180,21 @@ const EmployeeDetails: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 sm:shrink-0">
               <DynamicProtectedComponent permission="employees.edit">
-                <Button color="purple" onClick={() => navigate(`/edit-employee/${employee.id}`)}>
+                <Button color="purple" size="sm" className="flex-1 sm:flex-initial" onClick={() => navigate(`/edit-employee/${employee.id}`)}>
                   <FaEdit className="w-4 h-4 mr-2" />
                   Edit Profile
                 </Button>
               </DynamicProtectedComponent>
-              
+
               <DynamicProtectedComponent permission="employees.delete">
-                <Button 
-                  color="failure" 
+                <Button
+                  color="failure"
+                  size="sm"
+                  className="flex-1 sm:flex-initial"
                   onClick={() => setShowTerminateModal(true)}
                   disabled={employee.employment_status === 'terminated'}
                 >
@@ -1204,20 +1207,20 @@ const EmployeeDetails: React.FC = () => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="mb-8">
-          <div className="border-b border-gray-200 dark:border-gray-700">
-            <nav className="-mb-px flex space-x-8">
+        <div className="mb-6 sm:mb-8">
+          <div className="border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+            <nav className="-mb-px flex gap-4 sm:gap-8 w-max min-w-full sm:w-auto">
               {sidebarTabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveSidebarTab(tab.id)}
-                  className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm ${
+                  className={`flex items-center gap-1.5 sm:gap-2 py-3 sm:py-4 px-1 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap shrink-0 ${
                     activeSidebarTab === tab.id
                       ? 'border-purple-500 text-purple-600 dark:text-purple-400'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                   }`}
                 >
-                  <tab.icon className="w-5 h-5" />
+                  <tab.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                   {tab.label}
                 </button>
               ))}
@@ -1226,18 +1229,18 @@ const EmployeeDetails: React.FC = () => {
         </div>
 
         {/* Content Card */}
-        <Card>
-          <div className="p-6">
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
+          <div>
             {/* Profile Tab */}
             {activeSidebarTab === "Profile" && (
-              <div className="space-y-8">
+              <div className="space-y-6 sm:space-y-8">
                 {/* Personal Information Section */}
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <HiUser className="w-6 h-6 text-purple-600" />
+                  <h3 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+                    <HiUser className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
                     Personal Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
                     <Field label="First Name" value={employee.first_name} />
                     <Field label="Last Name" value={employee.last_name} />
                     <Field 
@@ -1254,10 +1257,11 @@ const EmployeeDetails: React.FC = () => {
                     <Field label="Gender" value={employee.gender} />
                     <Field label="Marital Status" value={employee.marital_status} />
                     <Field label="Nationality" value={employee.nationality} />
-                    <Field 
-                      label="Address" 
-                      value={employee.address} 
+                    <Field
+                      label="Address"
+                      value={employee.address}
                       icon={<HiLocationMarker className="w-4 h-4 text-gray-500" />}
+                      className="col-span-2 lg:col-span-1"
                     />
                     <Field label="City" value={employee.city} />
                     <Field label="State" value={employee.state} />
@@ -1267,11 +1271,11 @@ const EmployeeDetails: React.FC = () => {
 
                 {/* Professional Information Section */}
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <HiBriefcase className="w-6 h-6 text-purple-600" />
+                  <h3 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
+                    <HiBriefcase className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
                     Professional Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
                     <Field label="Employee Code" value={employee.employee_code} />
                     <Field label="Department" value={employee.department_name} />
                     <Field label="Designation" value={employee.designation_title} />
@@ -1281,33 +1285,33 @@ const EmployeeDetails: React.FC = () => {
                     <Field label="Employee Type" value={employee.employee_type} />
                     
                     {/* Enhanced Base Salary Field */}
-                    <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800 shadow-md">
-                      <div className="flex items-center gap-2 mb-2">
-                        <HiCash className="w-5 h-5 text-purple-600" />
-                        <p className="text-sm font-bold text-purple-800 dark:text-purple-200">Base Salary (Monthly)</p>
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-3 sm:p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800 shadow-md">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
+                        <HiCash className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 shrink-0" />
+                        <p className="text-xs sm:text-sm font-bold text-purple-800 dark:text-purple-200">Base Salary (Monthly)</p>
                       </div>
-                      <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                      <p className="text-base sm:text-2xl font-bold text-purple-900 dark:text-purple-100">
                         {employee.base_salary ? `LKR ${employee.base_salary.toLocaleString()}` : 'Not specified'}
                       </p>
                     </div>
 
                     {/* Attendance Affects Salary Field */}
-                    <div className={`p-6 rounded-lg border-2 shadow-md ${
+                    <div className={`p-3 sm:p-6 rounded-lg border-2 shadow-md ${
                       (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
                         : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
                     }`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <HiClock className={`w-5 h-5 ${
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
+                        <HiClock className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${
                           (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1) ? 'text-green-600' : 'text-blue-600'
                         }`} />
-                        <p className={`text-sm font-bold ${
+                        <p className={`text-xs sm:text-sm font-bold ${
                           (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
                             ? 'text-green-800 dark:text-green-200'
                             : 'text-blue-800 dark:text-blue-200'
                         }`}>Salary Calculation</p>
                       </div>
-                      <p className={`text-lg font-semibold ${
+                      <p className={`text-sm sm:text-lg font-semibold ${
                         (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
                           ? 'text-green-900 dark:text-green-100'
                           : 'text-blue-900 dark:text-blue-100'
@@ -1324,16 +1328,16 @@ const EmployeeDetails: React.FC = () => {
                     </div>
 
                     {/* Overtime Configuration Display */}
-                    <div className={`md:col-span-2 p-6 rounded-lg border-2 shadow-md ${
+                    <div className={`col-span-2 p-3 sm:p-6 rounded-lg border-2 shadow-md ${
                       (employee.overtime_enabled === true || employee.overtime_enabled === 1)
                         ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
                         : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                     }`}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <HiClock className={`w-5 h-5 ${
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                        <HiClock className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${
                           (employee.overtime_enabled === true || employee.overtime_enabled === 1) ? 'text-orange-600' : 'text-gray-500'
                         }`} />
-                        <h4 className={`text-sm font-bold ${
+                        <h4 className={`text-xs sm:text-sm font-bold ${
                           (employee.overtime_enabled === true || employee.overtime_enabled === 1)
                             ? 'text-orange-800 dark:text-orange-200'
                             : 'text-gray-700 dark:text-gray-300'
@@ -1341,71 +1345,67 @@ const EmployeeDetails: React.FC = () => {
                       </div>
 
                       {(employee.overtime_enabled === true || employee.overtime_enabled === 1) ? (
-                        <div className="space-y-3">
+                        <div className="space-y-2 sm:space-y-3">
                           <div className="flex items-center gap-2">
-                            <Badge color="success" icon={FaCheck}>Overtime Enabled</Badge>
+                            <Badge color="success" icon={FaCheck} size="sm">Overtime Enabled</Badge>
                           </div>
 
                           {/* Overtime Shift Flags */}
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              {(employee.pre_shift_overtime_enabled === true || employee.pre_shift_overtime_enabled === 1) ? (
-                                <Badge color="info" icon={FaCheck} size="sm">Pre-Shift OT</Badge>
-                              ) : (
-                                <Badge color="gray" icon={FaTimes} size="sm">Pre-Shift OT</Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              {(employee.post_shift_overtime_enabled === true || employee.post_shift_overtime_enabled === 1) ? (
-                                <Badge color="info" icon={FaCheck} size="sm">Post-Shift OT</Badge>
-                              ) : (
-                                <Badge color="gray" icon={FaTimes} size="sm">Post-Shift OT</Badge>
-                              )}
-                            </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(employee.pre_shift_overtime_enabled === true || employee.pre_shift_overtime_enabled === 1) ? (
+                              <Badge color="info" icon={FaCheck} size="sm">Pre-Shift OT</Badge>
+                            ) : (
+                              <Badge color="gray" icon={FaTimes} size="sm">Pre-Shift OT</Badge>
+                            )}
+                            {(employee.post_shift_overtime_enabled === true || employee.post_shift_overtime_enabled === 1) ? (
+                              <Badge color="info" icon={FaCheck} size="sm">Post-Shift OT</Badge>
+                            ) : (
+                              <Badge color="gray" icon={FaTimes} size="sm">Post-Shift OT</Badge>
+                            )}
                           </div>
 
                           {/* Overtime Multipliers */}
-                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3 mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-orange-200 dark:border-orange-700">
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Weekday OT</p>
-                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">Weekday</p>
+                              <p className="text-sm sm:text-lg font-semibold text-orange-900 dark:text-orange-100">
                                 {employee.weekday_ot_multiplier ? `${employee.weekday_ot_multiplier}x` : 'Not set'}
                               </p>
                               <p className="text-xs text-gray-500 dark:text-gray-400">Mon-Fri</p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Saturday OT</p>
-                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">Saturday</p>
+                              <p className="text-sm sm:text-lg font-semibold text-orange-900 dark:text-orange-100">
                                 {employee.saturday_ot_multiplier ? `${employee.saturday_ot_multiplier}x` : 'Not set'}
                               </p>
                               <p className="text-xs text-gray-500 dark:text-gray-400">Sat</p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Sunday OT</p>
-                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">Sunday</p>
+                              <p className="text-sm sm:text-lg font-semibold text-orange-900 dark:text-orange-100">
                                 {employee.sunday_ot_multiplier ? `${employee.sunday_ot_multiplier}x` : 'Not set'}
                               </p>
                               <p className="text-xs text-gray-500 dark:text-gray-400">Sun</p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Holiday OT</p>
-                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">Holiday</p>
+                              <p className="text-sm sm:text-lg font-semibold text-orange-900 dark:text-orange-100">
                                 {employee.holiday_ot_multiplier ? `${employee.holiday_ot_multiplier}x` : 'Not set'}
                               </p>
                               <p className="text-xs text-gray-500 dark:text-gray-400">Holidays</p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Statutory Holiday OT</p>
-                              <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">Statutory</p>
+                              <p className="text-sm sm:text-lg font-semibold text-orange-900 dark:text-orange-100">
                                 {employee.statutory_holiday_ot_multiplier ? `${employee.statutory_holiday_ot_multiplier}x` : 'Not set'}
                               </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Statutory Holidays</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Stat. Holidays</p>
                             </div>
                           </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <Badge color="gray" icon={FaTimes}>Overtime Disabled</Badge>
+                          <Badge color="gray" icon={FaTimes} size="sm">Overtime Disabled</Badge>
                           <p className="text-xs text-gray-600 dark:text-gray-400">
                             No overtime pay calculated for this employee
                           </p>
@@ -1414,13 +1414,13 @@ const EmployeeDetails: React.FC = () => {
                     </div>
 
                     {/* APIT (Income Tax) Configuration Display */}
-                    <div className={`md:col-span-2 p-6 rounded-lg border-2 shadow-md ${
+                    <div className={`col-span-2 p-3 sm:p-6 rounded-lg border-2 shadow-md ${
                       (employee.apit_enabled === true || employee.apit_enabled === 1)
                         ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
                         : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                     }`}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <h4 className={`text-sm font-bold ${
+                      <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                        <h4 className={`text-xs sm:text-sm font-bold ${
                           (employee.apit_enabled === true || employee.apit_enabled === 1)
                             ? 'text-red-800 dark:text-red-200'
                             : 'text-gray-700 dark:text-gray-300'
@@ -1428,15 +1428,15 @@ const EmployeeDetails: React.FC = () => {
                       </div>
 
                       {(employee.apit_enabled === true || employee.apit_enabled === 1) ? (
-                        <div className="flex items-center gap-2">
-                          <Badge color="success" icon={FaCheck}>APIT Enabled</Badge>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <Badge color="success" icon={FaCheck} size="sm" className="self-start">APIT Enabled</Badge>
                           <p className="text-xs text-gray-600 dark:text-gray-400">
                             APIT is deducted per the Sri Lankan tax table (income up to Rs. 150,000/month is tax free)
                           </p>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <Badge color="gray" icon={FaTimes}>APIT Disabled</Badge>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <Badge color="gray" icon={FaTimes} size="sm" className="self-start">APIT Disabled</Badge>
                           <p className="text-xs text-gray-600 dark:text-gray-400">
                             No income tax deducted for this employee
                           </p>

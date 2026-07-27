@@ -51,6 +51,25 @@ interface EmployeeStats {
   }>;
 }
 
+const AVATAR_COLORS = [
+  'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200',
+  'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200',
+  'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200',
+  'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-200',
+  'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-200',
+  'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-200',
+  'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200',
+];
+
+const getAvatarColor = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
+
 const AllEmployees: React.FC = () => {
   const navigate = useNavigate();
   
@@ -424,7 +443,7 @@ const AllEmployees: React.FC = () => {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-3 sm:p-6">
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
           <div>
@@ -743,83 +762,41 @@ const AllEmployees: React.FC = () => {
           ) : (
             <>
               {/* Mobile: card list */}
-              <div className="lg:hidden divide-y divide-gray-200 dark:divide-gray-700">
+              <div className="lg:hidden p-3 space-y-2.5 bg-gray-50 dark:bg-gray-900">
                 {employees.map((employee) => (
                   <div
                     key={employee.id}
-                    className="p-4 flex items-start gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                    className="p-3 flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 cursor-pointer hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all"
                     onClick={(e) => handleRowClick(employee.id, e)}
                   >
-                    <div onClick={(e) => e.stopPropagation()} className="pt-1">
+                    <div onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedEmployees.includes(employee.id)}
                         onChange={() => handleEmployeeSelect(employee.id)}
                       />
                     </div>
                     <div className="h-10 w-10 flex-shrink-0">
-                      <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${getAvatarColor(employee.id)}`}>
+                        <span className="text-xs font-semibold">
                           {employee.first_name?.charAt(0)}{employee.last_name?.charAt(0)}
                         </span>
                       </div>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                             {employee.first_name} {employee.last_name}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {employee.email}
-                          </div>
-                          <div className="text-xs text-gray-400 dark:text-gray-500">
-                            ID: {employee.employee_code}
+                            {employee.department_name || 'Not Assigned'}
+                            {employee.fingerprint_id != null && ` · #${employee.fingerprint_id}`}
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Badge color={getStatusBadge(employee.employment_status)} size="sm">
                             {formatEmploymentStatus(employee.employment_status)}
                           </Badge>
-                          <Badge color={getTypeBadge(employee.employee_type)} size="sm">
-                            {formatEmployeeType(employee.employee_type)}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">Department</p>
-                          <p className="text-gray-900 dark:text-white">
-                            {employee.department_name || 'Not Assigned'}
-                          </p>
-                          {employee.designation_title && (
-                            <p className="text-gray-500 dark:text-gray-400">{employee.designation_title}</p>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">Fingerprint ID</p>
-                          {employee.fingerprint_id != null ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                              #{employee.fingerprint_id}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 dark:text-gray-500">Not Set</span>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">Base Salary</p>
-                          <p className="text-gray-900 dark:text-white font-medium">
-                            {employee.base_salary ? employee.base_salary.toLocaleString() : 'Not Set'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">Hire Date</p>
-                          <p className="text-gray-900 dark:text-white">
-                            {new Date(employee.hire_date).toLocaleDateString()}
-                          </p>
-                          {employee.years_of_service && (
-                            <p className="text-gray-500 dark:text-gray-400">{employee.years_of_service} years</p>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -940,9 +917,9 @@ const AllEmployees: React.FC = () => {
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
-              <div className="flex items-center">
-                <span className="text-sm text-gray-700 dark:text-gray-300">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 sm:px-6 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex items-center justify-center sm:justify-start">
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">
                   Showing{' '}
                   <span className="font-medium">
                     {(pagination.currentPage - 1) * pagination.recordsPerPage + 1}
@@ -956,32 +933,34 @@ const AllEmployees: React.FC = () => {
                   results
                 </span>
               </div>
-              
-              <div className="flex items-center space-x-2">
+
+              <div className="flex items-center gap-2 overflow-x-auto sm:justify-end">
                 <Button
                   size="sm"
                   color="gray"
+                  className="shrink-0"
                   onClick={() => handlePageChange(pagination.currentPage - 1)}
                   disabled={pagination.currentPage === 1}
                 >
                   Previous
                 </Button>
-                
+
                 {/* Page Numbers */}
                 {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
-                  .filter(page => 
-                    page === 1 || 
-                    page === pagination.totalPages || 
+                  .filter(page =>
+                    page === 1 ||
+                    page === pagination.totalPages ||
                     Math.abs(page - pagination.currentPage) <= 2
                   )
                   .map((page, index, array) => (
                     <React.Fragment key={page}>
                       {index > 0 && array[index - 1] !== page - 1 && (
-                        <span className="text-gray-500">...</span>
+                        <span className="text-gray-500 shrink-0">...</span>
                       )}
                       <Button
                         size="sm"
                         color={pagination.currentPage === page ? "blue" : "gray"}
+                        className="shrink-0"
                         onClick={() => handlePageChange(page)}
                       >
                         {page}
@@ -989,10 +968,11 @@ const AllEmployees: React.FC = () => {
                     </React.Fragment>
                   ))
                 }
-                
+
                 <Button
                   size="sm"
                   color="gray"
+                  className="shrink-0"
                   onClick={() => handlePageChange(pagination.currentPage + 1)}
                   disabled={pagination.currentPage === pagination.totalPages}
                 >
