@@ -39,7 +39,7 @@ const Header = () => {
       >
         <Navbar
           fluid
-          className={`rounded-none bg-transparent dark:bg-transparent py-4 sm:px-30 px-4`}
+          className={`rounded-none bg-transparent dark:bg-transparent py-2 sm:py-4 px-3 sm:px-30`}
         >
           {/* Mobile Toggle Icon */}
 

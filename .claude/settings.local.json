@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Read(/D:\\attendance-system\\BackEnd\\src\\scripts/**)"
+      "Read(/D:\\attendance-system\\BackEnd\\src\\scripts/**)",
+      "Bash(python3 -c ' *)"
     ],
     "deny": [],
     "ask": []

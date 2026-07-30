@@ -443,7 +443,7 @@ const AllEmployees: React.FC = () => {
   };
 
   return (
-    <div className="p-3 sm:p-6">
+    <div>
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
           <div>
@@ -529,92 +529,92 @@ const AllEmployees: React.FC = () => {
       {/* Employee Statistics - Enhanced with Clickable Cards */}
       {stats && (
         <DynamicProtectedComponent permission="employees.view">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-6">
             {/* Total Employees Card */}
-            <div 
-              className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                !filters.employment_status 
-                  ? 'bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-500' 
+            <div
+              className={`p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 ${
+                !filters.employment_status
+                  ? 'bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-500'
                   : 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
               }`}
               onClick={() => handleStatusCardClick('')}
             >
-              <h3 className="text-sm font-medium text-blue-600 dark:text-blue-400">Total</h3>
-              <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{stats.total}</p>
+              <h3 className="text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400">Total</h3>
+              <p className="text-xl sm:text-2xl font-bold text-blue-800 dark:text-blue-200">{stats.total}</p>
               {!filters.employment_status && (
-                <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                <div className="mt-1 sm:mt-2 text-xs text-blue-600 dark:text-blue-400">
                   Showing all employees
                 </div>
               )}
             </div>
 
             {/* Active Employees Card */}
-            <div 
-              className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                filters.employment_status === 'active' 
-                  ? 'bg-green-100 dark:bg-green-900/40 ring-2 ring-green-500' 
+            <div
+              className={`p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 ${
+                filters.employment_status === 'active'
+                  ? 'bg-green-100 dark:bg-green-900/40 ring-2 ring-green-500'
                   : 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
               }`}
               onClick={() => handleStatusCardClick('active')}
             >
-              <h3 className="text-sm font-medium text-green-600 dark:text-green-400">Active</h3>
-              <p className="text-2xl font-bold text-green-800 dark:text-green-200">{stats.active}</p>
+              <h3 className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400">Active</h3>
+              <p className="text-xl sm:text-2xl font-bold text-green-800 dark:text-green-200">{stats.active}</p>
               {filters.employment_status === 'active' && (
-                <div className="mt-2 text-xs text-green-600 dark:text-green-400">
+                <div className="mt-1 sm:mt-2 text-xs text-green-600 dark:text-green-400">
                   Click to clear filter
                 </div>
               )}
             </div>
 
             {/* Inactive Employees Card */}
-            <div 
-              className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                filters.employment_status === 'inactive' 
-                  ? 'bg-yellow-100 dark:bg-yellow-900/40 ring-2 ring-yellow-500' 
+            <div
+              className={`p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 ${
+                filters.employment_status === 'inactive'
+                  ? 'bg-yellow-100 dark:bg-yellow-900/40 ring-2 ring-yellow-500'
                   : 'bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30'
               }`}
               onClick={() => handleStatusCardClick('inactive')}
             >
-              <h3 className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Inactive</h3>
-              <p className="text-2xl font-bold text-yellow-800 dark:text-yellow-200">{stats.inactive}</p>
+              <h3 className="text-xs sm:text-sm font-medium text-yellow-600 dark:text-yellow-400">Inactive</h3>
+              <p className="text-xl sm:text-2xl font-bold text-yellow-800 dark:text-yellow-200">{stats.inactive}</p>
               {filters.employment_status === 'inactive' && (
-                <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                <div className="mt-1 sm:mt-2 text-xs text-yellow-600 dark:text-yellow-400">
                   Click to clear filter
                 </div>
               )}
             </div>
 
             {/* Terminated Employees Card */}
-            <div 
-              className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                filters.employment_status === 'terminated' 
-                  ? 'bg-red-100 dark:bg-red-900/40 ring-2 ring-red-500' 
+            <div
+              className={`p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 ${
+                filters.employment_status === 'terminated'
+                  ? 'bg-red-100 dark:bg-red-900/40 ring-2 ring-red-500'
                   : 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
               }`}
               onClick={() => handleStatusCardClick('terminated')}
             >
-              <h3 className="text-sm font-medium text-red-600 dark:text-red-400">Terminated</h3>
-              <p className="text-2xl font-bold text-red-800 dark:text-red-200">{stats.terminated}</p>
+              <h3 className="text-xs sm:text-sm font-medium text-red-600 dark:text-red-400">Terminated</h3>
+              <p className="text-xl sm:text-2xl font-bold text-red-800 dark:text-red-200">{stats.terminated}</p>
               {filters.employment_status === 'terminated' && (
-                <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                <div className="mt-1 sm:mt-2 text-xs text-red-600 dark:text-red-400">
                   Click to clear filter
                 </div>
               )}
             </div>
 
             {/* Resigned Employees Card */}
-            <div 
-              className={`p-4 rounded-lg cursor-pointer transition-all duration-200 ${
-                filters.employment_status === 'resigned' 
-                  ? 'bg-gray-100 dark:bg-gray-700 ring-2 ring-gray-500' 
+            <div
+              className={`col-span-2 md:col-span-1 p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 ${
+                filters.employment_status === 'resigned'
+                  ? 'bg-gray-100 dark:bg-gray-700 ring-2 ring-gray-500'
                   : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
               onClick={() => handleStatusCardClick('resigned')}
             >
-              <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">Resigned</h3>
-              <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{stats.resigned}</p>
+              <h3 className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Resigned</h3>
+              <p className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">{stats.resigned}</p>
               {filters.employment_status === 'resigned' && (
-                <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                <div className="mt-1 sm:mt-2 text-xs text-gray-600 dark:text-gray-400">
                   Click to clear filter
                 </div>
               )}

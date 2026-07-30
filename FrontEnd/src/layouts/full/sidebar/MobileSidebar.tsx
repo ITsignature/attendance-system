@@ -26,8 +26,16 @@ const MobileSidebar = () => {
         <Sidebar
           className="fixed menu-sidebar pt-0 bg-white dark:bg-darkgray transition-all"
           aria-label="Sidebar with multi-level dropdown example"
+          theme={{
+            item: {
+              base: "flex items-center justify-center rounded-lg px-3 py-2 mb-0.5 gap-3 text-sm leading-[normal] font-normal text-link hover:text-primary dark:text-white dark:hover:text-primary",
+            },
+            itemGroup: {
+              base: "mt-2 space-y-0.5 border-t border-ld pt-2 first:mt-0 first:border-t-0 first:pt-0 sidebar-nav",
+            },
+          }}
         >
-          <div className="px-5 py-4 pb-7 flex items-center sidebarlogo">
+          <div className="px-5 py-3 pb-4 flex items-center sidebarlogo">
             <FullLogo />
           </div>
           <SimpleBar className="h-[calc(100vh_-_242px)]">

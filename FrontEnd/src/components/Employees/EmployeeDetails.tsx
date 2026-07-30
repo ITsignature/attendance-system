@@ -1126,7 +1126,7 @@ const EmployeeDetails: React.FC = () => {
 
   return (
     <DynamicProtectedComponent permission="employees.view">
-      <div className="max-w-6xl mx-auto p-3 sm:p-6">
+      <div className="max-w-6xl mx-auto">
         {/* Breadcrumb */}
         <Breadcrumb className="mb-4 sm:mb-6">
           <Breadcrumb.Item href="/dashboard" icon={HiHome}>
@@ -1285,7 +1285,7 @@ const EmployeeDetails: React.FC = () => {
                     <Field label="Employee Type" value={employee.employee_type} />
                     
                     {/* Enhanced Base Salary Field */}
-                    <div className="bg-purple-50 dark:bg-purple-900/20 p-3 sm:p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800 shadow-md">
+                    <div className="col-span-2 sm:col-span-1 bg-purple-50 dark:bg-purple-900/20 p-3 sm:p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800 shadow-md">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
                         <HiCash className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 shrink-0" />
                         <p className="text-xs sm:text-sm font-bold text-purple-800 dark:text-purple-200">Base Salary (Monthly)</p>
@@ -1296,7 +1296,7 @@ const EmployeeDetails: React.FC = () => {
                     </div>
 
                     {/* Attendance Affects Salary Field */}
-                    <div className={`p-3 sm:p-6 rounded-lg border-2 shadow-md ${
+                    <div className={`col-span-2 sm:col-span-1 p-3 sm:p-6 rounded-lg border-2 shadow-md ${
                       (employee.attendance_affects_salary === true || employee.attendance_affects_salary === 1)
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
                         : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
@@ -2453,7 +2453,7 @@ const EmployeeDetails: React.FC = () => {
         {/* Quick Actions Footer */}
         <div className="mt-8 flex justify-between items-center">
           <Button color="gray" onClick={() => navigate('/employees')}>
-            â† Back to Employees
+            ← Back to Employees
           </Button>
         </div>
 
