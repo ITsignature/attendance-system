@@ -333,20 +333,20 @@ const filteredRecords = attendanceRecords.filter(record =>
 );
 
   return (
-    <div className="p-6">
+    <div>
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Attendance Management
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Track employee arrival times and work duration
           </p>
         </div>
         <div className="flex gap-2">
           <DynamicProtectedComponent permission="attendance.create">
-            <Button color="purple" as={Link} to="/manual-attendance">
+            <Button color="purple" as={Link} to="/manual-attendance" className="w-full sm:w-auto">
               Manual Attendance Sheet
             </Button>
           </DynamicProtectedComponent>
@@ -354,7 +354,10 @@ const filteredRecords = attendanceRecords.filter(record =>
       </div>
 
       {/* Filters */}
-      <Card className="mb-6">
+      <Card
+        className="mb-6"
+        theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Employee</label>
@@ -424,7 +427,7 @@ const filteredRecords = attendanceRecords.filter(record =>
           </div>
 
           <div className="flex items-end">
-            <Button onClick={loadAttendanceRecords} disabled={loading}>
+            <Button onClick={loadAttendanceRecords} disabled={loading} className="w-full lg:w-auto">
               <HiRefresh className="mr-2 h-4 w-4" />
               Refresh
             </Button>
@@ -433,14 +436,146 @@ const filteredRecords = attendanceRecords.filter(record =>
       </Card>
 
       {/* Attendance Table */}
-      <Card>
+      <Card
+        theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+      >
         {loading ? (
           <div className="flex justify-center py-8">
             <Spinner size="lg" />
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile: card list */}
+            <div className="lg:hidden space-y-3">
+              {filteredRecords.map((record) => {
+                let latenessLabel: string | null = null;
+                if (record.scheduled_in_time && record.check_in_time) {
+                  const diffMin =
+                    (new Date(`2000-01-01T${record.check_in_time}`).getTime() -
+                      new Date(`2000-01-01T${record.scheduled_in_time}`).getTime()) / 60000;
+                  if (diffMin > 0) {
+                    const hrs = Math.floor(diffMin / 60);
+                    const min = Math.round(diffMin % 60);
+                    latenessLabel = hrs ? `${hrs}h ${min}m` : `${min}m`;
+                  }
+                }
+
+                return (
+                  <div key={record.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+                          {record.employee_name || 'Unknown'}
+                        </div>
+                        <div className="text-xs text-gray-500">{record.employee_code || 'N/A'}</div>
+                      </div>
+                      <div className="flex items-center text-xs text-gray-500 shrink-0">
+                        <HiCalendar className="mr-1 h-3.5 w-3.5 text-gray-400" />
+                        {formatDate(record.date)}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                      <div>
+                        <p className="text-xs text-gray-500">Check In</p>
+                        <div className="flex items-center">
+                          <HiClock className="mr-1 h-3 w-3 text-green-500" />
+                          {formatTime(record.check_in_time)}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Check Out</p>
+                        <div className="flex items-center">
+                          <HiClock className="mr-1 h-3 w-3 text-red-500" />
+                          {formatTime(record.check_out_time)}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Break Start</p>
+                        {record.break_start_time ? (
+                          <div className="flex items-center">
+                            <HiClock className="mr-1 h-3 w-3 text-blue-500" />
+                            {formatTime(record.break_start_time)}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Break End</p>
+                        {record.break_end_time ? (
+                          <div className="flex items-center">
+                            <HiClock className="mr-1 h-3 w-3 text-blue-500" />
+                            {formatTime(record.break_end_time)}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center flex-wrap gap-2 mb-2">
+                      {latenessLabel && (
+                        <span className="text-xs text-orange-600">{latenessLabel} late</span>
+                      )}
+                      {getArrivalStatusBadge(record.arrival_status)}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openResolve(record)}
+                        onKeyDown={(e) => e.key === 'Enter' && openResolve(record)}
+                        className="inline-block cursor-pointer"
+                        title="Click to change work duration"
+                      >
+                        {getWorkDurationBadge(record.work_duration)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+                      <div>
+                        <span className="font-semibold text-sm">
+                          {record.total_hours ? toHrsMins(record.total_hours) : 'N/A'}
+                        </span>
+                        {(record.overtime_hours || 0) > 0 && (
+                          <span className="ml-2 text-xs text-orange-600">
+                            OT: {toHrsMins(record.overtime_hours)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <DynamicProtectedComponent permission="attendance.edit">
+                          <Button
+                            size="xs"
+                            color="warning"
+                            onClick={() => {
+                              setEditingRecord(record);
+                              setShowForm(true);
+                            }}
+                          >
+                            <HiPencil className="h-4 w-4" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                        <DynamicProtectedComponent permission="attendance.delete">
+                          <Button
+                            size="xs"
+                            color="failure"
+                            onClick={() => {
+                              setRecordToDelete(record);
+                              setShowDelete(true);
+                            }}
+                          >
+                            <HiTrash className="h-4 w-4" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden lg:block overflow-x-auto">
               <Table hoverable>
                 <Table.Head>
                   <Table.HeadCell>Employee</Table.HeadCell>
@@ -463,21 +598,21 @@ const filteredRecords = attendanceRecords.filter(record =>
                           <div className="text-sm text-gray-500">{record.employee_code || 'N/A'}</div>
                         </div>
                       </Table.Cell>
-                      
+
                       <Table.Cell>
                         <div className="flex items-center">
                           <HiCalendar className="mr-2 h-4 w-4 text-gray-400" />
                           {formatDate(record.date)}
                         </div>
                       </Table.Cell>
-                      
+
                       <Table.Cell>
                         <div className="flex items-center text-sm">
                           <HiClock className="mr-1 h-3 w-3 text-green-500" />
                           {formatTime(record.check_in_time)}
                         </div>
                       </Table.Cell>
-                      
+
                       <Table.Cell>
                         <div className="flex items-center text-sm">
                           <HiClock className="mr-1 h-3 w-3 text-red-500" />
@@ -525,14 +660,14 @@ const filteredRecords = attendanceRecords.filter(record =>
 
                         return (
                           <div className="text-xs text-orange-600">
-                            {label} 
+                            {label}
                           </div>
                         );
                       })()}
                         {getArrivalStatusBadge(record.arrival_status)}
-                  
+
                       </Table.Cell>
-                      
+
                       <Table.Cell>
                       <span
                         role="button"
@@ -545,7 +680,7 @@ const filteredRecords = attendanceRecords.filter(record =>
                         {getWorkDurationBadge(record.work_duration)}
                       </span>
                     </Table.Cell>
-                      
+
                     <Table.Cell>
                       <div className="space-y-1">
                         <div className="font-semibold">
@@ -558,7 +693,7 @@ const filteredRecords = attendanceRecords.filter(record =>
                         )}
                       </div>
                     </Table.Cell>
-                      
+
                       <Table.Cell>
                         <div className="flex space-x-2">
                           <DynamicProtectedComponent permission="attendance.edit">
@@ -594,18 +729,20 @@ const filteredRecords = attendanceRecords.filter(record =>
             </div>
 
             {/* Pagination */}
-            <div className="flex justify-between items-center mt-4">
-              <div className="text-sm text-gray-500">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-4">
+              <div className="text-sm text-gray-500 text-center sm:text-left">
                 Showing {((pagination.currentPage - 1) * pagination.recordsPerPage) + 1} to{' '}
                 {Math.min(pagination.currentPage * pagination.recordsPerPage, pagination.totalRecords)} of{' '}
                 {pagination.totalRecords} entries
               </div>
-              <Pagination
-                currentPage={pagination.currentPage}
-                totalPages={pagination.totalPages}
-                onPageChange={handlePageChange}
-                showIcons
-              />
+              <div className="flex justify-center sm:justify-end overflow-x-auto">
+                <Pagination
+                  currentPage={pagination.currentPage}
+                  totalPages={pagination.totalPages}
+                  onPageChange={handlePageChange}
+                  showIcons
+                />
+              </div>
             </div>
           </>
         )}

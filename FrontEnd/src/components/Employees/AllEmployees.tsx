@@ -445,7 +445,7 @@ const AllEmployees: React.FC = () => {
   return (
     <div>
       <div className="mb-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               All Employees
@@ -454,8 +454,8 @@ const AllEmployees: React.FC = () => {
               Manage your organization's employee directory
             </p>
           </div>
-          
-          <div className="flex gap-2 mt-4 sm:mt-0">
+
+          <div className="flex gap-2 mt-4 sm:mt-0 justify-end">
             <Button
               color="gray"
               size="sm"
@@ -656,7 +656,7 @@ const AllEmployees: React.FC = () => {
         </div>
         
         {/* Filters */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-end">
           {/* Status Filter */}
           <Dropdown
             label={filters.employment_status ? formatEmploymentStatus(filters.employment_status) : "All Status"}
