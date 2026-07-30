@@ -490,28 +490,6 @@ const filteredRecords = attendanceRecords.filter(record =>
                           {formatTime(record.check_out_time)}
                         </div>
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Break Start</p>
-                        {record.break_start_time ? (
-                          <div className="flex items-center">
-                            <HiClock className="mr-1 h-3 w-3 text-blue-500" />
-                            {formatTime(record.break_start_time)}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Break End</p>
-                        {record.break_end_time ? (
-                          <div className="flex items-center">
-                            <HiClock className="mr-1 h-3 w-3 text-blue-500" />
-                            {formatTime(record.break_end_time)}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </div>
                     </div>
 
                     <div className="flex items-center flex-wrap gap-2 mb-2">
