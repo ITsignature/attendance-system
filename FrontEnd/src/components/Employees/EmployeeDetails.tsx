@@ -1875,7 +1875,10 @@ const EmployeeDetails: React.FC = () => {
             {activeSidebarTab === "Attendance" && (
               <div className="space-y-6">
                 {/* Filters Section */}
-                <Card className="mb-6">
+                <Card
+                  className="mb-6"
+                  theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+                >
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">Start Date</label>
@@ -1929,9 +1932,10 @@ const EmployeeDetails: React.FC = () => {
                     </div>
 
                     <div className="flex items-end">
-                      <Button 
-                        onClick={() => loadAttendanceData(employee.id)} 
+                      <Button
+                        onClick={() => loadAttendanceData(employee.id)}
                         disabled={attendanceLoading}
+                        className="w-full md:w-auto"
                       >
                         <HiRefresh className="mr-2 h-4 w-4" />
                         Refresh
@@ -1941,7 +1945,9 @@ const EmployeeDetails: React.FC = () => {
                 </Card>
 
                 {/* Attendance Table */}
-                <Card>
+                <Card
+                  theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+                >
                   {attendanceLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Spinner size="xl" />
@@ -1953,63 +1959,110 @@ const EmployeeDetails: React.FC = () => {
                       <p className="text-gray-500 dark:text-gray-400">No attendance records found for the selected period.</p>
                     </div>
                   ) : (
-                    <Table hoverable>
-                      <Table.Head>
-                        <Table.HeadCell>Date</Table.HeadCell>
-                        <Table.HeadCell>Check In</Table.HeadCell>
-                        <Table.HeadCell>Check Out</Table.HeadCell>
-                        <Table.HeadCell>Break</Table.HeadCell>
-                        <Table.HeadCell>Total Hours</Table.HeadCell>
-                        <Table.HeadCell>Overtime</Table.HeadCell>
-                        <Table.HeadCell>Arrival Status</Table.HeadCell>
-                        <Table.HeadCell>Work Duration</Table.HeadCell>
-                        <Table.HeadCell>Work Type</Table.HeadCell>
-                      </Table.Head>
-                      <Table.Body className="divide-y">
+                    <>
+                      {/* Mobile: card list */}
+                      <div className="lg:hidden space-y-3">
                         {attendance.map((record) => (
-                          <Table.Row key={record.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                            <Table.Cell className="font-medium text-gray-900 dark:text-white">
-                              {formatDate(record.date)}
-                            </Table.Cell>
-                            <Table.Cell>{formatTime(record.check_in_time)}</Table.Cell>
-                            <Table.Cell>{formatTime(record.check_out_time)}</Table.Cell>
-                            <Table.Cell>{record.break_duration || 0} min</Table.Cell>
-                            <Table.Cell>{formatHours(record.total_hours)}</Table.Cell>
-                            <Table.Cell>{formatHours(record.overtime_hours)}</Table.Cell>
-                            <Table.Cell>{getArrivalStatusBadge(record.arrival_status)}</Table.Cell>
-                            <Table.Cell>{getWorkDurationBadge(record.work_duration)}</Table.Cell>
-                            <Table.Cell>{getWorkTypeBadge(record.work_type)}</Table.Cell>
-                          </Table.Row>
+                          <div key={record.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-sm text-gray-900 dark:text-white">
+                                {formatDate(record.date)}
+                              </span>
+                              {getArrivalStatusBadge(record.arrival_status)}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                              <div>
+                                <p className="text-xs text-gray-500">Check In</p>
+                                <p>{formatTime(record.check_in_time)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Check Out</p>
+                                <p>{formatTime(record.check_out_time)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Break</p>
+                                <p>{record.break_duration || 0} min</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Total Hours</p>
+                                <p>{formatHours(record.total_hours)}</p>
+                              </div>
+                              {(record.overtime_hours || 0) > 0 && (
+                                <div>
+                                  <p className="text-xs text-gray-500">Overtime</p>
+                                  <p>{formatHours(record.overtime_hours)}</p>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center flex-wrap gap-2">
+                              {getWorkDurationBadge(record.work_duration)}
+                              {getWorkTypeBadge(record.work_type)}
+                            </div>
+                          </div>
                         ))}
-                      </Table.Body>
-                    </Table>
+                      </div>
+
+                      {/* Desktop: table */}
+                      <div className="hidden lg:block overflow-x-auto">
+                        <Table hoverable>
+                          <Table.Head>
+                            <Table.HeadCell>Date</Table.HeadCell>
+                            <Table.HeadCell>Check In</Table.HeadCell>
+                            <Table.HeadCell>Check Out</Table.HeadCell>
+                            <Table.HeadCell>Break</Table.HeadCell>
+                            <Table.HeadCell>Total Hours</Table.HeadCell>
+                            <Table.HeadCell>Overtime</Table.HeadCell>
+                            <Table.HeadCell>Arrival Status</Table.HeadCell>
+                            <Table.HeadCell>Work Duration</Table.HeadCell>
+                            <Table.HeadCell>Work Type</Table.HeadCell>
+                          </Table.Head>
+                          <Table.Body className="divide-y">
+                            {attendance.map((record) => (
+                              <Table.Row key={record.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                                <Table.Cell className="font-medium text-gray-900 dark:text-white">
+                                  {formatDate(record.date)}
+                                </Table.Cell>
+                                <Table.Cell>{formatTime(record.check_in_time)}</Table.Cell>
+                                <Table.Cell>{formatTime(record.check_out_time)}</Table.Cell>
+                                <Table.Cell>{record.break_duration || 0} min</Table.Cell>
+                                <Table.Cell>{formatHours(record.total_hours)}</Table.Cell>
+                                <Table.Cell>{formatHours(record.overtime_hours)}</Table.Cell>
+                                <Table.Cell>{getArrivalStatusBadge(record.arrival_status)}</Table.Cell>
+                                <Table.Cell>{getWorkDurationBadge(record.work_duration)}</Table.Cell>
+                                <Table.Cell>{getWorkTypeBadge(record.work_type)}</Table.Cell>
+                              </Table.Row>
+                            ))}
+                          </Table.Body>
+                        </Table>
+                      </div>
+                    </>
                   )}
-                  
+
                   {/* Summary Section */}
                   {attendance.length > 0 && (
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Days</h4>
-                        <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{attendance.length}</p>
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Days</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-blue-900 dark:text-blue-100">{attendance.length}</p>
                       </div>
-                      
-                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">On Time</h4>
-                        <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+
+                      <div className="bg-green-50 dark:bg-green-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-green-800 dark:text-green-200 mb-1">On Time</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-green-900 dark:text-green-100">
                           {attendance.filter(r => r.arrival_status === 'on_time').length}
                         </p>
                       </div>
-                      
-                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Late</h4>
-                        <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Late</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-yellow-900 dark:text-yellow-100">
                           {attendance.filter(r => r.arrival_status === 'late').length}
                         </p>
                       </div>
-                      
-                      <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-1">Total Hours</h4>
-                        <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+
+                      <div className="bg-purple-50 dark:bg-purple-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-purple-800 dark:text-purple-200 mb-1">Total Hours</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-purple-900 dark:text-purple-100">
                           {attendance.reduce((sum, r) => sum + (r.total_hours || 0), 0).toFixed(2)}
                         </p>
                       </div>
