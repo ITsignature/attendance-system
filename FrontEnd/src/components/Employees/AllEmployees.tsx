@@ -662,7 +662,7 @@ const AllEmployees: React.FC = () => {
             label={filters.employment_status ? formatEmploymentStatus(filters.employment_status) : "All Status"}
             dismissOnClick={true}
             size="sm"
-            theme={{ floating: { target: "w-32 justify-between truncate" } }}
+            theme={{ floating: { target: "w-36 justify-between shrink-0" } }}
           >
             <Dropdown.Item onClick={() => updateFilter('employment_status', '')}>
               All Status
@@ -686,7 +686,7 @@ const AllEmployees: React.FC = () => {
             label={filters.employee_type ? formatEmployeeType(filters.employee_type) : "All Types"}
             dismissOnClick={true}
             size="sm"
-            theme={{ floating: { target: "w-32 justify-between truncate" } }}
+            theme={{ floating: { target: "w-36 justify-between shrink-0" } }}
           >
             <Dropdown.Item onClick={() => updateFilter('employee_type', '')}>
               All Types
