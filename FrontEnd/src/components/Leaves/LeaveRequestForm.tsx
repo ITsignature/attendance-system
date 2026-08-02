@@ -617,7 +617,7 @@ const employeeOptions = employees
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Card className="shadow-lg">
+      <Card className="shadow-lg" theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
         <div className="border-b pb-4 mb-6">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Create Leave Request
