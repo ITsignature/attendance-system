@@ -482,18 +482,18 @@ const PayrollRunDashboard = () => {
 
         {/* Desktop: table */}
         <div className="hidden lg:block overflow-x-auto">
-          <Table>
+          <Table className="w-full table-fixed">
             <Table.Head>
-              <Table.HeadCell>Name</Table.HeadCell>
-              <Table.HeadCell>Period</Table.HeadCell>
-              <Table.HeadCell>Employees</Table.HeadCell>
-              <Table.HeadCell>Created</Table.HeadCell>
-              <Table.HeadCell>Actions</Table.HeadCell>
+              <Table.HeadCell className="w-[26%]">Name</Table.HeadCell>
+              <Table.HeadCell className="w-[20%]">Period</Table.HeadCell>
+              <Table.HeadCell className="w-[14%]">Employees</Table.HeadCell>
+              <Table.HeadCell className="w-[15%]">Created</Table.HeadCell>
+              <Table.HeadCell className="w-[25%]">Actions</Table.HeadCell>
             </Table.Head>
             <Table.Body>
               {loading ? (
                 <Table.Row>
-                  <Table.Cell colSpan={5} className="text-center py-8">
+                  <Table.Cell colSpan={5} className="text-center py-12">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Loading payroll runs...</span>
@@ -502,22 +502,25 @@ const PayrollRunDashboard = () => {
                 </Table.Row>
               ) : !payrollRuns || payrollRuns.length === 0 ? (
                 <Table.Row>
-                  <Table.Cell colSpan={5} className="text-center py-8 text-gray-500">
+                  <Table.Cell colSpan={5} className="text-center py-12 text-gray-500">
                     No payroll runs found. Create your first payroll run to get started.
                   </Table.Cell>
                 </Table.Row>
               ) : (
                 (payrollRuns || []).map((run) => (
                   <Table.Row key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <Table.Cell>
+                    <Table.Cell className="py-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center font-semibold text-xs ${getAvatarColor(run.id)}`}>
+                        <div className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center font-semibold text-sm ring-2 ring-white dark:ring-gray-800 shadow-sm ${getAvatarColor(run.id)}`}>
                           {run.run_name?.slice(0, 2).toUpperCase()}
                         </div>
-                        <div className="font-semibold text-base text-gray-900 dark:text-white">{run.run_name}</div>
+                        <div>
+                          <div className="font-semibold text-base text-gray-900 dark:text-white">{run.run_name}</div>
+                          <div className="text-xs text-gray-400">{run.run_number}</div>
+                        </div>
                       </div>
                     </Table.Cell>
-                    <Table.Cell>
+                    <Table.Cell className="py-4">
                       <div className="text-sm font-semibold text-gray-900 dark:text-white">
                         <div>{payrollRunApiService.formatDate(run.period_start_date)}</div>
                         <div className="text-gray-500 dark:text-gray-400 font-normal">
@@ -525,18 +528,18 @@ const PayrollRunDashboard = () => {
                         </div>
                       </div>
                     </Table.Cell>
-                    <Table.Cell>
-                      <div className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <Table.Cell className="py-4">
+                      <div className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-full px-3 py-1">
                         <HiUsers className="w-4 h-4 text-gray-400" />
                         {run.total_employees}
                       </div>
                     </Table.Cell>
-                    <Table.Cell>
+                    <Table.Cell className="py-4">
                       <div className="text-sm text-gray-500 dark:text-gray-400">
                         {payrollRunApiService.formatDate(run.created_at)}
                       </div>
                     </Table.Cell>
-                    <Table.Cell>
+                    <Table.Cell className="py-4">
                       <div className="flex gap-2 flex-wrap">
                         <DynamicProtectedComponent permission="payroll.view">
                           <Button
