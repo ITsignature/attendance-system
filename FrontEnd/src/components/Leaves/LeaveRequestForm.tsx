@@ -76,7 +76,25 @@ interface FormErrors {
 
 const LeaveRequestForm: React.FC = () => {
   const navigate = useNavigate();
-  
+
+  // Hidden native date inputs, opened via the calendar icon on the text fields
+  const startDatePickerRef = React.useRef<HTMLInputElement>(null);
+  const endDatePickerRef = React.useRef<HTMLInputElement>(null);
+
+  const openDatePicker = (ref: React.RefObject<HTMLInputElement>): void => {
+    const input = ref.current;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // showPicker can throw (e.g. not called from a direct user gesture) - fall through to focus
+      }
+    }
+    input.focus();
+  };
+
   // State Management with proper types
   const [formData, setFormData] = useState<FormData>({
     employee_id: '',
@@ -352,6 +370,29 @@ const LeaveRequestForm: React.FC = () => {
     }
   };
 
+  // Applies a date picked from the hidden native <input type="date"> (yyyy-mm-dd) through
+  // the same display/backend state as manual dd/mm/yyyy typing.
+  const handlePickerDateChange = (field: 'start_date' | 'end_date', backendDate: string): void => {
+    if (!backendDate) return;
+    const displayValue = convertToDisplayFormat(backendDate);
+
+    if (field === 'start_date') {
+      setDisplayStartDate(displayValue);
+    } else {
+      setDisplayEndDate(displayValue);
+    }
+
+    setFormData(prev => ({ ...prev, [field]: backendDate }));
+
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
@@ -575,13 +616,13 @@ const employeeOptions = employees
 
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="max-w-4xl mx-auto">
       <Card className="shadow-lg">
         <div className="border-b pb-4 mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Create Leave Request
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1">
             Submit a new leave request for an employee
           </p>
         </div>
@@ -685,7 +726,7 @@ const employeeOptions = employees
           {/* Leave Duration Selection */}
           <div>
             <Label htmlFor="leave_duration" value="Leave Duration *" />
-            <div className="grid grid-cols-3 gap-3 mt-2">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-2">
               {(['full_day', 'half_day', 'short_leave'] as const).map((duration) => (
                 <button
                   key={duration}
@@ -697,7 +738,7 @@ const employeeOptions = employees
                       : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
                   }`}
                 >
-                  <Badge color={getDurationBadgeColor(duration)} className="w-full">
+                  <Badge color={getDurationBadgeColor(duration)} className="w-full justify-center">
                     {getDurationLabel(duration)}
                   </Badge>
                   <p className="text-xs text-gray-500 mt-1">
@@ -714,17 +755,36 @@ const employeeOptions = employees
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="start_date" value="Start Date * (dd/mm/yyyy)" />
-              <TextInput
-                id="start_date"
-                type="text"
-                value={displayStartDate}
-                onChange={(e) => handleDateChange('start_date', e.target.value)}
-                placeholder="dd/mm/yyyy"
-                maxLength={10}
-                className={errors.start_date ? 'border-red-500' : ''}
-                icon={FaCalendarAlt}
-                required
-              />
+              <div className="relative">
+                <TextInput
+                  id="start_date"
+                  type="text"
+                  value={displayStartDate}
+                  onChange={(e) => handleDateChange('start_date', e.target.value)}
+                  placeholder="dd/mm/yyyy"
+                  maxLength={10}
+                  className={errors.start_date ? 'border-red-500' : ''}
+                  icon={FaCalendarAlt}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => openDatePicker(startDatePickerRef)}
+                  className="absolute inset-y-0 left-0 flex items-center pl-3 cursor-pointer"
+                  aria-label="Open start date picker"
+                >
+                  <span className="sr-only">Open date picker</span>
+                </button>
+                <input
+                  ref={startDatePickerRef}
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => handlePickerDateChange('start_date', e.target.value)}
+                  className="absolute inset-y-0 left-0 w-9 opacity-0 pointer-events-none"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+              </div>
               {errors.start_date && (
                 <p className="text-red-500 text-sm mt-1">{errors.start_date}</p>
               )}
@@ -732,18 +792,39 @@ const employeeOptions = employees
 
             <div>
               <Label htmlFor="end_date" value="End Date * (dd/mm/yyyy)" />
-              <TextInput
-                id="end_date"
-                type="text"
-                value={displayEndDate}
-                onChange={(e) => handleDateChange('end_date', e.target.value)}
-                placeholder="dd/mm/yyyy"
-                maxLength={10}
-                className={errors.end_date ? 'border-red-500' : ''}
-                icon={FaCalendarAlt}
-                disabled={formData.leave_duration !== 'full_day'}
-                required
-              />
+              <div className="relative">
+                <TextInput
+                  id="end_date"
+                  type="text"
+                  value={displayEndDate}
+                  onChange={(e) => handleDateChange('end_date', e.target.value)}
+                  placeholder="dd/mm/yyyy"
+                  maxLength={10}
+                  className={errors.end_date ? 'border-red-500' : ''}
+                  icon={FaCalendarAlt}
+                  disabled={formData.leave_duration !== 'full_day'}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => openDatePicker(endDatePickerRef)}
+                  disabled={formData.leave_duration !== 'full_day'}
+                  className="absolute inset-y-0 left-0 flex items-center pl-3 cursor-pointer disabled:cursor-not-allowed"
+                  aria-label="Open end date picker"
+                >
+                  <span className="sr-only">Open date picker</span>
+                </button>
+                <input
+                  ref={endDatePickerRef}
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) => handlePickerDateChange('end_date', e.target.value)}
+                  disabled={formData.leave_duration !== 'full_day'}
+                  className="absolute inset-y-0 left-0 w-9 opacity-0 pointer-events-none"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+              </div>
               {errors.end_date && (
                 <p className="text-red-500 text-sm mt-1">{errors.end_date}</p>
               )}
@@ -996,9 +1077,10 @@ const employeeOptions = employees
           )}
 
           {/* Submit Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row sm:justify-end gap-3 pt-4 border-t">
             <Button
               color="gray"
+              className="w-full sm:w-auto order-2 sm:order-1"
               onClick={() => navigate('/leave-requests')}
               disabled={submitLoading}
               type="button"
@@ -1008,6 +1090,7 @@ const employeeOptions = employees
             <Button
               type="submit"
               color="blue"
+              className="w-full sm:w-auto order-1 sm:order-2"
               disabled={
                 submitLoading ||
                 (holidaysInRange.length > 0 &&
