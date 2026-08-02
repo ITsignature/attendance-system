@@ -914,12 +914,12 @@ const hhmmToMinutes = (t) => {
 
             {/* Leave Types Management */}
             <div className="mt-8">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
                 <h4 className="text-md font-medium text-gray-900 dark:text-white">Leave Types</h4>
                 {hasPermission('leave_types.create') && (
                   <button
                     onClick={handleCreateLeaveType}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full sm:w-auto"
                   >
                     <Plus size={16} />
                     Add Leave Type
@@ -930,93 +930,173 @@ const hhmmToMinutes = (t) => {
               {loadingLeaveTypes ? (
                 <div className="text-center py-8">Loading leave types...</div>
               ) : (
-                <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tracking/Limit</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paid</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Requires Approval</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Notice Days</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {leaveTypes.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                            No leave types configured. Click "Add Leave Type" to create one.
-                          </td>
-                        </tr>
-                      ) : (
-                        leaveTypes.map((leaveType) => (
-                          <tr key={leaveType.id}>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                <>
+                  {/* Mobile: card list */}
+                  <div className="lg:hidden space-y-3">
+                    {leaveTypes.length === 0 ? (
+                      <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                        No leave types configured. Click "Add Leave Type" to create one.
+                      </div>
+                    ) : (
+                      leaveTypes.map((leaveType) => (
+                        <div key={leaveType.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div>
                               <div className="text-sm font-medium text-gray-900 dark:text-white">{leaveType.name}</div>
                               {leaveType.description && (
-                                <div className="text-sm text-gray-500 dark:text-gray-400">{leaveType.description}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{leaveType.description}</div>
                               )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                              <div className="text-sm font-medium">
+                            </div>
+                            <span className={`shrink-0 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              leaveType.is_paid
+                                ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                                : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                            }`}>
+                              {leaveType.is_paid ? 'Paid' : 'Unpaid'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                            <div>
+                              <p className="text-xs text-gray-500">Tracking/Limit</p>
+                              <p>
                                 {leaveType.tracking_period === 'Monthly'
                                   ? `${leaveType.max_days_per_month || 0} days/month`
-                                  : `${leaveType.max_days_per_year || 0} days/year`
-                                }
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                ({leaveType.tracking_period})
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                leaveType.is_paid
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
-                                  : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
-                              }`}>
-                                {leaveType.is_paid ? 'Paid' : 'Unpaid'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                              {leaveType.requires_approval ? 'Yes' : 'No'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                              {leaveType.notice_period_days || 0} days
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                                  : `${leaveType.max_days_per_year || 0} days/year`}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Requires Approval</p>
+                              <p>{leaveType.requires_approval ? 'Yes' : 'No'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Notice Days</p>
+                              <p>{leaveType.notice_period_days || 0} days</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500">Trainee</p>
                               {leaveType.is_trainee_only ? (
-                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100">
-                                  Trainee · {leaveType.accrual_per_month}/mo
+                                <span className="inline-flex text-xs font-semibold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100 px-2">
+                                  {leaveType.accrual_per_month}/mo
                                 </span>
                               ) : (
                                 <span className="text-xs text-gray-400">—</span>
                               )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              {hasPermission('leave_types.edit') && (
-                                <button
-                                  onClick={() => handleEditLeaveType(leaveType)}
-                                  className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
-                                >
-                                  <Edit size={16} className="inline" />
-                                </button>
-                              )}
-                              {hasPermission('leave_types.delete') && (
-                                <button
-                                  onClick={() => handleDeleteLeaveType(leaveType.id)}
-                                  className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                                >
-                                  <Trash2 size={16} className="inline" />
-                                </button>
-                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3">
+                            {hasPermission('leave_types.edit') && (
+                              <button
+                                onClick={() => handleEditLeaveType(leaveType)}
+                                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                              >
+                                <Edit size={16} className="inline" />
+                              </button>
+                            )}
+                            {hasPermission('leave_types.delete') && (
+                              <button
+                                onClick={() => handleDeleteLeaveType(leaveType.id)}
+                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                              >
+                                <Trash2 size={16} className="inline" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div className="hidden lg:block bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tracking/Limit</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paid</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Requires Approval</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Notice Days</th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {leaveTypes.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                              No leave types configured. Click "Add Leave Type" to create one.
                             </td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        ) : (
+                          leaveTypes.map((leaveType) => (
+                            <tr key={leaveType.id}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">{leaveType.name}</div>
+                                {leaveType.description && (
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">{leaveType.description}</div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                <div className="text-sm font-medium">
+                                  {leaveType.tracking_period === 'Monthly'
+                                    ? `${leaveType.max_days_per_month || 0} days/month`
+                                    : `${leaveType.max_days_per_year || 0} days/year`
+                                  }
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  ({leaveType.tracking_period})
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  leaveType.is_paid
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                                }`}>
+                                  {leaveType.is_paid ? 'Paid' : 'Unpaid'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                {leaveType.requires_approval ? 'Yes' : 'No'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                {leaveType.notice_period_days || 0} days
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {leaveType.is_trainee_only ? (
+                                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100">
+                                    Trainee · {leaveType.accrual_per_month}/mo
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                {hasPermission('leave_types.edit') && (
+                                  <button
+                                    onClick={() => handleEditLeaveType(leaveType)}
+                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
+                                  >
+                                    <Edit size={16} className="inline" />
+                                  </button>
+                                )}
+                                {hasPermission('leave_types.delete') && (
+                                  <button
+                                    onClick={() => handleDeleteLeaveType(leaveType.id)}
+                                    className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                  >
+                                    <Trash2 size={16} className="inline" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1143,26 +1223,25 @@ const hhmmToMinutes = (t) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <>
         {/* Header */}
-        <div className="mb-8 flex justify-between items-center">
+        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Settings</h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">System Settings</h1>
+            <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Configure your HRMS system preferences and security settings
             </p>
           </div>
           <button
             onClick={handleExport}
-            className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="flex items-center justify-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors w-full sm:w-auto"
           >
             <Download className="w-4 h-4 mr-2" />
             Export Settings
           </button>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8">
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-8">
           {/* Sidebar */}
           <div className="lg:w-1/4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -1170,22 +1249,22 @@ const hhmmToMinutes = (t) => {
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Settings Categories
                 </h2>
-                <nav className="space-y-2">
+                <nav className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
                   {visibleSections.map((section) => {
                     const Icon = section.icon;
                     return (
                       <button
                         key={section.id}
                         onClick={() => setActiveSection(section.id)}
-                        className={`w-full flex items-center px-3 py-2 text-left rounded-md transition-colors ${
+                        className={`w-full flex items-center px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap shrink-0 lg:shrink lg:whitespace-normal ${
                           activeSection === section.id
                             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                         }`}
                       >
-                        <Icon className="w-5 h-5 mr-3" />
+                        <Icon className="w-5 h-5 mr-3 shrink-0" />
                         {section.label}
-                        <ChevronRight className="w-4 h-4 ml-auto" />
+                        <ChevronRight className="w-4 h-4 ml-auto hidden lg:block" />
                       </button>
                     );
                   })}
@@ -1197,7 +1276,7 @@ const hhmmToMinutes = (t) => {
           {/* Main Content */}
           <div className="lg:w-3/4">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="p-6">
+              <div className="p-3 sm:p-6">
                 {renderSettingSection()}
               </div>
             </div>
@@ -1207,15 +1286,15 @@ const hhmmToMinutes = (t) => {
         {/* Action Bar */}
         {hasChanges && (
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 You have unsaved changes
               </p>
-              <div className="flex space-x-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={handleReset}
                   disabled={saving}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center disabled:opacity-50"
                 >
                   <RefreshCw className={`w-4 h-4 mr-2 ${saving ? 'animate-spin' : ''}`} />
                   Reset All
@@ -1223,7 +1302,7 @@ const hhmmToMinutes = (t) => {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center disabled:opacity-50"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {saving ? 'Saving...' : 'Save Changes'}
@@ -1235,9 +1314,9 @@ const hhmmToMinutes = (t) => {
 
         {/* Leave Type Modal */}
         {showLeaveTypeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4">
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3 sm:p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                     {editingLeaveType ? 'Edit Leave Type' : 'Create Leave Type'}
@@ -1251,7 +1330,7 @@ const hhmmToMinutes = (t) => {
                 </div>
               </div>
 
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Name *
@@ -1304,7 +1383,7 @@ const hhmmToMinutes = (t) => {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Conditional field based on tracking period */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1353,7 +1432,7 @@ const hhmmToMinutes = (t) => {
                   />
                 </div>
 
-                <div className="flex items-center space-x-6">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-6">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
@@ -1413,10 +1492,10 @@ const hhmmToMinutes = (t) => {
                 )}
               </div>
 
-              <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+              <div className="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:justify-end gap-3">
                 <button
                   onClick={() => setShowLeaveTypeModal(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 order-2 sm:order-1"
                 >
                   Cancel
                 </button>
@@ -1432,7 +1511,7 @@ const hhmmToMinutes = (t) => {
                         )
                     )
                   }
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2"
                 >
                   {editingLeaveType ? 'Update' : 'Create'}
                 </button>
@@ -1440,8 +1519,7 @@ const hhmmToMinutes = (t) => {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </>
   );
 };
 

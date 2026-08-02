@@ -108,22 +108,22 @@ const PayrollSettings: React.FC = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+      <div className="border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+        <nav className="-mb-px flex gap-4 sm:gap-8 w-max min-w-full sm:w-auto" aria-label="Tabs">
           {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                className={`group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap shrink-0 ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
                 <Icon
-                  className={`-ml-0.5 mr-2 h-5 w-5 transition-colors ${
+                  className={`-ml-0.5 mr-2 h-5 w-5 shrink-0 transition-colors ${
                     activeTab === tab.id
                       ? 'text-blue-500 dark:text-blue-400'
                       : 'text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300'
@@ -138,7 +138,7 @@ const PayrollSettings: React.FC = () => {
 
       {/* Tab Content */}
       <div className="bg-white dark:bg-gray-800 rounded-lg">
-        <div className="p-6">
+        <div className="p-0 sm:p-6">
           {/* Tab Description */}
           <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-blue-800 dark:text-blue-200 text-sm">
