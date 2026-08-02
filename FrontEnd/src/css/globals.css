@@ -30,6 +30,15 @@
     @apply text-sm text-bodytext;
   }
 
+  /* iOS Safari auto-zooms the page on focus when a form field's font-size is under 16px */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
   .dropdown {
     @apply shadow-md bg-white dark:bg-dark relative rounded-md dark:shadow-dark-md overflow-hidden;
   }
