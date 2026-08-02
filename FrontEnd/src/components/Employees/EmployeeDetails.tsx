@@ -2076,7 +2076,10 @@ const EmployeeDetails: React.FC = () => {
             {activeSidebarTab === "Leave" && (
               <div className="space-y-6">
                 {/* Filters Section */}
-                <Card className="mb-6">
+                <Card
+                  className="mb-6"
+                  theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+                >
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">Status</label>
@@ -2127,9 +2130,10 @@ const EmployeeDetails: React.FC = () => {
                     </div>
 
                     <div className="flex items-end">
-                      <Button 
-                        onClick={() => loadLeaveData(employee.id)} 
+                      <Button
+                        onClick={() => loadLeaveData(employee.id)}
                         disabled={leavesLoading}
+                        className="w-full md:w-auto"
                       >
                         <HiRefresh className="mr-2 h-4 w-4" />
                         Refresh
@@ -2141,10 +2145,12 @@ const EmployeeDetails: React.FC = () => {
 
                 {/* Trainee Accrual Balances */}
                 {employee.employee_type === 'trainee' && (
-                  <Card>
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-base font-semibold text-purple-800 dark:text-purple-200 flex items-center gap-2">
-                        <HiIdentification className="w-5 h-5" />
+                  <Card
+                    theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+                  >
+                    <div className="flex items-center justify-between mb-4 gap-2">
+                      <h4 className="text-sm sm:text-base font-semibold text-purple-800 dark:text-purple-200 flex items-center gap-2">
+                        <HiIdentification className="w-5 h-5 shrink-0" />
                         Trainee Accrual Balances
                       </h4>
                       <Button size="xs" color="purple" onClick={() => loadAccrualBalances(employee.id)} disabled={accrualBalancesLoading}>
@@ -2193,7 +2199,9 @@ const EmployeeDetails: React.FC = () => {
                 )}
 
                 {/* Leave Table */}
-                <Card>
+                <Card
+                  theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+                >
                   {leavesLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Spinner size="xl" />
@@ -2205,93 +2213,129 @@ const EmployeeDetails: React.FC = () => {
                       <p className="text-gray-500 dark:text-gray-400">No leave requests found.</p>
                     </div>
                   ) : (
-                    <Table hoverable>
-                      <Table.Head>
-                        <Table.HeadCell>Leave Type</Table.HeadCell>
-                        <Table.HeadCell>Duration</Table.HeadCell>
-                        <Table.HeadCell>Date Range</Table.HeadCell>
-                        <Table.HeadCell>Days</Table.HeadCell>
-                        <Table.HeadCell>Reason</Table.HeadCell>
-                        <Table.HeadCell>Status</Table.HeadCell>
-                        <Table.HeadCell>Applied Date</Table.HeadCell>
-                        <Table.HeadCell>Reviewed By</Table.HeadCell>
-                      </Table.Head>
-                      <Table.Body className="divide-y">
+                    <>
+                      {/* Mobile: card list */}
+                      <div className="lg:hidden space-y-3">
                         {leaves.map((leave) => (
-                          <Table.Row key={leave.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                            <Table.Cell>
+                          <div key={leave.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                            <div className="flex items-start justify-between gap-2 mb-2">
                               <span className={`text-sm font-medium text-${getLeaveTypeColor(leave.leave_type_name)}-600`}>
                                 {leave.leave_type_name}
                               </span>
-                            </Table.Cell>
-                            <Table.Cell>
+                              {getLeaveStatusBadge(leave.status)}
+                            </div>
+                            <div className="text-sm mb-2">
+                              <span>{formatDate(leave.start_date)}</span>
+                              <span className="text-gray-500"> to {formatDate(leave.end_date)}</span>
+                              <span className="ml-2 font-medium">({leave.days_requested} day{leave.days_requested === 1 ? '' : 's'})</span>
+                            </div>
+                            <div className="mb-2">
                               <Badge color="info" size="sm">
                                 {leave.leave_duration?.replace('_', ' ')}
                               </Badge>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="text-sm">
-                                <div>{formatDate(leave.start_date)}</div>
-                                <div className="text-gray-500">to {formatDate(leave.end_date)}</div>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="font-medium">{leave.days_requested}</span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="max-w-xs">
-                                <p className="truncate text-sm" title={leave.reason}>
-                                  {leave.reason}
-                                </p>
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell>
-                              {getLeaveStatusBadge(leave.status)}
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="text-sm text-gray-500">
-                                {formatDate(leave.applied_at)}
-                              </span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="text-sm">
-                                <p>{leave.reviewer_name || 'Pending'}</p>
-                                {leave.reviewed_at && (
-                                  <p className="text-xs text-gray-500">{formatDate(leave.reviewed_at)}</p>
-                                )}
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
+                            </div>
+                            {leave.reason && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{leave.reason}</p>
+                            )}
+                            <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100 dark:border-gray-700">
+                              <span>Applied {formatDate(leave.applied_at)}</span>
+                              <span>{leave.reviewer_name || 'Pending review'}</span>
+                            </div>
+                          </div>
                         ))}
-                      </Table.Body>
-                    </Table>
+                      </div>
+
+                      {/* Desktop: table */}
+                      <div className="hidden lg:block overflow-x-auto">
+                        <Table hoverable>
+                          <Table.Head>
+                            <Table.HeadCell>Leave Type</Table.HeadCell>
+                            <Table.HeadCell>Duration</Table.HeadCell>
+                            <Table.HeadCell>Date Range</Table.HeadCell>
+                            <Table.HeadCell>Days</Table.HeadCell>
+                            <Table.HeadCell>Reason</Table.HeadCell>
+                            <Table.HeadCell>Status</Table.HeadCell>
+                            <Table.HeadCell>Applied Date</Table.HeadCell>
+                            <Table.HeadCell>Reviewed By</Table.HeadCell>
+                          </Table.Head>
+                          <Table.Body className="divide-y">
+                            {leaves.map((leave) => (
+                              <Table.Row key={leave.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                                <Table.Cell>
+                                  <span className={`text-sm font-medium text-${getLeaveTypeColor(leave.leave_type_name)}-600`}>
+                                    {leave.leave_type_name}
+                                  </span>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <Badge color="info" size="sm">
+                                    {leave.leave_duration?.replace('_', ' ')}
+                                  </Badge>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <div className="text-sm">
+                                    <div>{formatDate(leave.start_date)}</div>
+                                    <div className="text-gray-500">to {formatDate(leave.end_date)}</div>
+                                  </div>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <span className="font-medium">{leave.days_requested}</span>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <div className="max-w-xs">
+                                    <p className="truncate text-sm" title={leave.reason}>
+                                      {leave.reason}
+                                    </p>
+                                  </div>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  {getLeaveStatusBadge(leave.status)}
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(leave.applied_at)}
+                                  </span>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <div className="text-sm">
+                                    <p>{leave.reviewer_name || 'Pending'}</p>
+                                    {leave.reviewed_at && (
+                                      <p className="text-xs text-gray-500">{formatDate(leave.reviewed_at)}</p>
+                                    )}
+                                  </div>
+                                </Table.Cell>
+                              </Table.Row>
+                            ))}
+                          </Table.Body>
+                        </Table>
+                      </div>
+                    </>
                   )}
-                  
+
                   {/* Leave Summary Cards */}
                   {leaves.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Requests</h4>
-                        <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{leaves.length}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-6">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">Total Requests</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-blue-900 dark:text-blue-100">{leaves.length}</p>
                       </div>
-                      
-                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Approved</h4>
-                        <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+
+                      <div className="bg-green-50 dark:bg-green-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-green-800 dark:text-green-200 mb-1">Approved</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-green-900 dark:text-green-100">
                           {leaves.filter(l => l.status === 'approved').length}
                         </p>
                       </div>
-                      
-                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Pending</h4>
-                        <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Pending</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-yellow-900 dark:text-yellow-100">
                           {leaves.filter(l => l.status === 'pending').length}
                         </p>
                       </div>
-                      
-                      <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">Rejected</h4>
-                        <p className="text-2xl font-bold text-red-900 dark:text-red-100">
+
+                      <div className="bg-red-50 dark:bg-red-900/20 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm font-medium text-red-800 dark:text-red-200 mb-1">Rejected</h4>
+                        <p className="text-xl sm:text-2xl font-bold text-red-900 dark:text-red-100">
                           {leaves.filter(l => l.status === 'rejected').length}
                         </p>
                       </div>
@@ -2304,50 +2348,53 @@ const EmployeeDetails: React.FC = () => {
             {/* Financial Records Tab - Keeping existing implementation */}
             {activeSidebarTab === "Financial Records" && (
               <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    <HiCash className="w-6 h-6 text-purple-600" />
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <HiCash className="w-6 h-6 text-purple-600 shrink-0" />
                     Financial Records
                   </h3>
-                  
-                  <div className="flex items-center gap-4">
-                    <Select
-                      value={filterMonthYear}
-                      onChange={(e) => {
-                        setFilterMonthYear(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className="w-48"
-                      sizing="sm"
-                    >
-                      <option value="all">All Months</option>
-                      {getUniqueMonthYears().map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </Select>
-                    
-                    <Select
-                      value={filterType}
-                      onChange={(e) => {
-                        setFilterType(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className="w-32"
-                      sizing="sm"
-                    >
-                      <option value="all">All Types</option>
-                      <option value="salary">Salary</option>
-                      <option value="bonus">Bonus</option>
-                      <option value="advance">Advance</option>
-                      <option value="loan">Loan</option>
-                    </Select>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Select
+                        value={filterMonthYear}
+                        onChange={(e) => {
+                          setFilterMonthYear(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-full sm:w-48"
+                        sizing="sm"
+                      >
+                        <option value="all">All Months</option>
+                        {getUniqueMonthYears().map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+
+                      <Select
+                        value={filterType}
+                        onChange={(e) => {
+                          setFilterType(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-full sm:w-32"
+                        sizing="sm"
+                      >
+                        <option value="all">All Types</option>
+                        <option value="salary">Salary</option>
+                        <option value="bonus">Bonus</option>
+                        <option value="advance">Advance</option>
+                        <option value="loan">Loan</option>
+                      </Select>
+                    </div>
 
                     <DynamicProtectedComponent permission="payroll.edit">
                       <Button
                         size="sm"
                         color="purple"
+                        className="w-full sm:w-auto"
                         onClick={() => setShowAddRecordModal(true)}
                       >
                         <FaPlus className="w-3 h-3 mr-2" />
@@ -2357,8 +2404,56 @@ const EmployeeDetails: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Financial Records Table */}
-                <div className="overflow-x-auto">
+                {/* Mobile: card list */}
+                <div className="lg:hidden space-y-3">
+                  {getPaginatedRecords().map((record) => (
+                    <div key={record.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2 gap-2">
+                        <Badge
+                          color={record.type === 'salary' ? 'blue' : record.type === 'bonus' ? 'green' : 'gray'}
+                          size="sm"
+                        >
+                          {record.type.charAt(0).toUpperCase() + record.type.slice(1)}
+                        </Badge>
+                        <Badge color={getStatusBadgeColor(record.status)} size="sm">
+                          {record.status}
+                        </Badge>
+                      </div>
+                      <p className="text-lg font-medium text-gray-900 dark:text-white mb-1">
+                        LKR {record.amount.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 break-words mb-2">
+                        {record.description}
+                      </p>
+                      <p className="text-xs text-gray-500 mb-2">{formatDate(record.date)}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {record.slipUrl && (
+                          <>
+                            <Button size="xs" color="gray" title="View Slip">
+                              <FaEye className="w-3 h-3" />
+                            </Button>
+                            <Button size="xs" color="gray" title="Download Slip">
+                              <FaDownload className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
+                        <DynamicProtectedComponent permission="payroll.edit">
+                          <Button
+                            size="xs"
+                            color="red"
+                            title="Delete Record"
+                            onClick={() => handleDeleteFinancialRecord(record)}
+                          >
+                            <FaTrash className="w-3 h-3" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop: table */}
+                <div className="hidden lg:block overflow-x-auto">
                   <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                       <tr>
@@ -2374,7 +2469,7 @@ const EmployeeDetails: React.FC = () => {
                       {getPaginatedRecords().map((record) => (
                         <tr key={record.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
                           <td className="px-6 py-4">
-                            <Badge 
+                            <Badge
                               color={record.type === 'salary' ? 'blue' : record.type === 'bonus' ? 'green' : 'gray'}
                               size="sm"
                             >
@@ -2429,7 +2524,7 @@ const EmployeeDetails: React.FC = () => {
 
                 {/* Pagination */}
                 {getFilteredFinancialRecords().length > recordsPerPage && (
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Showing {((currentPage - 1) * recordsPerPage) + 1} to{" "}
                       {Math.min(currentPage * recordsPerPage, getFilteredFinancialRecords().length)} of{" "}
@@ -2439,6 +2534,7 @@ const EmployeeDetails: React.FC = () => {
                       <Button
                         size="sm"
                         color="gray"
+                        className="flex-1 sm:flex-none"
                         disabled={currentPage === 1}
                         onClick={() => setCurrentPage(prev => prev - 1)}
                       >
@@ -2447,6 +2543,7 @@ const EmployeeDetails: React.FC = () => {
                       <Button
                         size="sm"
                         color="gray"
+                        className="flex-1 sm:flex-none"
                         disabled={currentPage * recordsPerPage >= getFilteredFinancialRecords().length}
                         onClick={() => setCurrentPage(prev => prev + 1)}
                       >
@@ -2457,30 +2554,30 @@ const EmployeeDetails: React.FC = () => {
                 )}
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg">
-                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Total Salary (YTD)</h4>
-                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-6">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 sm:p-6 rounded-lg">
+                    <h4 className="text-xs sm:text-sm font-medium text-blue-800 dark:text-blue-200 mb-1 sm:mb-2">Total Salary (YTD)</h4>
+                    <p className="text-2xl sm:text-3xl font-bold text-blue-900 dark:text-blue-100 break-words">
                       LKR {financialRecords
                         .filter(r => r.type === 'salary')
                         .reduce((sum, r) => sum + r.amount, 0)
                         .toLocaleString()}
                     </p>
                   </div>
-                  
-                  <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg">
-                    <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Total Bonuses</h4>
-                    <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 sm:p-6 rounded-lg">
+                    <h4 className="text-xs sm:text-sm font-medium text-green-800 dark:text-green-200 mb-1 sm:mb-2">Total Bonuses</h4>
+                    <p className="text-2xl sm:text-3xl font-bold text-green-900 dark:text-green-100 break-words">
                       LKR {financialRecords
                         .filter(r => r.type === 'bonus')
                         .reduce((sum, r) => sum + r.amount, 0)
                         .toLocaleString()}
                     </p>
                   </div>
-                  
-                  <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800">
-                    <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">Current Salary</h4>
-                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+
+                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 sm:p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                    <h4 className="text-xs sm:text-sm font-medium text-purple-800 dark:text-purple-200 mb-1 sm:mb-2">Current Salary</h4>
+                    <p className="text-2xl sm:text-3xl font-bold text-purple-900 dark:text-purple-100 break-words">
                       LKR {employee.base_salary?.toLocaleString() || 'N/A'}
                     </p>
                   </div>

@@ -1,13 +1,13 @@
 .fallback-spinner {
   position: relative;
   display: flex;
-  height: 100vh;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
   width: 100%;
 }
 .loading {
-  position: absolute;
-  left: calc(50% - 35px);
-  top: 50%;
+  position: relative;
   width: 55px;
   height: 55px;
   border-radius: 50%;

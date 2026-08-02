@@ -134,7 +134,9 @@ const PayrollCycleConfig: React.FC<PayrollCycleConfigProps> = ({
 
   if (loading) {
     return (
-      <Card>
+      <Card
+        theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+      >
         <div className="flex items-center justify-center p-8">
           <Spinner size="lg" />
           <span className="ml-3">Loading payroll cycle configuration...</span>
@@ -144,14 +146,16 @@ const PayrollCycleConfig: React.FC<PayrollCycleConfigProps> = ({
   }
 
   return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
+    <Card
+      theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center">
-          <HiCalendar className="text-2xl text-blue-600 mr-2" />
-          <h3 className="text-xl font-semibold">Payroll Cycle Configuration</h3>
+          <HiCalendar className="text-2xl text-blue-600 mr-2 shrink-0" />
+          <h3 className="text-lg sm:text-xl font-semibold">Payroll Cycle Configuration</h3>
         </div>
         {canEdit && !editMode && (
-          <Button size="sm" onClick={() => setEditMode(true)}>
+          <Button size="sm" onClick={() => setEditMode(true)} className="w-full sm:w-auto">
             Edit Configuration
           </Button>
         )}
