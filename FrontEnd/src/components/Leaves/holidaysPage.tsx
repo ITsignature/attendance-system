@@ -155,7 +155,7 @@ const HolidayPage = () => {
   };
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-md w-full space-y-5">
+    <div className="p-3 sm:p-6 bg-white rounded-xl shadow-md w-full space-y-5">
       {/* Error Alert */}
       {error && (
         <Alert color="failure" onDismiss={() => setError(null)}>
@@ -164,7 +164,7 @@ const HolidayPage = () => {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
         <div className="flex flex-col sm:flex-row gap-4 flex-1">
           <TextInput
             placeholder="Search holidays..."
@@ -189,11 +189,11 @@ const HolidayPage = () => {
             })}
           </Select>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           {hasPermission('holidays.create') && (
             <Button
               color="blue"
-              className="flex items-center gap-2"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
               onClick={handleImportSriLankanHolidays}
               disabled={loading}
             >
@@ -204,7 +204,7 @@ const HolidayPage = () => {
           {hasPermission('holidays.create') && (
             <Button
               color="purple"
-              className="flex items-center gap-2"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
               onClick={() => setModalOpen(true)}
               disabled={loading}
             >
@@ -216,85 +216,147 @@ const HolidayPage = () => {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div>
         {loading && (
           <div className="flex justify-center items-center p-8">
             <Spinner size="lg" />
             <span className="ml-2">Loading holidays...</span>
           </div>
         )}
-        
+
         {!loading && (
-          <Table hoverable>
-            <Table.Head>
-              <Table.HeadCell>Date</Table.HeadCell>
-              <Table.HeadCell>Day</Table.HeadCell>
-              <Table.HeadCell>Holiday Name</Table.HeadCell>
-              <Table.HeadCell>Type</Table.HeadCell>
-              <Table.HeadCell>Statutory</Table.HeadCell>
-              <Table.HeadCell>Actions</Table.HeadCell>
-            </Table.Head>
-            <Table.Body className="divide-y divide-gray-200">
+          <>
+            {/* Mobile: card list */}
+            <div className="lg:hidden space-y-3">
               {filteredHolidays.length === 0 ? (
-                <Table.Row>
-                  <Table.Cell colSpan={6} className="text-center py-8 text-gray-500">
-                    {holidays.length === 0 ? "No holidays found. Try importing Sri Lankan holidays." : "No holidays match your search."}
-                  </Table.Cell>
-                </Table.Row>
+                <div className="text-center py-8 text-gray-500">
+                  {holidays.length === 0 ? "No holidays found. Try importing Sri Lankan holidays." : "No holidays match your search."}
+                </div>
               ) : (
                 filteredHolidays.map((holiday) => (
-                  <Table.Row key={holiday.id || holiday.name}>
-                    <Table.Cell>{formatDate(holiday.date)}</Table.Cell>
-                    <Table.Cell>{getDay(holiday.date)}</Table.Cell>
-                    <Table.Cell>
+                  <div key={holiday.id || holiday.name} className="border border-gray-200 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
                         <div className="font-medium">{holiday.name}</div>
                         {holiday.description && (
                           <div className="text-sm text-gray-500">{holiday.description}</div>
                         )}
                       </div>
-                    </Table.Cell>
-                    <Table.Cell>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="text-sm text-gray-600">{formatDate(holiday.date)} • {getDay(holiday.date)}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${getHolidayTypeColor(holiday.is_optional)}`}>
                         {getHolidayTypeName(holiday.is_optional)}
                       </span>
-                    </Table.Cell>
-                    <Table.Cell>
                       {holiday.is_statutory && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white bg-green-600">
                           Statutory
                         </span>
                       )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex gap-2">
-                        {hasPermission('holidays.edit') && (
-                          <Button
-                            size="xs"
-                            color="blue"
-                            onClick={() => handleEditHoliday(holiday)}
-                            disabled={loading}
-                          >
-                            Edit
-                          </Button>
-                        )}
-                        {hasPermission('holidays.delete') && (
-                          <Button
-                            size="xs"
-                            color="red"
-                            onClick={() => handleDeleteHoliday(holiday)}
-                            disabled={loading}
-                          >
-                            <HiOutlineTrash />
-                          </Button>
-                        )}
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
+                    </div>
+                    <div className="flex gap-2">
+                      {hasPermission('holidays.edit') && (
+                        <Button
+                          size="xs"
+                          color="blue"
+                          onClick={() => handleEditHoliday(holiday)}
+                          disabled={loading}
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      {hasPermission('holidays.delete') && (
+                        <Button
+                          size="xs"
+                          color="red"
+                          onClick={() => handleDeleteHoliday(holiday)}
+                          disabled={loading}
+                        >
+                          <HiOutlineTrash />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 ))
               )}
-            </Table.Body>
-          </Table>
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <Table hoverable>
+                <Table.Head>
+                  <Table.HeadCell>Date</Table.HeadCell>
+                  <Table.HeadCell>Day</Table.HeadCell>
+                  <Table.HeadCell>Holiday Name</Table.HeadCell>
+                  <Table.HeadCell>Type</Table.HeadCell>
+                  <Table.HeadCell>Statutory</Table.HeadCell>
+                  <Table.HeadCell>Actions</Table.HeadCell>
+                </Table.Head>
+                <Table.Body className="divide-y divide-gray-200">
+                  {filteredHolidays.length === 0 ? (
+                    <Table.Row>
+                      <Table.Cell colSpan={6} className="text-center py-8 text-gray-500">
+                        {holidays.length === 0 ? "No holidays found. Try importing Sri Lankan holidays." : "No holidays match your search."}
+                      </Table.Cell>
+                    </Table.Row>
+                  ) : (
+                    filteredHolidays.map((holiday) => (
+                      <Table.Row key={holiday.id || holiday.name}>
+                        <Table.Cell>{formatDate(holiday.date)}</Table.Cell>
+                        <Table.Cell>{getDay(holiday.date)}</Table.Cell>
+                        <Table.Cell>
+                          <div>
+                            <div className="font-medium">{holiday.name}</div>
+                            {holiday.description && (
+                              <div className="text-sm text-gray-500">{holiday.description}</div>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${getHolidayTypeColor(holiday.is_optional)}`}>
+                            {getHolidayTypeName(holiday.is_optional)}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {holiday.is_statutory && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white bg-green-600">
+                              Statutory
+                            </span>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex gap-2">
+                            {hasPermission('holidays.edit') && (
+                              <Button
+                                size="xs"
+                                color="blue"
+                                onClick={() => handleEditHoliday(holiday)}
+                                disabled={loading}
+                              >
+                                Edit
+                              </Button>
+                            )}
+                            {hasPermission('holidays.delete') && (
+                              <Button
+                                size="xs"
+                                color="red"
+                                onClick={() => handleDeleteHoliday(holiday)}
+                                disabled={loading}
+                              >
+                                <HiOutlineTrash />
+                              </Button>
+                            )}
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))
+                  )}
+                </Table.Body>
+              </Table>
+            </div>
+          </>
         )}
       </div>
 
@@ -381,9 +443,10 @@ const HolidayPage = () => {
             </div>
           </div>
         </Modal.Body>
-        <Modal.Footer>
-          <Button 
-            color="purple" 
+        <Modal.Footer className="flex-col sm:flex-row">
+          <Button
+            color="purple"
+            className="w-full sm:w-auto"
             onClick={handleAddHoliday}
             disabled={loading}
           >
@@ -396,7 +459,7 @@ const HolidayPage = () => {
               editingHoliday ? 'Update Holiday' : 'Add Holiday'
             )}
           </Button>
-          <Button color="gray" onClick={handleCloseModal} disabled={loading}>
+          <Button color="gray" className="w-full sm:w-auto" onClick={handleCloseModal} disabled={loading}>
             Cancel
           </Button>
         </Modal.Footer>

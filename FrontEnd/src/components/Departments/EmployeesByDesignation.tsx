@@ -204,8 +204,8 @@ const ManageDepartments = () => {
   };
 
   return (
-    <div className="p-6 rounded-xl shadow-md bg-white dark:bg-darkgray w-full">
-      <h2 className="text-2xl font-semibold mb-6">Manage Departments & Designations</h2>
+    <div className="p-3 sm:p-6 rounded-xl shadow-md bg-white dark:bg-darkgray w-full">
+      <h2 className="text-xl sm:text-2xl font-semibold mb-6">Manage Departments & Designations</h2>
 
       {/* Success/Error Messages */}
       {successMessage && (
@@ -222,71 +222,114 @@ const ManageDepartments = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* ========== DEPARTMENT SECTION ========== */}
         <div>
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
             <h3 className="text-lg font-medium">Departments</h3>
             <DynamicProtectedComponent permission="departments.create">
-              <Button color="purple" size="sm" onClick={openAddDeptModal}>
+              <Button color="purple" size="sm" className="w-full sm:w-auto" onClick={openAddDeptModal}>
                 <HiOutlinePlus className="mr-2 h-4 w-4" />
                 Add Department
               </Button>
             </DynamicProtectedComponent>
           </div>
 
-          <Table striped={false} hoverable className="w-full">
-            <Table.Head>
-              <Table.HeadCell>Department</Table.HeadCell>
-              <Table.HeadCell>Employees</Table.HeadCell>
-              <Table.HeadCell>Actions</Table.HeadCell>
-            </Table.Head>
-            <Table.Body>
-              {departments.map((dept) => (
-                <Table.Row
-                  key={dept.id}
-                  className={selectedDeptId === dept.id ? "bg-purple-50 dark:bg-purple-900/20" : ""}
+          {/* Mobile: card list */}
+          <div className="sm:hidden space-y-3">
+            {departments.map((dept) => (
+              <div
+                key={dept.id}
+                className={`border rounded-lg p-3 ${selectedDeptId === dept.id ? "border-purple-400 bg-purple-50 dark:bg-purple-900/20" : "border-gray-200 dark:border-gray-700"}`}
+              >
+                <button
+                  className="text-left w-full mb-2"
+                  onClick={() => setSelectedDeptId(dept.id)}
                 >
-                  <Table.Cell>
-                    <button
-                      className="text-left hover:text-purple-600 dark:hover:text-purple-400"
-                      onClick={() => setSelectedDeptId(dept.id)}
-                    >
-                      <div className="font-medium">{dept.name}</div>
-                      {dept.description && (
-                        <div className="text-xs text-gray-500">{dept.description}</div>
-                      )}
-                    </button>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {dept.employee_count || 0}
-                    </span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex gap-2">
-                      <DynamicProtectedComponent permission="departments.edit">
-                        <Button size="xs" color="warning" onClick={() => openEditDeptModal(dept)}>
-                          <HiPencil className="h-3 w-3" />
-                        </Button>
-                      </DynamicProtectedComponent>
-                      <DynamicProtectedComponent permission="departments.delete">
-                        <Button size="xs" color="failure" onClick={() => openDeleteDeptModal(dept)}>
-                          <HiTrash className="h-3 w-3" />
-                        </Button>
-                      </DynamicProtectedComponent>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
+                  <div className="font-medium">{dept.name}</div>
+                  {dept.description && (
+                    <div className="text-xs text-gray-500 mt-0.5">{dept.description}</div>
+                  )}
+                </button>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {dept.employee_count || 0} employee{dept.employee_count === 1 ? '' : 's'}
+                  </span>
+                  <div className="flex gap-2">
+                    <DynamicProtectedComponent permission="departments.edit">
+                      <Button size="xs" color="warning" onClick={() => openEditDeptModal(dept)}>
+                        <HiPencil className="h-3 w-3" />
+                      </Button>
+                    </DynamicProtectedComponent>
+                    <DynamicProtectedComponent permission="departments.delete">
+                      <Button size="xs" color="failure" onClick={() => openDeleteDeptModal(dept)}>
+                        <HiTrash className="h-3 w-3" />
+                      </Button>
+                    </DynamicProtectedComponent>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {departments.length === 0 && (
+              <div className="text-center py-8 text-gray-500">No departments found</div>
+            )}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <Table striped={false} hoverable className="w-full">
+              <Table.Head>
+                <Table.HeadCell>Department</Table.HeadCell>
+                <Table.HeadCell>Employees</Table.HeadCell>
+                <Table.HeadCell>Actions</Table.HeadCell>
+              </Table.Head>
+              <Table.Body>
+                {departments.map((dept) => (
+                  <Table.Row
+                    key={dept.id}
+                    className={selectedDeptId === dept.id ? "bg-purple-50 dark:bg-purple-900/20" : ""}
+                  >
+                    <Table.Cell>
+                      <button
+                        className="text-left hover:text-purple-600 dark:hover:text-purple-400"
+                        onClick={() => setSelectedDeptId(dept.id)}
+                      >
+                        <div className="font-medium">{dept.name}</div>
+                        {dept.description && (
+                          <div className="text-xs text-gray-500">{dept.description}</div>
+                        )}
+                      </button>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {dept.employee_count || 0}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex gap-2">
+                        <DynamicProtectedComponent permission="departments.edit">
+                          <Button size="xs" color="warning" onClick={() => openEditDeptModal(dept)}>
+                            <HiPencil className="h-3 w-3" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                        <DynamicProtectedComponent permission="departments.delete">
+                          <Button size="xs" color="failure" onClick={() => openDeleteDeptModal(dept)}>
+                            <HiTrash className="h-3 w-3" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
+          </div>
         </div>
 
         {/* ========== DESIGNATION SECTION ========== */}
         <div>
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
             <h3 className="text-lg font-medium">Designations</h3>
             {selectedDeptId && hasPermission("designations.view") && (
               <DynamicProtectedComponent permission="designations.create">
-                <Button color="purple" size="sm" onClick={openAddDesigModal}>
+                <Button color="purple" size="sm" className="w-full sm:w-auto" onClick={openAddDesigModal}>
                   <HiOutlinePlus className="mr-2 h-4 w-4" />
                   Add Designation
                 </Button>
@@ -303,50 +346,86 @@ const ManageDepartments = () => {
               You don't have permission to view designations
             </div>
           ) : (
-            <Table striped={false} hoverable className="w-full">
-              <Table.Head>
-                <Table.HeadCell>Designation</Table.HeadCell>
-                <Table.HeadCell>Responsibilities</Table.HeadCell>
-                <Table.HeadCell>Actions</Table.HeadCell>
-              </Table.Head>
-              <Table.Body>
+            <>
+              {/* Mobile: card list */}
+              <div className="sm:hidden space-y-3">
                 {designations
                   .filter((d) => d.department_id === selectedDeptId)
                   .map((d) => (
-                    <Table.Row key={d.id}>
-                      <Table.Cell>
-                        <div className="font-medium">{d.designation_name || d.title}</div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {d.responsibilities || <span className="text-gray-400 italic">—</span>}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex gap-2">
-                          <DynamicProtectedComponent permission="designations.edit">
-                            <Button size="xs" color="warning" onClick={() => openEditDesigModal(d)}>
-                              <HiPencil className="h-3 w-3" />
-                            </Button>
-                          </DynamicProtectedComponent>
-                          <DynamicProtectedComponent permission="designations.delete">
-                            <Button size="xs" color="failure" onClick={() => openDeleteDesigModal(d)}>
-                              <HiTrash className="h-3 w-3" />
-                            </Button>
-                          </DynamicProtectedComponent>
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
+                    <div key={d.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      <div className="font-medium mb-1">{d.designation_name || d.title}</div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 break-words">
+                        {d.responsibilities || <span className="text-gray-400 italic">No responsibilities listed</span>}
+                      </p>
+                      <div className="flex gap-2">
+                        <DynamicProtectedComponent permission="designations.edit">
+                          <Button size="xs" color="warning" onClick={() => openEditDesigModal(d)}>
+                            <HiPencil className="h-3 w-3" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                        <DynamicProtectedComponent permission="designations.delete">
+                          <Button size="xs" color="failure" onClick={() => openDeleteDesigModal(d)}>
+                            <HiTrash className="h-3 w-3" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                      </div>
+                    </div>
                   ))}
                 {designations.filter((d) => d.department_id === selectedDeptId).length === 0 && (
-                  <Table.Row>
-                    <Table.Cell colSpan={3} className="text-center py-8 text-gray-500">
-                      No designations found for this department
-                    </Table.Cell>
-                  </Table.Row>
+                  <div className="text-center py-8 text-gray-500">
+                    No designations found for this department
+                  </div>
                 )}
-              </Table.Body>
-            </Table>
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table striped={false} hoverable className="w-full">
+                  <Table.Head>
+                    <Table.HeadCell>Designation</Table.HeadCell>
+                    <Table.HeadCell>Responsibilities</Table.HeadCell>
+                    <Table.HeadCell>Actions</Table.HeadCell>
+                  </Table.Head>
+                  <Table.Body>
+                    {designations
+                      .filter((d) => d.department_id === selectedDeptId)
+                      .map((d) => (
+                        <Table.Row key={d.id}>
+                          <Table.Cell>
+                            <div className="font-medium">{d.designation_name || d.title}</div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                              {d.responsibilities || <span className="text-gray-400 italic">—</span>}
+                            </span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex gap-2">
+                              <DynamicProtectedComponent permission="designations.edit">
+                                <Button size="xs" color="warning" onClick={() => openEditDesigModal(d)}>
+                                  <HiPencil className="h-3 w-3" />
+                                </Button>
+                              </DynamicProtectedComponent>
+                              <DynamicProtectedComponent permission="designations.delete">
+                                <Button size="xs" color="failure" onClick={() => openDeleteDesigModal(d)}>
+                                  <HiTrash className="h-3 w-3" />
+                                </Button>
+                              </DynamicProtectedComponent>
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    {designations.filter((d) => d.department_id === selectedDeptId).length === 0 && (
+                      <Table.Row>
+                        <Table.Cell colSpan={3} className="text-center py-8 text-gray-500">
+                          No designations found for this department
+                        </Table.Cell>
+                      </Table.Row>
+                    )}
+                  </Table.Body>
+                </Table>
+              </div>
+            </>
           )}
         </div>
       </div>
