@@ -2,8 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TextInput, Button, Select, Badge, Modal, Table, Alert, Card } from "flowbite-react";
 import { payrollRunApiService, PayrollRun, PayrollRunFilters } from '../../services/payrollRunService';
-import { HiPlus, HiPlay, HiEye, HiCheck, HiX, HiCreditCard, HiDocumentReport, HiUsers } from 'react-icons/hi';
+import { HiPlus, HiPlay, HiEye, HiCheck, HiX, HiCreditCard, HiUsers, HiOutlineRefresh } from 'react-icons/hi';
 import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
+
+const AVATAR_COLORS = [
+  'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200',
+  'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200',
+  'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200',
+  'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-200',
+  'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-200',
+  'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-200',
+  'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200',
+];
+
+const getAvatarColor = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
 
 const PayrollRunDashboard = () => {
   // =============================================
@@ -390,27 +409,25 @@ const PayrollRunDashboard = () => {
         </Alert>
       )}
 
-      {/* Filters */}
+      {/* Payroll Runs */}
       <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
           <Select
             value={filters.limit || 20}
             onChange={(e) => setFilters({ ...filters, limit: parseInt(e.target.value) })}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-40"
+            sizing="sm"
           >
             <option value="10">10 per page</option>
             <option value="20">20 per page</option>
             <option value="50">50 per page</option>
           </Select>
 
-          <Button color="gray" className="w-full sm:w-auto" onClick={loadPayrollRuns}>
-            🔄 Refresh
+          <Button color="gray" size="sm" className="w-full sm:w-auto" onClick={loadPayrollRuns}>
+            <HiOutlineRefresh className="w-4 h-4 mr-2" />
+            Refresh
           </Button>
         </div>
-      </Card>
-
-      {/* Payroll Runs Table */}
-      <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
         {/* Mobile: card list */}
         <div className="lg:hidden space-y-3">
           {loading ? (
@@ -425,32 +442,31 @@ const PayrollRunDashboard = () => {
           ) : (
             (payrollRuns || []).map((run) => (
               <div key={run.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm ${getAvatarColor(run.id)}`}>
+                      {run.run_name?.slice(0, 2).toUpperCase()}
+                    </div>
                     <div className="font-semibold text-base">{run.run_name}</div>
                   </div>
-                  <Badge color={payrollRunApiService.getRunStatusColor(run.run_status)}>
-                    {payrollRunApiService.getRunStatusIcon(run.run_status)} {' '}
-                    {payrollRunApiService.getRunStatusText(run.run_status)}
-                  </Badge>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                   <div>
-                    <p className="text-xs text-gray-500">Period</p>
-                    <p className="font-semibold">{payrollRunApiService.formatDate(run.period_start_date)} - {payrollRunApiService.formatDate(run.period_end_date)}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Period</p>
+                    <p className="font-medium">{payrollRunApiService.formatDate(run.period_start_date)} - {payrollRunApiService.formatDate(run.period_end_date)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Employees</p>
-                    <p>{run.total_employees} ({run.processed_employees} processed)</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Employees</p>
+                    <p className="font-medium">{run.total_employees}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Created</p>
-                    <p>{payrollRunApiService.formatDate(run.created_at)}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Created</p>
+                    <p className="font-medium">{payrollRunApiService.formatDate(run.created_at)}</p>
                   </div>
                 </div>
 
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap pt-2 border-t border-gray-100 dark:border-gray-700">
                   <DynamicProtectedComponent permission="payroll.view">
                     <Button size="xs" color="green" onClick={() => navigate(`/payroll/runs/${run.id}/live`)}>
                       <HiEye className="w-3 h-3 mr-1" />
@@ -471,14 +487,13 @@ const PayrollRunDashboard = () => {
               <Table.HeadCell>Name</Table.HeadCell>
               <Table.HeadCell>Period</Table.HeadCell>
               <Table.HeadCell>Employees</Table.HeadCell>
-              <Table.HeadCell>Status</Table.HeadCell>
               <Table.HeadCell>Created</Table.HeadCell>
               <Table.HeadCell>Actions</Table.HeadCell>
             </Table.Head>
             <Table.Body>
               {loading ? (
                 <Table.Row>
-                  <Table.Cell colSpan={6} className="text-center py-8">
+                  <Table.Cell colSpan={5} className="text-center py-8">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Loading payroll runs...</span>
@@ -487,41 +502,38 @@ const PayrollRunDashboard = () => {
                 </Table.Row>
               ) : !payrollRuns || payrollRuns.length === 0 ? (
                 <Table.Row>
-                  <Table.Cell colSpan={6} className="text-center py-8 text-gray-500">
+                  <Table.Cell colSpan={5} className="text-center py-8 text-gray-500">
                     No payroll runs found. Create your first payroll run to get started.
                   </Table.Cell>
                 </Table.Row>
               ) : (
                 (payrollRuns || []).map((run) => (
-                  <Table.Row key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                  <Table.Row key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                     <Table.Cell>
-                      <div className="font-semibold text-base">{run.run_name}</div>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center font-semibold text-xs ${getAvatarColor(run.id)}`}>
+                          {run.run_name?.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="font-semibold text-base text-gray-900 dark:text-white">{run.run_name}</div>
+                      </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <div className="text-sm font-semibold">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">
                         <div>{payrollRunApiService.formatDate(run.period_start_date)}</div>
-                        <div className="text-gray-500 font-normal">
+                        <div className="text-gray-500 dark:text-gray-400 font-normal">
                           to {payrollRunApiService.formatDate(run.period_end_date)}
                         </div>
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <div>
-                        <div className="font-medium">{run.total_employees}</div>
-                        <div className="text-sm text-gray-500">
-                          {run.processed_employees} processed
-                        </div>
+                      <div className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <HiUsers className="w-4 h-4 text-gray-400" />
+                        {run.total_employees}
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <Badge color={payrollRunApiService.getRunStatusColor(run.run_status)}>
-                        {payrollRunApiService.getRunStatusIcon(run.run_status)} {' '}
-                        {payrollRunApiService.getRunStatusText(run.run_status)}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="text-sm">
-                        <div>{payrollRunApiService.formatDate(run.created_at)}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {payrollRunApiService.formatDate(run.created_at)}
                       </div>
                     </Table.Cell>
                     <Table.Cell>
