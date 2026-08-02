@@ -767,22 +767,14 @@ const employeeOptions = employees
                   icon={FaCalendarAlt}
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => openDatePicker(startDatePickerRef)}
-                  className="absolute inset-y-0 left-0 flex items-center pl-3 cursor-pointer"
-                  aria-label="Open start date picker"
-                >
-                  <span className="sr-only">Open date picker</span>
-                </button>
                 <input
                   ref={startDatePickerRef}
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => handlePickerDateChange('start_date', e.target.value)}
-                  className="absolute inset-y-0 left-0 w-9 opacity-0 pointer-events-none"
-                  tabIndex={-1}
-                  aria-hidden="true"
+                  onClick={() => openDatePicker(startDatePickerRef)}
+                  aria-label="Open start date picker"
+                  className="absolute inset-y-0 left-0 z-10 w-9 opacity-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 />
               </div>
               {errors.start_date && (
@@ -805,24 +797,15 @@ const employeeOptions = employees
                   disabled={formData.leave_duration !== 'full_day'}
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => openDatePicker(endDatePickerRef)}
-                  disabled={formData.leave_duration !== 'full_day'}
-                  className="absolute inset-y-0 left-0 flex items-center pl-3 cursor-pointer disabled:cursor-not-allowed"
-                  aria-label="Open end date picker"
-                >
-                  <span className="sr-only">Open date picker</span>
-                </button>
                 <input
                   ref={endDatePickerRef}
                   type="date"
                   value={formData.end_date}
                   onChange={(e) => handlePickerDateChange('end_date', e.target.value)}
+                  onClick={() => openDatePicker(endDatePickerRef)}
                   disabled={formData.leave_duration !== 'full_day'}
-                  className="absolute inset-y-0 left-0 w-9 opacity-0 pointer-events-none"
-                  tabIndex={-1}
-                  aria-hidden="true"
+                  aria-label="Open end date picker"
+                  className="absolute inset-y-0 left-0 z-10 w-9 opacity-0 cursor-pointer disabled:cursor-not-allowed [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 />
               </div>
               {errors.end_date && (
