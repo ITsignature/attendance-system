@@ -113,14 +113,18 @@ const LeaveRequestsManagement: React.FC = () => {
     }).catch(() => {});
   }, []);
 
+  // Tabs (Pending/Approved/Rejected/All) filter the already-loaded list client-side via
+  // getFilteredRequests() below, so switching tabs must not refetch with a status filter —
+  // doing so previously replaced `requests` with a status-scoped subset, corrupting the
+  // tab count badges (e.g. selecting "Rejected" made the "Approved" count read 0) and
+  // triggering a loading spinner on every tab click.
   useEffect(() => {
     const filterParams: Record<string, string> = {};
-    if (activeTab !== 'all') filterParams.status = activeTab;
     if (filters.startDate) filterParams.start_date = filters.startDate;
     if (filters.endDate) filterParams.end_date = filters.endDate;
     if (filters.employeeId) filterParams.employee_id = filters.employeeId;
     fetchRequests(filterParams as any);
-  }, [activeTab, filters, fetchRequests]);
+  }, [filters, fetchRequests]);
 
   // =============================================
   // HANDLERS (SIMPLIFIED)
@@ -239,7 +243,6 @@ const handleConfirmAction = async () => {
       if (res.success) {
         setEditModal({ isOpen: false, request: null });
         const filterParams: Record<string, string> = {};
-        if (activeTab !== 'all') filterParams.status = activeTab;
         if (filters.startDate) filterParams.start_date = filters.startDate;
         if (filters.endDate) filterParams.end_date = filters.endDate;
         if (filters.employeeId) filterParams.employee_id = filters.employeeId;
@@ -266,7 +269,6 @@ const handleConfirmAction = async () => {
       if (res.success) {
         setDeleteModal({ isOpen: false, request: null });
         const filterParams: Record<string, string> = {};
-        if (activeTab !== 'all') filterParams.status = activeTab;
         if (filters.startDate) filterParams.start_date = filters.startDate;
         if (filters.endDate) filterParams.end_date = filters.endDate;
         if (filters.employeeId) filterParams.employee_id = filters.employeeId;
@@ -341,8 +343,8 @@ const handleConfirmAction = async () => {
   // =============================================
 
   const renderTabs = () => (
-    <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-      <nav className="-mb-px flex space-x-8">
+    <div className="border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
+      <nav className="-mb-px flex gap-4 sm:gap-8 w-max min-w-full sm:w-auto">
         {[
           { key: 'pending', label: 'Pending', count: stats.pending },
           { key: 'approved', label: 'Approved', count: stats.approved },
@@ -352,7 +354,7 @@ const handleConfirmAction = async () => {
           <button
             key={tab.key}
             onClick={() => handleTabChange(tab.key)}
-            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap shrink-0 ${
               activeTab === tab.key
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
@@ -610,7 +612,7 @@ const handleConfirmAction = async () => {
   const filteredRequests = getFilteredRequests();
 
   return (
-    <div className="p-6 rounded-xl shadow-md bg-white dark:bg-darkgray space-y-6">
+    <div className="rounded-xl shadow-md bg-white dark:bg-darkgray p-3 sm:p-6 space-y-6">
       {/* Error Display */}
       {error && (
         <Alert color="failure" className="mb-4">
@@ -625,26 +627,27 @@ const handleConfirmAction = async () => {
 
       {/* Header Section */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           <Button
             color="gray"
             size="sm"
+            className="w-full sm:w-auto"
             onClick={() => navigate("/leaves")}
           >
             <FaArrowLeft className="w-4 h-4 mr-2" />
             Back to Dashboard
           </Button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
             Leave Requests Management
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           {/* CREATE NEW REQUEST BUTTON - PRIMARY ADMIN ACTION */}
           <DynamicProtectedComponent permission="leaves.create">
             <Button
               color="purple"
-              className="flex items-center gap-2"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
               onClick={handleCreateRequest}
             >
               <FaPlus className="w-4 h-4" />
@@ -655,6 +658,7 @@ const handleConfirmAction = async () => {
           <Button
             color="gray"
             size="sm"
+            className="w-full sm:w-auto"
             onClick={() => setShowFilters(!showFilters)}
           >
             <FaFilter className="w-4 h-4 mr-2" />
@@ -670,7 +674,7 @@ const handleConfirmAction = async () => {
       {renderFilters()}
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Spinner size="xl" />
@@ -686,7 +690,89 @@ const handleConfirmAction = async () => {
             </p>
           </div>
         ) : (
-          <Table hoverable>
+          <>
+            {/* Mobile: card list */}
+            <div className="lg:hidden space-y-3">
+              {filteredRequests.map((request) => {
+                const status = request.status || request.details?.status || '';
+                return (
+                  <div key={request.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900 dark:text-white truncate">
+                          {request.employee_name || 'N/A'}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {request.employee_code || ''} {request.employee?.department || ''}
+                        </div>
+                      </div>
+                      {getStatusBadge(status)}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                      <div>
+                        <p className="text-xs text-gray-500">Leave Type</p>
+                        <p>{request.leave_type_name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Days</p>
+                        <p className="font-medium">{request.days_requested || request.dates?.daysRequested || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Duration</p>
+                        <p>{formatDate(request.start_date || request.dates?.start || '')}</p>
+                        <p className="text-gray-500">to {formatDate(request.end_date || request.dates?.end || '')}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Applied Date</p>
+                        <p>{formatDate(request.applied_at || request.details?.appliedAt || '')}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      {request.is_paid ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                          💰 Paid
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                          Unpaid
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1">
+                        {canApproveOrReject(status) && (
+                          <>
+                            <DynamicProtectedComponent permission="leaves.approve">
+                              <Button size="xs" color="success" onClick={() => handleApprove(request)} disabled={submitting}>
+                                <FaCheck className="w-3 h-3" />
+                              </Button>
+                            </DynamicProtectedComponent>
+                            <DynamicProtectedComponent permission="leaves.reject">
+                              <Button size="xs" color="failure" onClick={() => handleReject(request)} disabled={submitting}>
+                                <FaTimes className="w-3 h-3" />
+                              </Button>
+                            </DynamicProtectedComponent>
+                          </>
+                        )}
+                        <DynamicProtectedComponent permission="leaves.create">
+                          <Button size="xs" color="blue" onClick={() => handleOpenEdit(request)} title="Edit">
+                            <FaEdit className="w-3 h-3" />
+                          </Button>
+                          <Button size="xs" color="failure" onClick={() => handleOpenDelete(request)} title="Delete">
+                            <FaTrash className="w-3 h-3" />
+                          </Button>
+                        </DynamicProtectedComponent>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <Table hoverable>
             <Table.Head>
               <Table.HeadCell>Employee</Table.HeadCell>
               <Table.HeadCell>Leave Type</Table.HeadCell>
@@ -786,7 +872,9 @@ const handleConfirmAction = async () => {
                 );
               })}
             </Table.Body>
-          </Table>
+              </Table>
+            </div>
+          </>
         )}
       </div>
 
