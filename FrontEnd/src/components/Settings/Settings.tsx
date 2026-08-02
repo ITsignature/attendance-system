@@ -1243,10 +1243,10 @@ const hhmmToMinutes = (t) => {
 
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-8">
           {/* Sidebar */}
-          <div className="lg:w-1/4">
+          <div className="lg:w-1/4 sticky top-0 z-10 lg:static lg:z-auto">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="p-4">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              <div className="p-3 sm:p-4">
+                <h2 className="hidden lg:block text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Settings Categories
                 </h2>
                 <nav className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
