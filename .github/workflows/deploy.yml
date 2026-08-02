@@ -22,19 +22,15 @@ jobs:
 
             cd /www/wwwroot/attendance-system
 
-            echo "🧹 Cleaning workspace..."
-            git reset --hard HEAD
-            git clean -fd
-
             echo "📥 Pulling latest changes..."
-            git pull origin main --rebase
+            git pull origin main --no-rebase --no-edit
 
             echo "📦 Installing backend dependencies..."
             cd BackEnd
             npm ci
 
             echo "🔄 Restarting backend service..."
-            pm2 restart backend || pm2 start server.js --name backend
+            sudo -u www pm2 restart attendance_backend
 
             echo "📦 Installing frontend dependencies..."
             cd ../FrontEnd
@@ -42,8 +38,5 @@ jobs:
 
             echo "🔨 Building frontend..."
             npm run build
-
-            echo "🔁 Reloading Nginx..."
-            sudo systemctl reload nginx
 
             echo "✅ Deployment completed successfully!"
