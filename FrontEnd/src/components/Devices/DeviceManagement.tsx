@@ -574,22 +574,22 @@ const DeviceManagement: React.FC = () => {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6">
+    <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <HiFingerPrint className="text-blue-600 w-8 h-8" />
+          <HiFingerPrint className="text-blue-600 w-8 h-8 shrink-0" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Device Management</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Device Management</h1>
             <p className="text-sm text-gray-500">Control fingerprint devices remotely via MQTT</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={fetchDevices} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200">
+          <button onClick={fetchDevices} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200">
             <HiRefresh className="w-4 h-4" /> Refresh
           </button>
           {isSuperAdmin && (
-            <button onClick={() => setShowRegisterModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+            <button onClick={() => setShowRegisterModal(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
               <HiPlus className="w-4 h-4" /> Register Device
             </button>
           )}
@@ -735,7 +735,7 @@ const DeviceManagement: React.FC = () => {
             Control Panel — {selectedDevice?.name} ({selectedDevice?.device_id})
           </div>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="max-h-[75vh] overflow-y-auto">
           {selectedDevice && (
             <div className="space-y-4">
               {/* Online status banner */}
@@ -885,8 +885,8 @@ const DeviceManagement: React.FC = () => {
                     />
 
                     <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="max-h-80 overflow-y-auto">
-                        <table className="w-full text-xs">
+                      <div className="max-h-80 overflow-auto">
+                        <table className="w-full text-xs min-w-[420px]">
                           <thead className="bg-gray-50 sticky top-0">
                             <tr>
                               <th className="text-left px-3 py-2 font-semibold text-gray-600">Employee</th>
@@ -1012,13 +1012,13 @@ const DeviceManagement: React.FC = () => {
                         {otaResult.message}
                       </div>
                     )}
-                    <div className="flex gap-2 items-center">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                       <input
                         ref={otaInputRef}
                         type="file"
                         accept=".bin"
                         onChange={e => setOtaFile(e.target.files?.[0] || null)}
-                        className="flex-1 text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        className="flex-1 min-w-0 text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                       />
                       <button
                         disabled={isOtaUploading || !otaFile}

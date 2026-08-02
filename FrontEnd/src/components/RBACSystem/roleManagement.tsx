@@ -471,15 +471,15 @@ const RoleManagementPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Role Management</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Role Management</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Manage roles and permissions {currentClient?.name ? `for ${currentClient.name}` : ''}
           </p>
         </div>
         {hasPermission('rbac.create') && (
-          <Button onClick={handleCreateRole} gradientDuoTone="purpleToBlue" disabled={isSubmitting}>
+          <Button onClick={handleCreateRole} gradientDuoTone="purpleToBlue" disabled={isSubmitting} className="w-full sm:w-auto">
             <HiPlus className="mr-2 h-4 w-4" />
             Create Role
           </Button>
@@ -504,21 +504,21 @@ const RoleManagementPage: React.FC = () => {
         {roles.map((role) => (
           
           <Card key={role.id} className="hover:shadow-lg transition-shadow">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                  {role.name}
+            <div className="flex justify-between items-start mb-4 gap-2">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center flex-wrap gap-2">
+                  <span className="truncate">{role.name}</span>
                   {role.is_system_role === 1 && (
-                    <Badge color="blue" size="sm" className="ml-2">System</Badge>
+                    <Badge color="blue" size="sm">System</Badge>
                   )}
                 </h3>
                 <Badge color={getAccessLevelColor(role.access_level)} size="sm" className="mt-1">
                   {getAccessLevelText(role.access_level)}
                 </Badge>
               </div>
-              
+
               {!role.is_system_role && (
-                <div className="flex space-x-2">
+                <div className="flex space-x-2 shrink-0">
                   <DynamicProtectedComponent permission="rbac.edit">
                     <Button
                       size="sm"
@@ -593,7 +593,7 @@ const RoleManagementPage: React.FC = () => {
       {/* Create Role Modal */}
       <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="4xl">
         <Modal.Header>Create New Role</Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
           <div className="space-y-6">
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -647,11 +647,12 @@ const RoleManagementPage: React.FC = () => {
             </div>
           </div>
         </Modal.Body>
-        <Modal.Footer>
-          <Button 
-            onClick={handleSaveRole} 
+        <Modal.Footer className="flex-col sm:flex-row">
+          <Button
+            onClick={handleSaveRole}
             gradientDuoTone="purpleToBlue"
             disabled={isSubmitting || !formData.name.trim()}
+            className="w-full sm:w-auto order-1"
           >
             {isSubmitting ? (
               <div className="flex items-center">
@@ -662,10 +663,11 @@ const RoleManagementPage: React.FC = () => {
               'Create Role'
             )}
           </Button>
-          <Button 
-            color="gray" 
+          <Button
+            color="gray"
             onClick={() => setShowCreateModal(false)}
             disabled={isSubmitting}
+            className="w-full sm:w-auto order-2"
           >
             Cancel
           </Button>
@@ -675,7 +677,7 @@ const RoleManagementPage: React.FC = () => {
       {/* Edit Role Modal */}
       <Modal show={showEditModal} onClose={() => setShowEditModal(false)} size="4xl">
         <Modal.Header>Edit Role: {selectedRole?.name}</Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
           <div className="space-y-6">
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -729,11 +731,12 @@ const RoleManagementPage: React.FC = () => {
             </div>
           </div>
         </Modal.Body>
-        <Modal.Footer>
-          <Button 
-            onClick={handleSaveRole} 
+        <Modal.Footer className="flex-col sm:flex-row">
+          <Button
+            onClick={handleSaveRole}
             gradientDuoTone="purpleToBlue"
             disabled={isSubmitting || !formData.name.trim()}
+            className="w-full sm:w-auto order-1"
           >
             {isSubmitting ? (
               <div className="flex items-center">
@@ -744,10 +747,11 @@ const RoleManagementPage: React.FC = () => {
               'Update Role'
             )}
           </Button>
-          <Button 
-            color="gray" 
+          <Button
+            color="gray"
             onClick={() => setShowEditModal(false)}
             disabled={isSubmitting}
+            className="w-full sm:w-auto order-2"
           >
             Cancel
           </Button>

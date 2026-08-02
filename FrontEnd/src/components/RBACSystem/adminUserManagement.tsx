@@ -438,14 +438,14 @@ const handleServerErrors = (responseData: any) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Users</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Admin Users</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Manage admin users and role assignments {currentClient?.name ? `for ${currentClient.name}` : ''}
           </p>
         </div>
-        <Button onClick={handleCreateUser} gradientDuoTone="purpleToBlue" disabled={isSubmitting}>
+        <Button onClick={handleCreateUser} gradientDuoTone="purpleToBlue" disabled={isSubmitting} className="w-full sm:w-auto">
           <HiPlus className="mr-2 h-4 w-4" />
           Add Admin User
         </Button>
@@ -545,7 +545,80 @@ const handleServerErrors = (responseData: any) => {
 
       {/* Users Table */}
       <Card>
-        <div className="overflow-x-auto">
+        {/* Mobile: card list */}
+        <div className="lg:hidden space-y-3">
+          {filteredUsers.map((user) => {
+            const role = getRoleInfo(user.role_id);
+            return (
+              <div key={user.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                <div className="flex items-start gap-3 mb-2">
+                  <Avatar
+                    img={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=3b82f6&color=fff`}
+                    rounded
+                    size="sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium flex items-center flex-wrap gap-1 text-gray-900 dark:text-white">
+                      <span className="truncate">{user.name}</span>
+                      {user.is_super_admin && (
+                        <Badge color="purple" size="xs">Super Admin</Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500 flex items-center">
+                      <HiMail className="mr-1 h-3 w-3 shrink-0" />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+                  </div>
+                  <Badge color={getStatusColor(user.is_active)} className="shrink-0">
+                    {getStatusText(user.is_active)}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500">Role</p>
+                    <p>{role?.name || 'Unknown Role'}</p>
+                    <Badge color={getAccessLevelColor(user.access_level)} size="sm" className="mt-1">
+                      {getAccessLevelText(user.access_level)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Department</p>
+                    <p className="flex items-center gap-1">
+                      <HiOfficeBuilding className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                      {user.department || 'Not assigned'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Last Login</p>
+                    <p>{user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button size="sm" color="gray" onClick={() => handleEditUser(user)} disabled={isSubmitting}>
+                    <HiPencil className="h-4 w-4" />
+                  </Button>
+                  {user.id !== currentUser?.id && (
+                    <Button size="sm" color="failure" onClick={() => handleDeleteUser(user.id)} disabled={isSubmitting}>
+                      <HiTrash className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {filteredUsers.length === 0 && (
+            <div className="text-center py-8">
+              <HiUsers className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No admin users</h3>
+              <p className="mt-1 text-sm text-gray-500">Get started by creating a new admin user.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop: table */}
+        <div className="hidden lg:block overflow-x-auto">
           <Table>
             <Table.Head>
               <Table.HeadCell>User</Table.HeadCell>
@@ -602,7 +675,7 @@ const handleServerErrors = (responseData: any) => {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="text-sm text-gray-500">
-                        {user.last_login_at 
+                        {user.last_login_at
                           ? new Date(user.last_login_at).toLocaleDateString()
                           : 'Never'
                         }
@@ -635,7 +708,7 @@ const handleServerErrors = (responseData: any) => {
               })}
             </Table.Body>
           </Table>
-          
+
           {filteredUsers.length === 0 && (
             <div className="text-center py-8">
               <HiUsers className="mx-auto h-12 w-12 text-gray-400" />
@@ -649,7 +722,7 @@ const handleServerErrors = (responseData: any) => {
       {/* Create User Modal */}
 <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="2xl">
   <Modal.Header>Add New Admin User</Modal.Header>
-  <Modal.Body>
+  <Modal.Body className="max-h-[70vh] overflow-y-auto">
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Name Field with Error */}
@@ -805,11 +878,12 @@ const handleServerErrors = (responseData: any) => {
       )}
     </div>
   </Modal.Body>
-  <Modal.Footer>
-    <Button 
-      onClick={handleSaveUser} 
+  <Modal.Footer className="flex-col sm:flex-row">
+    <Button
+      onClick={handleSaveUser}
       gradientDuoTone="purpleToBlue"
       disabled={isSubmitting}
+      className="w-full sm:w-auto order-1"
     >
       {isSubmitting ? (
         <div className="flex items-center">
@@ -820,13 +894,14 @@ const handleServerErrors = (responseData: any) => {
         'Create Admin User'
       )}
     </Button>
-    <Button 
-      color="gray" 
+    <Button
+      color="gray"
       onClick={() => {
         setShowCreateModal(false);
         setFieldErrors({}); // Clear errors when closing
       }}
       disabled={isSubmitting}
+      className="w-full sm:w-auto order-2"
     >
       Cancel
     </Button>
@@ -836,7 +911,7 @@ const handleServerErrors = (responseData: any) => {
       {/* Edit User Modal */}
       <Modal show={showEditModal} onClose={() => setShowEditModal(false)} size="2xl">
         <Modal.Header>Edit Admin User: {selectedUser?.name}</Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -957,11 +1032,12 @@ const handleServerErrors = (responseData: any) => {
             )}
           </div>
         </Modal.Body>
-        <Modal.Footer>
-          <Button 
-            onClick={handleSaveUser} 
+        <Modal.Footer className="flex-col sm:flex-row">
+          <Button
+            onClick={handleSaveUser}
             gradientDuoTone="purpleToBlue"
             disabled={isSubmitting || !formData.name.trim() || !formData.email.trim() || !formData.roleId}
+            className="w-full sm:w-auto order-1"
           >
             {isSubmitting ? (
               <div className="flex items-center">
@@ -972,10 +1048,11 @@ const handleServerErrors = (responseData: any) => {
               'Update User'
             )}
           </Button>
-          <Button 
-            color="gray" 
+          <Button
+            color="gray"
             onClick={() => setShowEditModal(false)}
             disabled={isSubmitting}
+            className="w-full sm:w-auto order-2"
           >
             Cancel
           </Button>
