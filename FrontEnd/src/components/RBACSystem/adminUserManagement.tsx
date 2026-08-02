@@ -466,7 +466,7 @@ const handleServerErrors = (responseData: any) => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div className="flex items-center">
             <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-full">
               <HiUsers className="h-6 w-6 text-blue-600" />
@@ -485,7 +485,7 @@ const handleServerErrors = (responseData: any) => {
           </div>
         </Card>
         
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div className="flex items-center">
             <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-full">
               <HiShieldCheck className="h-6 w-6 text-green-600" />
@@ -504,7 +504,7 @@ const handleServerErrors = (responseData: any) => {
           </div>
         </Card>
 
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div className="flex items-center">
             <div className="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-full">
               <HiShieldCheck className="h-6 w-6 text-purple-600" />
@@ -523,7 +523,7 @@ const handleServerErrors = (responseData: any) => {
           </div>
         </Card>
 
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div className="flex items-center">
             <div className="p-3 bg-yellow-100 dark:bg-yellow-900/20 rounded-full">
               <HiOfficeBuilding className="h-6 w-6 text-yellow-600" />
@@ -544,7 +544,7 @@ const handleServerErrors = (responseData: any) => {
       </div>
 
       {/* Users Table */}
-      <Card>
+      <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
         {/* Mobile: card list */}
         <div className="lg:hidden space-y-3">
           {filteredUsers.map((user) => {
