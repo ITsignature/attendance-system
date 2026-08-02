@@ -327,7 +327,7 @@ const EmployeeDeductions: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
           <h4 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
             <Minus className="w-5 h-5 mr-2" />
@@ -340,7 +340,7 @@ const EmployeeDeductions: React.FC = () => {
         {canAdd && (
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            className="flex items-center justify-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors w-full sm:w-auto"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Deduction
@@ -349,7 +349,7 @@ const EmployeeDeductions: React.FC = () => {
       </div>
 
       {/* Search and Filter */}
-      <div className="flex gap-4">
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input
@@ -361,11 +361,11 @@ const EmployeeDeductions: React.FC = () => {
           />
         </div>
         <div className="flex items-center gap-2">
-          <User className="w-4 h-4 text-gray-400" />
+          <User className="w-4 h-4 text-gray-400 shrink-0" />
           <select
             value={selectedEmployee}
             onChange={(e) => setSelectedEmployee(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
           >
             <option value="">All Employees</option>
             {employees.map(emp => (
@@ -383,8 +383,8 @@ const EmployeeDeductions: React.FC = () => {
           const deduction = row.representative;
           return (
             <div key={row.key} className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-4">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <h5 className="text-lg font-medium text-gray-900 dark:text-white">
                       {deduction.deduction_name}
@@ -416,7 +416,7 @@ const EmployeeDeductions: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">
                         {row.isBatch ? 'Employees:' : 'Employee:'}
@@ -470,7 +470,7 @@ const EmployeeDeductions: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex space-x-2">
+                <div className="flex space-x-2 shrink-0">
                   {canEdit && (
                     <button
                       onClick={() => row.isBatch ? handleEditBatch(row) : handleEditSingle(deduction)}
@@ -506,8 +506,8 @@ const EmployeeDeductions: React.FC = () => {
 
       {/* Add/Edit Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white dark:bg-gray-800 mb-10">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 p-3 sm:p-0">
+          <div className="relative sm:top-10 mx-auto p-4 sm:p-5 border w-full max-w-lg shadow-lg rounded-md bg-white dark:bg-gray-800 sm:mb-10">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
               {isEditingBatch ? 'Edit Bulk' : editingDeduction ? 'Edit' : 'Add'} Employee Deduction
             </h3>
@@ -634,7 +634,7 @@ const EmployeeDeductions: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     {formData.is_percentage ? 'Percentage (%)' : 'Amount (Rs.)'}
@@ -665,7 +665,7 @@ const EmployeeDeductions: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Effective From
@@ -692,7 +692,7 @@ const EmployeeDeductions: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -740,17 +740,17 @@ const EmployeeDeductions: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex flex-col sm:flex-row sm:justify-end gap-3 pt-4">
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 border border-transparent rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 border border-transparent rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 order-2 sm:order-1"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 order-1 sm:order-2"
                 >
                   {editingDeduction || isEditingBatch
                     ? 'Update'
