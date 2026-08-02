@@ -443,7 +443,7 @@ const AllEmployees: React.FC = () => {
   };
 
   return (
-    <div>
+    <>
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-4">
           <div>
@@ -1067,7 +1067,7 @@ const AllEmployees: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-    </div>
+    </>
   );
 };
 

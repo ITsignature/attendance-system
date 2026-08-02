@@ -483,10 +483,10 @@ const LivePayrollDashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
           <Button
             color="gray"
             size="sm"
@@ -496,10 +496,10 @@ const LivePayrollDashboard: React.FC = () => {
             Back
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white">
               Live Payroll Preview
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">
               <HiClock className="inline w-4 h-4 mr-1" />
               Last calculated: {lastCalculated.toLocaleTimeString()}
               {autoRefresh ? (
@@ -510,7 +510,7 @@ const LivePayrollDashboard: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           <Button
             color="gray"
             size="sm"
@@ -545,6 +545,7 @@ const LivePayrollDashboard: React.FC = () => {
           <Button
             color="indigo"
             size="sm"
+            className="col-span-2 sm:col-span-1"
             onClick={handleBulkDownloadPayslips}
             disabled={bulkDownloading || !rawData || calculatedResults.length === 0}
           >
@@ -568,36 +569,36 @@ const LivePayrollDashboard: React.FC = () => {
       )}
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div className="flex items-center">
-            <HiUsers className="w-8 h-8 text-blue-500 mr-3" />
+            <HiUsers className="w-8 h-8 text-blue-500 mr-3 shrink-0" />
             <div>
               <p className="text-sm text-gray-500">Total Employees</p>
               <p className="text-2xl font-bold">{stats.totalEmployees}</p>
             </div>
           </div>
         </Card>
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div>
             <p className="text-sm text-gray-500">Total Gross</p>
-            <p className="text-xl font-bold text-green-600">
+            <p className="text-xl font-bold text-green-600 break-words">
               {formatCurrency(stats.totalGross)}
             </p>
           </div>
         </Card>
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div>
             <p className="text-sm text-gray-500">Total Deductions</p>
-            <p className="text-xl font-bold text-red-600">
+            <p className="text-xl font-bold text-red-600 break-words">
               {formatCurrency(stats.totalDeductions)}
             </p>
           </div>
         </Card>
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div>
             <p className="text-sm text-gray-500">Total Net</p>
-            <p className="text-xl font-bold text-purple-600">
+            <p className="text-xl font-bold text-purple-600 break-words">
               {formatCurrency(stats.totalNet)}
             </p>
           </div>
@@ -605,19 +606,19 @@ const LivePayrollDashboard: React.FC = () => {
       </div>
 
       {/* Additional Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div>
             <p className="text-sm text-gray-500">💰 Total Allowances</p>
-            <p className="text-lg font-bold text-green-600">
+            <p className="text-lg font-bold text-green-600 break-words">
               {formatCurrency(stats.totalAllowances)}
             </p>
           </div>
         </Card>
-        <Card>
+        <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
           <div>
             <p className="text-sm text-gray-500">⚠️ Total Shortfall</p>
-            <p className="text-lg font-bold text-orange-600">
+            <p className="text-lg font-bold text-orange-600 break-words">
               {formatCurrency(stats.totalShortfall)}
             </p>
           </div>
@@ -625,8 +626,113 @@ const LivePayrollDashboard: React.FC = () => {
       </div>
 
       {/* Payroll Table */}
-      <Card>
-        <div className="overflow-x-auto">
+      <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
+        {/* Mobile: card list */}
+        <div className="lg:hidden space-y-3">
+          {paginatedResults.length > 0 ? (
+            paginatedResults.map(result => {
+              const hasAllowances = (result.allowances_breakdown && result.allowances_breakdown.length > 0) ||
+                                   (result.bonuses_breakdown && result.bonuses_breakdown.length > 0);
+              const hasDeductions = (result.deductions_breakdown && result.deductions_breakdown.length > 0) ||
+                                   (result.financial_deductions_breakdown && result.financial_deductions_breakdown.length > 0);
+              return (
+                <div
+                  key={result.employee_id}
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 cursor-pointer"
+                  onClick={() => openDailyDetailsModal(result.employee_id, result.employee_name)}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <div className="font-medium">{result.employee_name}</div>
+                      <div className="text-xs text-gray-500">{result.employee_code}</div>
+                    </div>
+                    <span className="font-bold text-purple-600">{formatCurrency(result.net_salary)}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                    <div>
+                      <p className="text-xs text-gray-500">Base Salary</p>
+                      <p>{formatCurrency(result.base_salary)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Actual Earned</p>
+                      {result.total_earnings >= 0 ? (
+                        <button
+                          onClick={(e) => openEarningsModal(e, result)}
+                          className="text-green-600 underline decoration-dotted decoration-green-400 underline-offset-2 hover:decoration-solid hover:text-green-700 cursor-pointer font-medium"
+                        >
+                          {formatCurrency(result.actual_earned_base)}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Shortfall</p>
+                      {result.attendance_shortfall > 0 ? (
+                        <button
+                          onClick={(e) => openShortfallModal(e, result)}
+                          className="text-orange-600 underline decoration-dotted decoration-orange-400 underline-offset-2 hover:decoration-solid hover:text-orange-700 cursor-pointer font-medium"
+                        >
+                          {formatCurrency(result.attendance_shortfall)}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Allowances</p>
+                      {result.total_earnings > 0 ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openModal(result, 'allowances'); }}
+                          className="text-green-600 underline decoration-dotted decoration-green-400 underline-offset-2 hover:decoration-solid hover:text-green-700 cursor-pointer font-medium disabled:no-underline disabled:cursor-default"
+                          disabled={!hasAllowances}
+                        >
+                          {formatCurrency(result.total_earnings)}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Gross Salary</p>
+                      <p className="font-medium text-blue-600">{formatCurrency(result.gross_salary)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Deductions</p>
+                      {result.deductions_total > 0 ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openModal(result, 'deductions'); }}
+                          className="text-red-600 underline decoration-dotted decoration-red-400 underline-offset-2 hover:decoration-solid hover:text-red-700 cursor-pointer font-medium disabled:no-underline disabled:cursor-default"
+                          disabled={!hasDeductions}
+                        >
+                          {formatCurrency(result.deductions_total)}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={(e) => openPayslipModal(e, result)}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400 transition-all duration-150 shadow-sm"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    View Payslip
+                  </button>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-8 text-gray-500">No employee records found.</div>
+          )}
+        </div>
+
+        {/* Desktop: table */}
+        <div className="hidden lg:block overflow-x-auto">
           <Table>
             <Table.Head>
               <Table.HeadCell>Employee</Table.HeadCell>
@@ -751,11 +857,11 @@ const LivePayrollDashboard: React.FC = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex justify-between items-center mt-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-4">
             <div className="text-sm text-gray-500">
               Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, calculatedResults.length)} of {calculatedResults.length} employees
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center justify-between sm:justify-start gap-2">
               <Button
                 size="sm"
                 color="gray"
@@ -959,7 +1065,43 @@ const LivePayrollDashboard: React.FC = () => {
                       Overtime
                       <span className="ml-auto text-red-600 font-medium">{formatCurrency(ebs?.overtime?.earned ?? 0)}</span>
                     </h3>
-                    <div className="overflow-x-auto rounded border border-gray-100">
+                    {/* Mobile: card list */}
+                    <div className="sm:hidden space-y-2">
+                      {emp.overtime_records.filter(rec => rec.amount > 0).map((rec, i) => {
+                        const isUnconfiguredSat = rec.date === 'unconfigured-saturday';
+                        const isUnconfiguredSun = rec.date === 'unconfigured-sunday';
+                        const isExtraTime = rec.date === 'saturday-covering-extra-time';
+                        const dateLabel = isUnconfiguredSat
+                          ? 'Non-working Saturdays (total)'
+                          : isUnconfiguredSun
+                          ? 'Non-working Sundays (total)'
+                          : isExtraTime
+                          ? 'Saturday Covering Extra Time'
+                          : formatDate(rec.date);
+                        const isAggregated = isUnconfiguredSat || isUnconfiguredSun || isExtraTime;
+                        return (
+                          <div key={i} className={`rounded-lg border border-gray-100 p-3 ${isAggregated ? 'bg-orange-50' : 'bg-gray-50'}`}>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <span className="text-xs font-medium text-gray-700">{dateLabel}</span>
+                              <span className="text-xs font-semibold text-red-600">{formatCurrency(rec.amount)}</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                              <span className="capitalize">{rec.day_type.replace(/_/g, ' ')}</span>
+                              {!isAggregated && rec.pre_shift_enabled && <span>Pre-shift: {rec.pre_shift_minutes}m</span>}
+                              {!isAggregated && rec.post_shift_enabled && <span>Post-shift: {rec.post_shift_minutes}m</span>}
+                              <span className="font-medium text-gray-700">Total: {rec.total_minutes}m</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-red-50 border border-red-100">
+                        <span className="text-xs font-semibold text-red-700">Total Overtime</span>
+                        <span className="text-xs font-bold text-red-700">{formatCurrency(ebs?.overtime?.earned ?? 0)}</span>
+                      </div>
+                    </div>
+
+                    {/* Desktop: table */}
+                    <div className="hidden sm:block overflow-x-auto rounded border border-gray-100">
                       <table className="w-full text-xs">
                         <thead className="bg-gray-50 text-gray-600">
                           <tr>
@@ -1139,7 +1281,7 @@ const LivePayrollDashboard: React.FC = () => {
             </div>
           )}
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
           {shortfallModal.employee?.shortfall_by_cause && (() => {
             const sbc = shortfallModal.employee.shortfall_by_cause!;
             return (
@@ -1153,30 +1295,50 @@ const LivePayrollDashboard: React.FC = () => {
                       <span className="text-orange-700 font-bold">{formatCurrency(sbc.time_variance.deduction)}</span>
                     </div>
                     {sbc.time_variance.details && sbc.time_variance.details.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-gray-500 text-xs border-b">
-                              <th className="pb-2 font-medium">Date</th>
-                              <th className="pb-2 font-medium text-right">Expected</th>
-                              <th className="pb-2 font-medium text-right">Actual</th>
-                              <th className="pb-2 font-medium text-right">Shortfall</th>
-                              <th className="pb-2 font-medium text-right">Deduction</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {sbc.time_variance.details.map((d: TimeVarianceDetail, i: number) => (
-                              <tr key={i} className="py-1.5">
-                                <td className="py-1.5 text-gray-700">{formatDate(d.date)}</td>
-                                <td className="py-1.5 text-right text-gray-600">{formatHours(d.expected_hours)}</td>
-                                <td className="py-1.5 text-right text-gray-600">{formatHours(d.actual_hours)}</td>
-                                <td className="py-1.5 text-right text-orange-600 font-medium">{formatHours(d.shortfall_hours)}</td>
-                                <td className="py-1.5 text-right text-red-600 font-semibold">{formatCurrency(d.deduction)}</td>
+                      <>
+                        {/* Mobile: card list */}
+                        <div className="sm:hidden space-y-2">
+                          {sbc.time_variance.details.map((d: TimeVarianceDetail, i: number) => (
+                            <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <span className="text-xs font-medium text-gray-700">{formatDate(d.date)}</span>
+                                <span className="text-xs font-semibold text-red-600">{formatCurrency(d.deduction)}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                                <span>Expected: {formatHours(d.expected_hours)}</span>
+                                <span>Actual: {formatHours(d.actual_hours)}</span>
+                                <span className="text-orange-600 font-medium">Shortfall: {formatHours(d.shortfall_hours)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Desktop: table */}
+                        <div className="hidden sm:block overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-gray-500 text-xs border-b">
+                                <th className="pb-2 font-medium">Date</th>
+                                <th className="pb-2 font-medium text-right">Expected</th>
+                                <th className="pb-2 font-medium text-right">Actual</th>
+                                <th className="pb-2 font-medium text-right">Shortfall</th>
+                                <th className="pb-2 font-medium text-right">Deduction</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {sbc.time_variance.details.map((d: TimeVarianceDetail, i: number) => (
+                                <tr key={i} className="py-1.5">
+                                  <td className="py-1.5 text-gray-700">{formatDate(d.date)}</td>
+                                  <td className="py-1.5 text-right text-gray-600">{formatHours(d.expected_hours)}</td>
+                                  <td className="py-1.5 text-right text-gray-600">{formatHours(d.actual_hours)}</td>
+                                  <td className="py-1.5 text-right text-orange-600 font-medium">{formatHours(d.shortfall_hours)}</td>
+                                  <td className="py-1.5 text-right text-red-600 font-semibold">{formatCurrency(d.deduction)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
                     ) : (
                       <p className="text-sm text-gray-500 italic">No per-day detail available (recalculate to get details).</p>
                     )}
@@ -1303,8 +1465,147 @@ const LivePayrollDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Daily Records Table */}
-              <div className="overflow-x-auto max-h-96">
+              {/* Daily Records: mobile card list */}
+              <div className="sm:hidden space-y-3 max-h-96 overflow-y-auto">
+                {dailyDetailsModal.data.daily_records.length > 0 ? (
+                  dailyDetailsModal.data.daily_records.map((record: any, index: number) => {
+                    const isAbsent = record.record_type === 'absent';
+                    const isLeave = record.record_type === 'leave';
+                    const isHoliday = record.record_type === 'holiday';
+                    const isWeekendOff = record.record_type === 'weekend_off';
+                    const isUnscheduledWeekend = record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)';
+                    const hasPartialLeave = record.record_type === 'attendance' &&
+                                        (record.leave_duration === 'half_day' || record.leave_duration === 'short_leave');
+
+                    const cardBg = isAbsent ? 'bg-red-50 dark:bg-red-900/10' :
+                                  isLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
+                                  isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
+                                  hasPartialLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
+                                  hasPartialLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
+                                  isHoliday ? 'bg-blue-50 dark:bg-blue-900/10' :
+                                  isWeekendOff ? 'bg-gray-50 dark:bg-gray-800/50' : '';
+
+                    const statusColor = record.status === 'present' ? 'success' :
+                                        record.status === 'late' ? 'warning' :
+                                        record.status === 'absent' ? 'failure' :
+                                        record.status === 'paid_leave' ? 'warning' :
+                                        record.status === 'unpaid_leave' ? 'pink' :
+                                        record.status === 'holiday' ? 'info' :
+                                        record.status === 'weekend_off' ? 'gray' : 'gray';
+
+                    const statusLabel = record.status === 'paid_leave' ? 'Paid Leave' :
+                                        record.status === 'unpaid_leave' ? 'Unpaid Leave' :
+                                        record.status === 'holiday' ? 'Holiday' :
+                                        record.status === 'weekend_off' ? 'Weekend Off' :
+                                        record.status;
+
+                    const partialLeaveLabel = record.leave_duration === 'half_day' ? 'Half Day' :
+                                        record.leave_duration === 'short_leave'
+                                          ? `Short Leave${record.leave_start_time && record.leave_end_time ? ` (${record.leave_start_time} - ${record.leave_end_time})` : ''}`
+                                          : '';
+
+                    return (
+                      <div key={index} className={`border border-gray-200 dark:border-gray-700 rounded-lg p-3 ${cardBg}`}>
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <span className="font-medium text-sm">
+                            {new Date(record.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </span>
+                          <Badge color={record.day_type === 'Sunday' || record.day_type === 'Sunday (Unscheduled)' ? 'failure' : record.day_type === 'Saturday' || record.day_type === 'Saturday (Unscheduled)' ? 'warning' : 'info'}>
+                            {record.day_type}
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                          <div>
+                            <p className="text-xs text-gray-500">Check In</p>
+                            <p>{record.check_in || '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Check Out</p>
+                            <p>{record.check_out || '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Working Minutes</p>
+                            <div className="font-medium">
+                              {isAbsent || isWeekendOff ? (
+                                <span className="text-gray-400">—</span>
+                              ) : isLeave ? (
+                                <div>
+                                  <span className="text-yellow-700 font-medium">{record.leave_type_name}</span>
+                                  <div className="text-xs text-gray-500">{record.is_paid_leave ? 'Paid' : 'Unpaid'}</div>
+                                </div>
+                              ) : isHoliday ? (
+                                <span className="text-blue-700 font-medium">{record.holiday_name}</span>
+                              ) : isUnscheduledWeekend ? (
+                                <span className="text-red-600 font-bold">
+                                  {record.overtime_minutes.toLocaleString()} mins
+                                  <div className="text-xs font-medium">({(record.overtime_minutes / 60).toFixed(2)} hrs)</div>
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="text-blue-600">{record.working_minutes.toLocaleString()} mins</span>
+                                  <div className="text-xs text-gray-500 font-normal">({record.working_hours} hrs)</div>
+                                  {record.overtime_minutes > 0 && <div className="text-xs text-red-600 font-medium">+{record.overtime_minutes} OT mins</div>}
+                                  {hasPartialLeave && (
+                                    <div className={`text-xs font-medium mt-1 ${record.is_paid_leave ? 'text-yellow-700' : 'text-orange-600'}`}>
+                                      {partialLeaveLabel} {record.leave_type_name ? `(${record.leave_type_name})` : ''} · {record.is_paid_leave ? 'Paid' : 'Unpaid'}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Daily Salary</p>
+                            <div className="font-bold">
+                              {isAbsent ? (
+                                <span className="text-red-500">Rs. 0.00</span>
+                              ) : isWeekendOff ? (
+                                <span className="text-gray-400">—</span>
+                              ) : isHoliday ? (
+                                <span className="text-blue-600">—</span>
+                              ) : isLeave ? (
+                                record.is_paid_leave ? (
+                                  <span className="text-yellow-700">{formatCurrency(record.daily_salary)}</span>
+                                ) : (
+                                  <span className="text-orange-600">Rs. 0.00 <span className="text-xs font-normal">(Unpaid)</span></span>
+                                )
+                              ) : isUnscheduledWeekend ? (
+                                <span className="text-red-600">{formatCurrency(record.overtime_amount)}</span>
+                              ) : (
+                                <>
+                                  <span className="text-green-600">{formatCurrency(record.daily_salary)}</span>
+                                  {record.overtime_amount > 0 && <div className="text-xs text-red-600 font-medium">+{formatCurrency(record.overtime_amount)} OT</div>}
+                                  {hasPartialLeave && record.is_paid_leave && (
+                                    <div className="text-xs text-yellow-700 font-normal">(incl. {formatCurrency(record.leave_daily_salary)} leave pay)</div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge color={statusColor as any}>{statusLabel}</Badge>
+                          {hasPartialLeave && (
+                            <Badge color={record.is_paid_leave ? 'warning' : 'pink'}>
+                              {partialLeaveLabel}
+                            </Badge>
+                          )}
+                          {hasPartialLeave && record.leave_type_name && (
+                            <span className="text-xs text-gray-500">{record.leave_type_name}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-gray-500">No records found for this period.</div>
+                )}
+              </div>
+
+              {/* Daily Records Table: desktop */}
+              <div className="hidden sm:block overflow-x-auto max-h-96">
                 <Table>
                   <Table.Head>
                     <Table.HeadCell>Date</Table.HeadCell>
@@ -1491,7 +1792,7 @@ const LivePayrollDashboard: React.FC = () => {
             )}
           </div>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
           {payslipModal.employee && (() => {
             const emp = payslipModal.employee;
             const ebs = emp.earnings_by_source;
@@ -1511,10 +1812,10 @@ const LivePayrollDashboard: React.FC = () => {
                 {/* Employee Details */}
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-3 pb-1 border-b">Employee Details</h3>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-1">
-                    <p><span className="text-gray-500">Name:</span> <span className="font-medium text-gray-800">{emp.employee_name}</span></p>
-                    <p><span className="text-gray-500">ID:</span> <span className="font-medium text-gray-800">{emp.employee_code}</span></p>
-                    <p><span className="text-gray-500">Department:</span> <span className="font-medium text-gray-800">{emp.department_name}</span></p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
+                    <p className="break-words"><span className="text-gray-500">Name:</span> <span className="font-medium text-gray-800">{emp.employee_name}</span></p>
+                    <p className="break-words"><span className="text-gray-500">ID:</span> <span className="font-medium text-gray-800">{emp.employee_code}</span></p>
+                    <p className="break-words"><span className="text-gray-500">Department:</span> <span className="font-medium text-gray-800">{emp.department_name}</span></p>
                   </div>
                 </div>
 
@@ -1562,31 +1863,31 @@ const LivePayrollDashboard: React.FC = () => {
 
                     {/* Shortfall Breakdown */}
                     {hasShortfall && (
-                      <div className="ml-4 bg-orange-50 border border-orange-200 p-3 rounded-lg">
+                      <div className="ml-2 sm:ml-4 bg-orange-50 border border-orange-200 p-3 rounded-lg">
                         <div className="font-medium text-orange-800 mb-2 text-xs uppercase tracking-wide">Salary Reduction (Shortfall)</div>
                         <div className="space-y-1.5">
                           {(sbc!.time_variance?.deduction ?? 0) > 0 && (
-                            <div className="flex justify-between text-gray-700">
+                            <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                               <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-yellow-500 rounded-full inline-block"></span>
+                                <span className="w-2 h-2 bg-yellow-500 rounded-full inline-block shrink-0"></span>
                                 Late Arrivals &amp; Early Departures ({sbc!.time_variance.hours.toFixed(2)}h)
                               </span>
                               <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.time_variance.deduction)}</span>
                             </div>
                           )}
                           {(sbc!.unpaid_time_off?.deduction ?? 0) > 0 && (
-                            <div className="flex justify-between text-gray-700">
+                            <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                               <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-orange-500 rounded-full inline-block"></span>
+                                <span className="w-2 h-2 bg-orange-500 rounded-full inline-block shrink-0"></span>
                                 Unpaid Leaves ({sbc!.unpaid_time_off.hours.toFixed(2)}h)
                               </span>
                               <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.unpaid_time_off.deduction)}</span>
                             </div>
                           )}
                           {(sbc!.absent_days?.deduction ?? 0) > 0 && (
-                            <div className="flex justify-between text-gray-700">
+                            <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                               <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span>
+                                <span className="w-2 h-2 bg-red-500 rounded-full inline-block shrink-0"></span>
                                 Absent Days
                               </span>
                               <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.absent_days.deduction)}</span>
@@ -1603,31 +1904,31 @@ const LivePayrollDashboard: React.FC = () => {
                     </div>
 
                     {/* Earnings from Work breakdown */}
-                    <div className="ml-4 bg-green-50 border border-green-100 p-3 rounded-lg">
+                    <div className="ml-2 sm:ml-4 bg-green-50 border border-green-100 p-3 rounded-lg">
                       <div className="font-medium text-green-800 mb-2 text-xs uppercase tracking-wide">Earnings from Work</div>
                       <div className="space-y-1.5">
                         {emp.allowances_breakdown.map((a, i) => (
-                          <div key={i} className="flex justify-between text-gray-700">
+                          <div key={i} className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                             <span className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 bg-green-500 rounded-full inline-block"></span>
+                              <span className="w-2 h-2 bg-green-500 rounded-full inline-block shrink-0"></span>
                               {a.name}{a.is_percentage ? ' (% of Base)' : ''}
                             </span>
                             <span>+{formatCurrency(a.amount)}</span>
                           </div>
                         ))}
                         {emp.bonuses_breakdown.map((b, i) => (
-                          <div key={i} className="flex justify-between text-gray-700">
+                          <div key={i} className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                             <span className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 bg-teal-500 rounded-full inline-block"></span>
+                              <span className="w-2 h-2 bg-teal-500 rounded-full inline-block shrink-0"></span>
                               {b.description}
                             </span>
                             <span>+{formatCurrency(b.amount)}</span>
                           </div>
                         ))}
                         {ebs?.overtime && ebs.overtime.earned > 0 && (
-                          <div className="flex justify-between text-gray-700">
+                          <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                             <span className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 bg-blue-500 rounded-full inline-block"></span>
+                              <span className="w-2 h-2 bg-blue-500 rounded-full inline-block shrink-0"></span>
                               Overtime ({ebs.overtime.minutes} mins)
                             </span>
                             <span>+{formatCurrency(ebs.overtime.earned)}</span>
@@ -1652,13 +1953,13 @@ const LivePayrollDashboard: React.FC = () => {
                   <h3 className="font-semibold text-gray-700 mb-3 pb-1 border-b">Deductions (from Gross Salary)</h3>
                   <div className="space-y-2">
                     {emp.deductions_breakdown.map((d, i) => (
-                      <div key={i} className="flex justify-between">
+                      <div key={i} className="flex flex-wrap justify-between gap-x-2">
                         <span className="text-gray-600">{d.name} <span className="text-xs text-gray-400 uppercase ml-1">{d.category}</span></span>
                         <span className="font-medium text-red-600">-{formatCurrency(d.amount)}</span>
                       </div>
                     ))}
                     {emp.financial_deductions_breakdown.map((d, i) => (
-                      <div key={i} className="flex justify-between">
+                      <div key={i} className="flex flex-wrap justify-between gap-x-2">
                         <span className="text-gray-600">{d.description}</span>
                         <span className="font-medium text-red-600">-{formatCurrency(d.amount)}</span>
                       </div>
@@ -1695,9 +1996,10 @@ const LivePayrollDashboard: React.FC = () => {
             );
           })()}
         </Modal.Body>
-        <Modal.Footer>
+        <Modal.Footer className="flex-col sm:flex-row">
           <Button
             color="blue"
+            className="w-full sm:w-auto"
             onClick={handleDownloadPayslip}
             disabled={payslipDownloading || !payslipModal.employee}
           >
@@ -1708,7 +2010,7 @@ const LivePayrollDashboard: React.FC = () => {
             )}
             {payslipDownloading ? 'Generating...' : 'Download Payslip'}
           </Button>
-          <Button color="gray" onClick={closePayslipModal}>Close</Button>
+          <Button color="gray" className="w-full sm:w-auto" onClick={closePayslipModal}>Close</Button>
         </Modal.Footer>
       </Modal>
 

@@ -316,30 +316,31 @@ const ManualAttendance: React.FC = () => {
   };
 
   return (
-    <div className="p-6">
+    <>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Manual Attendance (Create Only)</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Manual Attendance (Create Only)</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Shows only employees who don’t have a record for the selected date.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button color="gray" onClick={() => changeDateBy(-1)}>
-            <HiArrowLeft className="mr-2 h-5 w-5" /> Prev
+        <div className="flex flex-wrap items-center gap-2">
+          <Button color="gray" size="sm" className="flex-1 sm:flex-none" onClick={() => changeDateBy(-1)}>
+            <HiArrowLeft className="mr-2 h-4 w-4 sm:h-5 sm:w-5" /> Prev
           </Button>
-          <div className="flex items-center gap-2">
-            <HiCalendar className="text-gray-500" />
+          <div className="flex items-center gap-2 order-first w-full sm:order-none sm:w-auto">
+            <HiCalendar className="text-gray-500 shrink-0" />
             <TextInput
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              className="w-full sm:w-auto"
             />
           </div>
-          <Button color="gray" onClick={() => setDate(todayStr())}>Today</Button>
-          <Button color="gray" onClick={() => changeDateBy(1)}>
-            Next <HiArrowRight className="ml-2 h-5 w-5" />
+          <Button color="gray" size="sm" className="flex-1 sm:flex-none" onClick={() => setDate(todayStr())}>Today</Button>
+          <Button color="gray" size="sm" className="flex-1 sm:flex-none" onClick={() => changeDateBy(1)}>
+            Next <HiArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
         </div>
       </div>
@@ -351,20 +352,20 @@ const ManualAttendance: React.FC = () => {
       )}
 
       {/* Quick actions (times only) */}
-      <Card className="mb-4">
-        <div className="flex flex-wrap gap-2 items-center">
-          <Button size="sm" onClick={() => fillWithDefaultTimes()}>
+      <Card className="mb-4" theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center">
+          <Button size="sm" className="w-full sm:w-auto" onClick={() => fillWithDefaultTimes()}>
             Fill Default Times (Employee Schedules)
           </Button>
           <span className="text-xs text-gray-500">
             Company default: {cleanTimeValue(workingHours.start_time)}–{cleanTimeValue(workingHours.end_time)}
           </span>
-          <Button size="sm" color="gray" onClick={() => quickFillTimes('', '')}>
+          <Button size="sm" color="gray" className="w-full sm:w-auto" onClick={() => quickFillTimes('', '')}>
             Clear All Times
           </Button>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center justify-between sm:justify-start gap-3 sm:ml-auto">
             <span className="text-sm text-gray-500">{dirtyCount} change(s)</span>
-            <Button disabled={!dirtyCount || savingAll} onClick={saveAll}>
+            <Button disabled={!dirtyCount || savingAll} onClick={saveAll} size="sm" className="flex-1 sm:flex-none">
               <HiSave className="mr-2 h-5 w-5" /> Save All
             </Button>
           </div>
@@ -372,7 +373,7 @@ const ManualAttendance: React.FC = () => {
       </Card>
 
       {/* Table */}
-      <Card>
+      <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
         {loading ? (
           <div className="flex justify-center py-10"><Spinner size="lg" /></div>
         ) : rows.length === 0 ? (
@@ -380,47 +381,40 @@ const ManualAttendance: React.FC = () => {
             All employees already have attendance for {date}. 🎉
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table hoverable>
-              <Table.Head>
-                <Table.HeadCell>Employee</Table.HeadCell>
-                <Table.HeadCell>Work Location</Table.HeadCell>
-                <Table.HeadCell>In Time</Table.HeadCell>
-                <Table.HeadCell>Out Time</Table.HeadCell>
-                <Table.HeadCell>Break Start</Table.HeadCell>
-                <Table.HeadCell>Break End</Table.HeadCell>
-                {/* <Table.HeadCell>Notes</Table.HeadCell> */}
-                <Table.HeadCell>Status</Table.HeadCell>
-                <Table.HeadCell>Action</Table.HeadCell>
-              </Table.Head>
-              <Table.Body className="divide-y">
-                {rows.map((r, idx) => {
-                  const ciOk = !r.check_in_time || isTimeValid(r.check_in_time);
-                  const coOk = !r.check_out_time || isTimeValid(r.check_out_time);
-                  const bsOk = !r.break_start_time || isTimeValid(r.break_start_time);
-                  const beOk = !r.break_end_time || isTimeValid(r.break_end_time);
-                  // Check if employee has configured break times
-                  const hasBreakSchedule = r.employee.break_start_time && r.employee.break_end_time;
-                  return (
-                    <Table.Row key={r.employee.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                      <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                        <div className="font-semibold">
+          <>
+            {/* Mobile: card list */}
+            <div className="lg:hidden space-y-3">
+              {rows.map((r, idx) => {
+                const ciOk = !r.check_in_time || isTimeValid(r.check_in_time);
+                const coOk = !r.check_out_time || isTimeValid(r.check_out_time);
+                const bsOk = !r.break_start_time || isTimeValid(r.break_start_time);
+                const beOk = !r.break_end_time || isTimeValid(r.break_end_time);
+                const hasBreakSchedule = r.employee.break_start_time && r.employee.break_end_time;
+                return (
+                  <div key={r.employee.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <div className="font-semibold text-gray-900 dark:text-white">
                           {r.employee.first_name} {r.employee.last_name}
                         </div>
                         <div className="text-xs text-gray-500">
                           {r.employee.employee_code || '—'} {r.employee.department_name ? `• ${r.employee.department_name}` : ''}
-                          {r.employee.follows_company_schedule === false && r.employee.in_time && r.employee.out_time && (
-                            <span className="ml-2 text-blue-600 font-medium">
-                              • Custom: {cleanTimeValue(r.employee.in_time)}–{cleanTimeValue(r.employee.out_time)}
-                            </span>
-                          )}
                         </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {/* Read-only badge; not sent */}
+                        {r.employee.follows_company_schedule === false && r.employee.in_time && r.employee.out_time && (
+                          <div className="text-xs text-blue-600 font-medium mt-0.5">
+                            Custom: {cleanTimeValue(r.employee.in_time)}–{cleanTimeValue(r.employee.out_time)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
                         {workTypeBadge(r.work_type || 'office')}
-                      </Table.Cell>
-                      <Table.Cell>
+                        {rowStatusBadge(r)}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">In Time</p>
                         <TextInput
                           type="time"
                           step="1"
@@ -428,9 +422,11 @@ const ManualAttendance: React.FC = () => {
                           onChange={(e) => setRowField(idx, { check_in_time: e.target.value })}
                           color={ciOk ? undefined : 'failure'}
                           helperText={!ciOk ? 'Format HH:MM:SS' : undefined}
+                          sizing="sm"
                         />
-                      </Table.Cell>
-                      <Table.Cell>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Out Time</p>
                         <TextInput
                           type="time"
                           step="1"
@@ -438,63 +434,170 @@ const ManualAttendance: React.FC = () => {
                           onChange={(e) => setRowField(idx, { check_out_time: e.target.value })}
                           color={coOk ? undefined : 'failure'}
                           helperText={!coOk ? 'Format HH:MM:SS' : undefined}
+                          sizing="sm"
                         />
-                      </Table.Cell>
-                      <Table.Cell>
-                        {hasBreakSchedule ? (
+                      </div>
+                      {hasBreakSchedule && (
+                        <>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Break Start</p>
+                            <TextInput
+                              type="time"
+                              step="1"
+                              value={r.break_start_time}
+                              onChange={(e) => setRowField(idx, { break_start_time: e.target.value })}
+                              color={bsOk ? undefined : 'failure'}
+                              helperText={!bsOk ? 'Format HH:MM:SS' : undefined}
+                              sizing="sm"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Break End</p>
+                            <TextInput
+                              type="time"
+                              step="1"
+                              value={r.break_end_time}
+                              onChange={(e) => setRowField(idx, { break_end_time: e.target.value })}
+                              color={beOk ? undefined : 'failure'}
+                              helperText={!beOk ? 'Format HH:MM:SS' : undefined}
+                              sizing="sm"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={() => saveRow(idx)}
+                      disabled={r.saving || r.saved}
+                    >
+                      <HiCheck className="mr-2 h-4 w-4" />
+                      Save
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <Table hoverable>
+                <Table.Head>
+                  <Table.HeadCell>Employee</Table.HeadCell>
+                  <Table.HeadCell>Work Location</Table.HeadCell>
+                  <Table.HeadCell>In Time</Table.HeadCell>
+                  <Table.HeadCell>Out Time</Table.HeadCell>
+                  <Table.HeadCell>Break Start</Table.HeadCell>
+                  <Table.HeadCell>Break End</Table.HeadCell>
+                  {/* <Table.HeadCell>Notes</Table.HeadCell> */}
+                  <Table.HeadCell>Status</Table.HeadCell>
+                  <Table.HeadCell>Action</Table.HeadCell>
+                </Table.Head>
+                <Table.Body className="divide-y">
+                  {rows.map((r, idx) => {
+                    const ciOk = !r.check_in_time || isTimeValid(r.check_in_time);
+                    const coOk = !r.check_out_time || isTimeValid(r.check_out_time);
+                    const bsOk = !r.break_start_time || isTimeValid(r.break_start_time);
+                    const beOk = !r.break_end_time || isTimeValid(r.break_end_time);
+                    // Check if employee has configured break times
+                    const hasBreakSchedule = r.employee.break_start_time && r.employee.break_end_time;
+                    return (
+                      <Table.Row key={r.employee.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                        <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                          <div className="font-semibold">
+                            {r.employee.first_name} {r.employee.last_name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {r.employee.employee_code || '—'} {r.employee.department_name ? `• ${r.employee.department_name}` : ''}
+                            {r.employee.follows_company_schedule === false && r.employee.in_time && r.employee.out_time && (
+                              <span className="ml-2 text-blue-600 font-medium">
+                                • Custom: {cleanTimeValue(r.employee.in_time)}–{cleanTimeValue(r.employee.out_time)}
+                              </span>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {/* Read-only badge; not sent */}
+                          {workTypeBadge(r.work_type || 'office')}
+                        </Table.Cell>
+                        <Table.Cell>
                           <TextInput
                             type="time"
                             step="1"
-                            value={r.break_start_time}
-                            onChange={(e) => setRowField(idx, { break_start_time: e.target.value })}
-                            color={bsOk ? undefined : 'failure'}
-                            helperText={!bsOk ? 'Format HH:MM:SS' : undefined}
+                            value={r.check_in_time}
+                            onChange={(e) => setRowField(idx, { check_in_time: e.target.value })}
+                            color={ciOk ? undefined : 'failure'}
+                            helperText={!ciOk ? 'Format HH:MM:SS' : undefined}
                           />
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        {hasBreakSchedule ? (
+                        </Table.Cell>
+                        <Table.Cell>
                           <TextInput
                             type="time"
                             step="1"
-                            value={r.break_end_time}
-                            onChange={(e) => setRowField(idx, { break_end_time: e.target.value })}
-                            color={beOk ? undefined : 'failure'}
-                            helperText={!beOk ? 'Format HH:MM:SS' : undefined}
+                            value={r.check_out_time}
+                            onChange={(e) => setRowField(idx, { check_out_time: e.target.value })}
+                            color={coOk ? undefined : 'failure'}
+                            helperText={!coOk ? 'Format HH:MM:SS' : undefined}
                           />
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </Table.Cell>
-                      {/* <Table.Cell>
-                        <TextInput
-                          value={r.notes}
-                          onChange={(e) => setRowField(idx, { notes: e.target.value })}
-                          placeholder="Optional"
-                        />
-                      </Table.Cell> */}
-                      <Table.Cell>{rowStatusBadge(r)}</Table.Cell>
-                      <Table.Cell>
-                        <Button
-                          size="sm"
-                          onClick={() => saveRow(idx)}
-                          disabled={r.saving || r.saved}
-                        >
-                          <HiCheck className="mr-2 h-4 w-4" />
-                          Save
-                        </Button>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table>
-          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {hasBreakSchedule ? (
+                            <TextInput
+                              type="time"
+                              step="1"
+                              value={r.break_start_time}
+                              onChange={(e) => setRowField(idx, { break_start_time: e.target.value })}
+                              color={bsOk ? undefined : 'failure'}
+                              helperText={!bsOk ? 'Format HH:MM:SS' : undefined}
+                            />
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {hasBreakSchedule ? (
+                            <TextInput
+                              type="time"
+                              step="1"
+                              value={r.break_end_time}
+                              onChange={(e) => setRowField(idx, { break_end_time: e.target.value })}
+                              color={beOk ? undefined : 'failure'}
+                              helperText={!beOk ? 'Format HH:MM:SS' : undefined}
+                            />
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </Table.Cell>
+                        {/* <Table.Cell>
+                          <TextInput
+                            value={r.notes}
+                            onChange={(e) => setRowField(idx, { notes: e.target.value })}
+                            placeholder="Optional"
+                          />
+                        </Table.Cell> */}
+                        <Table.Cell>{rowStatusBadge(r)}</Table.Cell>
+                        <Table.Cell>
+                          <Button
+                            size="sm"
+                            onClick={() => saveRow(idx)}
+                            disabled={r.saving || r.saved}
+                          >
+                            <HiCheck className="mr-2 h-4 w-4" />
+                            Save
+                          </Button>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table>
+            </div>
+          </>
         )}
       </Card>
-    </div>
+    </>
   );
 };
 

@@ -359,16 +359,16 @@ const PayrollRunDashboard = () => {
   // =============================================
   
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
             Payroll Management
           </h1>
         </div>
         <DynamicProtectedComponent permission="payroll.create">
-          <Button color="blue" onClick={() => setShowCreateModal(true)}>
+          <Button color="blue" className="w-full sm:w-auto" onClick={() => setShowCreateModal(true)}>
             <HiPlus className="w-4 h-4 mr-2" />
             Create Payroll Run
           </Button>
@@ -381,7 +381,7 @@ const PayrollRunDashboard = () => {
           {error}
         </Alert>
       )}
-      
+
       {successMessage && (
         <Alert color="success" onDismiss={() => setSuccessMessage(null)}>
           {successMessage}
@@ -389,27 +389,99 @@ const PayrollRunDashboard = () => {
       )}
 
       {/* Filters */}
-      <Card>
-        
-        <div className="flex justify-between items-center">
+      <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <Select
             value={filters.limit || 20}
             onChange={(e) => setFilters({ ...filters, limit: parseInt(e.target.value) })}
+            className="w-full sm:w-auto"
           >
             <option value="10">10 per page</option>
             <option value="20">20 per page</option>
             <option value="50">50 per page</option>
           </Select>
 
-          <Button color="gray" onClick={loadPayrollRuns}>
+          <Button color="gray" className="w-full sm:w-auto" onClick={loadPayrollRuns}>
             🔄 Refresh
           </Button>
         </div>
       </Card>
 
       {/* Payroll Runs Table */}
-      <Card>
-        <div className="overflow-x-auto">
+      <Card theme={{ root: { base: "flex rounded-tw shadow-md dark:shadow-none bg-white dark:bg-darkgray p-3 sm:p-[30px] relative w-full break-words" } }}>
+        {/* Mobile: card list */}
+        <div className="lg:hidden space-y-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-2">Loading payroll runs...</span>
+            </div>
+          ) : !payrollRuns || payrollRuns.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No payroll runs found. Create your first payroll run to get started.
+            </div>
+          ) : (
+            (payrollRuns || []).map((run) => (
+              <div key={run.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="font-medium">{run.run_name}</div>
+                    <div className="text-xs text-gray-500">{run.run_number} • {run.run_type}</div>
+                  </div>
+                  <Badge color={payrollRunApiService.getRunStatusColor(run.run_status)}>
+                    {payrollRunApiService.getRunStatusIcon(run.run_status)} {' '}
+                    {payrollRunApiService.getRunStatusText(run.run_status)}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500">Period</p>
+                    <p>{payrollRunApiService.formatDate(run.period_start_date)} - {payrollRunApiService.formatDate(run.period_end_date)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Employees</p>
+                    <p>{run.total_employees} ({run.processed_employees} processed)</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Total Amount</p>
+                    <p className="font-medium">Rs. {run.total_net_amount?.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Created</p>
+                    <p>{payrollRunApiService.formatDate(run.created_at)}</p>
+                    <p className="text-gray-500">{run.created_by_name}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 flex-wrap">
+                  <DynamicProtectedComponent permission="payroll.view">
+                    <Button size="xs" color="green" onClick={() => navigate(`/payroll/runs/${run.id}/live`)}>
+                      <HiEye className="w-3 h-3 mr-1" />
+                      Live Preview
+                    </Button>
+                  </DynamicProtectedComponent>
+                  <DynamicProtectedComponent permission="payroll.view">
+                    <Button size="xs" color="gray" onClick={() => openRunDetails(run)}>
+                      <HiEye className="w-3 h-3 mr-1" />
+                      Summary
+                    </Button>
+                  </DynamicProtectedComponent>
+                  <DynamicProtectedComponent permission="payroll.view">
+                    <Button size="xs" color="blue" onClick={() => navigateToEmployeeRecords(run.id)}>
+                      <HiUsers className="w-3 h-3 mr-1" />
+                      Employees
+                    </Button>
+                  </DynamicProtectedComponent>
+                  {getActionButtons(run)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop: table */}
+        <div className="hidden lg:block overflow-x-auto">
           <Table>
             <Table.Head>
               <Table.HeadCell>Run Details</Table.HeadCell>
