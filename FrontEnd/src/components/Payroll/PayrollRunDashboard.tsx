@@ -298,7 +298,9 @@ const PayrollRunDashboard = () => {
   const getActionButtons = (run: PayrollRun) => {
     const actions = payrollRunApiService.getAvailableActions(run);
 
-    return actions.map(action => {
+    return actions
+      .filter(action => action.action !== 'calculate')
+      .map(action => {
       // Determine required permission for each action
       let permission = 'payroll.view'; // default
       switch (action.action) {
@@ -425,8 +427,7 @@ const PayrollRunDashboard = () => {
               <div key={run.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <div className="font-medium">{run.run_name}</div>
-                    <div className="text-xs text-gray-500">{run.run_number} • {run.run_type}</div>
+                    <div className="font-semibold text-base">{run.run_name}</div>
                   </div>
                   <Badge color={payrollRunApiService.getRunStatusColor(run.run_status)}>
                     {payrollRunApiService.getRunStatusIcon(run.run_status)} {' '}
@@ -437,20 +438,15 @@ const PayrollRunDashboard = () => {
                 <div className="grid grid-cols-2 gap-2 text-sm mb-2">
                   <div>
                     <p className="text-xs text-gray-500">Period</p>
-                    <p>{payrollRunApiService.formatDate(run.period_start_date)} - {payrollRunApiService.formatDate(run.period_end_date)}</p>
+                    <p className="font-semibold">{payrollRunApiService.formatDate(run.period_start_date)} - {payrollRunApiService.formatDate(run.period_end_date)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Employees</p>
                     <p>{run.total_employees} ({run.processed_employees} processed)</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Total Amount</p>
-                    <p className="font-medium">Rs. {run.total_net_amount?.toLocaleString()}</p>
-                  </div>
-                  <div>
                     <p className="text-xs text-gray-500">Created</p>
                     <p>{payrollRunApiService.formatDate(run.created_at)}</p>
-                    <p className="text-gray-500">{run.created_by_name}</p>
                   </div>
                 </div>
 
@@ -459,18 +455,6 @@ const PayrollRunDashboard = () => {
                     <Button size="xs" color="green" onClick={() => navigate(`/payroll/runs/${run.id}/live`)}>
                       <HiEye className="w-3 h-3 mr-1" />
                       Live Preview
-                    </Button>
-                  </DynamicProtectedComponent>
-                  <DynamicProtectedComponent permission="payroll.view">
-                    <Button size="xs" color="gray" onClick={() => openRunDetails(run)}>
-                      <HiEye className="w-3 h-3 mr-1" />
-                      Summary
-                    </Button>
-                  </DynamicProtectedComponent>
-                  <DynamicProtectedComponent permission="payroll.view">
-                    <Button size="xs" color="blue" onClick={() => navigateToEmployeeRecords(run.id)}>
-                      <HiUsers className="w-3 h-3 mr-1" />
-                      Employees
                     </Button>
                   </DynamicProtectedComponent>
                   {getActionButtons(run)}
@@ -484,10 +468,9 @@ const PayrollRunDashboard = () => {
         <div className="hidden lg:block overflow-x-auto">
           <Table>
             <Table.Head>
-              <Table.HeadCell>Run Details</Table.HeadCell>
+              <Table.HeadCell>Name</Table.HeadCell>
               <Table.HeadCell>Period</Table.HeadCell>
               <Table.HeadCell>Employees</Table.HeadCell>
-              <Table.HeadCell>Total Amount</Table.HeadCell>
               <Table.HeadCell>Status</Table.HeadCell>
               <Table.HeadCell>Created</Table.HeadCell>
               <Table.HeadCell>Actions</Table.HeadCell>
@@ -495,7 +478,7 @@ const PayrollRunDashboard = () => {
             <Table.Body>
               {loading ? (
                 <Table.Row>
-                  <Table.Cell colSpan={7} className="text-center py-8">
+                  <Table.Cell colSpan={6} className="text-center py-8">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Loading payroll runs...</span>
@@ -504,7 +487,7 @@ const PayrollRunDashboard = () => {
                 </Table.Row>
               ) : !payrollRuns || payrollRuns.length === 0 ? (
                 <Table.Row>
-                  <Table.Cell colSpan={7} className="text-center py-8 text-gray-500">
+                  <Table.Cell colSpan={6} className="text-center py-8 text-gray-500">
                     No payroll runs found. Create your first payroll run to get started.
                   </Table.Cell>
                 </Table.Row>
@@ -512,17 +495,12 @@ const PayrollRunDashboard = () => {
                 (payrollRuns || []).map((run) => (
                   <Table.Row key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-600">
                     <Table.Cell>
-                      <div>
-                        <div className="font-medium">{run.run_name}</div>
-                        <div className="text-sm text-gray-500">
-                          {run.run_number} • {run.run_type}
-                        </div>
-                      </div>
+                      <div className="font-semibold text-base">{run.run_name}</div>
                     </Table.Cell>
                     <Table.Cell>
-                      <div className="text-sm">
+                      <div className="text-sm font-semibold">
                         <div>{payrollRunApiService.formatDate(run.period_start_date)}</div>
-                        <div className="text-gray-500">
+                        <div className="text-gray-500 font-normal">
                           to {payrollRunApiService.formatDate(run.period_end_date)}
                         </div>
                       </div>
@@ -536,11 +514,6 @@ const PayrollRunDashboard = () => {
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <div className="font-medium">
-                        Rs. {run.total_net_amount?.toLocaleString()}
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
                       <Badge color={payrollRunApiService.getRunStatusColor(run.run_status)}>
                         {payrollRunApiService.getRunStatusIcon(run.run_status)} {' '}
                         {payrollRunApiService.getRunStatusText(run.run_status)}
@@ -549,7 +522,6 @@ const PayrollRunDashboard = () => {
                     <Table.Cell>
                       <div className="text-sm">
                         <div>{payrollRunApiService.formatDate(run.created_at)}</div>
-                        <div className="text-gray-500">{run.created_by_name}</div>
                       </div>
                     </Table.Cell>
                     <Table.Cell>
@@ -562,26 +534,6 @@ const PayrollRunDashboard = () => {
                           >
                             <HiEye className="w-3 h-3 mr-1" />
                             Live Preview
-                          </Button>
-                        </DynamicProtectedComponent>
-                        <DynamicProtectedComponent permission="payroll.view">
-                          <Button
-                            size="xs"
-                            color="gray"
-                            onClick={() => openRunDetails(run)}
-                          >
-                            <HiEye className="w-3 h-3 mr-1" />
-                            Summary
-                          </Button>
-                        </DynamicProtectedComponent>
-                        <DynamicProtectedComponent permission="payroll.view">
-                          <Button
-                            size="xs"
-                            color="blue"
-                            onClick={() => navigateToEmployeeRecords(run.id)}
-                          >
-                            <HiUsers className="w-3 h-3 mr-1" />
-                            Employees
                           </Button>
                         </DynamicProtectedComponent>
                         {getActionButtons(run)}
