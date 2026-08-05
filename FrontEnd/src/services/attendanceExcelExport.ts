@@ -13,6 +13,16 @@ function getWorkedHours(record: AttendanceRecord): number {
   return (payable + preShift + postShift) / 3600;
 }
 
+// Builds a Date whose UTC fields equal the literal date+time string, so that
+// when ExcelJS serializes it (using UTC fields) Excel displays the same
+// clock time that's stored in the database, instead of shifting it by the
+// browser's local timezone offset.
+function toExcelDateTime(dateStr: string, timeStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hour, minute, second] = timeStr.split(':').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, hour, minute, second || 0));
+}
+
 export async function exportAttendanceToExcel(
     records : AttendanceRecord[],
     month : number,
@@ -36,7 +46,7 @@ export async function exportAttendanceToExcel(
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Sheet1');
 
-    const headerRow = ws.addRow(['Check In', 'Check Out', 'Employee', 'Over Time', 'Worked Hours']);
+    const headerRow = ws.addRow(['Employee', 'Check In', 'Check Out', 'Worked Hours', 'Over Time']);
     headerRow.font = { bold: true };
 
         for (const employeeRecords of groups.values()) {
@@ -53,8 +63,8 @@ export async function exportAttendanceToExcel(
             `${first.employee_name} (${first.employee_code})`,
             '',
             '',
-            totalOvertime,
-            totalWorked
+            totalWorked,
+            totalOvertime
         ]);
         summaryRow.font = { bold: true };
         summaryRow.eachCell((cell) => {
@@ -67,22 +77,22 @@ export async function exportAttendanceToExcel(
 
             for (const record of employeeRecords) {
             const checkIn = record.check_in_time
-                ? new Date(`${record.date}T${record.check_in_time}`)
+                ? toExcelDateTime(record.date, record.check_in_time)
                 : null;
             const checkOut = record.check_out_time
-                ? new Date(`${record.date}T${record.check_out_time}`)
+                ? toExcelDateTime(record.date, record.check_out_time)
                 : null;
 
             const dailyRow = ws.addRow([
+                record.employee_name || '',
                 checkIn,
                 checkOut,
-                record.employee_name || '',
-                record.overtime_hours || 0,
-                getWorkedHours(record)
+                getWorkedHours(record),
+                record.overtime_hours || 0
             ]);
 
-            dailyRow.getCell(1).numFmt = 'yyyy-mm-dd hh:mm:ss';
             dailyRow.getCell(2).numFmt = 'yyyy-mm-dd hh:mm:ss';
+            dailyRow.getCell(3).numFmt = 'yyyy-mm-dd hh:mm:ss';
             dailyRow.getCell(4).numFmt = '#,##0.00';
             dailyRow.getCell(5).numFmt = '#,##0.00';
         }
@@ -90,8 +100,10 @@ export async function exportAttendanceToExcel(
     }
 
     ws.getColumn(1).width = 30;
-    ws.getColumn(4).width = 10;
-    ws.getColumn(5).width = 13;
+    ws.getColumn(2).width = 20;
+    ws.getColumn(3).width = 20;
+    ws.getColumn(4).width = 13;
+    ws.getColumn(5).width = 10;
 
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], {

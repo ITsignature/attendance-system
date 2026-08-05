@@ -16,7 +16,8 @@ import {
   HiTrash,
   HiRefresh,
   HiClock,
-  HiCalendar
+  HiCalendar,
+  HiDownload
 } from 'react-icons/hi';
 import apiService from '../../services/api';
 import AttendanceForm from './AttendanceForm';
@@ -24,6 +25,7 @@ import { set } from 'lodash';
 import ResolveWorkDurationModal from './ResolveWorkDurationModal'
 import {Link} from 'react-router-dom';
 import { DynamicProtectedComponent } from '../RBACSystem/rbacSystem';
+import { exportAttendanceToExcel } from '../../services/attendanceExcelExport';
 
 // Types
 interface AttendanceRecord {
@@ -91,6 +93,38 @@ const AttendanceView: React.FC = () => {
     totalRecords: 0,
     recordsPerPage: 50
   });
+
+  const [exportMonth, setExportMonth] = useState(new Date().toISOString().slice(0, 7)); // "YYYY-MM"
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const [yearStr, monthStr] = exportMonth.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+
+      const startDate = `${exportMonth}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${exportMonth}-${String(lastDay).padStart(2, '0')}`;
+
+      const response = await apiService.getAttendanceRecords({
+        startDate,
+        endDate,
+        limit: 5000,
+        sortBy: 'date',
+        sortOrder: 'DESC'
+      });
+
+      if (response.success && response.data) {
+        await exportAttendanceToExcel(response.data.attendance, month, year);
+      }
+    } catch (error) {
+      console.error('Failed to export attendance:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const [showResolve, setShowResolve] = useState(false);
   const [resolveRecord, setResolveRecord] = useState<AttendanceRecord | null>(null);
@@ -344,7 +378,17 @@ const filteredRecords = attendanceRecords.filter(record =>
             Track employee arrival times and work duration
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="month"
+            value={exportMonth}
+            onChange={(e) => setExportMonth(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <Button color="light" onClick={handleExportExcel} disabled={exporting} className="w-full sm:w-auto">
+            <HiDownload className="mr-2 h-4 w-4" />
+            {exporting ? 'Exporting...' : 'Export Excel'}
+          </Button>
           <DynamicProtectedComponent permission="attendance.create">
             <Button color="purple" as={Link} to="/manual-attendance" className="w-full sm:w-auto">
               Manual Attendance Sheet
