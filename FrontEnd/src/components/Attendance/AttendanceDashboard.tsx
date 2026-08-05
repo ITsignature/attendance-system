@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Badge, Button } from 'flowbite-react';
-import { 
-  HiClock, 
-  HiBriefcase, 
-  HiUserGroup, 
+import {
+  HiClock,
+  HiBriefcase,
+  HiUserGroup,
   HiTrendingUp,
-  HiChartBar
+  HiChartBar,
+  HiDownload
 } from 'react-icons/hi';
 import apiService from '../../services/api';
+import { exportAttendanceToExcel } from '../../services/attendanceExcelExport';
 
 interface AttendanceStats {
   total_employees: number;
@@ -30,6 +32,8 @@ const AttendanceDashboard: React.FC = () => {
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // "YYYY-MM"
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadAttendanceStats();
@@ -49,6 +53,35 @@ const AttendanceDashboard: React.FC = () => {
       console.error('Failed to load attendance stats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const [yearStr, monthStr] = selectedMonth.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+
+      const startDate = `${selectedMonth}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+
+      const response = await apiService.getAttendanceRecords({
+        startDate,
+        endDate,
+        limit: 5000,
+        sortBy: 'date',
+        sortOrder: 'DESC'
+      });
+
+      if (response.success && response.data) {
+        await exportAttendanceToExcel(response.data.attendance, month, year);
+      }
+    } catch (error) {
+      console.error('Failed to export attendance:', error);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -86,6 +119,16 @@ const AttendanceDashboard: React.FC = () => {
           <Button onClick={loadAttendanceStats} size="sm">
             <HiChartBar className="mr-2 h-4 w-4" />
             Refresh
+          </Button>
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <Button onClick={handleExportExcel} size="sm" disabled={exporting}>
+            <HiDownload className="mr-2 h-4 w-4" />
+            {exporting ? 'Exporting...' : 'Export Excel'}
           </Button>
         </div>
       </div>

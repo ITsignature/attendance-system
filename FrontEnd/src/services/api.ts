@@ -87,6 +87,9 @@ export interface AttendanceRecord {
   scheduled_in_time?: string | null;
   scheduled_out_time?: string | null;
   follows_company_schedule?: 0 | 1 | boolean;
+  payable_duration?: number | null;
+  pre_shift_overtime_seconds?: number | null;
+  post_shift_overtime_seconds?: number | null;
   created_at?: string;
   updated_at?: string;
 }
