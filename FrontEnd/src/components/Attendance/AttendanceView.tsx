@@ -362,9 +362,9 @@ const setWorkDuration = async (id: string, value: 'half_day' | 'short_leave') =>
   }
 };
 
-const filteredRecords = attendanceRecords.filter(record =>
-  record.employee_name.toLowerCase().includes(filters.employeeName?.toLowerCase() || '')
-);
+// Employee-name filtering now happens server-side (see loadAttendanceRecords),
+// so attendanceRecords already reflects the current filters.
+const filteredRecords = attendanceRecords;
 
   return (
     <div>
@@ -770,7 +770,7 @@ const filteredRecords = attendanceRecords.filter(record =>
         )}
       </Card>
 
-      // place the modal once at the end of the page JSX:
+      {/* place the modal once at the end of the page JSX: */}
 <ResolveWorkDurationModal
   open={showResolve}
   record={resolveRecord}

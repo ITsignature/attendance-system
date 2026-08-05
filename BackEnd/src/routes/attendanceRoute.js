@@ -2041,6 +2041,7 @@ router.get('/',
       page = 1,
       limit = 50,
       employeeId = '',
+      employeeName = '',
       startDate = '',
       endDate = '',
       arrival_status = '',
@@ -2050,15 +2051,20 @@ router.get('/',
     } = req.query;
 
     const offset = (page - 1) * limit;
-    
+
     let whereClause = 'WHERE e.client_id = ?';
     let queryParams = [req.user.clientId];
-    
+
     if (employeeId) {
       whereClause += ' AND a.employee_id = ?';
       queryParams.push(employeeId);
     }
-    
+
+    if (employeeName) {
+      whereClause += " AND CONCAT_WS(' ', e.first_name, e.last_name) LIKE ?";
+      queryParams.push(`%${employeeName}%`);
+    }
+
     if (startDate) {
       whereClause += ' AND a.date >= ?';
       queryParams.push(startDate);
