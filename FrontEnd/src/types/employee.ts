@@ -20,7 +20,7 @@ export interface Employee {
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
-  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant';
+  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   work_location?: 'office' | 'remote' | 'hybrid';
   employment_status: 'active' | 'inactive' | 'terminated' | 'resigned';
   
@@ -65,7 +65,7 @@ export interface CreateEmployeeData {
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
-  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant';
+  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   work_location?: 'office' | 'remote' | 'hybrid';
   employment_status: 'active' | 'inactive' | 'terminated' | 'resigned';
   
@@ -101,7 +101,7 @@ export interface UpdateEmployeeData {
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
-  employee_type?: 'permanent' | 'contract' | 'intern' | 'consultant';
+  employee_type?: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   work_location?: 'office' | 'remote' | 'hybrid';
   employment_status?: 'active' | 'inactive' | 'terminated' | 'resigned';
   
@@ -123,7 +123,7 @@ export interface EmployeeFilters {
   department_id?: string;
   designation_id?: string;
   employment_status?: 'active' | 'inactive' | 'terminated' | 'resigned';
-  employee_type?: 'permanent' | 'contract' | 'intern' | 'consultant';
+  employee_type?: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   work_location?: 'office' | 'remote' | 'hybrid';
   gender?: 'male' | 'female' | 'other';
   hire_date_from?: string;

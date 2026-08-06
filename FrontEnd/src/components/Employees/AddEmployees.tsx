@@ -52,7 +52,7 @@ interface EmployeeFormData {
   manager_id: string;
   hire_date: string;
   employment_status: 'active' | 'inactive';
-  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant';
+  employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   salary: number | '';
   attendance_affects_salary: boolean;
   payable_hours_policy: 'strict_schedule' | 'actual_worked';
@@ -1238,6 +1238,7 @@ const debugAuth = () => {
                       <option value="contract">Contract</option>
                       <option value="intern">Intern</option>
                       <option value="consultant">Consultant</option>
+                      <option value="trainee">Trainee</option>
                     </RequiredSelect>
                     {validationErrors.employee_type && (
                       <p className="text-red-600 text-sm mt-1">{validationErrors.employee_type}</p>

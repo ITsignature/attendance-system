@@ -45,6 +45,7 @@ interface EmployeeStats {
   contract: number;
   intern: number;
   consultant: number;
+  trainee: number;
   by_department: Array<{
     department_name: string;
     count: number;
@@ -219,6 +220,7 @@ const AllEmployees: React.FC = () => {
         contract: allEmployees.filter(emp => emp.employee_type === 'contract').length,
         intern: allEmployees.filter(emp => emp.employee_type === 'intern').length,
         consultant: allEmployees.filter(emp => emp.employee_type === 'consultant').length,
+        trainee: allEmployees.filter(emp => emp.employee_type === 'trainee').length,
         by_department: []
       };
       setStats(calculatedStats);
@@ -329,7 +331,8 @@ const AllEmployees: React.FC = () => {
       permanent: 'success',
       contract: 'warning',
       intern: 'info',
-      consultant: 'purple'
+      consultant: 'purple',
+      trainee: 'pink'
     };
     return typeColors[type as keyof typeof typeColors] || 'gray';
   };
@@ -702,6 +705,9 @@ const AllEmployees: React.FC = () => {
             </Dropdown.Item>
             <Dropdown.Item onClick={() => updateFilter('employee_type', 'consultant')}>
               Consultant
+            </Dropdown.Item>
+            <Dropdown.Item onClick={() => updateFilter('employee_type', 'trainee')}>
+              Trainee
             </Dropdown.Item>
           </Dropdown>
           
