@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, Minus, User, AlertCircle, Check, Users } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Minus, User, AlertCircle, Check, Users, Calendar, X } from 'lucide-react';
 import payrollConfigApi, { EmployeeDeduction, CreateEmployeeDeductionRequest } from '../../../services/payrollConfigApi';
 import apiService from '../../../services/api';
 import { useDynamicRBAC } from '../../RBACSystem/rbacSystem';
@@ -33,6 +33,8 @@ const EmployeeDeductions: React.FC = () => {
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  // Payroll month filter (YYYY-MM). Empty string = no filter (show all).
+  const [payrollMonth, setPayrollMonth] = useState<string>('');
 
   // Multi-select state, used both for bulk create and for editing a batch's membership
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
@@ -304,6 +306,25 @@ const EmployeeDeductions: React.FC = () => {
     return [...batchRows, ...singleRows];
   })();
 
+  // Same overlap rule the payroll run engine uses to decide whether a deduction
+  // applies to a given month: effective_from <= monthEnd AND (effective_to IS NULL OR effective_to >= monthStart)
+  const matchesPayrollMonth = (d: EmployeeDeduction): boolean => {
+    if (!payrollMonth) return true;
+    const [year, month] = payrollMonth.split('-').map(Number);
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+
+    const from = new Date(d.effective_from);
+    if (from > monthEnd) return false;
+
+    if (d.effective_to) {
+      const to = new Date(d.effective_to);
+      if (to < monthStart) return false;
+    }
+    return true;
+  };
+
   const filteredRows = rows.filter(row => {
     const rep = row.representative;
     const matchesSearch = rep.deduction_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -312,7 +333,8 @@ const EmployeeDeductions: React.FC = () => {
         m.employee_code?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     const matchesEmployee = !selectedEmployee || row.members.some(m => m.employee_id === selectedEmployee);
-    return matchesSearch && matchesEmployee;
+    const matchesMonth = row.members.some(m => matchesPayrollMonth(m));
+    return matchesSearch && matchesEmployee && matchesMonth;
   });
 
   if (loading) {
@@ -336,6 +358,11 @@ const EmployeeDeductions: React.FC = () => {
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Manage employee-specific deductions like loans, advances, and penalties
           </p>
+          {payrollMonth && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Showing deductions that apply to {new Date(`${payrollMonth}-01`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} payroll
+            </p>
+          )}
         </div>
         {canAdd && (
           <button
@@ -374,6 +401,26 @@ const EmployeeDeductions: React.FC = () => {
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+          <input
+            type="month"
+            value={payrollMonth}
+            onChange={(e) => setPayrollMonth(e.target.value)}
+            title="Show only deductions that apply to this payroll month"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
+          {payrollMonth && (
+            <button
+              type="button"
+              onClick={() => setPayrollMonth('')}
+              title="Clear month filter"
+              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -500,7 +547,11 @@ const EmployeeDeductions: React.FC = () => {
         <div className="text-center py-12">
           <Minus className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-500 dark:text-gray-400 text-lg">No deductions found</p>
-          <p className="text-gray-400 dark:text-gray-500 text-sm">Add deductions for specific employees</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm">
+            {payrollMonth
+              ? 'No deductions apply to the selected payroll month'
+              : 'Add deductions for specific employees'}
+          </p>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Search, User, Check, Users } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, User, Check, Users, Calendar, X } from 'lucide-react';
 import payrollConfigApi, { EmployeeAllowance, CreateEmployeeAllowanceRequest } from '../../../services/payrollConfigApi';
 import apiService from '../../../services/api';
 import { useDynamicRBAC } from '../../RBACSystem/rbacSystem';
@@ -33,6 +33,8 @@ const EmployeeAllowances: React.FC = () => {
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  // Payroll month filter (YYYY-MM). Empty string = no filter (show all).
+  const [payrollMonth, setPayrollMonth] = useState<string>('');
 
   // Multi-select state, used both for bulk create and for editing a batch's membership
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
@@ -298,6 +300,25 @@ const EmployeeAllowances: React.FC = () => {
     return [...batchRows, ...singleRows];
   })();
 
+  // Same overlap rule the payroll run engine uses to decide whether an allowance
+  // applies to a given month: effective_from <= monthEnd AND (effective_to IS NULL OR effective_to >= monthStart)
+  const matchesPayrollMonth = (a: EmployeeAllowance): boolean => {
+    if (!payrollMonth) return true;
+    const [year, month] = payrollMonth.split('-').map(Number);
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+
+    const from = new Date(a.effective_from);
+    if (from > monthEnd) return false;
+
+    if (a.effective_to) {
+      const to = new Date(a.effective_to);
+      if (to < monthStart) return false;
+    }
+    return true;
+  };
+
   const filteredRows = rows.filter(row => {
     const rep = row.representative;
     const matchesSearch = rep.allowance_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -306,7 +327,8 @@ const EmployeeAllowances: React.FC = () => {
         m.employee_code?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     const matchesEmployee = !selectedEmployee || row.members.some(m => m.employee_id === selectedEmployee);
-    return matchesSearch && matchesEmployee;
+    const matchesMonth = row.members.some(m => matchesPayrollMonth(m));
+    return matchesSearch && matchesEmployee && matchesMonth;
   });
 
   if (loading) {
@@ -329,6 +351,11 @@ const EmployeeAllowances: React.FC = () => {
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Assign specific allowances to individual employees
           </p>
+          {payrollMonth && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              Showing allowances that apply to {new Date(`${payrollMonth}-01`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} payroll
+            </p>
+          )}
         </div>
         {canAdd && (
           <button
@@ -367,6 +394,26 @@ const EmployeeAllowances: React.FC = () => {
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+          <input
+            type="month"
+            value={payrollMonth}
+            onChange={(e) => setPayrollMonth(e.target.value)}
+            title="Show only allowances that apply to this payroll month"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
+          {payrollMonth && (
+            <button
+              type="button"
+              onClick={() => setPayrollMonth('')}
+              title="Clear month filter"
+              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -471,7 +518,11 @@ const EmployeeAllowances: React.FC = () => {
       {filteredRows.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500 dark:text-gray-400 text-lg">No allowances found</p>
-          <p className="text-gray-400 dark:text-gray-500 text-sm">Add allowances to specific employees</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm">
+            {payrollMonth
+              ? 'No allowances apply to the selected payroll month'
+              : 'Add allowances to specific employees'}
+          </p>
         </div>
       )}
 
