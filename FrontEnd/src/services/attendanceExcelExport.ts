@@ -42,14 +42,26 @@ export async function exportAttendanceToExcel(
         employeeRecords.sort((a,b) => b.date.localeCompare(a.date));
     }
 
-    //now groups is set of sorted by date attendance record arrays, categorized employee wise
+    const isNumericCode = (code: string) => /^\d+$/.test(code);
+    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+        const aCode = a[0].employee_code || '';
+        const bCode = b[0].employee_code || '';
+        const aNum = isNumericCode(aCode);
+        const bNum = isNumericCode(bCode);
+        if (aNum && bNum) return parseInt(aCode) - parseInt(bCode);
+        if (aNum) return -1;
+        if (bNum) return 1;
+        return aCode.localeCompare(bCode);
+    });
+
+    //now groups is set of sorted by date attendance record arrays, categorized employee wise, ordered by employee code
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Sheet1');
 
     const headerRow = ws.addRow(['Employee', 'Check In', 'Check Out', 'Worked Hours', 'Over Time']);
     headerRow.font = { bold: true };
 
-        for (const employeeRecords of groups.values()) {
+        for (const employeeRecords of sortedGroups) {
         const first = employeeRecords[0];
 
         let totalOvertime = 0;
