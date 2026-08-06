@@ -80,6 +80,18 @@ const LivePayrollDashboard: React.FC = () => {
     setEarningsModal({ show: false, employee: null });
   };
 
+  const sortByEmployeeCode = (results: CalculatedPayroll[]) => {
+    const isNumericCode = (code: string) => /^\d+$/.test(code);
+    return [...results].sort((a, b) => {
+      const aNum = isNumericCode(a.employee_code);
+      const bNum = isNumericCode(b.employee_code);
+      if (aNum && bNum) return parseInt(a.employee_code) - parseInt(b.employee_code);
+      if (aNum) return -1;
+      if (bNum) return 1;
+      return a.employee_code.localeCompare(b.employee_code);
+    });
+  };
+
   const formatHours = (h: number) => {
     const hrs = Math.floor(h);
     const mins = Math.round((h - hrs) * 60);
@@ -381,7 +393,7 @@ const LivePayrollDashboard: React.FC = () => {
         console.log(`⚡ Calculated ${results.length} employees in ${calcTime.toFixed(0)}ms`);
         console.log(`📈 Total time: ${(fetchTime + calcTime).toFixed(0)}ms`);
 
-        setCalculatedResults(results);
+        setCalculatedResults(sortByEmployeeCode(results));
         setLastCalculated(new Date());
       } else {
         setError(response.message || 'Failed to load payroll data');
@@ -414,7 +426,7 @@ const LivePayrollDashboard: React.FC = () => {
     
     console.log("new updates",results)
 
-    setCalculatedResults(results);
+    setCalculatedResults(sortByEmployeeCode(results));
 
     setLastCalculated(new Date());
   }, [rawData]);
