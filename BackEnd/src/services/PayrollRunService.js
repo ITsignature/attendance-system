@@ -5564,6 +5564,25 @@ class PayrollRunService {
                 }
             }
 
+            // Subtrract break duration so standard hours match weekdya_hourly_rate's basis
+            // (payroll_records.weekday_hourly_rate is derived from break-deducted daily hours -
+            // See the same subtraction in getLivwPayrollData).Without this, leave/day-salary
+            // figures here overpay by the break duration relative to the live payrolldashboard
+
+            let breakdurationHoursForStandard = 0;
+
+            try{
+                const SettingsHelper = require('../utils/settingsHelper').SettingsHelper;
+                const settingsHelper = new SettingsHelper(clientId);
+                const breakSetting = await settingsHelper.getSetting('break_duration_hours');
+                breakdurationHoursForStandard = breakSetting ? Number(breakSetting) : 0;
+            } catch(error){
+                console.log('Error loading break_duration_hours,defaulting to 0: ', error.message);
+            }
+            standardWeekdayHours = Math.max(0, standardWeekdayHours - breakdurationHoursForStandard);
+            standardSaturdayHours = Math.max(0, standardSaturdayHours - breakdurationHoursForStandard);
+            standardSundayHours = Math.max(0, standardSundayHours - breakdurationHoursForStandard);    
+
             // Get daily attendance records for the employee-specific period
             const [attendanceRecords] = await db.execute(`
                 SELECT
