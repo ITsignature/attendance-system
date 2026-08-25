@@ -485,6 +485,7 @@ router.get('/employee-allowances',
                     e.employee_code,
                     COALESCE(NULLIF(CONCAT(TRIM(e.first_name), ' ', TRIM(e.last_name)), ' '), e.employee_code) as employee_name,
                     ea.allowance_type,
+                    ea.payment_category,
                     ea.allowance_name,
                     ea.amount,
                     ea.is_percentage,
@@ -524,6 +525,7 @@ router.post('/employee-allowances',
     [
         body('employee_id').isUUID().withMessage('Valid employee ID is required'),
         body('allowance_type').notEmpty().withMessage('Allowance type is required'),
+        body('payment_category').optional().isIn(['allowance', 'performance_incentive', 'salary_adjustment']),
         body('allowance_name').notEmpty().withMessage('Allowance name is required'),
         body('amount').isNumeric().withMessage('Amount must be numeric'),
         body('is_percentage').optional().isBoolean(),
@@ -555,6 +557,7 @@ router.post('/employee-allowances',
         const {
             employee_id,
             allowance_type,
+            payment_category = 'allowance',
             allowance_name,
             amount,
             is_percentage = false,
@@ -567,12 +570,12 @@ router.post('/employee-allowances',
         try {
             await db.execute(`
                 INSERT INTO employee_allowances (
-                    id, client_id, employee_id, allowance_type, allowance_name,
+                    id, client_id, employee_id, allowance_type, payment_category, allowance_name,
                     amount, is_percentage, deduct_from_base_salary, is_taxable, is_active,
                     effective_from, effective_to, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             `, [
-                allowanceId, clientId, employee_id, allowance_type, allowance_name,
+                allowanceId, clientId, employee_id, allowance_type, payment_category, allowance_name,
                 amount, is_percentage, deduct_from_base_salary, is_taxable, true,
                 effective_from, effective_to, userId
             ]);
@@ -601,6 +604,7 @@ router.put('/employee-allowances/:id',
     [
         param('id').isUUID().withMessage('Valid allowance ID is required'),
         body('allowance_type').optional().notEmpty(),
+        body('payment_category').optional().isIn(['allowance', 'performance_incentive', 'salary_adjustment']),
         body('allowance_name').optional().notEmpty(),
         body('amount').optional().isNumeric(),
         body('is_percentage').optional().isBoolean(),
@@ -780,6 +784,7 @@ router.post('/employee-allowance-batches',
         body('employee_ids').isArray({ min: 1 }).withMessage('At least one employee is required'),
         body('employee_ids.*').isUUID().withMessage('Valid employee IDs are required'),
         body('allowance_type').notEmpty().withMessage('Allowance type is required'),
+        body('payment_category').optional().isIn(['allowance', 'performance_incentive', 'salary_adjustment']),
         body('allowance_name').notEmpty().withMessage('Allowance name is required'),
         body('amount').isNumeric().withMessage('Amount must be numeric'),
         body('is_percentage').optional().isBoolean(),
@@ -805,6 +810,7 @@ router.post('/employee-allowance-batches',
         const {
             employee_ids,
             allowance_type,
+            payment_category = 'allowance',
             allowance_name,
             amount,
             is_percentage = false,
@@ -823,23 +829,23 @@ router.post('/employee-allowance-batches',
 
             await connection.execute(`
                 INSERT INTO employee_allowance_batches (
-                    id, client_id, allowance_type, allowance_name, amount, is_percentage,
+                    id, client_id, allowance_type, payment_category, allowance_name, amount, is_percentage,
                     deduct_from_base_salary, is_taxable, is_active, effective_from, effective_to, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             `, [
-                batchId, clientId, allowance_type, allowance_name, amount, is_percentage,
+                batchId, clientId, allowance_type, payment_category, allowance_name, amount, is_percentage,
                 deduct_from_base_salary, is_taxable, true, effective_from, effective_to, userId
             ]);
 
             for (const employeeId of uniqueEmployeeIds) {
                 await connection.execute(`
                     INSERT INTO employee_allowances (
-                        id, client_id, batch_id, employee_id, allowance_type, allowance_name,
+                        id, client_id, batch_id, employee_id, allowance_type, payment_category, allowance_name,
                         amount, is_percentage, deduct_from_base_salary, is_taxable, is_active,
                         effective_from, effective_to, created_by, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                 `, [
-                    uuidv4(), clientId, batchId, employeeId, allowance_type, allowance_name,
+                    uuidv4(), clientId, batchId, employeeId, allowance_type, payment_category, allowance_name,
                     amount, is_percentage, deduct_from_base_salary, is_taxable, true,
                     effective_from, effective_to, userId
                 ]);
@@ -874,6 +880,7 @@ router.put('/employee-allowance-batches/:id',
     [
         param('id').isUUID().withMessage('Valid batch ID is required'),
         body('allowance_type').optional().notEmpty(),
+        body('payment_category').optional().isIn(['allowance', 'performance_incentive', 'salary_adjustment']),
         body('allowance_name').optional().notEmpty(),
         body('amount').optional().isNumeric(),
         body('is_percentage').optional().isBoolean(),
@@ -901,7 +908,7 @@ router.put('/employee-allowance-batches/:id',
         const { employee_ids, ...rawFields } = req.body;
 
         const ALLOWED_BATCH_FIELDS = [
-            'allowance_type', 'allowance_name', 'amount', 'is_percentage',
+            'allowance_type', 'payment_category', 'allowance_name', 'amount', 'is_percentage',
             'deduct_from_base_salary', 'is_taxable', 'effective_from', 'effective_to'
         ];
         const sharedFields = {};
@@ -971,12 +978,12 @@ router.put('/employee-allowance-batches/:id',
                     for (const employeeId of toAdd) {
                         await connection.execute(`
                             INSERT INTO employee_allowances (
-                                id, client_id, batch_id, employee_id, allowance_type, allowance_name,
+                                id, client_id, batch_id, employee_id, allowance_type, payment_category, allowance_name,
                                 amount, is_percentage, deduct_from_base_salary, is_taxable, is_active,
                                 effective_from, effective_to, created_by, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                         `, [
-                            uuidv4(), clientId, batchId, employeeId, b.allowance_type, b.allowance_name,
+                            uuidv4(), clientId, batchId, employeeId, b.allowance_type, b.payment_category, b.allowance_name,
                             b.amount, b.is_percentage, b.deduct_from_base_salary, b.is_taxable, true,
                             b.effective_from, b.effective_to, userId
                         ]);

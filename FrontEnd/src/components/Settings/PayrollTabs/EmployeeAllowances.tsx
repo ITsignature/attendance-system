@@ -50,6 +50,7 @@ const EmployeeAllowances: React.FC = () => {
   const [formData, setFormData] = useState<Omit<CreateEmployeeAllowanceRequest, 'employee_id'> & { employee_id: string }>({
     employee_id: '',
     allowance_type: '',
+    payment_category: 'allowance',
     allowance_name: '',
     amount: 0,
     is_percentage: false,
@@ -154,6 +155,7 @@ const EmployeeAllowances: React.FC = () => {
     setFormData({
       employee_id: allowance.employee_id,
       allowance_type: allowance.allowance_type,
+      payment_category: allowance.payment_category || 'allowance',
       allowance_name: allowance.allowance_name,
       amount: allowance.amount,
       is_percentage: allowance.is_percentage,
@@ -174,6 +176,7 @@ const EmployeeAllowances: React.FC = () => {
       setFormData({
         employee_id: '',
         allowance_type: batch.allowance_type,
+        payment_category: batch.payment_category || 'allowance',
         allowance_name: batch.allowance_name,
         amount: batch.amount,
         is_percentage: batch.is_percentage,
@@ -229,6 +232,7 @@ const EmployeeAllowances: React.FC = () => {
     setFormData({
       employee_id: '',
       allowance_type: '',
+      payment_category: 'allowance',
       allowance_name: '',
       amount: 0,
       is_percentage: false,
@@ -457,6 +461,12 @@ const EmployeeAllowances: React.FC = () => {
                       </span>
                     </div>
                     <div>
+                      <span className="text-gray-500 dark:text-gray-400">Category:</span>
+                      <span className="ml-2 text-gray-900 dark:text-white capitalize">
+                        {(allowance.payment_category || 'allowance').replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div>
                       <span className="text-gray-500 dark:text-gray-400">Type:</span>
                       <span className="ml-2 text-gray-900 dark:text-white capitalize">
                         {allowance.allowance_type.replace('_', ' ')}
@@ -623,6 +633,22 @@ const EmployeeAllowances: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Payment Category
+                </label>
+                <select
+                  required
+                  value={formData.payment_category}
+                  onChange={(e) => setFormData({ ...formData, payment_category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  {payrollConfigApi.getPaymentCategories().map(category => (
+                    <option key={category.value} value={category.value}>{category.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div>

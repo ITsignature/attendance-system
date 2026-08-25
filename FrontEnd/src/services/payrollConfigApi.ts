@@ -29,6 +29,7 @@ export interface EmployeeAllowance {
   employee_name?: string;
   employee_code?: string;
   allowance_type: string;
+  payment_category: string;
   allowance_name: string;
   amount: number;
   is_percentage: boolean;
@@ -91,6 +92,7 @@ export interface EmployeeAllowanceBatch {
   id: string;
   client_id: string;
   allowance_type: string;
+  payment_category: string;
   allowance_name: string;
   amount: number;
   is_percentage: boolean;
@@ -118,6 +120,7 @@ export interface CreateDeductionBatchRequest {
 export interface CreateAllowanceBatchRequest {
   employee_ids: string[];
   allowance_type: string;
+  payment_category?: string;
   allowance_name: string;
   amount: number;
   is_percentage?: boolean;
@@ -143,6 +146,7 @@ export interface CreatePayrollComponentRequest {
 export interface CreateEmployeeAllowanceRequest {
   employee_id: string;
   allowance_type: string;
+  payment_category?: string;
   allowance_name: string;
   amount: number;
   is_percentage?: boolean;
@@ -336,6 +340,14 @@ class PayrollConfigApiService {
       { value: 'insurance', label: 'Insurance' },
       { value: 'loan', label: 'Loan Deductions' },
       { value: 'other', label: 'Other' }
+    ];
+  }
+
+  getPaymentCategories() {
+    return [
+      { value: 'allowance', label: 'Allowance' },
+      { value: 'performance_incentive', label: 'Performance Incentive' },
+      { value: 'salary_adjustment', label: 'Salary Adjustment' }
     ];
   }
 
