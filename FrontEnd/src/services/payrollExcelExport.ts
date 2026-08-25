@@ -89,9 +89,14 @@ export async function exportLivePayrollToExcel(
   const rawByEmpId = new Map<string, any>(rawEmployees.map(e => [e.employee_id, e]));
 
   // ── Collect dynamic column labels ─────────────────────────────────────────
-  const allowanceNames = [...new Set(
-    calculatedResults.flatMap(r => (r.allowances_breakdown || []).map(a => a.name))
-  )].sort();
+  // Allowances are grouped into the 3 fixed payment categories rather than by
+  // individual allowance name.
+  const PAYMENT_CATEGORIES: { key: string; label: string }[] = [
+    { key: 'allowance',             label: 'Allowance' },
+    { key: 'performance_incentive', label: 'Performance Incentive' },
+    { key: 'salary_adjustment',     label: 'Salary Adjustment' }
+  ];
+  const allowanceNames = PAYMENT_CATEGORIES.map(c => c.label);
 
   const advanceTypes = [...new Set(
     rawEmployees.flatMap(e =>
@@ -233,8 +238,11 @@ export async function exportLivePayrollToExcel(
     row[OT_AMOUNT-1]    = result.overtime_amount || 0;
 
     const allowMap: Record<string,number> = {};
-    (result.allowances_breakdown||[]).forEach(a => { allowMap[a.name]=(allowMap[a.name]||0)+a.amount; });
-    allowanceNames.forEach((nm,i) => { row[AL_S-1+i] = allowMap[nm]||0; });
+    (result.allowances_breakdown||[]).forEach(a => {
+      const cat = a.payment_category || 'allowance';
+      allowMap[cat] = (allowMap[cat]||0) + a.amount;
+    });
+    PAYMENT_CATEGORIES.forEach((c,i) => { row[AL_S-1+i] = allowMap[c.key]||0; });
 
     row[BONUS-1]  = result.bonuses_total || 0;
     row[GROSS-1]  = round2((result.base_salary||0)+(result.overtime_amount||0)+(result.allowances_total||0));

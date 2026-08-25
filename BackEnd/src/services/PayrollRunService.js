@@ -4478,6 +4478,7 @@ class PayrollRunService {
                     ea.employee_id,
                     ea.id,
                     ea.allowance_type,
+                    ea.payment_category,
                     ea.allowance_name,
                     ea.amount,
                     ea.is_percentage,
@@ -4896,6 +4897,7 @@ class PayrollRunService {
                     id: comp.id,
                     allowance_name: comp.component_name,
                     allowance_type: comp.category,
+                    payment_category: 'allowance',
                     amount: comp.calculation_value,
                     is_percentage: comp.calculation_type === 'percentage',
                     is_taxable: comp.is_taxable || false
