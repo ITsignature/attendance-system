@@ -120,8 +120,8 @@ export async function exportLivePayrollToExcel(
   // Allow: 20..20+N-1
   // Bonus: 20+N
   // Gross: 20+N+1
-  // Unpaid(Hr): 20+N+2
-  // Unpaid: 20+N+3
+  // NoPay: 20+N+2
+  // Late/Early Deductions: 20+N+3
   // Advances: 20+N+4 .. +4+M-1
   // Loans: 20+N+4+M .. +3+M+K
   // Ded: 20+N+4+M+K .. +3+M+K+D
@@ -150,9 +150,9 @@ export async function exportLivePayrollToExcel(
   const AL_S    = OT_AMOUNT + 1;
   const BONUS   = AL_S + N;
   const GROSS   = BONUS + 1;
-  const UNP_HR  = GROSS + 1;
-  const UNP_AMT = UNP_HR + 1;
-  const ADV_S   = UNP_AMT + 1;
+  const NOPAY       = GROSS + 1;
+  const LATE_EARLY  = NOPAY + 1;
+  const ADV_S       = LATE_EARLY + 1;
   const LOAN_S  = ADV_S + M;
   const DED_S   = LOAN_S + K;
   const TOT_DED = DED_S + D;
@@ -248,14 +248,10 @@ export async function exportLivePayrollToExcel(
     row[GROSS-1]  = round2((result.base_salary||0)+(result.overtime_amount||0)+(result.allowances_total||0));
 
     const sc = result.shortfall_by_cause;
-    let unpHr = 0;
-    if (sc) {
-      unpHr += sc.time_variance?.hours||0;
-      unpHr += sc.unpaid_time_off?.hours||0;
-      if (whRate>0 && sc.absent_days?.deduction) unpHr += sc.absent_days.deduction/whRate;
-    }
-    row[UNP_HR-1]  = round2(unpHr);
-    row[UNP_AMT-1] = result.attendance_shortfall || 0;
+    const noPay     = (sc?.absent_days?.deduction||0) + (sc?.unpaid_time_off?.deduction||0);
+    const lateEarly = sc?.time_variance?.deduction||0;
+    row[NOPAY-1]      = round2(noPay);
+    row[LATE_EARLY-1] = round2(lateEarly);
 
     const advMap: Record<string,number> = {};
     (raw.financial?.advanceRecords||[]).forEach((a:any)=>{
@@ -294,7 +290,7 @@ export async function exportLivePayrollToExcel(
 
   // ── Totals row ────────────────────────────────────────────────────────────
   const numSumCols = new Set([
-    6, GROSS, UNP_AMT, BONUS, NET, TOT_DED,
+    6, GROSS, NOPAY, LATE_EARLY, BONUS, NET, TOT_DED,
     OT_AMOUNT,  // OT Amount (not OT hours/rates)
     ...allowanceNames.map((_,i)=>AL_S+i),
     ...advanceTypes.map((_,i)=>ADV_S+i),
@@ -366,7 +362,7 @@ export async function exportLivePayrollToExcel(
   if (N > 0) addGroupHeader(AL_S, AL_S+N-1, 'Allowances', C.hdrAllow);
   addGroupHeader(BONUS, BONUS, 'Bonus', C.hdrAllow);
   addGroupHeader(GROSS, GROSS, 'Gross Salary', C.hdrAllow);
-  addGroupHeader(UNP_HR, UNP_AMT, 'Unpaid', C.hdrUnpaid);
+  addGroupHeader(NOPAY, LATE_EARLY, 'Unpaid', C.hdrUnpaid);
   if (M > 0) addGroupHeader(ADV_S, ADV_S+M-1, 'Advances', C.hdrAdv);
   if (K > 0) addGroupHeader(LOAN_S, LOAN_S+K-1, 'Loans', C.hdrLoan);
   if (D > 0) addGroupHeader(DED_S, DED_S+D-1, 'Deductions', C.hdrDed);
@@ -389,7 +385,7 @@ export async function exportLivePayrollToExcel(
     [OT_AMOUNT,    'OT Amount'],
     ...allowanceNames.map((nm, i): [number,string] => [AL_S+i, nm]),
     [BONUS, 'Bonus'], [GROSS, 'Gross Salary'],
-    [UNP_HR, 'Unpaid (Hr)'], [UNP_AMT, 'Unpaid'],
+    [NOPAY, 'NoPay'], [LATE_EARLY, 'Late/Early Deductions'],
     ...advanceTypes.map((t, i): [number,string] => [ADV_S+i, t]),
     ...loanTypes.map((t, i): [number,string] => [LOAN_S+i, t]),
     ...deductionNames.map((nm, i): [number,string] => [DED_S+i, nm]),
@@ -410,7 +406,7 @@ export async function exportLivePayrollToExcel(
     OT_WD_RATE, OT_WD_HRS, OT_SAT_RATE, OT_SAT_HRS, OT_SUN_RATE, OT_SUN_HRS,
     OT_HOL_RATE, OT_HOL_HRS, OT_STAT_RATE, OT_STAT_HRS, OT_AMOUNT,
     ...allowanceNames.map((_,i)=>AL_S+i),
-    BONUS, GROSS, UNP_HR, UNP_AMT,
+    BONUS, GROSS, NOPAY, LATE_EARLY,
     ...advanceTypes.map((_,i)=>ADV_S+i),
     ...loanTypes.map((_,i)=>LOAN_S+i),
     ...deductionNames.map((_,i)=>DED_S+i),
