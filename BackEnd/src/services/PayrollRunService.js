@@ -1584,6 +1584,37 @@ class PayrollRunService {
         console.log(`\n   📊 Full Period Working Days for ${employeeName} (${employeeCode}):`);
         console.log(`      Weekdays: ${fullPeriodWeekdays}, Saturdays: ${fullPeriodSaturdays}, Sundays: ${fullPeriodSundays}`);
 
+        // ============================================
+        // NO-PAY RATE (base salary + 'allowance'-category allowances) / 30
+        // ============================================
+        // Absent days and unpaid time off are deducted against base salary + allowances,
+        // per client requirement — distinct from time-variance shortfall, which stays on
+        // the base-salary-only rate. Only allowances tagged payment_category = 'allowance'
+        // count (performance incentives / salary adjustments are excluded).
+        const [noPayAllowanceRows] = await db.execute(`
+            SELECT amount, is_percentage
+            FROM employee_allowances
+            WHERE employee_id = ? AND client_id = ? AND is_active = 1
+            AND payment_category = 'allowance'
+            AND (effective_to IS NULL OR effective_to >= ?)
+            AND effective_from <= ?
+        `, [employeeId, clientId, period.period_start_date, calculationEndDate]);
+
+        const noPayAllowanceTotal = noPayAllowanceRows.reduce((sum, a) => {
+            const amt = parseFloat(a.amount) || 0;
+            return sum + (a.is_percentage ? (baseSalary * amt) / 100 : amt);
+        }, 0);
+
+        const noPayDailySalary = (baseSalary + noPayAllowanceTotal) / 30;
+        const noPayWeekdayHourlyRate  = weekdayDailyHours  > 0 ? noPayDailySalary / weekdayDailyHours  : 0;
+        const noPaySaturdayHourlyRate = saturdayDailyHours > 0 ? noPayDailySalary / saturdayDailyHours : 0;
+        const noPaySundayHourlyRate   = sundayDailyHours   > 0 ? noPayDailySalary / sundayDailyHours   : 0;
+
+        console.log(`\n   💵 No-Pay Rate (base + allowances) for ${employeeName} (${employeeCode}):`);
+        console.log(`      Allowance Total: Rs.${noPayAllowanceTotal.toFixed(2)}`);
+        console.log(`      No-Pay Daily Salary: Rs.${noPayDailySalary.toFixed(2)}`);
+        console.log(`      No-Pay Weekday/Sat/Sun Hourly Rate: Rs.${noPayWeekdayHourlyRate.toFixed(2)} / Rs.${noPaySaturdayHourlyRate.toFixed(2)} / Rs.${noPaySundayHourlyRate.toFixed(2)}`);
+
         // Calculate working days for expected hours
         // For FINAL mode: Include today as a full working day
         // For LIVE mode: Use yesterday, then add today's partial hours separately
@@ -1993,9 +2024,9 @@ class PayrollRunService {
             }
         }
 
-        const unpaidLeaveDeduction = (unpaidLeaveWeekdayHours * weekdayHourlyRate) +
-                                     (unpaidLeaveSaturdayHours * saturdayHourlyRate) +
-                                     (unpaidLeaveSundayHours * sundayHourlyRate);
+        const unpaidLeaveDeduction = (unpaidLeaveWeekdayHours * noPayWeekdayHourlyRate) +
+                                     (unpaidLeaveSaturdayHours * noPaySaturdayHourlyRate) +
+                                     (unpaidLeaveSundayHours * noPaySundayHourlyRate);
 
         // leaveHoursByDate is now fully populated (paid + unpaid). Recompute attendance hours
         // with a per-day cap so that on any leave date, attendance credit + leave credit never
@@ -2338,8 +2369,11 @@ class PayrollRunService {
 
         // Calculate deduction: EXPECTED EARNED (until NOW) - ACTUAL EARNED (until NOW)
         // Non-working day credit is returned separately and added on top — not mixed into deduction logic
+        // This is provisional — reassigned below (after time_variance/unpaid_time_off/absent_days
+        // are broken out) to price the no-pay causes at the base+allowance rate. See reassignment
+        // near the shortfall_by_cause block for the authoritative value.
         const totalActualEarnedAdjusted = totalActualEarned;
-        const deduction = Math.max(0, totalExpectedEarned - totalActualEarnedAdjusted);
+        let deduction = Math.max(0, totalExpectedEarned - totalActualEarnedAdjusted);
 
         const currentTimeStr = new Date().toLocaleString('en-US', {
             year: 'numeric',
@@ -2472,9 +2506,9 @@ class PayrollRunService {
                     const outT = new Date(`2000-01-01T${leave.end_time}`);
                     dailyHrs = (!isNaN(inT) && !isNaN(outT) && outT > inT) ? (outT - inT) / (1000 * 60 * 60) : 0;
                 }
-                const rate = dow >= 1 && dow <= 5 ? weekdayHourlyRate
-                           : dow === 6             ? saturdayHourlyRate
-                                                   : sundayHourlyRate;
+                const rate = dow >= 1 && dow <= 5 ? noPayWeekdayHourlyRate
+                           : dow === 6             ? noPaySaturdayHourlyRate
+                                                   : noPaySundayHourlyRate;
                 leaveTotalHours += dailyHrs;
                 leaveDeduction  += dailyHrs * rate;
                 cur.setDate(cur.getDate() + 1);
@@ -2599,18 +2633,18 @@ class PayrollRunService {
             const dow = cur.getDay();
             let isWorkingDay = false;
             let dailyHrs = 0;
-            let rate = weekdayHourlyRate;
+            let rate = noPayWeekdayHourlyRate;
             if (dow >= 1 && dow <= 5) {
                 isWorkingDay = true;
                 dailyHrs = weekdayDailyHours;
             } else if (dow === 6 && isConfiguredWorkingDay(ds, 'saturday')) {
                 isWorkingDay = true;
                 dailyHrs = saturdayDailyHours;
-                rate = saturdayHourlyRate;
+                rate = noPaySaturdayHourlyRate;
             } else if (dow === 0 && isConfiguredWorkingDay(ds, 'sunday')) {
                 isWorkingDay = true;
                 dailyHrs = sundayDailyHours;
-                rate = sundayHourlyRate;
+                rate = noPaySundayHourlyRate;
             }
             if (isWorkingDay && !attendedDates.has(ds) && !leaveHoursByDate.has(ds) && !absentHolidaySet.has(ds)) {
                 absentDaysDetails.push({
@@ -2623,7 +2657,14 @@ class PayrollRunService {
         const absentDaysDeduction = absentDaysDetails.reduce((sum, d) => sum + d.deduction, 0);
 
         console.log(`\n      ❌ Absent Days Deduction for ${employeeName} (${employeeCode}): Rs.${absentDaysDeduction.toFixed(2)}`);
-        console.log(`      Total Shortfall: Rs.${deduction.toFixed(2)} | Breakdown (informational, may overlap): Unpaid Leaves (${unpaidLeaveDeduction.toFixed(2)}) | Time Variance (${timeVarianceDeduction.toFixed(2)}) | Absent Days (${absentDaysDeduction.toFixed(2)})`);
+
+        // Reassign the authoritative deduction as the exact sum of the three causes: time_variance
+        // stays priced at the base-salary rate, while unpaid_time_off + absent_days are priced at
+        // the no-pay (base + allowance) rate computed above. This replaces the provisional
+        // uniform-rate value so shortfall_by_cause always matches net_salary exactly.
+        deduction = Math.round((timeVarianceDeduction + unpaidLeaveDeduction + absentDaysDeduction) * 100) / 100;
+
+        console.log(`      Total Shortfall: Rs.${deduction.toFixed(2)} | Breakdown: Unpaid Leaves (${unpaidLeaveDeduction.toFixed(2)}) | Time Variance (${timeVarianceDeduction.toFixed(2)}) | Absent Days (${absentDaysDeduction.toFixed(2)})`);
 
         return {
             total: deduction,
