@@ -144,14 +144,17 @@ router.get('/attendance-overview',
         COUNT(CASE WHEN a.id IS NULL THEN 1 END) as absent_count,
         COUNT(CASE WHEN a.arrival_status = 'voluntary_work' THEN 1 END) as voluntary_work_count,
         COUNT(CASE WHEN a.arrival_status = 'scheduled_off' THEN 1 END) as scheduled_off_count,
+        MAX(CASE WHEN h.id IS NOT NULL THEN 1 ELSE 0 END) as is_holiday,
+        MAX(h.name) as holiday_name,
         ROUND(
           ((COUNT(CASE WHEN a.arrival_status = 'on_time' THEN 1 END) + COUNT(CASE WHEN a.arrival_status = 'late' THEN 1 END)) * 100.0 / COUNT(ed.employee_id)), 2
         ) as attendance_percentage
       FROM employee_dates ed
       LEFT JOIN attendance a ON ed.employee_id = a.employee_id AND ed.date = a.date
+      LEFT JOIN holidays h ON h.client_id = ? AND h.date = ed.date AND h.applies_to_all = TRUE
       GROUP BY ed.date, DAYNAME(ed.date)
       ORDER BY ed.date
-    `, [clientId]);
+    `, [clientId, clientId]);
 
     res.status(200).json({
       success: true,

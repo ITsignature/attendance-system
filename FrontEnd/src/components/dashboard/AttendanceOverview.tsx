@@ -11,6 +11,9 @@ interface WeeklyAttendanceData {
   late_count: number;
   absent_count: number;
   on_leave_count: number;
+  voluntary_work_count: number;
+  is_holiday: number;
+  holiday_name: string | null;
   attendance_percentage: number;
 }
 
@@ -64,6 +67,7 @@ const AttendanceOverview = () => {
         categories: dayOrder.map(d => [dayLabel(d), ""]),
         onTimeData: [0, 0, 0, 0, 0, 0, 0],
         lateData: [0, 0, 0, 0, 0, 0, 0],
+        voluntaryWorkData: [0, 0, 0, 0, 0, 0, 0],
         absentData: [0, 0, 0, 0, 0, 0, 0],
       };
     }
@@ -73,22 +77,33 @@ const AttendanceOverview = () => {
     const categories: String[][] = [];
     const onTimeData: number[] = [];
     const lateData: number[] = [];
+    const voluntaryWorkData: number[] = [];
     const absentData: number[] = [];
 
     dayOrder.forEach(day => {
       const dayData = dataMap.get(day);
       categories.push([dayLabel(day), dayData && !isMobile ? formatDate(dayData.date) : ""]);
       if (dayData && dayData.total_records > 0) {
-        const onTimePercent = Math.round((dayData.present_count / dayData.total_records) * 100);
-        const latePercent = Math.round((dayData.late_count / dayData.total_records) * 100);
         const absentPercent = Math.round((dayData.absent_count / dayData.total_records) * 100);
 
-        onTimeData.push(onTimePercent);
-        lateData.push(latePercent);
+        if (dayData.is_holiday) {
+          // On holidays, on_time/late don't apply — show voluntary work instead
+          const voluntaryWorkPercent = Math.round((dayData.voluntary_work_count / dayData.total_records) * 100);
+          onTimeData.push(0);
+          lateData.push(0);
+          voluntaryWorkData.push(voluntaryWorkPercent);
+        } else {
+          const onTimePercent = Math.round((dayData.present_count / dayData.total_records) * 100);
+          const latePercent = Math.round((dayData.late_count / dayData.total_records) * 100);
+          onTimeData.push(onTimePercent);
+          lateData.push(latePercent);
+          voluntaryWorkData.push(0);
+        }
         absentData.push(absentPercent);
       } else {
         onTimeData.push(0);
         lateData.push(0);
+        voluntaryWorkData.push(0);
         absentData.push(0);
       }
     });
@@ -97,11 +112,12 @@ const AttendanceOverview = () => {
       categories: categories,
       onTimeData,
       lateData,
+      voluntaryWorkData,
       absentData,
     };
   };
 
-  const { categories, onTimeData, lateData, absentData } = calculatePercentages();
+  const { categories, onTimeData, lateData, voluntaryWorkData, absentData } = calculatePercentages();
 
   const attendanceData = {
     series: [
@@ -112,6 +128,10 @@ const AttendanceOverview = () => {
       {
         name: "Late",
         data: lateData,
+      },
+      {
+        name: "Voluntary Work",
+        data: voluntaryWorkData,
       },
       {
         name: "Absent",
@@ -127,9 +147,13 @@ const AttendanceOverview = () => {
   const avgLate = lateData.length > 0
     ? Math.round(lateData.reduce((a, b) => a + b, 0) / lateData.filter(d => d > 0).length) || 0
     : 0;
+  const avgVoluntaryWork = voluntaryWorkData.length > 0
+    ? Math.round(voluntaryWorkData.reduce((a, b) => a + b, 0) / voluntaryWorkData.filter(d => d > 0).length) || 0
+    : 0;
   const avgAbsent = absentData.length > 0
     ? Math.round(absentData.reduce((a, b) => a + b, 0) / absentData.filter(d => d > 0).length) || 0
     : 0;
+  const hasHolidayInWeek = voluntaryWorkData.some(d => d > 0);
 
   const optionsBarChart: ApexOptions = {
     chart: {
@@ -144,7 +168,7 @@ const AttendanceOverview = () => {
         show: false,
       },
     },
-    colors: ["#22c55e", "#fbbf24", "#ef4444"], // Green, Yellow, Red
+    colors: ["#22c55e", "#fbbf24", "#3b82f6", "#ef4444"], // Green, Yellow, Blue, Red
     dataLabels: {
       enabled: true,
       style: {
@@ -316,7 +340,7 @@ const AttendanceOverview = () => {
           </div>
 
           {/* Summary stats */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className={`grid ${hasHolidayInWeek ? "grid-cols-4" : "grid-cols-3"} gap-2 sm:gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700`}>
             <div className="text-center">
               <div className="text-lg sm:text-2xl font-bold text-green-500">{avgOnTime}%</div>
               <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Average On Time</div>
@@ -325,6 +349,12 @@ const AttendanceOverview = () => {
               <div className="text-lg sm:text-2xl font-bold text-yellow-500">{avgLate}%</div>
               <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Average Late</div>
             </div>
+            {hasHolidayInWeek && (
+              <div className="text-center">
+                <div className="text-lg sm:text-2xl font-bold text-blue-500">{avgVoluntaryWork}%</div>
+                <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Average Voluntary Work</div>
+              </div>
+            )}
             <div className="text-center">
               <div className="text-lg sm:text-2xl font-bold text-red-500">{avgAbsent}%</div>
               <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Average Absent</div>
