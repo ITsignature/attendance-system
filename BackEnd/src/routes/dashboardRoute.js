@@ -300,4 +300,5 @@ router.get('/attendance-trends',
   })
 );
 
+
 module.exports = router;
