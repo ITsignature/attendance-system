@@ -12,6 +12,38 @@ const path = require('path');
 
 const router = express.Router();
 
+/**
+ * Returns true if the given date is a configured working Saturday/Sunday for the
+ * employee — i.e. the day whose worked hours should be treated as regular pay
+ * rather than 100% overtime. Mirrors isConfiguredWorkingDay() in PayrollRunService.js.
+ * dayType is 'saturday' or 'sunday'.
+ */
+const isConfiguredWorkingWeekendDay = (dateStr, dayType, weekendWorkingConfig, companyDefaultWeekendConfig) => {
+  if (!weekendWorkingConfig) return true; // no config at all → backward compat → all working
+  const dayConfig = weekendWorkingConfig[dayType];
+  if (!dayConfig?.working) return false; // employee not marked as working that day type at all
+  const monthlySchedule = dayConfig.monthly_schedule;
+  if (monthlySchedule === undefined) return true; // absent → backward compat → all working
+  if (monthlySchedule === null) {
+    // null = use company default schedule
+    if (!companyDefaultWeekendConfig) return true; // no company default → all working
+    const companyDayConfig = companyDefaultWeekendConfig[dayType];
+    if (!companyDayConfig?.monthly_schedule) return true; // no company schedule → all working
+    const d = new Date(dateStr);
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const nth = Math.ceil(d.getDate() / 7);
+    const monthPattern = companyDayConfig.monthly_schedule[yearMonth];
+    return Array.isArray(monthPattern) && monthPattern.includes(nth);
+  }
+  // Has own monthly_schedule object — use it directly
+  if (Object.keys(monthlySchedule).length === 0) return true; // empty → backward compat
+  const d = new Date(dateStr);
+  const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const nth = Math.ceil(d.getDate() / 7);
+  const monthPattern = monthlySchedule[yearMonth];
+  return Array.isArray(monthPattern) && monthPattern.includes(nth);
+};
+
 // File logger for debugging fingerprint endpoint
 const logToFile = (message) => {
   try {
@@ -2106,6 +2138,7 @@ router.get('/',
     e.in_time AS scheduled_in_time,
     e.out_time AS scheduled_out_time,
     e.follows_company_schedule,
+    e.weekend_working_config,
     d.name AS department_name,
     de.title AS designation_name
 FROM attendance a
@@ -2117,9 +2150,55 @@ ORDER BY a.${sortBy} ${sortOrder}
 LIMIT ? OFFSET ?
 
     `;
-    
+
     queryParams.push(parseInt(limit), parseInt(offset));
     const [attendance] = await db.execute(query, queryParams);
+
+    // Annotate weekend rows (is_weekend 1=Sunday, 7=Saturday) with whether that specific
+    // date is a configured working day for the employee, and compute the "true" overtime
+    // (unconfigured weekend days count 100% of worked time as OT, not just pre/post-shift).
+    const hasWeekendRows = attendance.some(r => r.is_weekend === 1 || r.is_weekend === 7);
+    if (hasWeekendRows) {
+      const [companyDefaultRow] = await db.execute(
+        `SELECT setting_value FROM system_settings WHERE client_id = ? AND setting_key = 'default_weekend_working_config' LIMIT 1`,
+        [req.user.clientId]
+      );
+      let companyDefaultWeekendConfig = null;
+      try {
+        companyDefaultWeekendConfig = companyDefaultRow[0]?.setting_value
+          ? JSON.parse(companyDefaultRow[0].setting_value)
+          : null;
+      } catch (e) { companyDefaultWeekendConfig = null; }
+
+      for (const record of attendance) {
+        if (record.is_weekend !== 1 && record.is_weekend !== 7) continue;
+
+        let weekendWorkingConfig = null;
+        try {
+          weekendWorkingConfig = record.weekend_working_config ? JSON.parse(record.weekend_working_config) : null;
+        } catch (e) { weekendWorkingConfig = null; }
+
+        const dayType = record.is_weekend === 7 ? 'saturday' : 'sunday';
+        const dateStr = record.date instanceof Date ? record.date.toISOString().split('T')[0] : String(record.date).split('T')[0];
+        const isConfigured = isConfiguredWorkingWeekendDay(dateStr, dayType, weekendWorkingConfig, companyDefaultWeekendConfig);
+
+        record.is_configured_weekend_day = isConfigured;
+
+        if (!isConfigured && record.check_in_time && record.check_out_time) {
+          // Unconfigured weekend day: ALL actual worked time counts as overtime,
+          // not just pre/post-shift OT against a schedule that doesn't apply.
+          // None of it counts as regular "worked hours" since it isn't a scheduled work day.
+          const inT = new Date(`2000-01-01T${record.check_in_time}`);
+          const outT = new Date(`2000-01-01T${record.check_out_time}`);
+          if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+            record.overtime_hours = (outT - inT) / 1000 / 3600;
+            record.payable_duration = 0;
+            record.pre_shift_overtime_seconds = 0;
+            record.post_shift_overtime_seconds = 0;
+          }
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,

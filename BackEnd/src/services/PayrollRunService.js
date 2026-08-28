@@ -145,7 +145,11 @@ class PayrollRunService {
                     e.employee_type,
                     e.department_id,
                     e.designation_id,
-                    e.client_id
+                    e.client_id,
+                    e.saturday_ot_multiplier,
+                    e.sunday_ot_multiplier,
+                    e.holiday_ot_multiplier,
+                    e.statutory_holiday_ot_multiplier
                 FROM payroll_records pr
                 JOIN employees e ON pr.employee_id = e.id
                 WHERE pr.run_id = ? AND pr.calculation_status = 'pending'
@@ -811,6 +815,7 @@ class PayrollRunService {
         // =============================================
         let actualEarnedBaseSalary;
         let attendanceDeduction;
+        let unconfiguredWeekendOvertime = null;
 
         if (!attendanceAffectsSalary) {
             // Employee gets full salary regardless of attendance
@@ -834,6 +839,7 @@ class PayrollRunService {
             actualEarnedBaseSalary = attendanceCalculation.earned_salary || 0;
             attendanceDeduction = attendanceCalculation.total || 0;
             const nonWorkingDayCredit = attendanceCalculation.non_working_day_credit || 0;
+            unconfiguredWeekendOvertime = attendanceCalculation.unconfigured_weekend_overtime || null;
 
             // For fixed-30: add non-working day credit (holidays + non-working Saturdays + Sundays)
             // separately on top of earned salary, same way OT is added — not mixed into deduction
@@ -851,7 +857,7 @@ class PayrollRunService {
         // STEP 2: Calculate allowances and bonuses (FULL amounts, not prorated)
         // =============================================
         console.log(`\n🎁 Step 2: Adding full allowances and bonuses (not prorated)...`);
-        const grossComponents = await this.calculateGrossComponents(record, employeeData);
+        const grossComponents = await this.calculateGrossComponents(record, employeeData, unconfiguredWeekendOvertime);
 
         // Extract allowances (everything except base salary)
         const baseSalary = parseFloat(record.base_salary) || 0;
@@ -3575,7 +3581,7 @@ class PayrollRunService {
     /**
      * Calculate gross salary components
      */
-    async calculateGrossComponents(record, employeeData) {
+    async calculateGrossComponents(record, employeeData, unconfiguredWeekendOvertime = null) {
         const baseSalary = parseFloat(record.base_salary) || 0;
         const components = [];
         let total = baseSalary; // Start with base salary
@@ -3748,6 +3754,86 @@ class PayrollRunService {
                 category: 'earning',
                 amount: overtimeAmount
             });
+        }
+
+        // Unconfigured weekend days (worked Saturday/Sunday that isn't part of the employee's
+        // configured working-Saturday/Sunday schedule) — ALL worked hours on that day are OT,
+        // regardless of the overtime_enabled/pre-post-shift flags above. Mirrors the same logic
+        // used in the live payroll preview (getLivePayrollData) so the final calculated run
+        // matches what was previewed.
+        if (unconfiguredWeekendOvertime) {
+            const satRate = parseFloat(record.saturday_hourly_rate) || 0;
+            const sunRate = parseFloat(record.sunday_hourly_rate) || parseFloat(record.weekday_hourly_rate) || 0;
+            const satMult = parseFloat(record.saturday_ot_multiplier) || 1;
+            const sunMult = parseFloat(record.sunday_ot_multiplier) || 1;
+
+            const resolveWeekendOT = async (ds, fallbackType, fallbackRate, fallbackMult) => {
+                const holidayInfo = await HolidayService.isHoliday(record.client_id, ds, record.department_id);
+                if (holidayInfo && holidayInfo.is_statutory && record.statutory_holiday_ot_multiplier) {
+                    return {
+                        dayType: 'statutory_holiday',
+                        rate: parseFloat(record.weekday_hourly_rate) || 0,
+                        mult: parseFloat(record.statutory_holiday_ot_multiplier) || 1.0
+                    };
+                }
+                if (holidayInfo && record.holiday_ot_multiplier) {
+                    return {
+                        dayType: 'holiday',
+                        rate: parseFloat(record.weekday_hourly_rate) || 0,
+                        mult: parseFloat(record.holiday_ot_multiplier) || 1.0
+                    };
+                }
+                return { dayType: fallbackType, rate: fallbackRate, mult: fallbackMult };
+            };
+
+            let unconfiguredOtAmount = 0;
+
+            const satSeconds = unconfiguredWeekendOvertime.saturday_seconds || 0;
+            if (satSeconds > 0) {
+                const satByDate = unconfiguredWeekendOvertime.saturday_by_date || {};
+                const satDates = Object.keys(satByDate).sort();
+                if (satDates.length > 0) {
+                    for (const ds of satDates) {
+                        const secs = satByDate[ds];
+                        const { rate, mult } = await resolveWeekendOT(ds, 'saturday', satRate, satMult);
+                        unconfiguredOtAmount += (secs / 3600) * rate * mult;
+                    }
+                } else {
+                    unconfiguredOtAmount += (satSeconds / 3600) * satRate * satMult;
+                }
+                console.log(`   Unconfigured Saturday OT: ${(satSeconds/3600).toFixed(2)}h`);
+            }
+
+            const sunSeconds = unconfiguredWeekendOvertime.sunday_seconds || 0;
+            if (sunSeconds > 0) {
+                const sunByDate = unconfiguredWeekendOvertime.sunday_by_date || {};
+                const sunDates = Object.keys(sunByDate).sort();
+                if (sunDates.length > 0) {
+                    for (const ds of sunDates) {
+                        const secs = sunByDate[ds];
+                        const { rate, mult } = await resolveWeekendOT(ds, 'sunday', sunRate, sunMult);
+                        unconfiguredOtAmount += (secs / 3600) * rate * mult;
+                    }
+                } else {
+                    unconfiguredOtAmount += (sunSeconds / 3600) * sunRate * sunMult;
+                }
+                console.log(`   Unconfigured Sunday OT: ${(sunSeconds/3600).toFixed(2)}h`);
+            }
+
+            if (unconfiguredOtAmount > 0) {
+                console.log(`   Unconfigured Weekend OT Amount: Rs.${unconfiguredOtAmount.toFixed(2)}`);
+
+                total += unconfiguredOtAmount;
+                additionsTotal += unconfiguredOtAmount;
+
+                components.push({
+                    code: 'UNCONFIGURED_WEEKEND_OT',
+                    name: 'Overtime Pay (Unconfigured Weekend)',
+                    type: 'earning',
+                    category: 'earning',
+                    amount: unconfiguredOtAmount
+                });
+            }
         }
 
         // Saturday covering extra-time OT — surplus worked time left over after the
