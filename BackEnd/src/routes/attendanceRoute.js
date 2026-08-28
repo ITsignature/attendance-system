@@ -2139,6 +2139,7 @@ router.get('/',
     e.out_time AS scheduled_out_time,
     e.follows_company_schedule,
     e.weekend_working_config,
+    e.department_id,
     d.name AS department_name,
     de.title AS designation_name
 FROM attendance a
@@ -2195,6 +2196,55 @@ LIMIT ? OFFSET ?
             record.payable_duration = 0;
             record.pre_shift_overtime_seconds = 0;
             record.post_shift_overtime_seconds = 0;
+          }
+        }
+      }
+    }
+
+    // Annotate holiday rows: any day worked that's a company holiday is a non-working
+    // day by default, so ALL worked time counts as overtime — same treatment as an
+    // unconfigured weekend day, regardless of day-of-week.
+    if (attendance.length > 0) {
+      const dates = attendance.map(r => (r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0]));
+      const minDate = dates.reduce((a, b) => (a < b ? a : b));
+      const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+
+      const [holidayRows] = await db.execute(
+        `SELECT date, applies_to_all, department_ids FROM holidays WHERE client_id = ? AND date BETWEEN ? AND ?`,
+        [req.user.clientId, minDate, maxDate]
+      );
+
+      if (holidayRows.length > 0) {
+        const holidaysByDate = new Map();
+        for (const h of holidayRows) {
+          const hDate = h.date instanceof Date ? h.date.toISOString().split('T')[0] : String(h.date).split('T')[0];
+          let departmentIds = null;
+          try { departmentIds = h.department_ids ? JSON.parse(h.department_ids) : null; } catch (e) { departmentIds = null; }
+          if (!holidaysByDate.has(hDate)) holidaysByDate.set(hDate, []);
+          holidaysByDate.get(hDate).push({ applies_to_all: !!h.applies_to_all, departmentIds });
+        }
+
+        for (const record of attendance) {
+          const dateStr = record.date instanceof Date ? record.date.toISOString().split('T')[0] : String(record.date).split('T')[0];
+          const holidaysOnDate = holidaysByDate.get(dateStr);
+          if (!holidaysOnDate) continue;
+
+          const isHoliday = holidaysOnDate.some(h =>
+            h.applies_to_all || !h.departmentIds || h.departmentIds.includes(record.department_id)
+          );
+          if (!isHoliday) continue;
+
+          record.is_holiday = true;
+
+          if (record.check_in_time && record.check_out_time) {
+            const inT = new Date(`2000-01-01T${record.check_in_time}`);
+            const outT = new Date(`2000-01-01T${record.check_out_time}`);
+            if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+              record.overtime_hours = (outT - inT) / 1000 / 3600;
+              record.payable_duration = 0;
+              record.pre_shift_overtime_seconds = 0;
+              record.post_shift_overtime_seconds = 0;
+            }
           }
         }
       }
