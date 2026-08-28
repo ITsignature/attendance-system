@@ -400,9 +400,36 @@ class PayrollRunService {
      */
     async getEligibleEmployees(clientId, periodId, filters = {}) {
         const db = getDB();
-        
-        let whereConditions = ['e.client_id = ?', 'e.employment_status = "active"'];
+
+        // Employees who are no longer 'active' (terminated/resigned/inactive) should still be
+        // included when recreating a run for a PAST period they actually worked/attended —
+        // there's no termination-date column on employees, so attendance records within the
+        // period's date range are the signal used to tell "left before this period even
+        // started" apart from "worked this period, then left later".
+        // Conversely, employees hired AFTER the period ends (e.g. joined in August, run is for
+        // June) must never be eligible even though they're currently 'active' — hire_date is
+        // the signal for that side.
+        const [periodRows] = await db.execute(
+            'SELECT period_start_date, period_end_date FROM payroll_periods WHERE id = ? AND client_id = ?',
+            [periodId, clientId]
+        );
+        const period = periodRows[0] || null;
+
+        let whereConditions = ['e.client_id = ?'];
         let queryParams = [clientId];
+
+        if (period) {
+            whereConditions.push('(e.hire_date IS NULL OR e.hire_date <= ?)');
+            queryParams.push(period.period_end_date);
+
+            whereConditions.push(`(e.employment_status = "active" OR EXISTS (
+                        SELECT 1 FROM attendance a
+                        WHERE a.employee_id = e.id AND a.date BETWEEN ? AND ?
+                   ))`);
+            queryParams.push(period.period_start_date, period.period_end_date);
+        } else {
+            whereConditions.push('e.employment_status = "active"');
+        }
 
         // Apply filters
         if (filters.department_id) {
