@@ -1587,32 +1587,39 @@ class PayrollRunService {
         // ============================================
         // NO-PAY RATE (base salary + 'allowance'-category allowances) / 30
         // ============================================
-        // Absent days and unpaid time off are deducted against base salary + allowances,
-        // per client requirement — distinct from time-variance shortfall, which stays on
-        // the base-salary-only rate. Only allowances tagged payment_category = 'allowance'
-        // count (performance incentives / salary adjustments are excluded).
-        const [noPayAllowanceRows] = await db.execute(`
-            SELECT amount, is_percentage
-            FROM employee_allowances
-            WHERE employee_id = ? AND client_id = ? AND is_active = 1
-            AND payment_category = 'allowance'
-            AND (effective_to IS NULL OR effective_to >= ?)
-            AND effective_from <= ?
-        `, [employeeId, clientId, period.period_start_date, calculationEndDate]);
+        // Opt-in per client via the 'nopay_includes_allowances' setting. When off (default),
+        // absent days and unpaid time off keep using the base-salary-only rate — identical to
+        // pre-existing behavior. When on, those two causes are deducted against
+        // base salary + allowances, per client requirement — time-variance shortfall is never
+        // affected either way. Only allowances tagged payment_category = 'allowance' count
+        // (performance incentives / salary adjustments are excluded).
+        const noPaySettingsHelper = new SettingsHelper(clientId);
+        const noPayIncludesAllowances = await noPaySettingsHelper.getSetting('nopay_includes_allowances').catch(() => false);
 
-        const noPayAllowanceTotal = noPayAllowanceRows.reduce((sum, a) => {
-            const amt = parseFloat(a.amount) || 0;
-            return sum + (a.is_percentage ? (baseSalary * amt) / 100 : amt);
-        }, 0);
+        let noPayAllowanceTotal = 0;
+        if (noPayIncludesAllowances) {
+            const [noPayAllowanceRows] = await db.execute(`
+                SELECT amount, is_percentage
+                FROM employee_allowances
+                WHERE employee_id = ? AND client_id = ? AND is_active = 1
+                AND payment_category = 'allowance'
+                AND (effective_to IS NULL OR effective_to >= ?)
+                AND effective_from <= ?
+            `, [employeeId, clientId, period.period_start_date, calculationEndDate]);
+
+            noPayAllowanceTotal = noPayAllowanceRows.reduce((sum, a) => {
+                const amt = parseFloat(a.amount) || 0;
+                return sum + (a.is_percentage ? (baseSalary * amt) / 100 : amt);
+            }, 0);
+        }
 
         const noPayDailySalary = (baseSalary + noPayAllowanceTotal) / 30;
-        const noPayWeekdayHourlyRate  = weekdayDailyHours  > 0 ? noPayDailySalary / weekdayDailyHours  : 0;
-        const noPaySaturdayHourlyRate = saturdayDailyHours > 0 ? noPayDailySalary / saturdayDailyHours : 0;
-        const noPaySundayHourlyRate   = sundayDailyHours   > 0 ? noPayDailySalary / sundayDailyHours   : 0;
+        const noPayWeekdayHourlyRate  = noPayIncludesAllowances && weekdayDailyHours  > 0 ? noPayDailySalary / weekdayDailyHours  : weekdayHourlyRate;
+        const noPaySaturdayHourlyRate = noPayIncludesAllowances && saturdayDailyHours > 0 ? noPayDailySalary / saturdayDailyHours : saturdayHourlyRate;
+        const noPaySundayHourlyRate   = noPayIncludesAllowances && sundayDailyHours   > 0 ? noPayDailySalary / sundayDailyHours   : sundayHourlyRate;
 
-        console.log(`\n   💵 No-Pay Rate (base + allowances) for ${employeeName} (${employeeCode}):`);
+        console.log(`\n   💵 No-Pay Rate for ${employeeName} (${employeeCode}) [includes allowances: ${noPayIncludesAllowances ? 'YES' : 'NO'}]:`);
         console.log(`      Allowance Total: Rs.${noPayAllowanceTotal.toFixed(2)}`);
-        console.log(`      No-Pay Daily Salary: Rs.${noPayDailySalary.toFixed(2)}`);
         console.log(`      No-Pay Weekday/Sat/Sun Hourly Rate: Rs.${noPayWeekdayHourlyRate.toFixed(2)} / Rs.${noPaySaturdayHourlyRate.toFixed(2)} / Rs.${noPaySundayHourlyRate.toFixed(2)}`);
 
         // Calculate working days for expected hours

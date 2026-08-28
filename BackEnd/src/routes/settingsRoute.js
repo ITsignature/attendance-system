@@ -39,6 +39,7 @@ const validateSettingKey = (key) => {
 
     // Payroll Settings
     'payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'daily_rate_method',
+    'nopay_includes_allowances',
     
     // Privacy Settings
     'data_retention_years', 'audit_logs_enabled', 'anonymize_data_enabled',
@@ -54,7 +55,8 @@ const getSettingType = (key, value) => {
   const booleanSettings = [
     'two_factor_auth_enabled', 'email_notifications_enabled', 'push_notifications_enabled',
     'sms_notifications_enabled', 'weekly_reports_enabled', 'audit_logs_enabled',
-    'anonymize_data_enabled', 'email_integration_enabled', 'calendar_sync_enabled'
+    'anonymize_data_enabled', 'email_integration_enabled', 'calendar_sync_enabled',
+    'nopay_includes_allowances'
   ];
   
   const numberSettings = [
