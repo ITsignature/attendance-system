@@ -17,6 +17,20 @@ interface WeeklyAttendanceData {
   attendance_percentage: number;
 }
 
+// The API returns aggregate columns (COUNT/MAX) as strings, so normalize to numbers on load.
+const normalizeWeeklyAttendance = (rows: any[]): WeeklyAttendanceData[] =>
+  rows.map(row => ({
+    ...row,
+    total_records: Number(row.total_records) || 0,
+    present_count: Number(row.present_count) || 0,
+    late_count: Number(row.late_count) || 0,
+    absent_count: Number(row.absent_count) || 0,
+    on_leave_count: Number(row.on_leave_count) || 0,
+    voluntary_work_count: Number(row.voluntary_work_count) || 0,
+    is_holiday: Number(row.is_holiday) || 0,
+    attendance_percentage: Number(row.attendance_percentage) || 0,
+  }));
+
 const AttendanceOverview = () => {
   const [weeklyData, setWeeklyData] = useState<WeeklyAttendanceData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +44,7 @@ const AttendanceOverview = () => {
       setLoading(true);
       const response = await dashboardService.getAttendanceOverview();
       if (response.success) {
-        setWeeklyData(response.data.weeklyAttendance || []);
+        setWeeklyData(normalizeWeeklyAttendance(response.data.weeklyAttendance || []));
       }
     } catch (error) {
       console.error('Error fetching weekly attendance:', error);
