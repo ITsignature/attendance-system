@@ -816,6 +816,7 @@ class PayrollRunService {
         let actualEarnedBaseSalary;
         let attendanceDeduction;
         let unconfiguredWeekendOvertime = null;
+        let holidayWorkedOvertime = null;
 
         if (!attendanceAffectsSalary) {
             // Employee gets full salary regardless of attendance
@@ -840,6 +841,7 @@ class PayrollRunService {
             attendanceDeduction = attendanceCalculation.total || 0;
             const nonWorkingDayCredit = attendanceCalculation.non_working_day_credit || 0;
             unconfiguredWeekendOvertime = attendanceCalculation.unconfigured_weekend_overtime || null;
+            holidayWorkedOvertime = attendanceCalculation.holiday_worked_overtime || null;
 
             // For fixed-30: add non-working day credit (holidays + non-working Saturdays + Sundays)
             // separately on top of earned salary, same way OT is added — not mixed into deduction
@@ -857,7 +859,7 @@ class PayrollRunService {
         // STEP 2: Calculate allowances and bonuses (FULL amounts, not prorated)
         // =============================================
         console.log(`\n🎁 Step 2: Adding full allowances and bonuses (not prorated)...`);
-        const grossComponents = await this.calculateGrossComponents(record, employeeData, unconfiguredWeekendOvertime);
+        const grossComponents = await this.calculateGrossComponents(record, employeeData, unconfiguredWeekendOvertime, holidayWorkedOvertime);
 
         // Extract allowances (everything except base salary)
         const baseSalary = parseFloat(record.base_salary) || 0;
@@ -1504,6 +1506,22 @@ class PayrollRunService {
         const clientId = recordInfo[0].client_id;
         const usesCustomCycle = recordInfo[0].uses_custom_cycle === 1;
 
+        // Fetch holidays in the period so worked holidays can be excluded from normal
+        // weekday/Saturday/Sunday actual-hours pay and instead paid entirely as OT
+        // (same treatment as unconfigured weekends) — see holidayMap usage below.
+        const [periodHolidays] = await db.execute(`
+            SELECT DATE(date) as holiday_date, is_statutory
+            FROM holidays
+            WHERE client_id = ?
+              AND date BETWEEN ? AND ?
+              AND (applies_to_all = TRUE OR department_ids IS NULL)
+        `, [clientId, period.period_start_date, period.period_end_date]);
+        const holidayMap = new Map();
+        periodHolidays.forEach(h => {
+            const ds = h.holiday_date instanceof Date ? h.holiday_date.toISOString().split('T')[0] : String(h.holiday_date).split('T')[0];
+            holidayMap.set(ds, { is_statutory: !!h.is_statutory });
+        });
+
         // Fetch company default weekend schedule (used when employee monthly_schedule === null)
         let companyDefaultWeekendConfig = null;
         try {
@@ -1779,11 +1797,36 @@ class PayrollRunService {
         let unconfiguredSundaySeconds = 0;
         const unconfiguredSaturdayByDate = {};
         const unconfiguredSundayByDate = {};
+        let holidayWorkedSeconds = 0;
+        const holidayWorkedByDate = {};
+
+        const computeActualSecs = (rec) => {
+            let actualSecs = 0;
+            if (rec.check_in_time && rec.check_out_time) {
+                const inT = new Date(`2000-01-01T${rec.check_in_time}`);
+                const outT = new Date(`2000-01-01T${rec.check_out_time}`);
+                if (!isNaN(inT) && !isNaN(outT) && outT > inT) {
+                    actualSecs = Math.round((outT - inT) / 1000);
+                }
+            }
+            return actualSecs;
+        };
 
         for (const rec of weekendRows) {
             const dateStr = rec.date instanceof Date
                 ? rec.date.toISOString().split('T')[0]
                 : String(rec.date).split('T')[0];
+
+            // Worked holiday takes priority over configured/unconfigured weekend classification —
+            // entire actual worked time is paid as OT at the holiday multiplier, same treatment
+            // as an unconfigured weekend (see holiday_worked_overtime returned below).
+            if (holidayMap.has(dateStr)) {
+                const actualSecs = computeActualSecs(rec);
+                holidayWorkedSeconds += actualSecs;
+                holidayWorkedByDate[dateStr] = (holidayWorkedByDate[dateStr] || 0) + actualSecs;
+                continue;
+            }
+
             if (rec.is_weekend === 7) { // Saturday
                 if (isConfiguredWorkingDay(dateStr, 'saturday')) {
                     // Configured Saturday: use payable_duration (break-deducted, schedule-capped)
@@ -2081,6 +2124,20 @@ class PayrollRunService {
             const recDateStr = rec.date instanceof Date
                 ? rec.date.toISOString().split('T')[0]
                 : String(rec.date).split('T')[0];
+
+            // Worked holidays (any day of week) are excluded from normal attendance pay here —
+            // they're paid entirely as OT via holidayWorkedSeconds/holidayWorkedByDate. Weekend
+            // holiday rows were already accumulated once in the weekendRows loop above, so they
+            // are skipped (not re-accumulated) here to avoid double-counting; only weekday holiday
+            // rows are added to the accumulator in this loop.
+            if (holidayMap.has(recDateStr)) {
+                if (rec.is_weekend >= 2 && rec.is_weekend <= 6) {
+                    const actualSecs = computeActualSecs(rec);
+                    holidayWorkedSeconds += actualSecs;
+                    holidayWorkedByDate[recDateStr] = (holidayWorkedByDate[recDateStr] || 0) + actualSecs;
+                }
+                continue;
+            }
 
             const leaveHoursThisDate = leaveHoursByDate.get(recDateStr) || 0;
             const rawAttendanceHours = (parseFloat(rec.payable_duration) || 0) / 3600;
@@ -2595,6 +2652,9 @@ class PayrollRunService {
             // Skip unconfigured Saturday/Sunday — those hours are treated as OT, not expected work
             if (record.is_weekend === 7 && !isConfiguredWorkingDay(recDateStr, 'saturday')) continue;
             if (record.is_weekend === 1  && !isConfiguredWorkingDay(recDateStr, 'sunday'))   continue;
+            // Skip holidays — not expected work days at all, so no shortfall applies regardless
+            // of how many hours were actually worked (paid entirely as OT instead).
+            if (holidayMap.has(recDateStr)) continue;
 
             let expectedDailyHours = 0;
             if (record.is_weekend >= 2 && record.is_weekend <= 6) {
@@ -2805,6 +2865,10 @@ class PayrollRunService {
                 sunday_seconds:   unconfiguredSundaySeconds,
                 saturday_by_date: unconfiguredSaturdayByDate,
                 sunday_by_date:   unconfiguredSundayByDate
+            },
+            holiday_worked_overtime: {
+                seconds: holidayWorkedSeconds,
+                by_date: holidayWorkedByDate
             }
         };
     }
@@ -3581,7 +3645,7 @@ class PayrollRunService {
     /**
      * Calculate gross salary components
      */
-    async calculateGrossComponents(record, employeeData, unconfiguredWeekendOvertime = null) {
+    async calculateGrossComponents(record, employeeData, unconfiguredWeekendOvertime = null, holidayWorkedOvertime = null) {
         const baseSalary = parseFloat(record.base_salary) || 0;
         const components = [];
         let total = baseSalary; // Start with base salary
@@ -3676,6 +3740,10 @@ class PayrollRunService {
                 for (const otRecord of employeeData.overtimeDetails) {
                     const dateStr = otRecord.date;
                     const dayOfWeek = new Date(dateStr).getDay(); // 0=Sunday, 6=Saturday
+
+                    // Skip worked holidays here — their entire shift (not just pre/post-shift
+                    // minutes) is paid as OT in the worked-holiday block below.
+                    if (otRecord.is_holiday) continue;
 
                     // Determine applicable overtime seconds based on enable flags
                     const preShiftSeconds = parseInt(otRecord.pre_shift_overtime_seconds) || 0;
@@ -3832,6 +3900,43 @@ class PayrollRunService {
                     type: 'earning',
                     category: 'earning',
                     amount: unconfiguredOtAmount
+                });
+            }
+        }
+
+        // Worked holidays — a holiday is never an expected working day, so calculateEarnedSalary
+        // excludes worked-holiday hours from normal attendance pay. Here, the entire actual
+        // worked time on that date is paid as OT at the holiday multiplier — same treatment as
+        // an unconfigured weekend. Mirrors the logic in getLivePayrollData so the final
+        // calculated run matches what was previewed.
+        if (holidayWorkedOvertime && holidayWorkedOvertime.seconds > 0) {
+            const holWeekdayRate = parseFloat(record.weekday_hourly_rate) || 0;
+            const byDate = holidayWorkedOvertime.by_date || {};
+            const dates = Object.keys(byDate).sort();
+            let holidayOtAmount = 0;
+
+            for (const ds of dates) {
+                const secs = byDate[ds];
+                const holidayInfo = await HolidayService.isHoliday(record.client_id, ds, record.department_id);
+                let mult = parseFloat(record.holiday_ot_multiplier) || 1.0;
+                if (holidayInfo && holidayInfo.is_statutory && record.statutory_holiday_ot_multiplier) {
+                    mult = parseFloat(record.statutory_holiday_ot_multiplier) || 1.0;
+                }
+                holidayOtAmount += (secs / 3600) * holWeekdayRate * mult;
+            }
+
+            if (holidayOtAmount > 0) {
+                console.log(`   Worked Holiday OT Amount: Rs.${holidayOtAmount.toFixed(2)}`);
+
+                total += holidayOtAmount;
+                additionsTotal += holidayOtAmount;
+
+                components.push({
+                    code: 'HOLIDAY_WORKED_OT',
+                    name: 'Overtime Pay (Worked Holiday)',
+                    type: 'earning',
+                    category: 'earning',
+                    amount: holidayOtAmount
                 });
             }
         }
@@ -5111,6 +5216,7 @@ class PayrollRunService {
                     // weekend block below and must not appear twice in overtimeDetailsWithAmount.
                     const unconfiguredSatDatesSet = new Set(Object.keys(attendanceData.unconfigured_weekend_overtime?.saturday_by_date || {}));
                     const unconfiguredSunDatesSet = new Set(Object.keys(attendanceData.unconfigured_weekend_overtime?.sunday_by_date || {}));
+                    const holidayWorkedDatesSet = new Set(Object.keys(attendanceData.holiday_worked_overtime?.by_date || {}));
 
                     for (const otRecord of employeeOvertime) {
                         const dateStr = typeof otRecord.date === 'string' ? otRecord.date : otRecord.date.toISOString().split('T')[0];
@@ -5126,6 +5232,10 @@ class PayrollRunService {
                         // in the unconfigured weekend block; adding pre/post-shift OT on top would double-count.
                         if (dayOfWeek === 6 && unconfiguredSatDatesSet.has(dateStr)) continue;
                         if (dayOfWeek === 0 && unconfiguredSunDatesSet.has(dateStr)) continue;
+
+                        // Skip worked holidays — their entire shift (including any pre/post-shift
+                        // minutes) is already paid as OT in the worked-holiday block below.
+                        if (holidayWorkedDatesSet.has(dateStr)) continue;
 
                         // Get pre/post shift seconds
                         const preShiftSeconds = parseInt(otRecord.pre_shift_overtime_seconds) || 0;
@@ -5330,6 +5440,49 @@ class PayrollRunService {
                         overtimeAmount += sunOTAmount;
                         console.log(`   Unconfigured Sunday OT: ${(uncOT.sunday_seconds/3600).toFixed(2)}h → Rs.${sunOTAmount.toFixed(2)}`);
                     }
+                }
+
+                // ========================================
+                // Worked holidays → treat all worked hours as OT
+                // ========================================
+                // A holiday (statutory or regular) is never an expected working day, so
+                // calculateEarnedSalary excludes worked-holiday hours from normal attendance pay
+                // (see holiday_worked_overtime). Here, the entire actual worked time is paid as
+                // OT at the holiday multiplier — same treatment as an unconfigured weekend.
+                const holOT = attendanceData.holiday_worked_overtime;
+                if (holOT && holOT.seconds > 0) {
+                    const holWeekdayRate = parseFloat(emp.weekday_hourly_rate) || 0;
+                    const byDate = holOT.by_date || {};
+                    const dates = Object.keys(byDate).sort();
+                    let holOTAmount = 0;
+                    if (dates.length > 0) {
+                        for (const ds of dates) {
+                            const secs = byDate[ds];
+                            const holidayInfo = getHolidayForDate(ds, emp.department_id);
+                            let dayType = 'holiday';
+                            let mult = parseFloat(emp.holiday_ot_multiplier) || 1.0;
+                            if (holidayInfo && holidayInfo.is_statutory && emp.statutory_holiday_ot_multiplier) {
+                                dayType = 'statutory_holiday';
+                                mult = parseFloat(emp.statutory_holiday_ot_multiplier) || 1.0;
+                            }
+                            const amt = (secs / 3600) * holWeekdayRate * mult;
+                            holOTAmount += amt;
+                            overtimeDetailsWithAmount.push({
+                                date: ds,
+                                day_type: dayType,
+                                total_minutes: Math.round(secs / 60),
+                                pre_shift_minutes: 0,
+                                post_shift_minutes: 0,
+                                pre_shift_enabled: false,
+                                post_shift_enabled: false,
+                                hourly_rate: holWeekdayRate,
+                                multiplier: mult,
+                                amount: amt
+                            });
+                        }
+                    }
+                    overtimeAmount += holOTAmount;
+                    console.log(`   Worked Holiday OT: ${(holOT.seconds/3600).toFixed(2)}h → Rs.${holOTAmount.toFixed(2)}`);
                 }
 
                 // Saturday covering extra-time OT earnings
@@ -5864,13 +6017,14 @@ class PayrollRunService {
                     otMultiplier = saturdayOTMultiplier;
                     dayType = isConfiguredDay(workDateStr, 'saturday') ? 'Saturday' : 'Saturday (Unscheduled)';
                 }
-                // Holiday (or statutory holiday) takes priority over weekday/weekend classification
-                // for the OT multiplier, matching the aggregate OT calculation elsewhere in this
-                // service (see getHolidayForDate usage). Base pay is unaffected — only the OT
-                // multiplier changes, same as the rest of the codebase.
+                // Holiday (or statutory holiday) takes priority over weekday/weekend classification.
+                // A worked holiday is treated the same way as an unconfigured weekend: the entire
+                // actual worked time (check-in to check-out) is paid as OT at the holiday multiplier,
+                // not just the pre/post-shift OT seconds on top of a normal daily salary.
                 let isHolidayWorked = false;
                 if (holidayInfo) {
                     isHolidayWorked = true;
+                    hourlyRate = weekdayHourlyRate;
                     if (holidayInfo.is_statutory) {
                         otMultiplier = statutoryHolidayOTMultiplier;
                         dayType = 'Statutory Holiday';
@@ -5880,10 +6034,11 @@ class PayrollRunService {
                     }
                 }
                 const isUnscheduledWeekend = dayType === 'Saturday (Unscheduled)' || dayType === 'Sunday (Unscheduled)';
-                const dailySalary = isUnscheduledWeekend ? 0 : totalHours * hourlyRate;
+                const treatAsFullOT = isUnscheduledWeekend || isHolidayWorked;
+                const dailySalary = treatAsFullOT ? 0 : totalHours * hourlyRate;
                 let overtimeMinutes = 0;
                 let overtimeAmount = 0;
-                if (isUnscheduledWeekend) {
+                if (treatAsFullOT) {
                     let actualWorkedSeconds = 0;
                     if (record.check_in_time && record.check_out_time) {
                         const actualIn = new Date(`2000-01-01T${record.check_in_time}`);
