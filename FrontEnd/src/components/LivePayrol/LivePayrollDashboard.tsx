@@ -1486,6 +1486,8 @@ const LivePayrollDashboard: React.FC = () => {
                     const isHoliday = record.record_type === 'holiday';
                     const isWeekendOff = record.record_type === 'weekend_off';
                     const isUnscheduledWeekend = record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)';
+                    const isHolidayWorked = record.record_type === 'attendance' && !!record.is_holiday_worked;
+                    const isFullDayOT = isUnscheduledWeekend || isHolidayWorked;
                     const hasPartialLeave = record.record_type === 'attendance' &&
                                         (record.leave_duration === 'half_day' || record.leave_duration === 'short_leave');
 
@@ -1494,7 +1496,7 @@ const LivePayrollDashboard: React.FC = () => {
                                   isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
                                   hasPartialLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
                                   hasPartialLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
-                                  isHoliday ? 'bg-blue-50 dark:bg-blue-900/10' :
+                                  isHoliday || isHolidayWorked ? 'bg-blue-50 dark:bg-blue-900/10' :
                                   isWeekendOff ? 'bg-gray-50 dark:bg-gray-800/50' : '';
 
                     const statusColor = record.status === 'present' ? 'success' :
@@ -1548,7 +1550,7 @@ const LivePayrollDashboard: React.FC = () => {
                                 </div>
                               ) : isHoliday ? (
                                 <span className="text-blue-700 font-medium">{record.holiday_name}</span>
-                              ) : isUnscheduledWeekend ? (
+                              ) : isFullDayOT ? (
                                 <span className="text-red-600 font-bold">
                                   {record.overtime_minutes.toLocaleString()} mins
                                   <div className="text-xs font-medium">({(record.overtime_minutes / 60).toFixed(2)} hrs)</div>
@@ -1582,7 +1584,7 @@ const LivePayrollDashboard: React.FC = () => {
                                 ) : (
                                   <span className="text-orange-600">Rs. 0.00 <span className="text-xs font-normal">(Unpaid)</span></span>
                                 )
-                              ) : isUnscheduledWeekend ? (
+                              ) : isFullDayOT ? (
                                 <span className="text-red-600">{formatCurrency(record.overtime_amount)}</span>
                               ) : (
                                 <>
@@ -1636,6 +1638,8 @@ const LivePayrollDashboard: React.FC = () => {
                         const isHoliday = record.record_type === 'holiday';
                         const isWeekendOff = record.record_type === 'weekend_off';
                         const isUnscheduledWeekend = record.day_type === 'Saturday (Unscheduled)' || record.day_type === 'Sunday (Unscheduled)';
+                        const isHolidayWorked = record.record_type === 'attendance' && !!record.is_holiday_worked;
+                        const isFullDayOT = isUnscheduledWeekend || isHolidayWorked;
                         const hasPartialLeave = record.record_type === 'attendance' &&
                                             (record.leave_duration === 'half_day' || record.leave_duration === 'short_leave');
 
@@ -1644,7 +1648,7 @@ const LivePayrollDashboard: React.FC = () => {
                                       isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
                                       hasPartialLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
                                       hasPartialLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
-                                      isHoliday ? 'bg-blue-50 dark:bg-blue-900/10' :
+                                      isHoliday || isHolidayWorked ? 'bg-blue-50 dark:bg-blue-900/10' :
                                       isWeekendOff ? 'bg-gray-50 dark:bg-gray-800/50' : '';
 
                         const statusColor = record.status === 'present' ? 'success' :
@@ -1690,7 +1694,7 @@ const LivePayrollDashboard: React.FC = () => {
                                 <div>
                                   <span className="text-blue-700 font-medium">{record.holiday_name}</span>
                                 </div>
-                              ) : isUnscheduledWeekend ? (
+                              ) : isFullDayOT ? (
                                 <span className="text-red-600 font-bold">
                                   {record.overtime_minutes.toLocaleString()} mins
                                   <div className="text-xs font-medium">({(record.overtime_minutes / 60).toFixed(2)} hrs)</div>
@@ -1721,7 +1725,7 @@ const LivePayrollDashboard: React.FC = () => {
                                 ) : (
                                   <span className="text-orange-600">Rs. 0.00 <span className="text-xs font-normal">(Unpaid)</span></span>
                                 )
-                              ) : isUnscheduledWeekend ? (
+                              ) : isFullDayOT ? (
                                 <span className="text-red-600">{formatCurrency(record.overtime_amount)}</span>
                               ) : (
                                 <>
