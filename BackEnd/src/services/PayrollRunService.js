@@ -5644,7 +5644,8 @@ class PayrollRunService {
                     weekday_ot_multiplier,
                     saturday_ot_multiplier,
                     sunday_ot_multiplier,
-                    holiday_ot_multiplier
+                    holiday_ot_multiplier,
+                    statutory_holiday_ot_multiplier
                 FROM employees
                 WHERE id = ?
             `, [employeeId]);
@@ -5655,6 +5656,8 @@ class PayrollRunService {
             const weekdayOTMultiplier = parseFloat(empSettings[0]?.weekday_ot_multiplier) || 1.0;
             const saturdayOTMultiplier = parseFloat(empSettings[0]?.saturday_ot_multiplier) || 1.0;
             const sundayOTMultiplier = parseFloat(empSettings[0]?.sunday_ot_multiplier)   || 1.0;
+            const holidayOTMultiplier = parseFloat(empSettings[0]?.holiday_ot_multiplier) || 1.0;
+            const statutoryHolidayOTMultiplier = parseFloat(empSettings[0]?.statutory_holiday_ot_multiplier) || 1.0;
 
             // Fetch weekend_working_config to distinguish configured vs unconfigured days
             const [empWCRow] = await db.execute(`
@@ -5787,7 +5790,7 @@ class PayrollRunService {
             const clientIdRow = await db.execute(`SELECT client_id FROM payroll_runs WHERE id = ? LIMIT 1`, [runId]);
             const runClientId = clientIdRow[0][0]?.client_id;
             const [holidays] = await db.execute(`
-                SELECT DATE(date) as holiday_date, name
+                SELECT DATE(date) as holiday_date, name, is_statutory
                 FROM holidays
                 WHERE client_id = ?
                   AND date BETWEEN ? AND ?
@@ -5804,10 +5807,13 @@ class PayrollRunService {
             const holidayMap = {};
             holidays.forEach(h => {
                 const ds = h.holiday_date instanceof Date ? h.holiday_date.toISOString().split('T')[0] : String(h.holiday_date).split('T')[0];
-                holidayMap[ds] = h.name;
+                holidayMap[ds] = { name: h.name, is_statutory: !!h.is_statutory };
             });
 
-            // Expand leave requests into per-day map
+            // Expand leave requests into per-day map. A single date can carry more than one
+            // approved leave request (e.g. a paid half-day plus an unpaid half-day on the same
+            // day), so each date maps to an ARRAY of leave entries rather than a single object -
+            // otherwise a later leave request silently overwrites an earlier one for that date.
             const leaveMap = {};
             for (const lr of leaveRequests) {
                 const startD = new Date(lr.start_date);
@@ -5825,20 +5831,21 @@ class PayrollRunService {
                         const mult = lr.leave_duration === 'half_day' ? 0.5 : lr.leave_duration === 'short_leave' ? 0.25 : 1;
                         leaveDailySalary = leaveHourlyRate * standardHours * mult;
                     }
-                    leaveMap[ds] = {
+                    if (!leaveMap[ds]) leaveMap[ds] = [];
+                    leaveMap[ds].push({
                         leave_type_name: lr.leave_type_name,
                         is_paid: lr.is_paid,
                         leave_duration: lr.leave_duration,
                         daily_salary: parseFloat(leaveDailySalary.toFixed(2)),
                         start_time: lr.start_time,
                         end_time: lr.end_time
-                    };
+                    });
                     cur.setDate(cur.getDate() + 1);
                 }
             }
 
             // Helper: process an attendance record into a detail object
-            const processAttendance = (record, leaveInfo) => {
+            const processAttendance = (record, leaveInfos, holidayInfo) => {
                 const payableDurationSeconds = parseFloat(record.payable_duration) || 0;
                 const totalHours = payableDurationSeconds / 3600;
                 const totalMinutes = Math.round(payableDurationSeconds / 60);
@@ -5856,6 +5863,21 @@ class PayrollRunService {
                     hourlyRate = saturdayHourlyRate;
                     otMultiplier = saturdayOTMultiplier;
                     dayType = isConfiguredDay(workDateStr, 'saturday') ? 'Saturday' : 'Saturday (Unscheduled)';
+                }
+                // Holiday (or statutory holiday) takes priority over weekday/weekend classification
+                // for the OT multiplier, matching the aggregate OT calculation elsewhere in this
+                // service (see getHolidayForDate usage). Base pay is unaffected — only the OT
+                // multiplier changes, same as the rest of the codebase.
+                let isHolidayWorked = false;
+                if (holidayInfo) {
+                    isHolidayWorked = true;
+                    if (holidayInfo.is_statutory) {
+                        otMultiplier = statutoryHolidayOTMultiplier;
+                        dayType = 'Statutory Holiday';
+                    } else {
+                        otMultiplier = holidayOTMultiplier;
+                        dayType = 'Holiday';
+                    }
                 }
                 const isUnscheduledWeekend = dayType === 'Saturday (Unscheduled)' || dayType === 'Sunday (Unscheduled)';
                 const dailySalary = isUnscheduledWeekend ? 0 : totalHours * hourlyRate;
@@ -5898,15 +5920,31 @@ class PayrollRunService {
                     status: record.status,
                     record_type: 'attendance'
                 };
+                if (isHolidayWorked) {
+                    detail.holiday_name = holidayInfo.name;
+                    detail.is_holiday_worked = true;
+                }
 
-                if (leaveInfo && (leaveInfo.leave_duration === 'half_day' || leaveInfo.leave_duration === 'short_leave')) {
-                    detail.leave_duration = leaveInfo.leave_duration;
-                    detail.leave_type_name = leaveInfo.leave_type_name;
-                    detail.is_paid_leave = !!leaveInfo.is_paid;
-                    detail.leave_start_time = leaveInfo.start_time;
-                    detail.leave_end_time = leaveInfo.end_time;
-                    detail.leave_daily_salary = leaveInfo.daily_salary;
-                    detail.daily_salary = parseFloat((dailySalary + leaveInfo.daily_salary).toFixed(2));
+                const partialLeaveInfos = (leaveInfos || []).filter(
+                    li => li.leave_duration === 'half_day' || li.leave_duration === 'short_leave'
+                );
+                if (partialLeaveInfos.length > 0) {
+                    // Prefer the paid component for the primary display fields (matches prior
+                    // behavior when only one leave existed); any unpaid component on the same
+                    // day is never dropped - it's still added into daily_salary (as Rs. 0, since
+                    // unpaid leave carries no pay) and always counted via has_unpaid_leave so the
+                    // summary stats and Shortfall Breakdown stay consistent with this view.
+                    const paidInfo = partialLeaveInfos.find(li => li.is_paid) || partialLeaveInfos[0];
+                    const unpaidInfos = partialLeaveInfos.filter(li => !li.is_paid);
+                    detail.leave_duration = paidInfo.leave_duration;
+                    detail.leave_type_name = partialLeaveInfos.map(li => li.leave_type_name).join(' + ');
+                    detail.is_paid_leave = !!paidInfo.is_paid;
+                    detail.leave_start_time = paidInfo.start_time;
+                    detail.leave_end_time = paidInfo.end_time;
+                    const leavePay = partialLeaveInfos.reduce((s, li) => s + (li.daily_salary || 0), 0);
+                    detail.leave_daily_salary = parseFloat(leavePay.toFixed(2));
+                    detail.daily_salary = parseFloat((dailySalary + leavePay).toFixed(2));
+                    detail.has_unpaid_leave = unpaidInfos.length > 0;
                 }
 
                 return detail;
@@ -5924,9 +5962,15 @@ class PayrollRunService {
                 const dayTypeLabel = dow === 0 ? 'Sunday' : dow === 6 ? 'Saturday' : 'Weekday';
 
                 if (attendanceMap[ds]) {
-                    allDailyDetails.push(processAttendance(attendanceMap[ds], leaveMap[ds]));
+                    allDailyDetails.push(processAttendance(attendanceMap[ds], leaveMap[ds], holidayMap[ds]));
                 } else if (leaveMap[ds]) {
-                    const lv = leaveMap[ds];
+                    const lvs = leaveMap[ds];
+                    // Prefer a paid entry for the primary display fields (matches prior behavior
+                    // when only one leave existed on the date); sum pay across all entries and
+                    // flag has_unpaid_leave so an unpaid entry sharing the date is never dropped.
+                    const paidLv = lvs.find(l => l.is_paid) || lvs[0];
+                    const unpaidLvs = lvs.filter(l => !l.is_paid);
+                    const totalLeavePay = lvs.reduce((s, l) => s + (l.daily_salary || 0), 0);
                     allDailyDetails.push({
                         date: ds,
                         day_type: dayTypeLabel,
@@ -5937,14 +5981,15 @@ class PayrollRunService {
                         overtime_minutes: 0,
                         overtime_amount: 0,
                         hourly_rate: 0,
-                        daily_salary: lv.daily_salary,
-                        status: lv.is_paid ? 'paid_leave' : 'unpaid_leave',
+                        daily_salary: parseFloat(totalLeavePay.toFixed(2)),
+                        status: paidLv.is_paid ? 'paid_leave' : 'unpaid_leave',
                         record_type: 'leave',
-                        leave_type_name: lv.leave_type_name,
-                        is_paid_leave: lv.is_paid,
-                        leave_duration: lv.leave_duration,
-                        leave_start_time: lv.start_time,
-                        leave_end_time: lv.end_time
+                        leave_type_name: lvs.map(l => l.leave_type_name).join(' + '),
+                        is_paid_leave: paidLv.is_paid,
+                        leave_duration: paidLv.leave_duration,
+                        leave_start_time: paidLv.start_time,
+                        leave_end_time: paidLv.end_time,
+                        has_unpaid_leave: unpaidLvs.length > 0
                     });
                 } else if (holidayMap[ds]) {
                     allDailyDetails.push({
@@ -5960,11 +6005,11 @@ class PayrollRunService {
                         daily_salary: 0,
                         status: 'holiday',
                         record_type: 'holiday',
-                        holiday_name: holidayMap[ds]
+                        holiday_name: holidayMap[ds].name
                     });
                 } else if (dow === 0 || dow === 6) {
                     const dayKey = dow === 0 ? 'sunday' : 'saturday';
-                    const isWorkingWeekend = weekendCfg ? (weekendCfg[dayKey]?.working === true) : false;
+                    const isWorkingWeekend = isConfiguredDay(ds, dayKey);
                     allDailyDetails.push({
                         date: ds,
                         day_type: dayTypeLabel,
@@ -6004,7 +6049,12 @@ class PayrollRunService {
             const workingDays = allDailyDetails.filter(d => d.record_type === 'attendance').length;
             const absentDays = allDailyDetails.filter(d => d.record_type === 'absent').length;
             const paidLeaveDays = allDailyDetails.filter(d => d.record_type === 'leave' && d.is_paid_leave).length;
-            const unpaidLeaveDays = allDailyDetails.filter(d => d.record_type === 'leave' && !d.is_paid_leave).length;
+            // Counts both leave-only days recorded as unpaid AND days (leave-only or attendance)
+            // that carry an unpaid leave component alongside a paid one - see has_unpaid_leave,
+            // set when a date has both a paid and unpaid leave request on the same day.
+            const unpaidLeaveDays = allDailyDetails.filter(
+                d => (d.record_type === 'leave' && !d.is_paid_leave) || d.has_unpaid_leave
+            ).length;
 
             return {
                 employee: {
