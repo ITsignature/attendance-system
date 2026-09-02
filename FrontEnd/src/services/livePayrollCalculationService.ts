@@ -108,6 +108,7 @@ interface EmployeeData {
   designation_name: string;
   base_salary: number;
   department_id: string;
+  employee_type?: string;
   apit_enabled?: boolean | number;
   attendance: {
     expected_salary: number;
@@ -186,6 +187,7 @@ interface CalculatedPayroll {
   employee_name: string;
   department_name: string;
   base_salary: number;
+  employee_type?: string;
   expected_base_salary: number;
   actual_earned_base: number;
   attendance_shortfall: number;
@@ -444,6 +446,7 @@ class LivePayrollCalculationService {
       employee_name: employee.employee_name,
       department_name: employee.department_name,
       base_salary: employee.base_salary,
+      employee_type: employee.employee_type,
       expected_base_salary: Math.round(expected_base_salary * 100) / 100,
       actual_earned_base: Math.round(actual_earned_base * 100) / 100,
       attendance_shortfall: Math.round(attendance_shortfall * 100) / 100,

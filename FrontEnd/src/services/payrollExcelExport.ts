@@ -78,13 +78,18 @@ function styleTotalsCell(cell: ExcelJS.Cell, isNumber = false) {
 // ── Helper ────────────────────────────────────────────────────────────────────
 function round2(n: number) { return Math.round(n * 100) / 100; }
 
-// ── Main export ───────────────────────────────────────────────────────────────
-export async function exportLivePayrollToExcel(
+const isTrainee = (r: CalculatedPayroll) => r.employee_type === 'trainee';
+
+// ── Build a single worksheet for one employee group ─────────────────────────
+function addPayrollSheet(
+  wb: ExcelJS.Workbook,
+  sheetName: string,
   calculatedResults: CalculatedPayroll[],
   rawEmployees: any[],
   periodInfo: PeriodInfo,
-  company: CompanyInfo = { name: '', address: '' }
-): Promise<void> {
+  company: CompanyInfo,
+  codePrefix: string
+): void {
 
   const rawByEmpId = new Map<string, any>(rawEmployees.map(e => [e.employee_id, e]));
 
@@ -184,7 +189,7 @@ export async function exportLivePayrollToExcel(
     const raw = rawByEmpId.get(result.employee_id) || {};
     const row: DataRow = new Array(TOTAL_COLS).fill('');
 
-    row[0] = result.employee_code || '';
+    row[0] = result.employee_code ? `${codePrefix}${result.employee_code}` : '';
     row[1] = result.employee_name || '';
     row[2] = raw.designation_name || '';
 
@@ -304,10 +309,8 @@ export async function exportLivePayrollToExcel(
     totalsRow[col] = round2(dataRows.reduce((s,r)=>s+(typeof r[col]==='number'?r[col]:0),0));
   });
 
-  // ── Create workbook ───────────────────────────────────────────────────────
-  const wb  = new ExcelJS.Workbook();
-  wb.creator = 'IT Signature HRMS';
-  const ws  = wb.addWorksheet('Payroll', { views: [{ state: 'frozen', xSplit: 2, ySplit: 5 }] });
+  // ── Create worksheet ──────────────────────────────────────────────────────
+  const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', xSplit: 2, ySplit: 5 }] });
 
   // Column widths (1-based index = position in array)
   const colWidths = Array.from({ length: TOTAL_COLS }, (_,i): ExcelJS.Column => {
@@ -431,6 +434,29 @@ export async function exportLivePayrollToExcel(
     if (c === ROUND + 1 || c === ROUND + 2) continue; // gap cols — no border/fill
     styleTotalsCell(totWsRow.getCell(c), numberCols.has(c));
   }
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+export async function exportLivePayrollToExcel(
+  calculatedResults: CalculatedPayroll[],
+  rawEmployees: any[],
+  periodInfo: PeriodInfo,
+  company: CompanyInfo = { name: '', address: '' }
+): Promise<void> {
+
+  const nonTrainees = calculatedResults.filter(r => !isTrainee(r));
+  const trainees = calculatedResults.filter(r => isTrainee(r));
+
+  const nonTraineeIds = new Set(nonTrainees.map(r => r.employee_id));
+  const traineeIds = new Set(trainees.map(r => r.employee_id));
+  const rawNonTrainees = rawEmployees.filter(e => nonTraineeIds.has(e.employee_id));
+  const rawTrainees = rawEmployees.filter(e => traineeIds.has(e.employee_id));
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'IT Signature HRMS';
+
+  addPayrollSheet(wb, 'Employees', nonTrainees, rawNonTrainees, periodInfo, company, '');
+  addPayrollSheet(wb, 'Trainees', trainees, rawTrainees, periodInfo, company, 'TR');
 
   // ── Download ──────────────────────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
@@ -445,6 +471,4 @@ export async function exportLivePayrollToExcel(
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-
-  
 }

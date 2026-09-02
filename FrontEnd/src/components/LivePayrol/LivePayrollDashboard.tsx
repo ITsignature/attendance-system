@@ -80,15 +80,24 @@ const LivePayrollDashboard: React.FC = () => {
     setEarningsModal({ show: false, employee: null });
   };
 
+  const isTrainee = (result: CalculatedPayroll) => result.employee_type === 'trainee';
+
   const sortByEmployeeCode = (results: CalculatedPayroll[]) => {
     const isNumericCode = (code: string) => /^\d+$/.test(code);
-    return [...results].sort((a, b) => {
+    const compareByCode = (a: CalculatedPayroll, b: CalculatedPayroll) => {
       const aNum = isNumericCode(a.employee_code);
       const bNum = isNumericCode(b.employee_code);
       if (aNum && bNum) return parseInt(a.employee_code) - parseInt(b.employee_code);
       if (aNum) return -1;
       if (bNum) return 1;
       return a.employee_code.localeCompare(b.employee_code);
+    };
+
+    return [...results].sort((a, b) => {
+      const aTrainee = isTrainee(a);
+      const bTrainee = isTrainee(b);
+      if (aTrainee !== bTrainee) return aTrainee ? 1 : -1;
+      return compareByCode(a, b);
     });
   };
 
@@ -481,6 +490,18 @@ const LivePayrollDashboard: React.FC = () => {
     page * itemsPerPage
   );
 
+  // Group-boundary marker: true for the row where the trainee/non-trainee group
+  // changes from the previous row (results are sorted non-trainees-first, then trainees).
+  const isGroupStart = (index: number) => {
+    const result = paginatedResults[index];
+    if (!result) return false;
+    const prev = index === 0
+      ? calculatedResults[(page - 1) * itemsPerPage - 1]
+      : paginatedResults[index - 1];
+    if (!prev) return false;
+    return isTrainee(result) !== isTrainee(prev);
+  };
+
   // =============================================
   // RENDER
   // =============================================
@@ -642,14 +663,22 @@ const LivePayrollDashboard: React.FC = () => {
         {/* Mobile: card list */}
         <div className="lg:hidden space-y-3">
           {paginatedResults.length > 0 ? (
-            paginatedResults.map(result => {
+            paginatedResults.map((result, index) => {
               const hasAllowances = (result.allowances_breakdown && result.allowances_breakdown.length > 0) ||
                                    (result.bonuses_breakdown && result.bonuses_breakdown.length > 0);
               const hasDeductions = (result.deductions_breakdown && result.deductions_breakdown.length > 0) ||
                                    (result.financial_deductions_breakdown && result.financial_deductions_breakdown.length > 0);
+              const showGroupBadge = isGroupStart(index);
               return (
+                <React.Fragment key={result.employee_id}>
+                  {showGroupBadge && (
+                    <div className="pt-1 pb-1">
+                      <Badge color={isTrainee(result) ? 'purple' : 'blue'} size="sm">
+                        {isTrainee(result) ? 'Trainees' : 'Employees'}
+                      </Badge>
+                    </div>
+                  )}
                 <div
-                  key={result.employee_id}
                   className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 cursor-pointer"
                   onClick={() => openDailyDetailsModal(result.employee_id, result.employee_name)}
                 >
@@ -736,6 +765,7 @@ const LivePayrollDashboard: React.FC = () => {
                     View Payslip
                   </button>
                 </div>
+                </React.Fragment>
               );
             })
           ) : (
@@ -760,15 +790,25 @@ const LivePayrollDashboard: React.FC = () => {
             </Table.Head>
             <Table.Body>
               {paginatedResults.length > 0 ? (
-                paginatedResults.map(result => {
+                paginatedResults.map((result, index) => {
                   const hasAllowances = (result.allowances_breakdown && result.allowances_breakdown.length > 0) ||
                                        (result.bonuses_breakdown && result.bonuses_breakdown.length > 0);
                   const hasDeductions = (result.deductions_breakdown && result.deductions_breakdown.length > 0) ||
                                        (result.financial_deductions_breakdown && result.financial_deductions_breakdown.length > 0);
+                  const showGroupBadge = isGroupStart(index);
 
                   return (
+                    <React.Fragment key={result.employee_id}>
+                      {showGroupBadge && (
+                        <Table.Row>
+                          <Table.Cell colSpan={9} className="bg-gray-50 dark:bg-gray-700 py-2">
+                            <Badge color={isTrainee(result) ? 'purple' : 'blue'} size="sm">
+                              {isTrainee(result) ? 'Trainees' : 'Employees'}
+                            </Badge>
+                          </Table.Cell>
+                        </Table.Row>
+                      )}
                     <Table.Row
-                      key={result.employee_id}
                       className="hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
                       onClick={() => openDailyDetailsModal(result.employee_id, result.employee_name)}
                     >
@@ -854,6 +894,7 @@ const LivePayrollDashboard: React.FC = () => {
                         </button>
                       </Table.Cell>
                     </Table.Row>
+                    </React.Fragment>
                   );
                 })
               ) : (

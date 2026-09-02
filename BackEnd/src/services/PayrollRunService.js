@@ -4720,6 +4720,7 @@ class PayrollRunService {
                     e.base_salary,
                     e.department_id,
                     e.hire_date,
+                    e.employee_type,
                     e.apit_enabled,
                     e.weekday_ot_multiplier,
                     e.saturday_ot_multiplier,

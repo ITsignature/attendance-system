@@ -302,8 +302,31 @@ router.get('/managers',
   })
 );
 
+// Get next auto-increment employee code (max numeric code + 1) for the current client
+router.get('/next-code',
+  checkPermission('employees.create'),
+  asyncHandler(async (req, res) => {
+    const db = getDB();
+
+    const [rows] = await db.execute(`
+      SELECT COALESCE(MAX(CAST(employee_code AS UNSIGNED)), 0) AS maxCode
+      FROM employees
+      WHERE client_id = ? AND employee_code REGEXP '^[0-9]+$'
+    `, [req.user.clientId]);
+
+    const nextCode = (rows[0].maxCode || 0) + 1;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        employee_code: String(nextCode)
+      }
+    });
+  })
+);
+
 // Check employee ID availability
-router.get('/check-id', 
+router.get('/check-id',
   checkPermission('employees.create'),
   asyncHandler(async (req, res) => {
     const db = getDB();
@@ -567,6 +590,22 @@ router.put('/:id',
           success: false,
           message: `Fingerprint ID ${req.body.fingerprint_id} is already assigned to ${existingFingerprint[0].employee_name} (${existingFingerprint[0].employee_code})`,
           field: 'fingerprint_id'
+        });
+      }
+    }
+
+    // Check for duplicate employee_code if being updated
+    if (req.body.hasOwnProperty('employee_code') && req.body.employee_code) {
+      const [existingCode] = await db.execute(`
+        SELECT id FROM employees
+        WHERE client_id = ? AND employee_code = ? AND id != ?
+      `, [req.user.clientId, req.body.employee_code, employeeId]);
+
+      if (existingCode.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee code already exists',
+          field: 'employee_code'
         });
       }
     }

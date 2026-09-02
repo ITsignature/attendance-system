@@ -466,6 +466,9 @@ private async queueRefresh(): Promise<void> {
   async checkEmployeeIdAvailability(employeeId: string): Promise<ApiResponse> {
     return this.apiCall(`/api/employees/check-id?employee_id=${encodeURIComponent(employeeId)}`);
   }
+  async getNextEmployeeCode(): Promise<ApiResponse> {
+    return this.apiCall('/api/employees/next-code');
+  }
   async checkEmailAvailability(email: string): Promise<ApiResponse> {
     return this.apiCall(`/api/employees/check-email?email=${encodeURIComponent(email)}`);
   }

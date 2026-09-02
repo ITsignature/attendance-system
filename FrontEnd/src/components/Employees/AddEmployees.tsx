@@ -344,17 +344,21 @@ const AddEmployees: React.FC = () => {
     }
   };
 
-  // Generate unique employee ID
-  const generateEmployeeId = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const newId = `EMP${timestamp}${random}`;
-    console.log('Generated employee ID:', newId);
-    
-    setFormData(prev => ({
-      ...prev,
-      employee_code: newId
-    }));
+  // Generate next sequential employee code (max existing numeric code + 1)
+  const generateEmployeeId = async () => {
+    try {
+      const response = await apiService.getNextEmployeeCode();
+      if (response.success && response.data) {
+        const newId = (response.data as { employee_code: string }).employee_code;
+        console.log('Generated employee ID:', newId);
+        setFormData(prev => ({
+          ...prev,
+          employee_code: newId
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to generate employee ID:', error);
+    }
   };
 
   // Add this function to handle document uploads:

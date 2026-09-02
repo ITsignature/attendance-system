@@ -92,8 +92,8 @@ const AllEmployees: React.FC = () => {
     department_id: '',
     employment_status: '',
     employee_type: '',
-    sortBy: 'first_name',
-    sortOrder: 'asc'
+    sortBy: 'employee_code',
+    sortOrder: 'desc'
   });
   
   // Modal states for bulk operations
@@ -169,9 +169,24 @@ const AllEmployees: React.FC = () => {
 
     // Apply sorting
     filtered.sort((a, b) => {
+      if (filters.sortBy === 'employee_code') {
+        const aNum = Number(a.employee_code);
+        const bNum = Number(b.employee_code);
+        const aIsNum = a.employee_code !== '' && !isNaN(aNum);
+        const bIsNum = b.employee_code !== '' && !isNaN(bNum);
+
+        let cmp: number;
+        if (aIsNum && bIsNum) {
+          cmp = aNum - bNum;
+        } else {
+          cmp = (a.employee_code || '').localeCompare(b.employee_code || '');
+        }
+        return filters.sortOrder === 'desc' ? -cmp : cmp;
+      }
+
       let aValue = '';
       let bValue = '';
-      
+
       switch (filters.sortBy) {
         case 'first_name':
           aValue = a.first_name || '';
@@ -310,8 +325,8 @@ const AllEmployees: React.FC = () => {
       department_id: '',
       employment_status: '',
       employee_type: '',
-      sortBy: 'first_name',
-      sortOrder: 'asc'
+      sortBy: 'employee_code',
+      sortOrder: 'desc'
     });
   };
 
