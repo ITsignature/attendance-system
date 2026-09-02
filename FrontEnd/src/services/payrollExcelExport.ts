@@ -185,11 +185,13 @@ function addPayrollSheet(
     return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
   });
 
-  const dataRows: DataRow[] = sortedResults.map(result => {
+  const dataRows: DataRow[] = sortedResults.map((result, idx) => {
     const raw = rawByEmpId.get(result.employee_id) || {};
     const row: DataRow = new Array(TOTAL_COLS).fill('');
 
-    row[0] = result.employee_code ? `${codePrefix}${result.employee_code}` : '';
+    // For prefixed sheets (e.g. trainees), show a sequential display code
+    // (TR1, TR2, ...) instead of the employee's real employee_code.
+    row[0] = codePrefix ? `${codePrefix}${idx + 1}` : (result.employee_code || '');
     row[1] = result.employee_name || '';
     row[2] = raw.designation_name || '';
 
