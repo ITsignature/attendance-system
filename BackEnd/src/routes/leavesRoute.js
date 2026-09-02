@@ -6,6 +6,7 @@ const { authenticate } = require('../middleware/authMiddleware');
 const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddleware');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const { v4: uuidv4 } = require('uuid');
+const LeaveAccrualService = require('../services/LeaveAccrualService');
 
 // =============================================
 // VALIDATION HELPERS
@@ -477,11 +478,25 @@ router.get('/accrual-balance',
       return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
-    const [rows] = await db.execute(`
+    let [rows] = await db.execute(`
       SELECT cumulative_accrued, cumulative_used, available_balance, last_accrual_month
       FROM leave_accrual_balances
       WHERE employee_id = ? AND leave_type_id = ?
     `, [employee_id, leave_type_id]);
+
+    if (rows.length === 0) {
+      // No balance row yet — likely a trainee created since the last monthly accrual run.
+      // Calculate on demand instead of making them wait for the cron / HR.
+      const processed = await LeaveAccrualService.ensureAccrualUpToDate(db, employee_id, leave_type_id);
+
+      if (processed) {
+        [rows] = await db.execute(`
+          SELECT cumulative_accrued, cumulative_used, available_balance, last_accrual_month
+          FROM leave_accrual_balances
+          WHERE employee_id = ? AND leave_type_id = ?
+        `, [employee_id, leave_type_id]);
+      }
+    }
 
     if (rows.length === 0) {
       return res.json({
@@ -1163,11 +1178,23 @@ router.post('/request',
 
       if (isTraineeOnly && accrualPerMonth > 0) {
         // Accrual-based leave — check cumulative balance
-        const [accrualRows] = await db.execute(`
+        let [accrualRows] = await db.execute(`
           SELECT cumulative_accrued, cumulative_used, available_balance
           FROM leave_accrual_balances
           WHERE employee_id = ? AND leave_type_id = ?
         `, [employee_id, leaveTypeId]);
+
+        if (accrualRows.length === 0) {
+          // No balance row yet — calculate on demand instead of blocking the request.
+          const processed = await LeaveAccrualService.ensureAccrualUpToDate(db, employee_id, leaveTypeId);
+          if (processed) {
+            [accrualRows] = await db.execute(`
+              SELECT cumulative_accrued, cumulative_used, available_balance
+              FROM leave_accrual_balances
+              WHERE employee_id = ? AND leave_type_id = ?
+            `, [employee_id, leaveTypeId]);
+          }
+        }
 
         if (accrualRows.length === 0 || accrualRows[0].available_balance === null) {
           return res.status(400).json({

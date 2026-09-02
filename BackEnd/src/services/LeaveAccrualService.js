@@ -52,6 +52,36 @@ class LeaveAccrualService {
             
     }
 
+    // On-demand fallback: run accrual for a single employee/leave-type pair right now,
+    // instead of waiting for the monthly cron. Used when a balance row doesn't exist yet
+    // (e.g. a trainee created mid-month who hasn't been through a cron cycle).
+    async ensureAccrualUpToDate(db, employeeId, leaveTypeId){
+        const [employees] = await db.execute(`
+            SELECT id, employee_code, hire_date
+            FROM employees
+            WHERE id = ? AND employee_type = 'trainee' AND employment_status = 'active' AND hire_date IS NOT NULL
+            `,[employeeId]
+        );
+
+        const [leaveTypes] = await db.execute(`
+            SELECT id, client_id, name, accrual_per_month
+            FROM leave_types
+            WHERE id = ? AND is_trainee_only = 1 AND accrual_per_month > 0 AND is_active = 1
+            `,[leaveTypeId]
+        );
+
+        if(employees.length === 0 || leaveTypes.length === 0){
+            return false;
+        }
+
+        const now = new Date();
+        const endMonth = new Date(now.getFullYear(),now.getMonth()+1,1);
+        const endMonthStr = this._toDateStr(endMonth);
+
+        await this._processTraineeAccrual(db, employees[0], leaveTypes[0], endMonthStr);
+        return true;
+    }
+
     async _processTraineeAccrual(db,trainee,leaveType,endMonthStr){
         await this._ensureBalanceRow(db,trainee.id,leaveType.id);
 
