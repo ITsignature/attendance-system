@@ -438,11 +438,14 @@ router.put('/:key',
 
     // Check permission based on setting category
     const { checkPermission } = require('../middleware/rbacMiddleware');
+    const generalSettings = ['company_name', 'timezone', 'date_format', 'currency', 'language'];
     const attendanceSettings = ['working_hours_per_day', 'work_start_time', 'work_end_time', 'late_threshold_minutes', 'break_duration_hours', 'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'weekend_working_days', 'day_specific_schedules'];
     const leaveSettings = ['paid_leaves_per_month'];
     const payrollSettings = ['payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'daily_rate_method'];
 
-    if (attendanceSettings.includes(key)) {
+    if (generalSettings.includes(key)) {
+      checkPermission('settings.attendance.edit')(req, res, () => {});
+    } else if (attendanceSettings.includes(key)) {
       checkPermission('settings.attendance.edit')(req, res, () => {});
     } else if (leaveSettings.includes(key)) {
       checkPermission('settings.leaves.edit')(req, res, () => {});
