@@ -1876,6 +1876,18 @@ const LivePayrollDashboard: React.FC = () => {
             return (
               <div ref={payslipContentRef} className="space-y-6 text-sm bg-white p-2">
 
+                {/* Header (mirrors Modal.Header so it's included in the captured PDF) */}
+                <div className="pb-3 border-b">
+                  <div className="text-lg font-bold text-gray-900">{companyName || 'Live Payroll Preview'}</div>
+                  {rawData?.period && (
+                    <div className="text-sm font-normal text-gray-500 mt-0.5">
+                      {new Date(rawData.period.start_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      {' '}&ndash;{' '}
+                      {new Date(rawData.period.end_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  )}
+                </div>
+
                 {/* Employee Details */}
                 <div>
                   <h3 className="font-semibold text-gray-700 mb-3 pb-1 border-b">Employee Details</h3>
