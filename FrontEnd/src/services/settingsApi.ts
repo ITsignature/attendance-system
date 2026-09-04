@@ -162,9 +162,21 @@ class SettingsApiService {
     currency: string;
     language: string;
   }> {
+    // Some settings were saved double-JSON-encoded (e.g. `"\"Gems Quality Lanka\""`),
+    // so a stored value can still be wrapped in literal quotes after being parsed once.
+    // Strip one extra layer if present, same fix as Settings.tsx's cleanValue().
+    const unquote = (val: any): any => {
+      if (typeof val !== 'string') return val;
+      const trimmed = val.trim();
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        return trimmed.slice(1, -1);
+      }
+      return trimmed;
+    };
+
     try {
       const settings = await this.getAllSettings();
-      
+
       // Add null/undefined checks
       if (!settings || !settings.success || !settings.data || !settings.data.settings) {
         console.warn('Failed to fetch settings, using defaults');
@@ -180,11 +192,11 @@ class SettingsApiService {
       const settingsData = settings.data.settings;
 
       return {
-        company_name: settingsData.company_name?.value || 'Your Company',
-        timezone: settingsData.timezone?.value || 'UTC+00:00',
-        date_format: settingsData.date_format?.value || 'YYYY-MM-DD',
-        currency: settingsData.currency?.value || 'USD',
-        language: settingsData.language?.value || 'English',
+        company_name: unquote(settingsData.company_name?.value) || 'Your Company',
+        timezone: unquote(settingsData.timezone?.value) || 'UTC+00:00',
+        date_format: unquote(settingsData.date_format?.value) || 'YYYY-MM-DD',
+        currency: unquote(settingsData.currency?.value) || 'USD',
+        language: unquote(settingsData.language?.value) || 'English',
       };
     } catch (error) {
       console.error('Error fetching company info:', error);
