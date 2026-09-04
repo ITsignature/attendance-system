@@ -352,22 +352,6 @@ const handleSave = async () => {
       if (result.success) {
         setHasChanges(false);
         alert('Settings saved successfully!');
-
-        // 🔧 FIX: Force refresh localSettings after successful save
-        // This ensures UI state matches backend immediately
-        console.log('🔄 Refreshing local settings after save...');
-        setTimeout(() => {
-          // Re-trigger the useEffect to sync localSettings with updated settings from hook
-          if (settings && Object.keys(settings).length > 0) {
-            const converted: Record<string, any> = {};
-            Object.entries(settings).forEach(([key, setting]) => {
-              converted[key] = setting.value;
-            });
-            console.log('🔄 Force-updated localSettings:', converted);
-            setLocalSettings({...converted}); // Force new object reference
-          }
-        }, 100); // Small delay to ensure hook state is updated
-
       } else {
         // Handle permission errors and other failures
         const errorMessage = result.error || 'Failed to save settings. Please try again.';
@@ -485,7 +469,7 @@ const hhmmToMinutes = (t) => {
                 />
               </div>
 
-              <div>
+              {/* <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Timezone
                 </label>
@@ -530,7 +514,7 @@ const hhmmToMinutes = (t) => {
                   <option value="EUR">EUR - Euro</option>
                   <option value="GBP">GBP - British Pound</option>
                 </select>
-              </div>
+              </div> */}
             </div>
           </div>
         );
