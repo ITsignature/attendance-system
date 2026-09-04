@@ -14,6 +14,8 @@ interface PayslipCardProps {
    *  shrink dense payslips to fit a fixed grid cell via real reflow (not CSS transform:
    *  scale, which html2canvas rasterizes incorrectly). */
   fontScale?: number;
+  /** Company name from system settings, shown as the card title. */
+  companyName?: string;
 }
 
 const formatCurrency = (amount: number | null | undefined) => {
@@ -32,7 +34,7 @@ const formatCurrency = (amount: number | null | undefined) => {
 //   flex row - render them as a standalone `<HRule>` block so their position can't drift.
 // - Bullet dots are wrapped with the text in an `inline-flex` span so they align to their
 //   own line, not to the parent box.
-const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCalculated, fontScale = 1 }) => {
+const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCalculated, fontScale = 1, companyName }) => {
   const ebs = emp.earnings_by_source;
   const sbc = emp.shortfall_by_cause;
   const attendanceHours = ebs?.attendance?.hours ?? 0;
@@ -107,7 +109,7 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
     >
       {/* Header */}
       <div style={{ marginBottom: px(10) }}>
-        <div style={{ fontSize: px(13), fontWeight: 700, color: '#111827', minHeight: px(16), display: 'flex', alignItems: 'center' }}>Live Payroll Preview</div>
+        <div style={{ fontSize: px(13), fontWeight: 700, color: '#111827', minHeight: px(16), display: 'flex', alignItems: 'center' }}>{companyName || 'Live Payroll Preview'}</div>
         {period && (
           <div style={{ fontSize: px(9), color: '#6b7280', marginTop: px(2), minHeight: px(13), display: 'flex', alignItems: 'center' }}>
             {new Date(period.start_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}

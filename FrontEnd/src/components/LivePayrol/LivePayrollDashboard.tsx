@@ -15,6 +15,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { createRoot } from 'react-dom/client';
 import PayslipCard from './PayslipCard';
+import settingsApi from '../../services/settingsApi';
 
 const LivePayrollDashboard: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
@@ -43,6 +44,14 @@ const LivePayrollDashboard: React.FC = () => {
 
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+
+  const [companyName, setCompanyName] = useState<string>('');
+
+  useEffect(() => {
+    settingsApi.getCompanyInfo()
+      .then(info => setCompanyName(info.company_name))
+      .catch(() => {});
+  }, []);
 
   const [dailyDetailsModal, setDailyDetailsModal] = useState<{
     show: boolean;
@@ -242,7 +251,7 @@ const LivePayrollDashboard: React.FC = () => {
       for (const emp of calculatedResults) {
         const h = await new Promise<number>(resolve => {
           measureRoot.render(
-            <PayslipCard employee={emp} period={rawData?.period} lastCalculated={lastCalculated} />
+            <PayslipCard employee={emp} period={rawData?.period} lastCalculated={lastCalculated} companyName={companyName} />
           );
           setTimeout(() => {
             resolve(measureEl.firstElementChild?.getBoundingClientRect().height ?? USABLE_HEIGHT);
@@ -297,6 +306,7 @@ const LivePayrollDashboard: React.FC = () => {
                     employee={emp}
                     period={rawData?.period}
                     lastCalculated={lastCalculated}
+                    companyName={companyName}
                   />
                 </div>
               ))}
@@ -1839,7 +1849,7 @@ const LivePayrollDashboard: React.FC = () => {
       <Modal show={payslipModal.show} onClose={closePayslipModal} size="3xl">
         <Modal.Header>
           <div>
-            <div className="text-lg font-bold">Live Payroll Preview</div>
+            <div className="text-lg font-bold">{companyName || 'Live Payroll Preview'}</div>
             {payslipModal.employee && rawData?.period && (
               <div className="text-sm font-normal text-gray-500 mt-0.5">
                 {new Date(rawData.period.start_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
