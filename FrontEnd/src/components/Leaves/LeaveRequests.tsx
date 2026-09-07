@@ -23,6 +23,7 @@ interface SimpleFilters {
   startDate: string;
   endDate: string;
   employeeId: string;
+  leaveTypeId: string;
 }
 
 interface EmployeeOption {
@@ -59,7 +60,8 @@ const LeaveRequestsManagement: React.FC = () => {
     status: '',
     startDate: '',
     endDate: '',
-    employeeId: ''
+    employeeId: '',
+    leaveTypeId: ''
   });
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [durationSort, setDurationSort] = useState<'asc' | 'desc' | null>(null);
@@ -200,7 +202,8 @@ const handleConfirmAction = async () => {
       status: '',
       startDate: '',
       endDate: '',
-      employeeId: ''
+      employeeId: '',
+      leaveTypeId: ''
     });
   };
 
@@ -324,6 +327,7 @@ const handleConfirmAction = async () => {
     const filtered = requests.filter(request => {
       const status = request.status || request.details?.status || '';
       if (activeTab !== 'all' && status !== activeTab) return false;
+      if (filters.leaveTypeId && request.leave_type_id !== filters.leaveTypeId) return false;
       return true;
     });
 
@@ -375,7 +379,7 @@ const handleConfirmAction = async () => {
   const renderFilters = () => (
     <div className={`mb-4 ${showFilters ? 'block' : 'hidden'}`}>
       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Employee
@@ -389,6 +393,23 @@ const handleConfirmAction = async () => {
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name} ({emp.employee_code})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Leave Type
+            </label>
+            <select
+              value={filters.leaveTypeId}
+              onChange={(e) => handleFilterChange('leaveTypeId', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+            >
+              <option value="">All Leave Types</option>
+              {leaveTypes.map(lt => (
+                <option key={lt.id} value={lt.id}>
+                  {lt.name}
                 </option>
               ))}
             </select>
