@@ -1533,6 +1533,7 @@ const LivePayrollDashboard: React.FC = () => {
                 {dailyDetailsModal.data.daily_records.length > 0 ? (
                   dailyDetailsModal.data.daily_records.map((record: any, index: number) => {
                     const isAbsent = record.record_type === 'absent';
+                    const isPending = record.record_type === 'pending';
                     const isLeave = record.record_type === 'leave';
                     const isHoliday = record.record_type === 'holiday';
                     const isWeekendOff = record.record_type === 'weekend_off';
@@ -1543,6 +1544,7 @@ const LivePayrollDashboard: React.FC = () => {
                                         (record.leave_duration === 'half_day' || record.leave_duration === 'short_leave');
 
                     const cardBg = isAbsent ? 'bg-red-50 dark:bg-red-900/10' :
+                                  isPending ? 'bg-gray-50 dark:bg-gray-800/50' :
                                   isLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
                                   isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
                                   hasPartialLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
@@ -1553,6 +1555,7 @@ const LivePayrollDashboard: React.FC = () => {
                     const statusColor = record.status === 'present' ? 'success' :
                                         record.status === 'late' ? 'warning' :
                                         record.status === 'absent' ? 'failure' :
+                                        record.status === 'pending' ? 'gray' :
                                         record.status === 'paid_leave' ? 'warning' :
                                         record.status === 'unpaid_leave' ? 'pink' :
                                         record.status === 'holiday' ? 'info' :
@@ -1562,6 +1565,7 @@ const LivePayrollDashboard: React.FC = () => {
                                         record.status === 'unpaid_leave' ? 'Unpaid Leave' :
                                         record.status === 'holiday' ? 'Holiday' :
                                         record.status === 'weekend_off' ? 'Weekend Off' :
+                                        record.status === 'pending' ? 'In Progress' :
                                         record.status;
 
                     const partialLeaveLabel = record.leave_duration === 'half_day' ? 'Half Day' :
@@ -1685,6 +1689,7 @@ const LivePayrollDashboard: React.FC = () => {
                     {dailyDetailsModal.data.daily_records.length > 0 ? (
                       dailyDetailsModal.data.daily_records.map((record: any, index: number) => {
                         const isAbsent = record.record_type === 'absent';
+                        const isPending = record.record_type === 'pending';
                         const isLeave = record.record_type === 'leave';
                         const isHoliday = record.record_type === 'holiday';
                         const isWeekendOff = record.record_type === 'weekend_off';
@@ -1695,6 +1700,7 @@ const LivePayrollDashboard: React.FC = () => {
                                             (record.leave_duration === 'half_day' || record.leave_duration === 'short_leave');
 
                         const rowBg = isAbsent ? 'bg-red-50 dark:bg-red-900/10' :
+                                      isPending ? 'bg-gray-50 dark:bg-gray-800/50' :
                                       isLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
                                       isLeave && !record.is_paid_leave ? 'bg-orange-50 dark:bg-orange-900/10' :
                                       hasPartialLeave && record.is_paid_leave ? 'bg-yellow-50 dark:bg-yellow-900/10' :
@@ -1705,6 +1711,7 @@ const LivePayrollDashboard: React.FC = () => {
                         const statusColor = record.status === 'present' ? 'success' :
                                             record.status === 'late' ? 'warning' :
                                             record.status === 'absent' ? 'failure' :
+                                            record.status === 'pending' ? 'gray' :
                                             record.status === 'paid_leave' ? 'warning' :
                                             record.status === 'unpaid_leave' ? 'pink' :
                                             record.status === 'holiday' ? 'info' :
@@ -1714,6 +1721,7 @@ const LivePayrollDashboard: React.FC = () => {
                                             record.status === 'unpaid_leave' ? 'Unpaid Leave' :
                                             record.status === 'holiday' ? 'Holiday' :
                                             record.status === 'weekend_off' ? 'Weekend Off' :
+                                            record.status === 'pending' ? 'In Progress' :
                                             record.status;
 
                         const partialLeaveLabel = record.leave_duration === 'half_day' ? 'Half Day' :

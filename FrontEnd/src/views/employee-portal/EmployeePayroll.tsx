@@ -439,12 +439,14 @@
                           <div className="space-y-3 lg:hidden">
                             {dailyDetailsModal.data.daily_records.map((day: any, index: number) => {
                               const isAbsent = day.record_type === 'absent';
+                              const isPending = day.record_type === 'pending';
                               const isLeave = day.record_type === 'leave';
                               const isHoliday = day.record_type === 'holiday';
                               const isWeekendOff = day.record_type === 'weekend_off';
                               const isUnscheduledWeekend = day.day_type === 'Saturday (Unscheduled)' || day.day_type === 'Sunday (Unscheduled)';
 
                               const cardBg = isAbsent ? 'bg-red-50 border-red-100' :
+                                isPending ? 'bg-gray-50 border-gray-100' :
                                 isLeave && day.is_paid_leave ? 'bg-yellow-50 border-yellow-100' :
                                 isLeave && !day.is_paid_leave ? 'bg-orange-50 border-orange-100' :
                                 isHoliday ? 'bg-blue-50 border-blue-100' :
@@ -454,6 +456,7 @@
                                 day.status === 'unpaid_leave' ? 'Unpaid Leave' :
                                 day.status === 'holiday' ? 'Holiday' :
                                 day.status === 'weekend_off' ? 'Weekend Off' :
+                                day.status === 'pending' ? 'In Progress' :
                                 day.status;
 
                               return (
@@ -479,7 +482,7 @@
 
                                   <div className="flex items-center justify-between pt-2 border-t border-black/5">
                                     <div className="text-sm">
-                                      {isAbsent || isWeekendOff ? (
+                                      {isAbsent || isWeekendOff || isPending ? (
                                         <span className="text-gray-400">—</span>
                                       ) : isLeave ? (
                                         <div>
@@ -503,7 +506,7 @@
                                     <div className="text-sm font-bold text-right">
                                       {isAbsent ? (
                                         <span className="text-red-500">Rs. 0.00</span>
-                                      ) : isWeekendOff ? (
+                                      ) : isWeekendOff || isPending ? (
                                         <span className="text-gray-400">—</span>
                                       ) : isHoliday ? (
                                         <span className="text-blue-600">—</span>
@@ -545,12 +548,14 @@
                               <tbody>
                                 {dailyDetailsModal.data.daily_records.map((day: any, index: number) => {
                                   const isAbsent = day.record_type === 'absent';
+                                  const isPending = day.record_type === 'pending';
                                   const isLeave = day.record_type === 'leave';
                                   const isHoliday = day.record_type === 'holiday';
                                   const isWeekendOff = day.record_type === 'weekend_off';
                                   const isUnscheduledWeekend = day.day_type === 'Saturday (Unscheduled)' || day.day_type === 'Sunday (Unscheduled)';
 
                                   const rowBg = isAbsent ? 'bg-red-50' :
+                                    isPending ? 'bg-gray-50' :
                                     isLeave && day.is_paid_leave ? 'bg-yellow-50' :
                                     isLeave && !day.is_paid_leave ? 'bg-orange-50' :
                                     isHoliday ? 'bg-blue-50' :
@@ -560,6 +565,7 @@
                                     day.status === 'unpaid_leave' ? 'Unpaid Leave' :
                                     day.status === 'holiday' ? 'Holiday' :
                                     day.status === 'weekend_off' ? 'Weekend Off' :
+                                    day.status === 'pending' ? 'In Progress' :
                                     day.status;
 
                                   return (
@@ -571,7 +577,7 @@
                                       <td className="py-2 pr-4">{day.check_in || '-'}</td>
                                       <td className="py-2 pr-4">{day.check_out || '-'}</td>
                                       <td className="py-2 pr-4">
-                                        {isAbsent || isWeekendOff ? (
+                                        {isAbsent || isWeekendOff || isPending ? (
                                           <span className="text-gray-400">—</span>
                                         ) : isLeave ? (
                                           <div>
@@ -596,7 +602,7 @@
                                       <td className="py-2 pr-4 font-bold">
                                         {isAbsent ? (
                                           <span className="text-red-500">Rs. 0.00</span>
-                                        ) : isWeekendOff ? (
+                                        ) : isWeekendOff || isPending ? (
                                           <span className="text-gray-400">—</span>
                                         ) : isHoliday ? (
                                           <span className="text-blue-600">—</span>

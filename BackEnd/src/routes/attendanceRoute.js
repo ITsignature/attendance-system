@@ -146,17 +146,25 @@ router.get('/fingerprint', [
 
     // Check if attendance already exists for today
     const [existing] = await db.execute(`
-      SELECT id, check_in_time, check_out_time 
+      SELECT id, check_in_time, check_out_time, is_auto_covered, work_duration
       FROM attendance
       WHERE employee_id = ? AND date = ?
     `, [employeeId, today]);
 
-    if (existing.length === 0) {
+    // A partial Saturday-covering placeholder (in-progress, not yet fully earned) isn't
+    // real attendance — a genuine scan on that day is still a first check-in, not a
+    // checkout against the placeholder's fabricated check_in_time. Treat it as absent
+    // for routing purposes; the real check-in will overwrite the placeholder row below.
+    const existingIsPartialAutoCover = existing.length > 0
+      && !!existing[0].is_auto_covered
+      && existing[0].work_duration === 'insufficient_hours';
+
+    if (existing.length === 0 || existingIsPartialAutoCover) {
       // ===== CHECK-IN =====
-      console.log(`   Action: CHECK-IN`);
+      console.log(`   Action: CHECK-IN${existingIsPartialAutoCover ? ' (overwriting partial Saturday-covering placeholder)' : ''}`);
 
       const schedule = await getEmployeeSchedule(employeeId, clientId, db, today);
-      const attendanceId = uuidv4();
+      const attendanceId = existingIsPartialAutoCover ? existing[0].id : uuidv4();
 
       // Get day of week
       const attendanceDate = new Date(today);
@@ -174,24 +182,47 @@ router.get('/fingerprint', [
 
       console.log(`   Arrival Status: ${arrivalStatus}`);
 
-      await db.execute(`
-        INSERT INTO attendance (
-          id, employee_id, client_id, date, check_in_time, check_out_time,
-          total_hours, overtime_hours,
-          arrival_status, work_duration, work_type,
-          scheduled_in_time, scheduled_out_time, is_weekend
-        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 'office', ?, ?, ?)
-      `, [
-        attendanceId,
-        employeeId,
-        clientId,
-        today,
-        currentTime,
-        arrivalStatus,
-        schedule.start_time,
-        schedule.end_time,
-        isWeekend
-      ]);
+      if (existingIsPartialAutoCover) {
+        // Overwrite the placeholder in place with the real check-in, clearing every
+        // auto-covered field so this becomes an ordinary physical attendance record.
+        await db.execute(`
+          UPDATE attendance SET
+            check_in_time = ?, check_out_time = NULL,
+            total_hours = NULL, overtime_hours = NULL,
+            pre_shift_overtime_seconds = 0, post_shift_overtime_seconds = 0,
+            arrival_status = ?, work_duration = NULL, work_type = 'office',
+            scheduled_in_time = ?, scheduled_out_time = ?, is_weekend = ?,
+            payable_duration = NULL, is_auto_covered = 0, notes = NULL,
+            updated_at = NOW()
+          WHERE id = ?
+        `, [
+          currentTime,
+          arrivalStatus,
+          schedule.start_time,
+          schedule.end_time,
+          isWeekend,
+          attendanceId
+        ]);
+      } else {
+        await db.execute(`
+          INSERT INTO attendance (
+            id, employee_id, client_id, date, check_in_time, check_out_time,
+            total_hours, overtime_hours,
+            arrival_status, work_duration, work_type,
+            scheduled_in_time, scheduled_out_time, is_weekend
+          ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 'office', ?, ?, ?)
+        `, [
+          attendanceId,
+          employeeId,
+          clientId,
+          today,
+          currentTime,
+          arrivalStatus,
+          schedule.start_time,
+          schedule.end_time,
+          isWeekend
+        ]);
+      }
 
       console.log(`   ✅ Check-in successful at ${currentTime}`);
 
@@ -1551,42 +1582,52 @@ const computeSaturdayCovering = async (attendanceId, employeeId, clientId, payab
     [newExtra, newCoveringSeconds, newCompleted ? 1 : 0, attendanceId]
   );
 
-  // 5. Create auto attendance records for any newly crossed Saturday thresholds
-  // This runs whether or not fully completed — handles partial coverage (e.g. 2 of 3 Saturdays earned)
-  const prevCoveredCount = satDurationSeconds > 0 ? Math.floor(prevCoveringSeconds / satDurationSeconds) : 0;
-  const newCoveredCount  = satDurationSeconds > 0 ? Math.floor(newCoveringSeconds  / satDurationSeconds) : 0;
-
-  if (newCoveredCount > prevCoveredCount && saturdayDates.length > 0) {
+  // 5. Create/update auto attendance records to reflect covering progress.
+  // Runs on every checkout so the Saturday currently being earned shows its
+  // partial progress instead of staying "absent" until the full 8h is banked.
+  if (saturdayDates.length > 0) {
     await createAutoCoveredSaturdayRecords(employeeId, clientId, db, saturdayDates, yearMonth, newCoveringSeconds);
   }
 };
 
 /**
- * Create auto-covered attendance records for Saturdays that have been earned.
- * Only creates records that don't already exist (skips if physical attendance exists).
- * Tracks how many Saturdays are covered based on saturday_covering_seconds vs obligation per Saturday.
+ * Create/update auto-covered attendance records to reflect Saturday covering progress.
+ * Only touches records that don't have real physical attendance (never overwrites a
+ * checked-out physical record). Every fully-earned Saturday gets the full scheduled
+ * hours; the Saturday currently being earned (if any) gets an auto-covered record
+ * showing its partial progress so it isn't reported as absent while still in progress.
  */
 const createAutoCoveredSaturdayRecords = async (employeeId, clientId, db, saturdayDates, yearMonth, coveringSeconds) => {
   // Get Saturday duration to know how many are covered
   const { satDurationSeconds, config } = await getSaturdayCoveringConfig(employeeId, clientId, db, yearMonth);
   if (!satDurationSeconds || !config) return;
 
-  const coveredCount = satDurationSeconds > 0
-    ? Math.min(saturdayDates.length, Math.floor(coveringSeconds / satDurationSeconds))
-    : 0;
-
   const satInTime = config.saturday.in_time || '08:00';
   const satOutTime = config.saturday.out_time || '17:00';
+  const satIn = new Date(`2000-01-01T${satInTime}:00`);
+  const satOut = new Date(`2000-01-01T${satOutTime}:00`);
+  const fullTotalHoursVal = parseFloat(((satOut - satIn) / 3600000).toFixed(2));
 
-  for (let i = 0; i < coveredCount; i++) {
+  // How many Saturdays to touch: every fully-covered one, plus the one currently
+  // in progress (if any seconds have been allocated toward it and it isn't yet full).
+  const fullyCoveredCount = Math.min(saturdayDates.length, Math.floor(coveringSeconds / satDurationSeconds));
+  const remainderSeconds = coveringSeconds - fullyCoveredCount * satDurationSeconds;
+  const touchCount = Math.min(
+    saturdayDates.length,
+    fullyCoveredCount + (remainderSeconds > 0 && fullyCoveredCount < saturdayDates.length ? 1 : 0)
+  );
+
+  for (let i = 0; i < touchCount; i++) {
     const satDate = saturdayDates[i];
+    const isFullyCovered = i < fullyCoveredCount;
+    // Partial Saturday gets only the remainder seconds earned so far toward it.
+    const payableSecs = isFullyCovered ? satDurationSeconds : remainderSeconds;
 
-    // payable duration = saturday obligation per day (already has break deducted)
-    const payableSecs = satDurationSeconds;
-    // total_hours = raw scheduled hours (in_time to out_time, no break deducted)
-    const satIn = new Date(`2000-01-01T${satInTime}:00`);
-    const satOut = new Date(`2000-01-01T${satOutTime}:00`);
-    const totalHoursVal = parseFloat(((satOut - satIn) / 3600000).toFixed(2));
+    // Reflect partial hours as a shortened check-out time (check-in fixed at schedule start).
+    const partialOutDate = new Date(satIn.getTime() + payableSecs * 1000);
+    const partialOutTime = partialOutDate.toTimeString().slice(0, 8);
+    const checkOutTimeVal = isFullyCovered ? satOutTime : partialOutTime;
+    const totalHoursVal = isFullyCovered ? fullTotalHoursVal : parseFloat((payableSecs / 3600).toFixed(2));
 
     // Get day of week value for is_weekend column
     const dateObj = new Date(satDate);
@@ -1595,7 +1636,7 @@ const createAutoCoveredSaturdayRecords = async (employeeId, clientId, db, saturd
 
     // Check if a record already exists for this date
     const [existing] = await db.execute(
-      `SELECT id, is_auto_covered, check_out_time FROM attendance WHERE employee_id = ? AND date = ?`,
+      `SELECT id, is_auto_covered, check_out_time, payable_duration FROM attendance WHERE employee_id = ? AND date = ?`,
       [employeeId, satDate]
     );
 
@@ -1603,7 +1644,35 @@ const createAutoCoveredSaturdayRecords = async (employeeId, clientId, db, saturd
       const rec = existing[0];
 
       if (rec.is_auto_covered) {
-        // Already auto-covered — skip
+        const prevPayable = parseInt(rec.payable_duration) || 0;
+        if (prevPayable >= satDurationSeconds) {
+          // Already fully auto-covered — nothing left to update.
+          continue;
+        }
+        if (payableSecs === prevPayable) {
+          // No change in progress since last computation — skip the write.
+          continue;
+        }
+        // Update the in-progress auto-covered record with the latest partial/full progress.
+        await db.execute(
+          `UPDATE attendance SET
+            check_in_time = ?, check_out_time = ?,
+            total_hours = ?, work_duration = ?,
+            arrival_status = 'on_time', payable_duration = ?,
+            scheduled_in_time = ?, scheduled_out_time = ?,
+            is_auto_covered = 1,
+            notes = ?,
+            updated_at = NOW()
+          WHERE id = ?`,
+          [
+            satInTime, checkOutTimeVal, totalHoursVal,
+            isFullyCovered ? 'full_day' : 'insufficient_hours', payableSecs,
+            satInTime, satOutTime,
+            isFullyCovered ? 'Auto-covered by weekday extra time' : 'Auto-covered by weekday extra time (in progress)',
+            rec.id
+          ]
+        );
+        console.log(`✅ Auto-covered Saturday record updated (${isFullyCovered ? 'complete' : 'partial'}): ${satDate} for employee ${employeeId}`);
         continue;
       }
 
@@ -1617,16 +1686,22 @@ const createAutoCoveredSaturdayRecords = async (employeeId, clientId, db, saturd
       await db.execute(
         `UPDATE attendance SET
           check_in_time = ?, check_out_time = ?,
-          total_hours = ?, work_duration = 'full_day',
+          total_hours = ?, work_duration = ?,
           arrival_status = 'on_time', payable_duration = ?,
           scheduled_in_time = ?, scheduled_out_time = ?,
           is_auto_covered = 1,
-          notes = 'Auto-covered by weekday extra time',
+          notes = ?,
           updated_at = NOW()
         WHERE id = ?`,
-        [satInTime, satOutTime, totalHoursVal, payableSecs, satInTime, satOutTime, rec.id]
+        [
+          satInTime, checkOutTimeVal, totalHoursVal,
+          isFullyCovered ? 'full_day' : 'insufficient_hours', payableSecs,
+          satInTime, satOutTime,
+          isFullyCovered ? 'Auto-covered by weekday extra time' : 'Auto-covered by weekday extra time (in progress)',
+          rec.id
+        ]
       );
-      console.log(`✅ Auto-covered existing absent Saturday record updated: ${satDate} for employee ${employeeId}`);
+      console.log(`✅ Auto-covered existing absent Saturday record updated (${isFullyCovered ? 'complete' : 'partial'}): ${satDate} for employee ${employeeId}`);
     } else {
       // No record exists — create new auto-covered record
       const autoId = uuidv4();
@@ -1641,15 +1716,17 @@ const createAutoCoveredSaturdayRecords = async (employeeId, clientId, db, saturd
           is_weekend, payable_duration,
           is_auto_covered, notes,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 'on_time', 'full_day', 'office', ?, ?, ?, ?, 1, 'Auto-covered by weekday extra time', NOW(), NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 'on_time', ?, 'office', ?, ?, ?, ?, 1, ?, NOW(), NOW())`,
         [
           autoId, employeeId, clientId, satDate,
-          satInTime, satOutTime, totalHoursVal,
+          satInTime, checkOutTimeVal, totalHoursVal,
+          isFullyCovered ? 'full_day' : 'insufficient_hours',
           satInTime, satOutTime,
-          isWeekend, payableSecs
+          isWeekend, payableSecs,
+          isFullyCovered ? 'Auto-covered by weekday extra time' : 'Auto-covered by weekday extra time (in progress)'
         ]
       );
-      console.log(`✅ Auto-covered Saturday record created: ${satDate} for employee ${employeeId}`);
+      console.log(`✅ Auto-covered Saturday record created (${isFullyCovered ? 'complete' : 'partial'}): ${satDate} for employee ${employeeId}`);
     }
   }
 };

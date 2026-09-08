@@ -1468,13 +1468,18 @@ class PayrollRunService {
 
         // Get employee name and code for logging
         const [employeeInfo] = await db.execute(`
-            SELECT first_name, last_name, employee_code
+            SELECT first_name, last_name, employee_code, hire_date
             FROM employees
             WHERE id = ?
         `, [employeeId]);
 
         const employeeName = employeeInfo[0] ? `${employeeInfo[0].first_name} ${employeeInfo[0].last_name}` : 'Unknown';
         const employeeCode = employeeInfo[0]?.employee_code || employeeId;
+        const employeeHireDateStr = employeeInfo[0]?.hire_date
+            ? (employeeInfo[0].hire_date instanceof Date
+                ? employeeInfo[0].hire_date.toISOString().split('T')[0]
+                : String(employeeInfo[0].hire_date).split('T')[0])
+            : null;
 
         // Fetch weekend_working_config to distinguish configured vs unconfigured weekend days
         const [empWeekendRow] = await db.execute(`
@@ -2380,7 +2385,10 @@ class PayrollRunService {
                     r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0])
             ]);
 
-            const calcStart = parseLocalDate(period.period_start_date);
+            // Never credit non-working days before the employee's hire date
+            const calcStartRaw = parseLocalDate(period.period_start_date);
+            const hireDateParsed = employeeHireDateStr ? parseLocalDate(employeeHireDateStr) : null;
+            const calcStart = hireDateParsed && hireDateParsed > calcStartRaw ? hireDateParsed : calcStartRaw;
             const calcEnd   = parseLocalDate(attendanceEndDateStr);
             let cur = new Date(calcStart);
 
@@ -6111,11 +6119,19 @@ class PayrollRunService {
             const allDailyDetails = [];
             let cur = new Date(periodStartDate);
             const periodEnd = new Date(periodEndDate);
+            const getLocalDateStr = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+            const todayStr = getLocalDateStr(new Date());
 
             while (cur <= periodEnd) {
                 const ds = cur.toISOString().split('T')[0];
                 const dow = cur.getDay(); // 0=Sun, 6=Sat
                 const dayTypeLabel = dow === 0 ? 'Sunday' : dow === 6 ? 'Saturday' : 'Weekday';
+                const isToday = ds === todayStr;
 
                 if (attendanceMap[ds]) {
                     allDailyDetails.push(processAttendance(attendanceMap[ds], leaveMap[ds], holidayMap[ds]));
@@ -6166,6 +6182,10 @@ class PayrollRunService {
                 } else if (dow === 0 || dow === 6) {
                     const dayKey = dow === 0 ? 'sunday' : 'saturday';
                     const isWorkingWeekend = isConfiguredDay(ds, dayKey);
+                    // A working weekend day that is still "today" and has no attendance row yet
+                    // (no check-in synced, or the covering job hasn't run) is still in progress -
+                    // it should not be reported as absent before the day is even over.
+                    const isPendingToday = isWorkingWeekend && isToday;
                     allDailyDetails.push({
                         date: ds,
                         day_type: dayTypeLabel,
@@ -6177,8 +6197,24 @@ class PayrollRunService {
                         overtime_amount: 0,
                         hourly_rate: 0,
                         daily_salary: 0,
-                        status: isWorkingWeekend ? 'absent' : 'weekend_off',
-                        record_type: isWorkingWeekend ? 'absent' : 'weekend_off'
+                        status: isPendingToday ? 'pending' : (isWorkingWeekend ? 'absent' : 'weekend_off'),
+                        record_type: isPendingToday ? 'pending' : (isWorkingWeekend ? 'absent' : 'weekend_off')
+                    });
+                } else if (isToday) {
+                    // Today's weekday with no attendance row yet - still in progress, not absent.
+                    allDailyDetails.push({
+                        date: ds,
+                        day_type: 'Weekday',
+                        check_in: null,
+                        check_out: null,
+                        working_minutes: 0,
+                        working_hours: 0,
+                        overtime_minutes: 0,
+                        overtime_amount: 0,
+                        hourly_rate: weekdayHourlyRate,
+                        daily_salary: 0,
+                        status: 'pending',
+                        record_type: 'pending'
                     });
                 } else {
                     allDailyDetails.push({
