@@ -84,6 +84,16 @@ interface Employee {
   updated_at: string;
 }
 
+interface SaturdayCoveringBreakdownEntry {
+  date: string;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  payableDurationSeconds: number;
+  payableDurationHours: number;
+  contributedSeconds: number;
+  contributedHours: number;
+}
+
 interface SaturdayCoveringStatus {
   enabled: boolean;
   yearMonth: string;
@@ -96,6 +106,7 @@ interface SaturdayCoveringStatus {
   coveredCount: number;
   totalSaturdays: number;
   extraTimeSeconds: number;
+  breakdown: SaturdayCoveringBreakdownEntry[];
   coveringHours: number;
   remainingHours: number;
   totalObligationHours: number;
@@ -287,6 +298,7 @@ const EmployeeDetails: React.FC = () => {
   const [satCoveringYM, setSatCoveringYM] = useState<string>(currentYM);
   const [satCoveringStatus, setSatCoveringStatus] = useState<SaturdayCoveringStatus | null>(null);
   const [satCoveringLoading, setSatCoveringLoading] = useState(false);
+  const [showCoveringBreakdownModal, setShowCoveringBreakdownModal] = useState(false);
 
   // Filter states for Financial Records (keeping existing)
   const [filterType, setFilterType] = useState<string>('all');
@@ -1761,10 +1773,18 @@ const EmployeeDetails: React.FC = () => {
 
                         {/* Stats grid */}
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setShowCoveringBreakdownModal(true)}
+                            disabled={!satCoveringStatus.breakdown || satCoveringStatus.breakdown.length === 0}
+                            className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-left hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors disabled:cursor-default disabled:hover:bg-blue-50 dark:disabled:hover:bg-blue-900/20"
+                          >
                             <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Hours Covered</p>
                             <p className="text-lg font-bold text-blue-900 dark:text-blue-100">{satCoveringStatus.coveringHours}h</p>
-                          </div>
+                            {satCoveringStatus.breakdown && satCoveringStatus.breakdown.length > 0 && (
+                              <p className="text-xs text-blue-500 dark:text-blue-400 underline mt-0.5">View breakdown</p>
+                            )}
+                          </button>
                           <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
                             <p className="text-xs text-red-600 dark:text-red-400 font-medium">Hours Remaining</p>
                             <p className="text-lg font-bold text-red-900 dark:text-red-100">
@@ -2962,6 +2982,56 @@ const EmployeeDetails: React.FC = () => {
             </Button>
             <Button color="gray" onClick={() => setShowTerminateModal(false)} disabled={terminating}>
               Cancel
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Saturday Covering — Hours Covered Breakdown Modal */}
+        <Modal show={showCoveringBreakdownModal} onClose={() => setShowCoveringBreakdownModal(false)} size="lg">
+          <Modal.Header>Hours Covered Breakdown{satCoveringStatus?.yearMonth ? ` — ${satCoveringStatus.yearMonth}` : ''}</Modal.Header>
+          <Modal.Body>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Each weekday below contributed extra time (worked beyond the standard 8h) toward this month's Saturday covering obligation.
+            </p>
+            <div className="overflow-x-auto">
+              <Table>
+                <Table.Head>
+                  <Table.HeadCell>Date</Table.HeadCell>
+                  <Table.HeadCell>Check In</Table.HeadCell>
+                  <Table.HeadCell>Check Out</Table.HeadCell>
+                  <Table.HeadCell>Hours Worked</Table.HeadCell>
+                  <Table.HeadCell>Contributed</Table.HeadCell>
+                </Table.Head>
+                <Table.Body>
+                  {(satCoveringStatus?.breakdown || []).map((entry) => (
+                    <Table.Row key={entry.date} className="bg-white dark:bg-gray-800">
+                      <Table.Cell className="font-medium">
+                        {new Date(entry.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </Table.Cell>
+                      <Table.Cell>{entry.checkInTime || '-'}</Table.Cell>
+                      <Table.Cell>{entry.checkOutTime || '-'}</Table.Cell>
+                      <Table.Cell>{entry.payableDurationHours}h</Table.Cell>
+                      <Table.Cell>
+                        <span className="text-blue-700 dark:text-blue-400 font-semibold">+{entry.contributedHours}h</span>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+              {(!satCoveringStatus?.breakdown || satCoveringStatus.breakdown.length === 0) && (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-6">No contributing days found for this month.</p>
+              )}
+            </div>
+            {satCoveringStatus && (
+              <div className="mt-4 pt-3 border-t border-gray-200 dark:border-gray-700 flex justify-between text-sm font-semibold text-gray-700 dark:text-gray-300">
+                <span>Total Covered</span>
+                <span>{satCoveringStatus.coveringHours}h</span>
+              </div>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button color="gray" onClick={() => setShowCoveringBreakdownModal(false)}>
+              Close
             </Button>
           </Modal.Footer>
         </Modal>

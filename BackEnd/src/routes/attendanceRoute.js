@@ -3607,6 +3607,38 @@ router.get('/saturday-covering/:employeeId',
 
     const coveredCount = satDurationSeconds > 0 ? Math.floor(coveringSeconds / satDurationSeconds) : 0;
 
+    // Day-by-day breakdown: each physical checked-out day's contribution toward covering
+    // is the delta between its running saturday_covering_seconds total and the previous
+    // day's total (first day's delta is just its own value, since the running total starts at 0).
+    const [monthRecords] = await db.execute(
+      `SELECT date, check_in_time, check_out_time, payable_duration, saturday_covering_seconds
+       FROM attendance
+       WHERE employee_id = ? AND date >= ? AND date <= ?
+         AND is_auto_covered = 0 AND check_out_time IS NOT NULL
+       ORDER BY date ASC`,
+      [employeeId, mStart, mEnd]
+    );
+
+    let runningTotal = 0;
+    const breakdown = [];
+    for (const rec of monthRecords) {
+      const recCoveringSeconds = parseInt(rec.saturday_covering_seconds) || 0;
+      const contributedSeconds = Math.max(0, recCoveringSeconds - runningTotal);
+      runningTotal = recCoveringSeconds;
+      if (contributedSeconds <= 0) continue; // day contributed nothing toward covering
+
+      const dateStr = rec.date instanceof Date ? rec.date.toISOString().split('T')[0] : String(rec.date).split('T')[0];
+      breakdown.push({
+        date: dateStr,
+        checkInTime: rec.check_in_time,
+        checkOutTime: rec.check_out_time,
+        payableDurationSeconds: parseInt(rec.payable_duration) || 0,
+        payableDurationHours: parseFloat(((parseInt(rec.payable_duration) || 0) / 3600).toFixed(2)),
+        contributedSeconds,
+        contributedHours: parseFloat((contributedSeconds / 3600).toFixed(2))
+      });
+    }
+
     res.json({
       success: true,
       data: {
@@ -3621,6 +3653,7 @@ router.get('/saturday-covering/:employeeId',
         coveredCount,
         totalSaturdays: saturdayDates.length,
         extraTimeSeconds,
+        breakdown,
         // Human readable
         coveringHours: parseFloat((coveringSeconds / 3600).toFixed(2)),
         remainingHours: parseFloat((remainingSeconds / 3600).toFixed(2)),
