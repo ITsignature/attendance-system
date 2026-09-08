@@ -1928,44 +1928,24 @@ const LivePayrollDashboard: React.FC = () => {
                   <h3 className="font-semibold text-gray-700 mb-3 pb-1 border-b">Salary Calculation</h3>
                   <div className="space-y-3">
 
-                    {/* Base Salary */}
+                    {/* Work Hours Earned (attendance + non-working day credit) */}
                     <div className="flex justify-between">
-                      <span className="text-gray-600 font-medium">Base Salary (Full Month)</span>
-                      <span className="font-medium text-gray-700">{formatCurrency(emp.base_salary)}</span>
+                      <span className="text-gray-600 font-medium">Work Hours Earned ({formatHours(ebs?.attendance?.hours ?? 0)})</span>
+                      <span className="font-medium text-gray-700">{formatCurrency((ebs?.attendance?.earned ?? 0) + (ebs?.non_working_day_credit?.earned ?? 0))}</span>
                     </div>
 
                     {/* Base Salary Earned Breakdown */}
-                    {ebs && ((ebs.attendance?.earned ?? 0) > 0 || (ebs.paid_leaves?.earned ?? 0) > 0 || (ebs.non_working_day_credit?.earned ?? 0) > 0) && (
+                    {ebs && (ebs.paid_leaves?.earned ?? 0) > 0 && (
                       <div className="ml-2 sm:ml-4 bg-blue-50 border border-blue-100 p-3 rounded-lg">
                         <div className="font-medium text-blue-800 mb-2 text-xs uppercase tracking-wide">Base Salary Earned From</div>
                         <div className="space-y-1.5">
-                          {(ebs.attendance?.earned ?? 0) > 0 && (
-                            <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-green-500 rounded-full inline-block shrink-0"></span>
-                                Work Hours Earned ({formatHours(ebs.attendance.hours)})
-                              </span>
-                              <span className="text-blue-700 font-medium">+{formatCurrency(ebs.attendance.earned)}</span>
-                            </div>
-                          )}
-                          {(ebs.paid_leaves?.earned ?? 0) > 0 && (
-                            <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-blue-500 rounded-full inline-block shrink-0"></span>
-                                Paid Leave
-                              </span>
-                              <span className="text-blue-700 font-medium">+{formatCurrency(ebs.paid_leaves.earned)}</span>
-                            </div>
-                          )}
-                          {(ebs.non_working_day_credit?.earned ?? 0) > 0 && (
-                            <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-purple-500 rounded-full inline-block shrink-0"></span>
-                                Non-Working Day Credit
-                              </span>
-                              <span className="text-blue-700 font-medium">+{formatCurrency(ebs.non_working_day_credit.earned)}</span>
-                            </div>
-                          )}
+                          <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 bg-blue-500 rounded-full inline-block shrink-0"></span>
+                              Paid Leave ({formatHours(ebs.paid_leaves.hours)})
+                            </span>
+                            <span className="text-blue-700 font-medium">+{formatCurrency(ebs.paid_leaves.earned)}</span>
+                          </div>
                         </div>
                       </div>
                     )}

@@ -167,38 +167,24 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
         <HRule marginTop={4} marginBottom={8} />
 
         <div style={{ marginBottom: px(6) }}>
-          <Row label="Base Salary (Full Month)" value={formatCurrency(emp.base_salary)} bold />
+          <Row
+            label={`Work Hours Earned (${attendanceHours.toFixed(2)}h)`}
+            value={formatCurrency((ebs?.attendance?.earned ?? 0) + (ebs?.non_working_day_credit?.earned ?? 0))}
+            bold
+          />
         </div>
 
-        {ebs && ((ebs.attendance?.earned ?? 0) > 0 || (ebs.paid_leaves?.earned ?? 0) > 0 || (ebs.non_working_day_credit?.earned ?? 0) > 0) && (
+        {ebs && (ebs.paid_leaves?.earned ?? 0) > 0 && (
           <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: px(8), padding: `${px(6)} ${px(8)}`, marginBottom: px(8) }}>
             <div style={{ fontWeight: 700, color: '#1e40af', fontSize: px(8), minHeight: px(11), display: 'flex', alignItems: 'center', marginBottom: px(4), textTransform: 'uppercase', letterSpacing: '0.02em' }}>
               Base Salary Earned From
             </div>
-            {(ebs.attendance?.earned ?? 0) > 0 && (
-              <BulletRow
-                dotColor="#22c55e"
-                label={`Work Hours Earned (${attendanceHours.toFixed(2)}h)`}
-                value={`+${formatCurrency(ebs.attendance.earned)}`}
-                valueColor="#1d4ed8"
-              />
-            )}
-            {(ebs.paid_leaves?.earned ?? 0) > 0 && (
-              <BulletRow
-                dotColor="#3b82f6"
-                label="Paid Leave"
-                value={`+${formatCurrency(ebs.paid_leaves.earned)}`}
-                valueColor="#1d4ed8"
-              />
-            )}
-            {(ebs.non_working_day_credit?.earned ?? 0) > 0 && (
-              <BulletRow
-                dotColor="#a855f7"
-                label="Non-Working Day Credit"
-                value={`+${formatCurrency(ebs.non_working_day_credit.earned)}`}
-                valueColor="#1d4ed8"
-              />
-            )}
+            <BulletRow
+              dotColor="#3b82f6"
+              label={`Paid Leave (${paidLeaveHours.toFixed(2)}h)`}
+              value={`+${formatCurrency(ebs.paid_leaves.earned)}`}
+              valueColor="#1d4ed8"
+            />
           </div>
         )}
 

@@ -177,6 +177,7 @@
 
       // Calculate total expected days/hours
       const attendanceHours = earningsBySource.attendance?.hours || 0;
+      const paidLeaveHours = earningsBySource.paid_leaves?.hours || 0;
       const liveSessionHours = earningsBySource.live_session?.hours || 0;
 
       // Get leave days from backend (calculated based on actual daily hours)
@@ -258,44 +259,24 @@
             <div className="mb-6">
               <h3 className="font-semibold text-gray-700 mb-3 pb-2 border-b">Salary Calculation</h3>
               <div className="space-y-3">
-                {/* Base Salary (Total) */}
+                {/* Work Hours Earned (attendance + non-working day credit) */}
                 <div className="flex justify-between items-center gap-3">
-                  <span className="text-gray-600 font-medium">Base Salary (Full Month)</span>
-                  <span className="font-medium text-gray-600 text-right shrink-0">Rs. {(record.base_salary || 0).toLocaleString()}</span>
+                  <span className="text-gray-600 font-medium">Work Hours Earned ({attendanceHours.toFixed(2)}h)</span>
+                  <span className="font-medium text-gray-600 text-right shrink-0">Rs. {((earningsBySource.attendance?.earned || 0) + (earningsBySource.non_working_day_credit?.earned || 0)).toLocaleString()}</span>
                 </div>
 
                 {/* Base Salary Earned From - additive breakdown */}
-                {attendance_details && ((earningsBySource.attendance?.earned || 0) > 0 || (earningsBySource.paid_leaves?.earned || 0) > 0 || (earningsBySource.non_working_day_credit?.earned || 0) > 0) && (
+                {attendance_details && (earningsBySource.paid_leaves?.earned || 0) > 0 && (
                   <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-100">
                     <div className="font-medium text-blue-800 mb-2 text-sm">Base Salary Earned From</div>
                     <div className="space-y-2 text-sm">
-                      {(earningsBySource.attendance?.earned || 0) > 0 && (
-                        <div className="flex justify-between items-start gap-3 text-gray-700">
-                          <span className="flex items-start min-w-0">
-                            <span className="w-2 h-2 bg-green-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
-                            <span>Work Hours Earned ({attendanceHours.toFixed(2)}h)</span>
-                          </span>
-                          <span className="text-blue-700 text-right shrink-0">+Rs. {(earningsBySource.attendance.earned || 0).toLocaleString()}</span>
-                        </div>
-                      )}
-                      {(earningsBySource.paid_leaves?.earned || 0) > 0 && (
-                        <div className="flex justify-between items-start gap-3 text-gray-700">
-                          <span className="flex items-start min-w-0">
-                            <span className="w-2 h-2 bg-blue-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
-                            <span>Paid Leave</span>
-                          </span>
-                          <span className="text-blue-700 text-right shrink-0">+Rs. {(earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
-                        </div>
-                      )}
-                      {(earningsBySource.non_working_day_credit?.earned || 0) > 0 && (
-                        <div className="flex justify-between items-start gap-3 text-gray-700">
-                          <span className="flex items-start min-w-0">
-                            <span className="w-2 h-2 bg-purple-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
-                            <span>Non-Working Day Credit</span>
-                          </span>
-                          <span className="text-blue-700 text-right shrink-0">+Rs. {(earningsBySource.non_working_day_credit.earned || 0).toLocaleString()}</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between items-start gap-3 text-gray-700">
+                        <span className="flex items-start min-w-0">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full mr-2 mt-1.5 shrink-0"></span>
+                          <span>Paid Leave ({paidLeaveHours.toFixed(2)}h)</span>
+                        </span>
+                        <span className="text-blue-700 text-right shrink-0">+Rs. {(earningsBySource.paid_leaves.earned || 0).toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
                 )}
