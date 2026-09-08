@@ -36,15 +36,9 @@ const formatCurrency = (amount: number | null | undefined) => {
 //   own line, not to the parent box.
 const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCalculated, fontScale = 1, companyName }) => {
   const ebs = emp.earnings_by_source;
-  const sbc = emp.shortfall_by_cause;
   const attendanceHours = ebs?.attendance?.hours ?? 0;
   const paidLeaveHours = ebs?.paid_leaves?.hours ?? 0;
   const liveSessionHours = ebs?.live_session?.hours ?? 0;
-  const hasShortfall = !!sbc && (
-    (sbc.unpaid_time_off?.deduction ?? 0) > 0 ||
-    (sbc.time_variance?.deduction ?? 0) > 0 ||
-    (sbc.absent_days?.deduction ?? 0) > 0
-  );
 
   // px(10) => `${10 * BASE_SCALE * fontScale}px`, applied to every size value below so the
   // whole card reflows proportionally instead of being post-scaled with CSS transform.
@@ -176,33 +170,33 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
           <Row label="Base Salary (Full Month)" value={formatCurrency(emp.base_salary)} bold />
         </div>
 
-        {hasShortfall && (
-          <div style={{ backgroundColor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: px(8), padding: `${px(6)} ${px(8)}`, marginBottom: px(8) }}>
-            <div style={{ fontWeight: 700, color: '#9a3412', fontSize: px(8), minHeight: px(11), display: 'flex', alignItems: 'center', marginBottom: px(4), textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-              Salary Reduction (Shortfall)
+        {ebs && ((ebs.attendance?.earned ?? 0) > 0 || (ebs.paid_leaves?.earned ?? 0) > 0 || (ebs.non_working_day_credit?.earned ?? 0) > 0) && (
+          <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: px(8), padding: `${px(6)} ${px(8)}`, marginBottom: px(8) }}>
+            <div style={{ fontWeight: 700, color: '#1e40af', fontSize: px(8), minHeight: px(11), display: 'flex', alignItems: 'center', marginBottom: px(4), textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+              Base Salary Earned From
             </div>
-            {(sbc!.time_variance?.deduction ?? 0) > 0 && (
+            {(ebs.attendance?.earned ?? 0) > 0 && (
               <BulletRow
-                dotColor="#eab308"
-                label={<>Late Arrivals &amp; Early Departures ({sbc!.time_variance.hours.toFixed(2)}h)</>}
-                value={`-${formatCurrency(sbc!.time_variance.deduction)}`}
-                valueColor="#c2410c"
+                dotColor="#22c55e"
+                label={`Work Hours Earned (${attendanceHours.toFixed(2)}h)`}
+                value={`+${formatCurrency(ebs.attendance.earned)}`}
+                valueColor="#1d4ed8"
               />
             )}
-            {(sbc!.unpaid_time_off?.deduction ?? 0) > 0 && (
+            {(ebs.paid_leaves?.earned ?? 0) > 0 && (
               <BulletRow
-                dotColor="#f97316"
-                label={<>Unpaid Leaves ({sbc!.unpaid_time_off.hours.toFixed(2)}h)</>}
-                value={`-${formatCurrency(sbc!.unpaid_time_off.deduction)}`}
-                valueColor="#c2410c"
+                dotColor="#3b82f6"
+                label="Paid Leave"
+                value={`+${formatCurrency(ebs.paid_leaves.earned)}`}
+                valueColor="#1d4ed8"
               />
             )}
-            {(sbc!.absent_days?.deduction ?? 0) > 0 && (
+            {(ebs.non_working_day_credit?.earned ?? 0) > 0 && (
               <BulletRow
-                dotColor="#ef4444"
-                label="Absent Days"
-                value={`-${formatCurrency(sbc!.absent_days.deduction)}`}
-                valueColor="#c2410c"
+                dotColor="#a855f7"
+                label="Non-Working Day Credit"
+                value={`+${formatCurrency(ebs.non_working_day_credit.earned)}`}
+                valueColor="#1d4ed8"
               />
             )}
           </div>

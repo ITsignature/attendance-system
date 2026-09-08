@@ -1863,15 +1863,9 @@ const LivePayrollDashboard: React.FC = () => {
           {payslipModal.employee && (() => {
             const emp = payslipModal.employee;
             const ebs = emp.earnings_by_source;
-            const sbc = emp.shortfall_by_cause;
             const attendanceHours = ebs?.attendance?.hours ?? 0;
             const paidLeaveHours = ebs?.paid_leaves?.hours ?? 0;
             const liveSessionHours = ebs?.live_session?.hours ?? 0;
-            const hasShortfall = sbc && (
-              (sbc.unpaid_time_off?.deduction ?? 0) > 0 ||
-              (sbc.time_variance?.deduction ?? 0) > 0 ||
-              (sbc.absent_days?.deduction ?? 0) > 0
-            );
 
             return (
               <div ref={payslipContentRef} className="space-y-6 text-sm bg-white p-2">
@@ -1940,36 +1934,36 @@ const LivePayrollDashboard: React.FC = () => {
                       <span className="font-medium text-gray-700">{formatCurrency(emp.base_salary)}</span>
                     </div>
 
-                    {/* Shortfall Breakdown */}
-                    {hasShortfall && (
-                      <div className="ml-2 sm:ml-4 bg-orange-50 border border-orange-200 p-3 rounded-lg">
-                        <div className="font-medium text-orange-800 mb-2 text-xs uppercase tracking-wide">Salary Reduction (Shortfall)</div>
+                    {/* Base Salary Earned Breakdown */}
+                    {ebs && ((ebs.attendance?.earned ?? 0) > 0 || (ebs.paid_leaves?.earned ?? 0) > 0 || (ebs.non_working_day_credit?.earned ?? 0) > 0) && (
+                      <div className="ml-2 sm:ml-4 bg-blue-50 border border-blue-100 p-3 rounded-lg">
+                        <div className="font-medium text-blue-800 mb-2 text-xs uppercase tracking-wide">Base Salary Earned From</div>
                         <div className="space-y-1.5">
-                          {(sbc!.time_variance?.deduction ?? 0) > 0 && (
+                          {(ebs.attendance?.earned ?? 0) > 0 && (
                             <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                               <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-yellow-500 rounded-full inline-block shrink-0"></span>
-                                Late Arrivals &amp; Early Departures ({sbc!.time_variance.hours.toFixed(2)}h)
+                                <span className="w-2 h-2 bg-green-500 rounded-full inline-block shrink-0"></span>
+                                Work Hours Earned ({formatHours(ebs.attendance.hours)})
                               </span>
-                              <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.time_variance.deduction)}</span>
+                              <span className="text-blue-700 font-medium">+{formatCurrency(ebs.attendance.earned)}</span>
                             </div>
                           )}
-                          {(sbc!.unpaid_time_off?.deduction ?? 0) > 0 && (
+                          {(ebs.paid_leaves?.earned ?? 0) > 0 && (
                             <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                               <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-orange-500 rounded-full inline-block shrink-0"></span>
-                                Unpaid Leaves ({sbc!.unpaid_time_off.hours.toFixed(2)}h)
+                                <span className="w-2 h-2 bg-blue-500 rounded-full inline-block shrink-0"></span>
+                                Paid Leave
                               </span>
-                              <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.unpaid_time_off.deduction)}</span>
+                              <span className="text-blue-700 font-medium">+{formatCurrency(ebs.paid_leaves.earned)}</span>
                             </div>
                           )}
-                          {(sbc!.absent_days?.deduction ?? 0) > 0 && (
+                          {(ebs.non_working_day_credit?.earned ?? 0) > 0 && (
                             <div className="flex flex-wrap justify-between gap-x-2 text-gray-700">
                               <span className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 bg-red-500 rounded-full inline-block shrink-0"></span>
-                                Absent Days
+                                <span className="w-2 h-2 bg-purple-500 rounded-full inline-block shrink-0"></span>
+                                Non-Working Day Credit
                               </span>
-                              <span className="text-orange-700 font-medium">-{formatCurrency(sbc!.absent_days.deduction)}</span>
+                              <span className="text-blue-700 font-medium">+{formatCurrency(ebs.non_working_day_credit.earned)}</span>
                             </div>
                           )}
                         </div>
