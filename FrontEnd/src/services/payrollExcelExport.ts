@@ -121,7 +121,7 @@ function addPayrollSheet(
 
   // ── Column positions (1-based for ExcelJS) ────────────────────────────────
   // cols: 1=EmpCode 2=Name 3=Desig 4=DOJ 5=WorkMonth 6=ExpBase 7=WorkDays 8=NormRate
-  // OT: 9-19  (11 cols: 5x [rate, hours] pairs + OT Amount)
+  // OT: 9-20  (12 cols: 5x [rate, hours] pairs + Statutory OT Amount + Non-Statutory OT Amount)
   // Allow: 20..20+N-1
   // Bonus: 20+N
   // Gross: 20+N+1
@@ -151,8 +151,9 @@ function addPayrollSheet(
   const OT_HOL_HRS   = OT_S + 7;
   const OT_STAT_RATE = OT_S + 8;
   const OT_STAT_HRS  = OT_S + 9;
-  const OT_AMOUNT    = OT_S + 10;
-  const AL_S    = OT_AMOUNT + 1;
+  const OT_STAT_AMOUNT    = OT_S + 10;
+  const OT_NONSTAT_AMOUNT = OT_S + 11;
+  const AL_S    = OT_NONSTAT_AMOUNT + 1;
   const BONUS   = AL_S + N;
   const GROSS   = BONUS + 1;
   const NOPAY       = GROSS + 1;
@@ -242,7 +243,15 @@ function addPayrollSheet(
     row[OT_HOL_HRS-1]   = round2(holMin/60);
     row[OT_STAT_RATE-1] = statOTRate;
     row[OT_STAT_HRS-1]  = round2(statMin/60);
-    row[OT_AMOUNT-1]    = result.overtime_amount || 0;
+
+    const amountFor = (dt: string) =>
+      otRecs.filter((r: any) => r.day_type === dt).reduce((s: number, r: any) => s + (r.amount || 0), 0);
+    const statutoryOTAmount    = amountFor('statutory_holiday');
+    const nonStatutoryOTAmount = otRecs
+      .filter((r: any) => r.day_type !== 'statutory_holiday')
+      .reduce((s: number, r: any) => s + (r.amount || 0), 0);
+    row[OT_STAT_AMOUNT-1]    = round2(statutoryOTAmount);
+    row[OT_NONSTAT_AMOUNT-1] = round2(nonStatutoryOTAmount);
 
     const allowMap: Record<string,number> = {};
     (result.allowances_breakdown||[]).forEach(a => {
@@ -298,7 +307,7 @@ function addPayrollSheet(
   // ── Totals row ────────────────────────────────────────────────────────────
   const numSumCols = new Set([
     6, GROSS, NOPAY, LATE_EARLY, BONUS, NET, TOT_DED,
-    OT_AMOUNT,  // OT Amount (not OT hours/rates)
+    OT_STAT_AMOUNT, OT_NONSTAT_AMOUNT,  // OT Amount split (not OT hours/rates)
     ...allowanceNames.map((_,i)=>AL_S+i),
     ...advanceTypes.map((_,i)=>ADV_S+i),
     ...loanTypes.map((_,i)=>LOAN_S+i),
@@ -363,7 +372,7 @@ function addPayrollSheet(
 
   addGroupHeader(1, 8, '', C.hdrInfo);       // fixed info — label set per sub-header
   grpRow.getCell(1).value = 'Employee Info';
-  addGroupHeader(OT_S, OT_AMOUNT, 'OT', C.hdrOT);
+  addGroupHeader(OT_S, OT_NONSTAT_AMOUNT, 'OT', C.hdrOT);
   if (N > 0) addGroupHeader(AL_S, AL_S+N-1, 'Allowances', C.hdrAllow);
   addGroupHeader(BONUS, BONUS, 'Bonus', C.hdrAllow);
   addGroupHeader(GROSS, GROSS, 'Gross Salary', C.hdrAllow);
@@ -387,7 +396,8 @@ function addPayrollSheet(
     [OT_SUN_RATE,  'Sun OT Rate'],       [OT_SUN_HRS,  'Sun OT Hours'],
     [OT_HOL_RATE,  'Holiday OT Rate'],   [OT_HOL_HRS,  'Holiday OT Hours'],
     [OT_STAT_RATE, 'Statutory Holiday\nOT Rate'], [OT_STAT_HRS, 'Statutory Holiday\nOT Hours'],
-    [OT_AMOUNT,    'OT Amount'],
+    [OT_STAT_AMOUNT,    'Statutory OT\nAmount'],
+    [OT_NONSTAT_AMOUNT, 'Non-Statutory\nOT Amount'],
     ...allowanceNames.map((nm, i): [number,string] => [AL_S+i, nm]),
     [BONUS, 'Bonus'], [GROSS, 'Gross Salary'],
     [NOPAY, 'NoPay'], [LATE_EARLY, 'Late/Early Deductions'],
@@ -409,7 +419,7 @@ function addPayrollSheet(
   const numberCols = new Set<number>([
     6, 7, 8,
     OT_WD_RATE, OT_WD_HRS, OT_SAT_RATE, OT_SAT_HRS, OT_SUN_RATE, OT_SUN_HRS,
-    OT_HOL_RATE, OT_HOL_HRS, OT_STAT_RATE, OT_STAT_HRS, OT_AMOUNT,
+    OT_HOL_RATE, OT_HOL_HRS, OT_STAT_RATE, OT_STAT_HRS, OT_STAT_AMOUNT, OT_NONSTAT_AMOUNT,
     ...allowanceNames.map((_,i)=>AL_S+i),
     BONUS, GROSS, NOPAY, LATE_EARLY,
     ...advanceTypes.map((_,i)=>ADV_S+i),

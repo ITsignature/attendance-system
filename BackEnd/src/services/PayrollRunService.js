@@ -745,7 +745,6 @@ class PayrollRunService {
         return recordId;
     }
 
-
     /**
      * Calculate single payroll record with proper method selection
      *
@@ -1822,14 +1821,15 @@ class PayrollRunService {
                 ? rec.date.toISOString().split('T')[0]
                 : String(rec.date).split('T')[0];
 
-            // Worked holiday takes priority over configured/unconfigured weekend classification —
-            // entire actual worked time is paid as OT at the holiday multiplier, same treatment
-            // as an unconfigured weekend (see holiday_worked_overtime returned below).
+            // Worked holiday: entire actual worked time is ALSO paid as OT at the holiday
+            // multiplier (same treatment as an unconfigured weekend, see holiday_worked_overtime
+            // returned below), on top of — not instead of — normal weekend working-day credit.
+            // If this date is a configured Saturday/Sunday, it still falls through below so the
+            // employee keeps getting credited for that weekend working day as usual.
             if (holidayMap.has(dateStr)) {
                 const actualSecs = computeActualSecs(rec);
                 holidayWorkedSeconds += actualSecs;
                 holidayWorkedByDate[dateStr] = (holidayWorkedByDate[dateStr] || 0) + actualSecs;
-                continue;
             }
 
             if (rec.is_weekend === 7) { // Saturday
@@ -2130,18 +2130,20 @@ class PayrollRunService {
                 ? rec.date.toISOString().split('T')[0]
                 : String(rec.date).split('T')[0];
 
-            // Worked holidays (any day of week) are excluded from normal attendance pay here —
-            // they're paid entirely as OT via holidayWorkedSeconds/holidayWorkedByDate. Weekend
-            // holiday rows were already accumulated once in the weekendRows loop above, so they
-            // are skipped (not re-accumulated) here to avoid double-counting; only weekday holiday
-            // rows are added to the accumulator in this loop.
+            // Worked weekday holidays are excluded from normal attendance pay here — they're paid
+            // entirely as OT via holidayWorkedSeconds/holidayWorkedByDate (weekdays have no
+            // "weekend working day credit" to preserve). Weekend holiday rows were already added
+            // to holidayWorkedSeconds once in the weekendRows loop above (not re-added here to
+            // avoid double-counting the OT side), but they still fall through below so a
+            // configured Saturday/Sunday holiday keeps its normal weekend working-day credit
+            // on top of the OT.
             if (holidayMap.has(recDateStr)) {
                 if (rec.is_weekend >= 2 && rec.is_weekend <= 6) {
                     const actualSecs = computeActualSecs(rec);
                     holidayWorkedSeconds += actualSecs;
                     holidayWorkedByDate[recDateStr] = (holidayWorkedByDate[recDateStr] || 0) + actualSecs;
+                    continue;
                 }
-                continue;
             }
 
             const leaveHoursThisDate = leaveHoursByDate.get(recDateStr) || 0;
