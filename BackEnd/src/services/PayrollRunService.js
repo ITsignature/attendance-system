@@ -2378,15 +2378,6 @@ class PayrollRunService {
             const allNonWorkingSatDates = [];
             const allNonWorkingSunDates = [];
 
-            // Build a set of all dates the employee actually worked (checked in + out)
-            // so we can skip holiday credit for days they came to work (they get OT instead)
-            const workedDatesSet = new Set([
-                ...detailedAttendance.map(r =>
-                    r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0]),
-                ...weekendRows.map(r =>
-                    r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0])
-            ]);
-
             // Never credit non-working days before the employee's hire date
             const calcStartRaw = parseLocalDate(period.period_start_date);
             const hireDateParsed = employeeHireDateStr ? parseLocalDate(employeeHireDateStr) : null;
@@ -2399,12 +2390,10 @@ class PayrollRunService {
                 const dow = cur.getDay();
 
                 if (holidaySet.has(ds)) {
-                    // Holiday — only give credit if employee did NOT work that day
-                    // (if they worked, they get OT pay instead — no double credit)
-                    if (workedDatesSet.has(ds)) {
-                        cur.setDate(cur.getDate() + 1);
-                        continue;
-                    }
+                    // Holiday — always credited as a non-working day, whether or not the
+                    // employee worked it. If they worked it, they ALSO get full OT pay at the
+                    // holiday multiplier (see holidayWorkedSeconds) — the two are independent,
+                    // not mutually exclusive.
                     fixed30NonWorkingDayCredit += dailySalaryFixed30;
                     holidayCreditDays++;
                     holidayCreditDates.push(ds);
