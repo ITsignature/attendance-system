@@ -18,6 +18,7 @@ interface EarningsBySource {
   attendance: {
     hours: number;
     earned: number;
+    no_pay_allowance_adjustment?: number;
   };
   paid_leaves: {
     hours: number;

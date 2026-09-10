@@ -1319,6 +1319,11 @@ const LivePayrollDashboard: React.FC = () => {
                       <span className="ml-auto text-green-600 font-medium">{formatCurrency(ebs.attendance.earned)}</span>
                     </h3>
                     <p className="text-xs text-gray-500">{formatHours(ebs.attendance.hours)} of attended time</p>
+                    {!!ebs.attendance.no_pay_allowance_adjustment && ebs.attendance.no_pay_allowance_adjustment > 0 && (
+                      <p className="text-xs text-red-500 mt-1">
+                        No-Pay Allowance Adjustment: -{formatCurrency(ebs.attendance.no_pay_allowance_adjustment)}
+                      </p>
+                    )}
                   </div>
                 )}
               </>
@@ -1941,6 +1946,12 @@ const LivePayrollDashboard: React.FC = () => {
                       <span className="text-gray-600 font-medium">Work Hours Earned ({formatHours(ebs?.attendance?.hours ?? 0)})</span>
                       <span className="font-medium text-gray-700">{formatCurrency((ebs?.attendance?.earned ?? 0) + (ebs?.non_working_day_credit?.earned ?? 0))}</span>
                     </div>
+                    {!!ebs?.attendance?.no_pay_allowance_adjustment && ebs.attendance.no_pay_allowance_adjustment > 0 && (
+                      <div className="flex justify-between text-xs text-red-500 -mt-2">
+                        <span>No-Pay Allowance Adjustment</span>
+                        <span>-{formatCurrency(ebs.attendance.no_pay_allowance_adjustment)}</span>
+                      </div>
+                    )}
 
                     {/* Base Salary Earned Breakdown */}
                     {ebs && (ebs.paid_leaves?.earned ?? 0) > 0 && (

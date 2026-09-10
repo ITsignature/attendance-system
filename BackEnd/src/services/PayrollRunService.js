@@ -1640,7 +1640,7 @@ class PayrollRunService {
         console.log(`      Weekdays: ${fullPeriodWeekdays}, Saturdays: ${fullPeriodSaturdays}, Sundays: ${fullPeriodSundays}`);
 
         // ============================================
-        // NO-PAY RATE (base salary + 'allowance'-category allowances) / 30
+        // NO-PAY RATE (base salary + 'allowance'-category allowances) / same per-day divisor as dailySalary
         // ============================================
         // Opt-in per client via the 'nopay_includes_allowances' setting. When off (default),
         // absent days and unpaid time off keep using the base-salary-only rate — identical to
@@ -1668,7 +1668,14 @@ class PayrollRunService {
             }, 0);
         }
 
-        const noPayDailySalary = (baseSalary + noPayAllowanceTotal) / 30;
+        // Use the SAME per-day divisor that produced dailySalary/rates.daily_salary (either actual
+        // working days in the period, or actual days in the period's month — never a hardcoded 30;
+        // see createDraftPayrollRecord/createDraftPayrollRecordFixed) so the allowance-inclusive
+        // rate is a true apples-to-apples comparison with weekdayHourlyRate/saturdayHourlyRate/
+        // sundayHourlyRate instead of silently using a different divisor on 31/28/29-day periods.
+        const noPayDailySalary = baseSalary > 0
+            ? dailySalary * ((baseSalary + noPayAllowanceTotal) / baseSalary)
+            : dailySalary + noPayAllowanceTotal;
         const noPayWeekdayHourlyRate  = noPayIncludesAllowances && weekdayDailyHours  > 0 ? noPayDailySalary / weekdayDailyHours  : weekdayHourlyRate;
         const noPaySaturdayHourlyRate = noPayIncludesAllowances && saturdayDailyHours > 0 ? noPayDailySalary / saturdayDailyHours : saturdayHourlyRate;
         const noPaySundayHourlyRate   = noPayIncludesAllowances && sundayDailyHours   > 0 ? noPayDailySalary / sundayDailyHours   : sundayHourlyRate;
@@ -2116,6 +2123,16 @@ class PayrollRunService {
                                      (unpaidLeaveSaturdayHours * noPaySaturdayHourlyRate) +
                                      (unpaidLeaveSundayHours * noPaySundayHourlyRate);
 
+        // Same deduction priced at the base-salary-only rate (no allowances) — this is what the
+        // adding-method earned_salary below implicitly assumes (it's built from weekdayHourlyRate/
+        // saturdayHourlyRate/sundayHourlyRate, which are base-salary-only). When nopay_includes_allowances
+        // is on, unpaidLeaveDeduction above is inflated vs this baseline; the gap is clawed back from
+        // Work Hours Earned further down so the adding-method total reconciles with the (higher,
+        // allowance-inclusive) deducting-method total shown in shortfall_by_cause.
+        const unpaidLeaveDeductionBase = (unpaidLeaveWeekdayHours * weekdayHourlyRate) +
+                                         (unpaidLeaveSaturdayHours * saturdayHourlyRate) +
+                                         (unpaidLeaveSundayHours * sundayHourlyRate);
+
         // leaveHoursByDate is now fully populated (paid + unpaid). Recompute attendance hours
         // with a per-day cap so that on any leave date, attendance credit + leave credit never
         // exceeds that day's expected hours. Hours actually worked beyond the scheduled shift
@@ -2327,7 +2344,7 @@ class PayrollRunService {
         const actualWeekdayEarned = actualWeekdayHours * weekdayHourlyRate;
         const actualSaturdayEarned = actualSaturdayHours * saturdayHourlyRate;
         const actualSundayEarned = actualSundayHours * sundayHourlyRate;
-        const totalActualEarned = actualWeekdayEarned + actualSaturdayEarned + actualSundayEarned;
+        let totalActualEarned = actualWeekdayEarned + actualSaturdayEarned + actualSundayEarned;
 
         console.log(`\n   💵 ACTUAL Earned Salary for ${employeeName} (${employeeCode}) - including live session:`);
         console.log(`      Weekday: ${actualWeekdayHours.toFixed(2)}h × Rs.${weekdayHourlyRate.toFixed(2)} = Rs.${actualWeekdayEarned.toFixed(2)}`);
@@ -2509,7 +2526,7 @@ class PayrollRunService {
         const attendanceWeekdayEarned = cappedAttendanceWeekdayHours * weekdayHourlyRate;
         const attendanceSaturdayEarned = cappedAttendanceSaturdayHours * saturdayHourlyRate;
         const attendanceSundayEarned = cappedAttendanceSundayHours * sundayHourlyRate;
-        const totalAttendanceEarned = attendanceWeekdayEarned + attendanceSaturdayEarned + attendanceSundayEarned;
+        let totalAttendanceEarned = attendanceWeekdayEarned + attendanceSaturdayEarned + attendanceSundayEarned;
 
         const leaveWeekdayEarned = leaveWeekdayHours * weekdayHourlyRate;
         const leaveSaturdayEarned = leaveSaturdayHours * saturdayHourlyRate;
@@ -2724,6 +2741,7 @@ class PayrollRunService {
                 r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0])
         ]);
         const absentDaysDetails = [];
+        let absentDaysDeductionBase = 0; // same days, priced at base-salary-only rate (no allowances)
         const periodStartObj = parseLocalDate(period.period_start_date);
         const periodEndObj   = parseLocalDate(attendanceEndDateStr);
         let cur = new Date(periodStartObj);
@@ -2733,6 +2751,7 @@ class PayrollRunService {
             let isWorkingDay = false;
             let dailyHrs = 0;
             let rate = noPayWeekdayHourlyRate;
+            let baseRate = weekdayHourlyRate;
             if (dow >= 1 && dow <= 5) {
                 isWorkingDay = true;
                 dailyHrs = weekdayDailyHours;
@@ -2740,16 +2759,19 @@ class PayrollRunService {
                 isWorkingDay = true;
                 dailyHrs = saturdayDailyHours;
                 rate = noPaySaturdayHourlyRate;
+                baseRate = saturdayHourlyRate;
             } else if (dow === 0 && isConfiguredWorkingDay(ds, 'sunday')) {
                 isWorkingDay = true;
                 dailyHrs = sundayDailyHours;
                 rate = noPaySundayHourlyRate;
+                baseRate = sundayHourlyRate;
             }
             if (isWorkingDay && !attendedDates.has(ds) && !leaveHoursByDate.has(ds) && !absentHolidaySet.has(ds)) {
                 absentDaysDetails.push({
                     date:      ds,
                     deduction: parseFloat((dailyHrs * rate).toFixed(2))
                 });
+                absentDaysDeductionBase += dailyHrs * baseRate;
             }
             cur.setDate(cur.getDate() + 1);
         }
@@ -2764,6 +2786,24 @@ class PayrollRunService {
         deduction = Math.round((timeVarianceDeduction + unpaidLeaveDeduction + absentDaysDeduction) * 100) / 100;
 
         console.log(`      Total Shortfall: Rs.${deduction.toFixed(2)} | Breakdown: Unpaid Leaves (${unpaidLeaveDeduction.toFixed(2)}) | Time Variance (${timeVarianceDeduction.toFixed(2)}) | Absent Days (${absentDaysDeduction.toFixed(2)})`);
+
+        // Claw back the allowance-inclusive gap from Work Hours Earned.
+        // earned_salary/totalActualEarned above was built entirely from weekdayHourlyRate/
+        // saturdayHourlyRate/sundayHourlyRate (base-salary-only), so it already reconciles with
+        // (base_salary - unpaidLeaveDeductionBase - absentDaysDeductionBase), NOT with the
+        // allowance-inflated shortfall shown above when nopay_includes_allowances is on. Subtract
+        // the gap here so the adding-method total (this return value) matches the deducting-method
+        // total (base_salary - deduction) that shortfall_by_cause implies.
+        const noPayAllowanceGap = Math.max(0,
+            (unpaidLeaveDeduction - unpaidLeaveDeductionBase) +
+            (absentDaysDeduction - absentDaysDeductionBase)
+        );
+
+        if (noPayAllowanceGap > 0) {
+            console.log(`      No-Pay Allowance Gap (clawed back from Work Hours Earned): Rs.${noPayAllowanceGap.toFixed(2)}`);
+            totalAttendanceEarned = Math.max(0, totalAttendanceEarned - noPayAllowanceGap);
+            totalActualEarned = Math.max(0, totalActualEarned - noPayAllowanceGap);
+        }
 
         return {
             total: deduction,
@@ -2808,6 +2848,7 @@ class PayrollRunService {
                     hours: cappedAttendanceWeekdayHours + cappedAttendanceSaturdayHours + cappedAttendanceSundayHours,
                     earned: totalAttendanceEarned,
                     sessions_count: detailedAttendance.length,
+                    no_pay_allowance_adjustment: noPayAllowanceGap,
                     breakdown: {
                         weekday: { hours: cappedAttendanceWeekdayHours, earned: attendanceWeekdayEarned },
                         saturday: { hours: cappedAttendanceSaturdayHours, earned: attendanceSaturdayEarned },
