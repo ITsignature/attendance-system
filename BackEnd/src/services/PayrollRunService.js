@@ -456,7 +456,7 @@ class PayrollRunService {
             SELECT
                 e.id, e.employee_code, e.first_name, e.last_name, e.base_salary,
                 e.department_id, e.designation_id, e.employee_type,
-                e.attendance_affects_salary,
+                e.attendance_affects_salary, e.hire_date,
                 d.name as department_name,
                 des.title as designation_name
             FROM employees e
@@ -499,8 +499,16 @@ class PayrollRunService {
             period.period_end_date
         );
 
-        const periodStart = employeePeriod.startDate;
+        // Never count working days/Saturdays/Sundays before the employee's hire date
+        let periodStart = employeePeriod.startDate;
         const periodEnd = employeePeriod.endDate;
+        if (employee.hire_date) {
+            const hireDateObj = new Date(employee.hire_date);
+            const periodStartObj = new Date(periodStart);
+            if (hireDateObj > periodStartObj) {
+                periodStart = hireDateObj;
+            }
+        }
 
         // Get default working hours from system settings
         let defaultHoursPerDay = 8;
@@ -646,8 +654,19 @@ class PayrollRunService {
             period.period_end_date
         );
 
-        const periodStart = employeePeriod.startDate;
+        // Never count working days/Saturdays/Sundays before the employee's hire date.
+        // Keep the original (unclamped) period start too — the fixed-30 daily divisor is
+        // based on the period's calendar month, not on when the employee was hired.
+        const originalPeriodStart = employeePeriod.startDate;
+        let periodStart = employeePeriod.startDate;
         const periodEnd = employeePeriod.endDate;
+        if (employee.hire_date) {
+            const hireDateObj = new Date(employee.hire_date);
+            const periodStartObj = new Date(periodStart);
+            if (hireDateObj > periodStartObj) {
+                periodStart = hireDateObj;
+            }
+        }
 
         let defaultHoursPerDay = 8;
         try {
@@ -685,8 +704,10 @@ class PayrollRunService {
 
         const baseSalary = parseFloat(employee.base_salary) || 0;
 
-        // Daily divisor = actual number of days in the period's month (not always 30)
-        const periodStartDateObj = new Date(periodStart);
+        // Daily divisor = actual number of days in the period's month (not always 30).
+        // Uses the original (unclamped) period start so a mid-period hire date doesn't
+        // shift the divisor to a different calendar month.
+        const periodStartDateObj = new Date(originalPeriodStart);
         const daysInPeriodMonth = new Date(periodStartDateObj.getFullYear(), periodStartDateObj.getMonth() + 1, 0).getDate();
         const dailySalary = baseSalary / daysInPeriodMonth;
 
