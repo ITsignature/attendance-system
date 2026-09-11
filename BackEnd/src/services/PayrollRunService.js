@@ -426,11 +426,13 @@ class PayrollRunService {
             whereConditions.push('(e.hire_date IS NULL OR e.hire_date <= ?)');
             queryParams.push(period.period_end_date);
 
-            whereConditions.push(`(e.employment_status = "active" OR EXISTS (
+            whereConditions.push(`(e.employment_status = "active"
+                    OR (e.employment_status IN ("terminated", "inactive") AND (e.termination_date IS NULL OR e.termination_date >= ?))
+                    OR EXISTS (
                         SELECT 1 FROM attendance a
                         WHERE a.employee_id = e.id AND a.date BETWEEN ? AND ?
                    ))`);
-            queryParams.push(period.period_start_date, period.period_end_date);
+            queryParams.push(period.period_start_date, period.period_start_date, period.period_end_date);
         } else {
             whereConditions.push('e.employment_status = "active"');
         }
@@ -456,7 +458,7 @@ class PayrollRunService {
             SELECT
                 e.id, e.employee_code, e.first_name, e.last_name, e.base_salary,
                 e.department_id, e.designation_id, e.employee_type,
-                e.attendance_affects_salary, e.hire_date,
+                e.attendance_affects_salary, e.hire_date, e.termination_date,
                 d.name as department_name,
                 des.title as designation_name
             FROM employees e
@@ -499,14 +501,21 @@ class PayrollRunService {
             period.period_end_date
         );
 
-        // Never count working days/Saturdays/Sundays before the employee's hire date
+        // Never count working days/Saturdays/Sundays before the employee's hire date or after termination date
         let periodStart = employeePeriod.startDate;
-        const periodEnd = employeePeriod.endDate;
+        let periodEnd = employeePeriod.endDate;
         if (employee.hire_date) {
             const hireDateObj = new Date(employee.hire_date);
             const periodStartObj = new Date(periodStart);
             if (hireDateObj > periodStartObj) {
                 periodStart = hireDateObj;
+            }
+        }
+        if (employee.termination_date) {
+            const termDateObj = new Date(employee.termination_date);
+            const periodEndObj = new Date(periodEnd);
+            if (termDateObj < periodEndObj && termDateObj >= new Date(periodStart)) {
+                periodEnd = termDateObj;
             }
         }
 
@@ -659,12 +668,19 @@ class PayrollRunService {
         // based on the period's calendar month, not on when the employee was hired.
         const originalPeriodStart = employeePeriod.startDate;
         let periodStart = employeePeriod.startDate;
-        const periodEnd = employeePeriod.endDate;
+        let periodEnd = employeePeriod.endDate;
         if (employee.hire_date) {
             const hireDateObj = new Date(employee.hire_date);
             const periodStartObj = new Date(periodStart);
             if (hireDateObj > periodStartObj) {
                 periodStart = hireDateObj;
+            }
+        }
+        if (employee.termination_date) {
+            const termDateObj = new Date(employee.termination_date);
+            const periodEndObj = new Date(periodEnd);
+            if (termDateObj < periodEndObj && termDateObj >= new Date(periodStart)) {
+                periodEnd = termDateObj;
             }
         }
 
@@ -1488,7 +1504,7 @@ class PayrollRunService {
 
         // Get employee name and code for logging
         const [employeeInfo] = await db.execute(`
-            SELECT first_name, last_name, employee_code, hire_date
+            SELECT first_name, last_name, employee_code, hire_date, termination_date
             FROM employees
             WHERE id = ?
         `, [employeeId]);
@@ -1499,6 +1515,11 @@ class PayrollRunService {
             ? (employeeInfo[0].hire_date instanceof Date
                 ? employeeInfo[0].hire_date.toISOString().split('T')[0]
                 : String(employeeInfo[0].hire_date).split('T')[0])
+            : null;
+        const employeeTerminationDateStr = employeeInfo[0]?.termination_date
+            ? (employeeInfo[0].termination_date instanceof Date
+                ? employeeInfo[0].termination_date.toISOString().split('T')[0]
+                : String(employeeInfo[0].termination_date).split('T')[0])
             : null;
 
         // Fetch weekend_working_config to distinguish configured vs unconfigured weekend days
@@ -1589,6 +1610,11 @@ class PayrollRunService {
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+
+        // Clamp period.period_end_date to employee termination_date if employee was terminated earlier
+        if (employeeTerminationDateStr && employeeTerminationDateStr < period.period_end_date) {
+            period.period_end_date = employeeTerminationDateStr;
+        }
 
         // Parse period end date in local time to match today's local time
         const periodEndParts = period.period_end_date.split('-');
@@ -1711,7 +1737,8 @@ class PayrollRunService {
         const calculationDate = includeLiveSession ? yesterday : todayDate;
 
         let workingDaysForExpected;
-        if (isPartialPeriod) {
+        const hasTerminationProration = employeeTerminationDateStr && employeeTerminationDateStr < (rates.employee_period_end_date || period.period_end_date);
+        if (isPartialPeriod || hasTerminationProration) {
             // Get employee info for department
             const [empInfo] = await db.execute(`
                 SELECT department_id FROM employees WHERE id = ?
@@ -1721,7 +1748,7 @@ class PayrollRunService {
             workingDaysForExpected = await HolidayService.calculateWorkingDays(
                 clientId,
                 period.period_start_date,
-                calculationDate.toISOString().split('T')[0],
+                getLocalDateString(calculationEndDate),
                 empInfo[0]?.department_id,
                 false,
                 employeeId
@@ -2409,11 +2436,15 @@ class PayrollRunService {
             const allNonWorkingSatDates = [];
             const allNonWorkingSunDates = [];
 
-            // Never credit non-working days before the employee's hire date
+            // Never credit non-working days before the employee's hire date or after termination date
             const calcStartRaw = parseLocalDate(period.period_start_date);
             const hireDateParsed = employeeHireDateStr ? parseLocalDate(employeeHireDateStr) : null;
             const calcStart = hireDateParsed && hireDateParsed > calcStartRaw ? hireDateParsed : calcStartRaw;
-            const calcEnd   = parseLocalDate(attendanceEndDateStr);
+
+            const attendanceEndParsed = parseLocalDate(attendanceEndDateStr);
+            const termDateParsed = employeeTerminationDateStr ? parseLocalDate(employeeTerminationDateStr) : null;
+            const calcEnd = termDateParsed && termDateParsed < attendanceEndParsed ? termDateParsed : attendanceEndParsed;
+
             let cur = new Date(calcStart);
 
             while (cur <= calcEnd) {
@@ -2466,12 +2497,6 @@ class PayrollRunService {
             const workedUnconfiguredSats = workedUnconfiguredSatDates.size;
             const workedUnconfiguredSuns = workedUnconfiguredSunDates.size;
 
-            nonWorkingSatCreditDays = Math.max(0, totalSaturdaysInPeriod - workingSaturdaysInPeriod - workedUnconfiguredSats);
-            sundayCreditDays        = Math.max(0, totalSundaysInPeriod   - workingSundaysInPeriod   - workedUnconfiguredSuns);
-
-            fixed30NonWorkingDayCredit += nonWorkingSatCreditDays * dailySalaryFixed30;
-            fixed30NonWorkingDayCredit += sundayCreditDays        * dailySalaryFixed30;
-
             // Build credited date lists for the frontend modal.
             // A Saturday/Sunday gets non-working credit only if ALL three are true:
             //   1. It is NOT a configured working day for this employee
@@ -2486,6 +2511,13 @@ class PayrollRunService {
             nonWorkingSunCreditDates = allNonWorkingSunDates.filter(ds =>
                 !isConfiguredWorkingDay(ds, 'sunday') && !workedUnconfiguredSunDates.has(ds)
             );
+
+            // Sync credit days count directly with the filtered date lists so they match exactly
+            nonWorkingSatCreditDays = nonWorkingSatCreditDates.length;
+            sundayCreditDays        = nonWorkingSunCreditDates.length;
+
+            fixed30NonWorkingDayCredit += nonWorkingSatCreditDays * dailySalaryFixed30;
+            fixed30NonWorkingDayCredit += sundayCreditDays        * dailySalaryFixed30;
 
             console.log(`\n   🗓️  FIXED-30 Non-Working Day Credit for ${employeeName} (${employeeCode}):`);
             console.log(`      Holidays: ${holidayCreditDays} × Rs.${dailySalaryFixed30.toFixed(2)} = Rs.${(holidayCreditDays * dailySalaryFixed30).toFixed(2)}`);
@@ -2757,7 +2789,9 @@ class PayrollRunService {
         const absentDaysDetails = [];
         let absentDaysDeductionBase = 0; // same days, priced at base-salary-only rate (no allowances)
         const periodStartObj = parseLocalDate(period.period_start_date);
-        const periodEndObj   = parseLocalDate(attendanceEndDateStr);
+        const attendanceEndObj = parseLocalDate(attendanceEndDateStr);
+        const termDateParsedObj = employeeTerminationDateStr ? parseLocalDate(employeeTerminationDateStr) : null;
+        const periodEndObj   = termDateParsedObj && termDateParsedObj < attendanceEndObj ? termDateParsedObj : attendanceEndObj;
         let cur = new Date(periodStartObj);
         while (cur <= periodEndObj) {
             const ds  = getLocalDateString(cur);

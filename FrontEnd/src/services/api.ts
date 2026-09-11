@@ -472,19 +472,16 @@ private async queueRefresh(): Promise<void> {
   async checkEmailAvailability(email: string): Promise<ApiResponse> {
     return this.apiCall(`/api/employees/check-email?email=${encodeURIComponent(email)}`);
   }
-  async   (id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
-    return this.apiCall(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) });
-  }
   async deleteEmployee(id: string): Promise<ApiResponse> {
     return this.apiCall(`/api/employees/${id}`, { method: 'DELETE' });
   }
-  async bulkDeleteEmployees(employeeIds: string[]): Promise<ApiResponse> {
+  async bulkDeleteEmployees(employeeIds: string[], terminationDate?: string): Promise<ApiResponse> {
     return this.apiCall('/api/employees/bulk-delete', {
-      method: 'POST', body: JSON.stringify({ employee_ids: employeeIds }),
+      method: 'POST', body: JSON.stringify({ employee_ids: employeeIds, termination_date: terminationDate }),
     });
   }
   
-    async updateEmployee(id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
+  async updateEmployee(id: string, employeeData: UpdateEmployeeData): Promise<ApiResponse> {
     return this.apiCall(`/api/employees/${id}`, { method: 'PUT', body: JSON.stringify(employeeData) });
   }
   async bulkUpdateEmployees(updates: Array<{ id: string; data: UpdateEmployeeData }>): Promise<ApiResponse> {

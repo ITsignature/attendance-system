@@ -404,6 +404,13 @@ router.put('/:id',
     body('designation_id').optional().isUUID().withMessage('Invalid designation ID'),
     body('manager_id').optional().isUUID().withMessage('Invalid manager ID'),
     body('hire_date').optional().isISO8601().withMessage('Please enter a valid hire date'),
+    body('termination_date').optional({ nullable: true }).custom((value) => {
+      if (value === null || value === '' || value === undefined) return true;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) && isNaN(Date.parse(value))) {
+        throw new Error('Please enter a valid termination date');
+      }
+      return true;
+    }),
     body('employment_status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']).withMessage('Invalid employment status'),
     body('employee_type').optional().isIn(['permanent', 'contract', 'intern', 'consultant', 'trainee']).withMessage('Invalid employee type'),
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
@@ -618,7 +625,7 @@ router.put('/:id',
 
       // Professional Information
       'employee_code', 'fingerprint_id', 'department_id', 'designation_id', 'manager_id',
-      'hire_date', 'employment_status', 'employee_type', 'base_salary',
+      'hire_date', 'termination_date', 'employment_status', 'employee_type', 'base_salary',
 
       // Emergency Contact
       'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
@@ -646,6 +653,11 @@ router.put('/:id',
       // Saturday Covering
       'saturday_covering_enabled'
     ];
+
+    // If reactivating an employee and termination_date wasn't explicitly provided, clear termination_date
+    if (req.body.employment_status === 'active' && !req.body.hasOwnProperty('termination_date')) {
+      req.body.termination_date = null;
+    }
 
     const updateFields = [];
     const updateValues = [];
@@ -854,6 +866,13 @@ router.post('/',
     body('designation_id').isUUID().withMessage('Invalid designation ID'),
     body('manager_id').optional({ values: 'falsy' }).isUUID().withMessage('Invalid manager ID'),
     body('hire_date').isISO8601().withMessage('Please enter a valid hire date'),
+    body('termination_date').optional({ nullable: true }).custom((value) => {
+      if (value === null || value === '' || value === undefined) return true;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) && isNaN(Date.parse(value))) {
+        throw new Error('Please enter a valid termination date');
+      }
+      return true;
+    }),
     body('employment_status').isIn(['active', 'inactive']).withMessage('Invalid employment status'),
     body('employee_type').isIn(['permanent', 'contract', 'intern', 'consultant', 'trainee']).withMessage('Invalid employee type'),
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
@@ -1004,7 +1023,7 @@ router.post('/',
 
         // Professional Information
         employee_code, fingerprint_id, department_id, designation_id, manager_id,
-        hire_date, employment_status = 'active', employee_type,
+        hire_date, termination_date = null, employment_status = 'active', employee_type,
         base_salary,
         
         // Emergency Contact
@@ -1182,7 +1201,7 @@ router.post('/',
         INSERT INTO employees (
           id, client_id, employee_code, fingerprint_id, first_name, last_name, email, phone,
           date_of_birth, gender, address, city, state, zip_code, nationality, marital_status,
-          hire_date, department_id, designation_id, manager_id, employee_type,
+          hire_date, termination_date, department_id, designation_id, manager_id, employee_type,
           employment_status, base_salary, attendance_affects_salary, apit_enabled,
           emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
           in_time, out_time, break_start_time, break_end_time, follows_company_schedule, weekend_working_config,
@@ -1191,11 +1210,11 @@ router.post('/',
           statutory_holiday_ot_multiplier,
           payable_hours_policy,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `, [
         employeeUuid, req.user.clientId, employee_code, fingerprint_id || null, first_name, last_name, email, phone,
         date_of_birth, gender, address || null, city || null, state || null, zip_code || null,
-        nationality || null, marital_status || null, hire_date, department_id, designation_id,
+        nationality || null, marital_status || null, hire_date, termination_date || null, department_id, designation_id,
         manager_id || null, employee_type, employment_status, base_salary || null, attendance_affects_salary,
         apit_enabled,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
@@ -1510,6 +1529,7 @@ router.post('/bulk-delete',
   asyncHandler(async (req, res) => {
     const db = getDB();
     const ids = req.body.employee_ids; // Expecting an array of employee IDs
+    const terminationDate = req.body.termination_date || new Date().toISOString().split('T')[0];
 
     console.log("check cli",req.body)
     console.log("check cli",req.user.clientId);
@@ -1525,11 +1545,11 @@ router.post('/bulk-delete',
     const placeholders = ids.map(() => '?').join(', ');
 
     // Append client_id for all rows
-    const params = [...ids, req.user.clientId];
+    const params = [terminationDate, ...ids, req.user.clientId];
 
     const [result] = await db.execute(`
       UPDATE employees 
-      SET employment_status = 'terminated', updated_at = NOW()
+      SET employment_status = 'terminated', termination_date = ?, updated_at = NOW()
       WHERE id IN (${placeholders}) AND client_id = ?
     `, params);
 

@@ -11,7 +11,8 @@ import {
   Tooltip,
   Progress,
   Table,
-  Checkbox
+  Checkbox,
+  Label
 } from 'flowbite-react';
 import {
   HiOutlinePlus,
@@ -103,6 +104,8 @@ const AllEmployees: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [singleTerminationDate, setSingleTerminationDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [bulkTerminationDate, setBulkTerminationDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   // Pagination
   const [pagination, setPagination] = useState({
@@ -396,14 +399,15 @@ const AllEmployees: React.FC = () => {
     try {
       // Instead of deleting, update status to terminated
       const response = await apiService.updateEmployee(employeeToDelete, {
-        employment_status: 'terminated'
+        employment_status: 'terminated',
+        termination_date: singleTerminationDate
       });
       
       if (response.success) {
         // Remove from current view immediately
         setAllEmployees(prev => prev.map(emp => 
           emp.id === employeeToDelete 
-            ? { ...emp, employment_status: 'terminated' as any }
+            ? { ...emp, employment_status: 'terminated' as any, termination_date: singleTerminationDate }
             : emp
         ));
         setShowDeleteModal(false);
@@ -431,7 +435,8 @@ const AllEmployees: React.FC = () => {
         await Promise.all(batch.map(async (empId) => {
           try {
             await apiService.updateEmployee(empId, {
-              employment_status: 'terminated'
+              employment_status: 'terminated',
+              termination_date: bulkTerminationDate
             });
             completed++;
             setBulkOperationProgress((completed / selectedEmployees.length) * 100);
@@ -444,7 +449,7 @@ const AllEmployees: React.FC = () => {
       // Update local state
       setAllEmployees(prev => prev.map(emp => 
         selectedEmployees.includes(emp.id) 
-          ? { ...emp, employment_status: 'terminated' as any }
+          ? { ...emp, employment_status: 'terminated' as any, termination_date: bulkTerminationDate }
           : emp
       ));
       
@@ -924,6 +929,11 @@ const AllEmployees: React.FC = () => {
                           <div className="text-sm text-gray-900 dark:text-white">
                             {new Date(employee.hire_date).toLocaleDateString()}
                           </div>
+                          {employee.termination_date && (
+                            <div className="text-xs text-red-500 dark:text-red-400 font-medium">
+                              Left: {new Date(employee.termination_date).toLocaleDateString()}
+                            </div>
+                          )}
                           {employee.years_of_service && (
                             <div className="text-xs text-gray-500 dark:text-gray-400">
                               {employee.years_of_service} years
@@ -1012,9 +1022,19 @@ const AllEmployees: React.FC = () => {
         <Modal.Header>Confirm Employee Termination</Modal.Header>
         <Modal.Body>
           <p>Are you sure you want to terminate this employee? This will change their status to "Terminated" and remove them from the active employee list.</p>
+          <div className="mt-4">
+            <Label htmlFor="single_termination_date" value="Termination Date *" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300" />
+            <TextInput
+              id="single_termination_date"
+              type="date"
+              value={singleTerminationDate}
+              onChange={(e) => setSingleTerminationDate(e.target.value)}
+              required
+            />
+          </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="failure" onClick={handleDeleteEmployee}>
+          <Button color="failure" onClick={handleDeleteEmployee} disabled={!singleTerminationDate}>
             Terminate
           </Button>
           <Button color="gray" onClick={() => setShowDeleteModal(false)}>
@@ -1028,6 +1048,16 @@ const AllEmployees: React.FC = () => {
         <Modal.Header>Confirm Bulk Termination</Modal.Header>
         <Modal.Body>
           <p>Are you sure you want to terminate {selectedEmployees.length} selected employees? This will change their status to "Terminated" and remove them from the active employee list.</p>
+          <div className="mt-4">
+            <Label htmlFor="bulk_termination_date" value="Termination Date *" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300" />
+            <TextInput
+              id="bulk_termination_date"
+              type="date"
+              value={bulkTerminationDate}
+              onChange={(e) => setBulkTerminationDate(e.target.value)}
+              required
+            />
+          </div>
           {showBulkProgress && (
             <div className="mt-4">
               <Progress progress={bulkOperationProgress} />
@@ -1035,7 +1065,7 @@ const AllEmployees: React.FC = () => {
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button color="failure" onClick={handleBulkDelete} disabled={showBulkProgress}>
+          <Button color="failure" onClick={handleBulkDelete} disabled={showBulkProgress || !bulkTerminationDate}>
             Terminate All
           </Button>
           <Button color="gray" onClick={() => setShowBulkDeleteModal(false)} disabled={showBulkProgress}>

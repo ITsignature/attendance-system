@@ -1,4 +1,4 @@
-﻿// EmployeeDetails.tsx - Complete Enhanced Design with Updated Attendance and Leave tabs
+// EmployeeDetails.tsx - Complete Enhanced Design with Updated Attendance and Leave tabs
 import React, { useState, useEffect } from "react";
 import { Tabs, Button, Select, Modal, TextInput, Label, Badge, Spinner, Alert, Card, Breadcrumb, Table } from "flowbite-react";
 import { HiUser, HiBriefcase, HiDocumentText, HiCash, HiHome, HiCalendar, HiClock, HiPhone, HiMail, HiLocationMarker, HiIdentification, HiRefresh } from "react-icons/hi";
@@ -35,6 +35,7 @@ interface Employee {
   manager_id?: string;
   manager_name?: string;
   hire_date: string;
+  termination_date?: string | null;
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   base_salary?: number;
@@ -258,6 +259,7 @@ const EmployeeDetails: React.FC = () => {
   const [activeSidebarTab, setActiveSidebarTab] = useState("Profile");
   const [showTerminateModal, setShowTerminateModal] = useState(false);
   const [terminating, setTerminating] = useState(false);
+  const [terminationDate, setTerminationDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [leavesLoading, setLeavesLoading] = useState(false);
   const [accrualBalances, setAccrualBalances] = useState<Array<AccrualBalance & { leave_type_name: string }>>([]);
@@ -632,11 +634,12 @@ const EmployeeDetails: React.FC = () => {
     try {
       setTerminating(true);
       const response = await apiService.updateEmployee(employee.id, {
-        employment_status: 'terminated'
+        employment_status: 'terminated',
+        termination_date: terminationDate
       });
       
       if (response.success) {
-        setEmployee(prev => prev ? { ...prev, employment_status: 'terminated' } : null);
+        setEmployee(prev => prev ? { ...prev, employment_status: 'terminated', termination_date: terminationDate } : null);
         setShowTerminateModal(false);
       } else {
         setError(response.message || 'Failed to terminate employee');
@@ -1293,6 +1296,9 @@ const EmployeeDetails: React.FC = () => {
                     <Field label="Designation" value={employee.designation_title} />
                     <Field label="Manager" value={employee.manager_name} />
                     <Field label="Hire Date" value={formatDate(employee.hire_date)} />
+                    {employee.termination_date && (
+                      <Field label="Termination Date" value={formatDate(employee.termination_date)} className="border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10" />
+                    )}
                     <Field label="Employment Status" value={employee.employment_status} />
                     <Field label="Employee Type" value={employee.employee_type} />
                     
@@ -2959,6 +2965,16 @@ const EmployeeDetails: React.FC = () => {
           <Modal.Header>Confirm Employee Termination</Modal.Header>
           <Modal.Body>
             <p>Are you sure you want to terminate <strong>{employee.first_name} {employee.last_name}</strong>? This will change their status to "Terminated" and they will no longer have access to the system.</p>
+            <div className="mt-4">
+              <Label htmlFor="modal_termination_date" value="Termination Date *" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300" />
+              <TextInput
+                id="modal_termination_date"
+                type="date"
+                value={terminationDate}
+                onChange={(e) => setTerminationDate(e.target.value)}
+                required
+              />
+            </div>
             <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
               <p className="text-sm text-red-700 dark:text-red-300">
                 <strong>Warning:</strong> This action cannot be undone. The employee will be marked as terminated in the system.
@@ -2969,7 +2985,7 @@ const EmployeeDetails: React.FC = () => {
             <Button 
               color="failure" 
               onClick={handleTerminateEmployee}
-              disabled={terminating}
+              disabled={terminating || !terminationDate}
             >
               {terminating ? (
                 <>

@@ -61,6 +61,7 @@ interface Employee {
   designation_id: string;
   manager_id?: string;
   hire_date: string;
+  termination_date?: string | null;
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   base_salary?: number;
@@ -485,13 +486,28 @@ const EditEmployeeDetails: React.FC = () => {
     });
   };
 
-  const handleChange = (field: keyof Employee, value: string | number | boolean) => {
+  const handleChange = (field: keyof Employee, value: string | number | boolean | null) => {
     if (!formData) return;
     
-    setFormData(prev => ({
-      ...prev!,
-      [field]: value
-    }));
+    setFormData(prev => {
+      const updated = {
+        ...prev!,
+        [field]: value
+      };
+
+      // Auto-set termination_date when employment_status is changed to terminated or inactive
+      if (field === 'employment_status') {
+        if (value === 'terminated' || value === 'inactive') {
+          if (!updated.termination_date) {
+            updated.termination_date = new Date().toISOString().split('T')[0];
+          }
+        } else if (value === 'active') {
+          updated.termination_date = null;
+        }
+      }
+
+      return updated;
+    });
 
     if (validationErrors[field]) {
       setValidationErrors(prev => {
@@ -1075,6 +1091,19 @@ const EditEmployeeDetails: React.FC = () => {
                 <option value="terminated">Terminated</option>
               </Select>
             </div>
+
+            {(formData.employment_status === 'terminated' || formData.employment_status === 'inactive') && (
+              <div>
+                <Label htmlFor="termination_date" value="Termination Date *" className="text-red-600 dark:text-red-400" />
+                <TextInput
+                  id="termination_date"
+                  type="date"
+                  value={formData.termination_date ? formData.termination_date.substring(0, 10) : ''}
+                  onChange={(e) => handleChange('termination_date', e.target.value)}
+                  required
+                />
+              </div>
+            )}
 
             <div>
               <Label htmlFor="employee_type" value="Employee Type" />

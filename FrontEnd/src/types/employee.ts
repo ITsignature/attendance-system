@@ -17,6 +17,7 @@ export interface Employee {
   
   // Employment Details
   hire_date: string;
+  termination_date?: string | null;
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
@@ -62,6 +63,7 @@ export interface CreateEmployeeData {
   
   // Employment Details
   hire_date: string;
+  termination_date?: string | null;
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
@@ -98,6 +100,7 @@ export interface UpdateEmployeeData {
   
   // Employment Details
   hire_date?: string;
+  termination_date?: string | null;
   department_id?: string;
   designation_id?: string;
   manager_id?: string;

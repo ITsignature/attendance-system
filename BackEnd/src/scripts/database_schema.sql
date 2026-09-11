@@ -211,6 +211,7 @@ CREATE TABLE `employees` (
   `nationality` varchar(100) DEFAULT NULL,
   `marital_status` enum('single','married','divorced','widowed') DEFAULT NULL,
   `hire_date` date DEFAULT NULL,
+  `termination_date` date DEFAULT NULL COMMENT 'Date when employee was terminated or became inactive',
   `department_id` varchar(36) DEFAULT NULL,
   `designation_id` varchar(36) DEFAULT NULL,
   `manager_id` varchar(36) DEFAULT NULL,
