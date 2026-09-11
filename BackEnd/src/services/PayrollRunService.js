@@ -1640,7 +1640,7 @@ class PayrollRunService {
         console.log(`      Weekdays: ${fullPeriodWeekdays}, Saturdays: ${fullPeriodSaturdays}, Sundays: ${fullPeriodSundays}`);
 
         // ============================================
-        // NO-PAY RATE (base salary + 'allowance'-category allowances) / same per-day divisor as dailySalary
+        // NO-PAY RATE (base salary + 'allowance'-category allowances) / 30
         // ============================================
         // Opt-in per client via the 'nopay_includes_allowances' setting. When off (default),
         // absent days and unpaid time off keep using the base-salary-only rate — identical to
@@ -1668,14 +1668,7 @@ class PayrollRunService {
             }, 0);
         }
 
-        // Use the SAME per-day divisor that produced dailySalary/rates.daily_salary (either actual
-        // working days in the period, or actual days in the period's month — never a hardcoded 30;
-        // see createDraftPayrollRecord/createDraftPayrollRecordFixed) so the allowance-inclusive
-        // rate is a true apples-to-apples comparison with weekdayHourlyRate/saturdayHourlyRate/
-        // sundayHourlyRate instead of silently using a different divisor on 31/28/29-day periods.
-        const noPayDailySalary = baseSalary > 0
-            ? dailySalary * ((baseSalary + noPayAllowanceTotal) / baseSalary)
-            : dailySalary + noPayAllowanceTotal;
+        const noPayDailySalary = (baseSalary + noPayAllowanceTotal) / 30;
         const noPayWeekdayHourlyRate  = noPayIncludesAllowances && weekdayDailyHours  > 0 ? noPayDailySalary / weekdayDailyHours  : weekdayHourlyRate;
         const noPaySaturdayHourlyRate = noPayIncludesAllowances && saturdayDailyHours > 0 ? noPayDailySalary / saturdayDailyHours : saturdayHourlyRate;
         const noPaySundayHourlyRate   = noPayIncludesAllowances && sundayDailyHours   > 0 ? noPayDailySalary / sundayDailyHours   : sundayHourlyRate;
