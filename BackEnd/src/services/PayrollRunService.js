@@ -853,6 +853,9 @@ class PayrollRunService {
         let attendanceDeduction;
         let unconfiguredWeekendOvertime = null;
         let holidayWorkedOvertime = null;
+        // "No-pay" deduction = unpaid leave + absent days ONLY (excludes time-variance/lateness),
+        // used as the amount subtracted from a base when a deduction is flagged deduct_from_after_nopay_salary.
+        let noPayDeduction = 0;
 
         if (!attendanceAffectsSalary) {
             // Employee gets full salary regardless of attendance
@@ -879,6 +882,10 @@ class PayrollRunService {
             unconfiguredWeekendOvertime = attendanceCalculation.unconfigured_weekend_overtime || null;
             holidayWorkedOvertime = attendanceCalculation.holiday_worked_overtime || null;
 
+            const shortfallByCause = attendanceCalculation.shortfall_by_cause || {};
+            noPayDeduction = (shortfallByCause.unpaid_time_off?.deduction || 0) +
+                             (shortfallByCause.absent_days?.deduction || 0);
+
             // For fixed-30: add non-working day credit (holidays + non-working Saturdays + Sundays)
             // separately on top of earned salary, same way OT is added — not mixed into deduction
             actualEarnedBaseSalary += nonWorkingDayCredit;
@@ -889,6 +896,7 @@ class PayrollRunService {
             }
             console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
             console.log(`   Attendance Shortfall: Rs.${attendanceDeduction.toFixed(2)}`);
+            console.log(`   No-Pay Deduction (Unpaid Leave + Absent Days only): Rs.${noPayDeduction.toFixed(2)}`);
         }
 
         // =============================================
@@ -919,7 +927,7 @@ class PayrollRunService {
         // Note: EPF/ETF calculated on actual earned base, employee deductions on gross salary
         // =============================================
         console.log(`\n💸 Step 4: Calculating deductions (EPF/ETF on base salary, employee deductions on gross)...`);
-        const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary, baseSalary);
+        const deductionComponents = await this.calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary, baseSalary, noPayDeduction);
         console.log(`   Total Deductions: Rs.${deductionComponents.total.toFixed(2)}`);
 
         // =============================================
@@ -3377,6 +3385,7 @@ class PayrollRunService {
                 ed.amount,
                 ed.is_percentage,
                 ed.deduct_from_base_salary,
+                ed.deduct_from_after_nopay_salary,
                 ed.is_recurring,
                 ed.remaining_installments,
                 ed.effective_from,
@@ -4092,19 +4101,21 @@ class PayrollRunService {
     /**
      * Calculate deduction components
      */
-    async calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary = null, baseSalary = null) {
+    async calculateDeductions(grossSalary, calculationMethod, employeeData, actualEarnedBaseSalary = null, baseSalary = null, noPayDeduction = 0) {
         // EPF/ETF must be calculated on the fixed base salary, not on gross or earned salary
         // This ensures EPF is always a fixed % of the employee's contracted base salary
         const baseForStatutory = baseSalary !== null ? parseFloat(baseSalary)
             : actualEarnedBaseSalary !== null ? parseFloat(actualEarnedBaseSalary)
             : parseFloat(grossSalary);
         const baseForEmployee = parseFloat(grossSalary) || 0;
+        const noPayAmount = parseFloat(noPayDeduction) || 0;
         const components = [];
         let total = 0;
 
         console.log(`💸 DEDUCTION CALCULATION:`);
         console.log(`   Gross Salary (for employee deductions): ${grossSalary}`);
         console.log(`   Base Salary (for EPF/ETF): ${baseForStatutory}`);
+        console.log(`   No-Pay Deduction (Unpaid Leave + Absent Days): ${noPayAmount}`);
 
         // =============================================
         // 1. CONFIGURED DEDUCTION COMPONENTS (EPF/ETF - calculated on earned base)
@@ -4147,8 +4158,14 @@ class PayrollRunService {
             for (const deduction of employeeData.employeeDeductions) {
                 let amount = parseFloat(deduction.amount) || 0;
 
-                // Handle percentage-based deductions (on base salary if flagged, otherwise gross salary)
-                const deductionBase = deduction.deduct_from_base_salary ? baseForStatutory : baseForEmployee;
+                // Handle percentage-based deductions. Pick the base the same way as before
+                // (base salary if flagged, otherwise gross salary), then — if
+                // deduct_from_after_nopay_salary is also flagged — subtract the no-pay
+                // amount (unpaid leave + absent days only) from that base before applying %.
+                let deductionBase = deduction.deduct_from_base_salary ? baseForStatutory : baseForEmployee;
+                if (deduction.deduct_from_after_nopay_salary) {
+                    deductionBase = Math.max(0, deductionBase - noPayAmount);
+                }
                 if (deduction.is_percentage) {
                     amount = (deductionBase * amount) / 100;
                 }
@@ -4861,6 +4878,7 @@ class PayrollRunService {
                     ed.amount,
                     ed.is_percentage,
                     ed.deduct_from_base_salary,
+                    ed.deduct_from_after_nopay_salary,
                     ed.is_recurring,
                     ed.remaining_installments
                 FROM employee_deductions ed
@@ -5268,7 +5286,8 @@ class PayrollRunService {
                     calculation_type: ded.is_percentage ? 'percentage' : 'fixed',
                     calculation_value: ded.amount,
                     category: 'employee_specific',
-                    deduct_from_base_salary: ded.deduct_from_base_salary ? true : false
+                    deduct_from_base_salary: ded.deduct_from_base_salary ? true : false,
+                    deduct_from_after_nopay_salary: ded.deduct_from_after_nopay_salary ? true : false
                 }));
 
                 console.log(`💸 Calculated employee deductions for employee ${emp.employee_code}:`, specificDeductions)

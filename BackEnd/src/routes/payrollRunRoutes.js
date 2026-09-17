@@ -1099,6 +1099,7 @@ router.get('/employee-deductions',
                     ed.amount,
                     ed.is_percentage,
                     ed.deduct_from_base_salary,
+                    ed.deduct_from_after_nopay_salary,
                     ed.is_recurring,
                     ed.remaining_installments,
                     ed.is_active,
@@ -1138,6 +1139,7 @@ router.post('/employee-deductions',
         body('amount').isNumeric().withMessage('Amount must be numeric'),
         body('is_percentage').optional().isBoolean(),
         body('deduct_from_base_salary').optional().isBoolean(),
+        body('deduct_from_after_nopay_salary').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 1 }).withMessage('Remaining installments must be at least 1'),
         body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
@@ -1172,6 +1174,7 @@ router.post('/employee-deductions',
             amount,
             is_percentage = false,
             deduct_from_base_salary = false,
+            deduct_from_after_nopay_salary = false,
             is_recurring = false,
             remaining_installments = 1,
             effective_from,
@@ -1182,12 +1185,12 @@ router.post('/employee-deductions',
             await db.execute(`
                 INSERT INTO employee_deductions (
                     id, client_id, employee_id, deduction_type, deduction_name,
-                    amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                    amount, is_percentage, deduct_from_base_salary, deduct_from_after_nopay_salary, is_recurring, remaining_installments,
                     is_active, effective_from, effective_to, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             `, [
                 deductionId, clientId, employee_id, deduction_type, deduction_name,
-                amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                amount, is_percentage, deduct_from_base_salary, deduct_from_after_nopay_salary, is_recurring, remaining_installments,
                 true, effective_from, effective_to, userId
             ]);
 
@@ -1220,6 +1223,7 @@ router.put('/employee-deductions/:id',
         body('amount').optional().isNumeric(),
         body('is_percentage').optional().isBoolean(),
         body('deduct_from_base_salary').optional().isBoolean(),
+        body('deduct_from_after_nopay_salary').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 0 }).withMessage('Remaining installments cannot be negative'),
         body('effective_from').optional().isISO8601(),
@@ -1274,7 +1278,7 @@ router.put('/employee-deductions/:id',
                 WHERE id = ? AND client_id = ?`;
 
             console.log("query",query);
-            
+
             const [result] = await db.execute(`
                 UPDATE employee_deductions
                 SET ${updateFields.join(', ')}
@@ -1410,6 +1414,7 @@ router.post('/employee-deduction-batches',
         body('amount').isNumeric().withMessage('Amount must be numeric'),
         body('is_percentage').optional().isBoolean(),
         body('deduct_from_base_salary').optional().isBoolean(),
+        body('deduct_from_after_nopay_salary').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 1 }).withMessage('Remaining installments must be at least 1'),
         body('effective_from').isISO8601().withMessage('Valid effective from date is required'),
@@ -1436,6 +1441,7 @@ router.post('/employee-deduction-batches',
             amount,
             is_percentage = false,
             deduct_from_base_salary = false,
+            deduct_from_after_nopay_salary = false,
             is_recurring = false,
             remaining_installments = 1,
             effective_from,
@@ -1452,24 +1458,24 @@ router.post('/employee-deduction-batches',
             await connection.execute(`
                 INSERT INTO employee_deduction_batches (
                     id, client_id, deduction_type, deduction_name, amount, is_percentage,
-                    deduct_from_base_salary, is_recurring, remaining_installments, is_active, effective_from,
+                    deduct_from_base_salary, deduct_from_after_nopay_salary, is_recurring, remaining_installments, is_active, effective_from,
                     effective_to, created_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             `, [
                 batchId, clientId, deduction_type, deduction_name, amount, is_percentage,
-                deduct_from_base_salary, is_recurring, remaining_installments, true, effective_from, effective_to, userId
+                deduct_from_base_salary, deduct_from_after_nopay_salary, is_recurring, remaining_installments, true, effective_from, effective_to, userId
             ]);
 
             for (const employeeId of uniqueEmployeeIds) {
                 await connection.execute(`
                     INSERT INTO employee_deductions (
                         id, client_id, batch_id, employee_id, deduction_type, deduction_name,
-                        amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                        amount, is_percentage, deduct_from_base_salary, deduct_from_after_nopay_salary, is_recurring, remaining_installments,
                         is_active, effective_from, effective_to, created_by, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                 `, [
                     uuidv4(), clientId, batchId, employeeId, deduction_type, deduction_name,
-                    amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                    amount, is_percentage, deduct_from_base_salary, deduct_from_after_nopay_salary, is_recurring, remaining_installments,
                     true, effective_from, effective_to, userId
                 ]);
             }
@@ -1507,6 +1513,7 @@ router.put('/employee-deduction-batches/:id',
         body('amount').optional().isNumeric(),
         body('is_percentage').optional().isBoolean(),
         body('deduct_from_base_salary').optional().isBoolean(),
+        body('deduct_from_after_nopay_salary').optional().isBoolean(),
         body('is_recurring').optional().isBoolean(),
         body('remaining_installments').optional().isInt({ min: 0 }),
         body('effective_from').optional().isISO8601(),
@@ -1532,7 +1539,7 @@ router.put('/employee-deduction-batches/:id',
 
         const ALLOWED_BATCH_FIELDS = [
             'deduction_type', 'deduction_name', 'amount', 'is_percentage',
-            'deduct_from_base_salary', 'is_recurring', 'remaining_installments',
+            'deduct_from_base_salary', 'deduct_from_after_nopay_salary', 'is_recurring', 'remaining_installments',
             'effective_from', 'effective_to'
         ];
         const sharedFields = {};
@@ -1603,12 +1610,12 @@ router.put('/employee-deduction-batches/:id',
                         await connection.execute(`
                             INSERT INTO employee_deductions (
                                 id, client_id, batch_id, employee_id, deduction_type, deduction_name,
-                                amount, is_percentage, deduct_from_base_salary, is_recurring, remaining_installments,
+                                amount, is_percentage, deduct_from_base_salary, deduct_from_after_nopay_salary, is_recurring, remaining_installments,
                                 is_active, effective_from, effective_to, created_by, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                         `, [
                             uuidv4(), clientId, batchId, employeeId, b.deduction_type, b.deduction_name,
-                            b.amount, b.is_percentage, b.deduct_from_base_salary, b.is_recurring, b.remaining_installments,
+                            b.amount, b.is_percentage, b.deduct_from_base_salary, b.deduct_from_after_nopay_salary, b.is_recurring, b.remaining_installments,
                             true, b.effective_from, b.effective_to, userId
                         ]);
                     }

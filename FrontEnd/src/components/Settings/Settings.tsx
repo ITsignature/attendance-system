@@ -20,7 +20,8 @@ import {
   Plus,
   Edit,
   Trash2,
-  X
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const SettingsWithBackend = () => {
@@ -315,6 +316,57 @@ const updateLocalSetting = (key: string, value: any) => {
   setHasChanges(true);
 };
 
+const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    alert('Please upload a valid image file (PNG, JPG, SVG, WebP)');
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Image file size must be under 5MB');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX_WIDTH = 600;
+      const MAX_HEIGHT = 300;
+      let { width, height } = img;
+
+      if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+        const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        const format = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const optimizedDataUrl = canvas.toDataURL(format, 0.85);
+        updateLocalSetting('company_logo', optimizedDataUrl);
+      } else {
+        updateLocalSetting('company_logo', event.target?.result as string);
+      }
+    };
+    img.src = event.target?.result as string;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+};
+
+const handleRemoveLogo = () => {
+  updateLocalSetting('company_logo', '');
+};
+
 const handleSave = async () => {
   setSaving(true);
   try {
@@ -454,67 +506,97 @@ const hhmmToMinutes = (t) => {
       case 'general':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">General Settings</h3>
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">General Settings</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Configure your company logo, name, and address displayed on employee payslips and system documents.
+              </p>
+            </div>
 
             <div className="grid grid-cols-1 gap-6">
+              {/* Company Logo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Company Logo
+                </label>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                  <div className="h-20 w-48 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-white dark:bg-gray-700 overflow-hidden shrink-0 shadow-sm">
+                    {localSettings?.company_logo ? (
+                      <img
+                        src={localSettings.company_logo}
+                        alt="Company Logo Preview"
+                        className="max-h-16 max-w-full object-contain p-1"
+                      />
+                    ) : (
+                      <div className="text-center p-2">
+                        <ImageIcon className="w-8 h-8 text-gray-400 mx-auto mb-1" />
+                        <span className="text-[11px] text-gray-400">No logo uploaded</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <label className="cursor-pointer inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors">
+                        <Upload className="w-3.5 h-3.5 mr-1.5" />
+                        {localSettings?.company_logo ? 'Change Logo' : 'Upload Logo'}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                          onChange={handleLogoFileSelect}
+                        />
+                      </label>
+                      {localSettings?.company_logo && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                          Remove Logo
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Recommended: PNG or JPG image. Displayed centered at the top of employee payslips.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Company Name
                 </label>
                 <input
                   type="text"
-                  value={localSettings.company_name || ''}
+                  value={localSettings?.company_name || ''}
                   onChange={(e) => updateLocalSetting('company_name', e.target.value)}
+                  placeholder="e.g. GEMS QUALITY LANKA (PVT) LTD"
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Official company name shown prominently on payslips and system reports.
+                </p>
               </div>
 
-              {/* <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Timezone
-                </label>
-                <select
-                  value={localSettings.timezone || 'UTC+00:00'}
-                  onChange={(e) => updateLocalSetting('timezone', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="UTC+00:00">UTC+00:00</option>
-                  <option value="UTC+05:30">UTC+05:30 (Sri Lanka)</option>
-                  <option value="UTC-05:00">UTC-05:00 (EST)</option>
-                  <option value="UTC-08:00">UTC-08:00 (PST)</option>
-                </select>
-              </div>
-
+              {/* Company Address */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Date Format
+                  Company Address
                 </label>
-                <select
-                  value={localSettings.date_format || 'YYYY-MM-DD'}
-                  onChange={(e) => updateLocalSetting('date_format', e.target.value)}
+                <textarea
+                  rows={3}
+                  value={localSettings?.company_address || ''}
+                  onChange={(e) => updateLocalSetting('company_address', e.target.value)}
+                  placeholder="e.g. NO. 178/2/1, HIGH LEVEL ROAD, NUGEGODA"
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                  <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                  <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                </select>
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Company address displayed centered below the company name on payslips.
+                </p>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Currency
-                </label>
-                <select
-                  value={localSettings.currency || 'USD'}
-                  onChange={(e) => updateLocalSetting('currency', e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="USD">USD - US Dollar</option>
-                  <option value="LKR">LKR - Sri Lankan Rupee</option>
-                  <option value="EUR">EUR - Euro</option>
-                  <option value="GBP">GBP - British Pound</option>
-                </select>
-              </div> */}
             </div>
           </div>
         );

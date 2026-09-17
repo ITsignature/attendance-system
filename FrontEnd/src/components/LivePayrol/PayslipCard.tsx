@@ -16,6 +16,10 @@ interface PayslipCardProps {
   fontScale?: number;
   /** Company name from system settings, shown as the card title. */
   companyName?: string;
+  /** Company address from system settings. */
+  companyAddress?: string;
+  /** Company logo (Data URL or image path) from system settings. */
+  companyLogo?: string;
 }
 
 const formatCurrency = (amount: number | null | undefined) => {
@@ -34,7 +38,7 @@ const formatCurrency = (amount: number | null | undefined) => {
 //   flex row - render them as a standalone `<HRule>` block so their position can't drift.
 // - Bullet dots are wrapped with the text in an `inline-flex` span so they align to their
 //   own line, not to the parent box.
-const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCalculated, fontScale = 1, companyName }) => {
+const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCalculated, fontScale = 1, companyName, companyAddress, companyLogo }) => {
   const ebs = emp.earnings_by_source;
   const attendanceHours = ebs?.attendance?.hours ?? 0;
   const paidLeaveHours = ebs?.paid_leaves?.hours ?? 0;
@@ -102,16 +106,36 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       }}
     >
       {/* Header */}
-      <div style={{ marginBottom: px(10) }}>
-        <div style={{ fontSize: px(13), fontWeight: 700, color: '#111827', minHeight: px(16), display: 'flex', alignItems: 'center' }}>{companyName || 'Live Payroll Preview'}</div>
-        {period && (
-          <div style={{ fontSize: px(9), color: '#6b7280', marginTop: px(2), minHeight: px(13), display: 'flex', alignItems: 'center' }}>
-            {new Date(period.start_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-            {' '}&ndash;{' '}
-            {new Date(period.end_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+      <div style={{ textAlign: 'center', marginBottom: px(8) }}>
+        {companyLogo && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: px(3) }}>
+            <img
+              src={companyLogo}
+              alt="Company Logo"
+              style={{ maxHeight: px(26), maxWidth: px(140), objectFit: 'contain' }}
+              crossOrigin="anonymous"
+            />
           </div>
         )}
-        <HRule color="#d1d5db" marginTop={8} />
+        <div style={{ fontSize: px(12), fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          {companyName || 'Company Name'}
+        </div>
+        {companyAddress && (
+          <div style={{ fontSize: px(7.5), fontWeight: 600, color: '#374151', textTransform: 'uppercase', marginTop: px(1), whiteSpace: 'pre-line' }}>
+            {companyAddress}
+          </div>
+        )}
+        <div style={{ fontSize: px(9), fontWeight: 700, color: '#111827', textTransform: 'uppercase', letterSpacing: '1px', marginTop: px(2) }}>
+          SALARY SLIP
+        </div>
+        {period && (
+          <div style={{ fontSize: px(7.5), color: '#6b7280', marginTop: px(1) }}>
+            {new Date(period.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {' '}&ndash;{' '}
+            {new Date(period.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </div>
+        )}
+        <HRule color="#000000" thickness={1.5} marginTop={5} marginBottom={7} />
       </div>
 
       {/* Employee Details */}

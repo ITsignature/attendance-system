@@ -45,11 +45,23 @@ const LivePayrollDashboard: React.FC = () => {
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
 
-  const [companyName, setCompanyName] = useState<string>('');
+  const [companyInfo, setCompanyInfo] = useState<{
+    company_name: string;
+    company_address: string;
+    company_logo: string;
+  }>({ company_name: '', company_address: '', company_logo: '' });
+
+  const companyName = companyInfo.company_name;
 
   useEffect(() => {
     settingsApi.getCompanyInfo()
-      .then(info => setCompanyName(info.company_name))
+      .then(info => {
+        setCompanyInfo({
+          company_name: info.company_name || '',
+          company_address: info.company_address || '',
+          company_logo: info.company_logo || ''
+        });
+      })
       .catch(() => {});
   }, []);
 
@@ -251,7 +263,14 @@ const LivePayrollDashboard: React.FC = () => {
       for (const emp of calculatedResults) {
         const h = await new Promise<number>(resolve => {
           measureRoot.render(
-            <PayslipCard employee={emp} period={rawData?.period} lastCalculated={lastCalculated} companyName={companyName} />
+            <PayslipCard
+              employee={emp}
+              period={rawData?.period}
+              lastCalculated={lastCalculated}
+              companyName={companyName}
+              companyAddress={companyInfo.company_address}
+              companyLogo={companyInfo.company_logo}
+            />
           );
           setTimeout(() => {
             resolve(measureEl.firstElementChild?.getBoundingClientRect().height ?? USABLE_HEIGHT);
@@ -307,6 +326,8 @@ const LivePayrollDashboard: React.FC = () => {
                     period={rawData?.period}
                     lastCalculated={lastCalculated}
                     companyName={companyName}
+                    companyAddress={companyInfo.company_address}
+                    companyLogo={companyInfo.company_logo}
                   />
                 </div>
               ))}
@@ -1883,16 +1904,37 @@ const LivePayrollDashboard: React.FC = () => {
             return (
               <div ref={payslipContentRef} className="space-y-6 text-sm bg-white p-2">
 
-                {/* Header (mirrors Modal.Header so it's included in the captured PDF) */}
-                <div className="pb-3 border-b">
-                  <div className="text-lg font-bold text-gray-900">{companyName || 'Live Payroll Preview'}</div>
-                  {rawData?.period && (
-                    <div className="text-sm font-normal text-gray-500 mt-0.5">
-                      {new Date(rawData.period.start_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                      {' '}&ndash;{' '}
-                      {new Date(rawData.period.end_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                {/* Header matching Payslip reference design */}
+                <div className="text-center pb-2">
+                  {companyInfo.company_logo && (
+                    <div className="flex justify-center mb-2">
+                      <img
+                        src={companyInfo.company_logo}
+                        alt="Company Logo"
+                        className="max-h-16 max-w-[240px] object-contain"
+                        crossOrigin="anonymous"
+                      />
                     </div>
                   )}
+                  <h1 className="text-base sm:text-lg font-bold text-gray-900 uppercase tracking-wide">
+                    {companyInfo.company_name || companyName || 'Company Name'}
+                  </h1>
+                  {companyInfo.company_address && (
+                    <div className="text-xs font-semibold text-gray-800 uppercase tracking-wide whitespace-pre-line mt-0.5">
+                      {companyInfo.company_address}
+                    </div>
+                  )}
+                  <div className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-widest mt-1">
+                    SALARY SLIP
+                  </div>
+                  {rawData?.period && (
+                    <div className="text-[11px] font-medium text-gray-500 mt-0.5">
+                      {new Date(rawData.period.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {' '}&ndash;{' '}
+                      {new Date(rawData.period.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  )}
+                  <div className="w-full border-b-2 border-black mt-2 mb-4" />
                 </div>
 
                 {/* Employee Details */}

@@ -197,6 +197,8 @@ class SettingsHelper {
   async getCompanyInfo() {
     return await this.getSettings([
       'company_name',
+      'company_address',
+      'company_logo',
       'timezone',
       'date_format',
       'currency',

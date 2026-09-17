@@ -18,7 +18,7 @@ router.use(ensureClientAccess);
 const validateSettingKey = (key) => {
   const allowedKeys = [
     // General Settings
-    'company_name', 'timezone', 'date_format', 'currency', 'language',
+    'company_name', 'company_address', 'company_logo', 'timezone', 'date_format', 'currency', 'language',
 
     // Security Settings
     'password_expiry_days', 'session_timeout_minutes', 'two_factor_auth_enabled', 
@@ -89,7 +89,7 @@ const validateSettingValue = (key, value, type) => {
     case 'number':
       return typeof value === 'number' && !isNaN(value) && value >= 0;
     case 'string':
-      return typeof value === 'string' && value.length > 0;
+      return typeof value === 'string';
     case 'object':
       return typeof value === 'object' && value !== null && !Array.isArray(value);
     default:
@@ -165,11 +165,39 @@ router.get('/',
     // console.log('📊 Formatted settings response:', formattedSettings);
     // console.log('📊 Total settings:', settings.length);
 
+    // If client has no custom company_name or company_address in system_settings, check clients table
+    if (req.user.clientId) {
+      try {
+        const [clientRows] = await db.execute('SELECT name, address FROM clients WHERE id = ?', [req.user.clientId]);
+        if (clientRows.length > 0) {
+          const client = clientRows[0];
+          if (!formattedSettings.company_name && client.name) {
+            formattedSettings.company_name = {
+              value: client.name,
+              type: 'string',
+              description: 'Official company name',
+              is_public: true
+            };
+          }
+          if (!formattedSettings.company_address && client.address) {
+            formattedSettings.company_address = {
+              value: client.address,
+              type: 'string',
+              description: 'Official company address',
+              is_public: true
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching client fallback settings:', err.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: {
         settings: formattedSettings,
-        total: settings.length
+        total: Object.keys(formattedSettings).length
       }
     });
   })
@@ -438,7 +466,7 @@ router.put('/:key',
 
     // Check permission based on setting category
     const { checkPermission } = require('../middleware/rbacMiddleware');
-    const generalSettings = ['company_name', 'timezone', 'date_format', 'currency', 'language'];
+    const generalSettings = ['company_name', 'company_address', 'company_logo', 'timezone', 'date_format', 'currency', 'language'];
     const attendanceSettings = ['working_hours_per_day', 'work_start_time', 'work_end_time', 'late_threshold_minutes', 'break_duration_hours', 'full_day_minimum_hours', 'half_day_minimum_hours', 'short_leave_minimum_hours', 'weekend_working_days', 'day_specific_schedules'];
     const leaveSettings = ['paid_leaves_per_month'];
     const payrollSettings = ['payroll_cycle', 'salary_processing_date', 'tax_calculation_method', 'daily_rate_method'];
@@ -488,6 +516,19 @@ router.put('/:key',
         INSERT INTO system_settings (id, client_id, setting_key, setting_value, setting_type, description, is_public)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `, [settingId, req.user.clientId, key, jsonValue, settingType, description || null, false]);
+    }
+
+    // Sync company_name and company_address to clients table if client_id exists
+    if (req.user.clientId) {
+      try {
+        if (key === 'company_name') {
+          await db.execute('UPDATE clients SET name = ? WHERE id = ?', [value, req.user.clientId]);
+        } else if (key === 'company_address') {
+          await db.execute('UPDATE clients SET address = ? WHERE id = ?', [value, req.user.clientId]);
+        }
+      } catch (err) {
+        console.warn('Error syncing client profile in clients table:', err.message);
+      }
     }
 
     res.status(200).json({
@@ -573,6 +614,16 @@ router.put('/', [
           INSERT INTO system_settings (id, client_id, setting_key, setting_value, setting_type, is_public, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, FALSE, NOW(), NOW())
         `, [settingId, req.user.clientId, key, jsonValue, settingType]);
+      }
+    }
+
+    // Sync company_name and company_address to clients table if present
+    if (req.user.clientId) {
+      if (settings.company_name !== undefined) {
+        await db.execute('UPDATE clients SET name = ? WHERE id = ?', [settings.company_name, req.user.clientId]);
+      }
+      if (settings.company_address !== undefined) {
+        await db.execute('UPDATE clients SET address = ? WHERE id = ?', [settings.company_address, req.user.clientId]);
       }
     }
 
@@ -821,7 +872,7 @@ router.get('/meta/categories',
       general: {
         name: 'General Settings',
         description: 'Basic company and localization settings',
-        settings: ['company_name', 'timezone', 'date_format', 'currency', 'language']
+        settings: ['company_name', 'company_address', 'company_logo', 'timezone', 'date_format', 'currency', 'language']
       },
       security: {
         name: 'Security Settings',

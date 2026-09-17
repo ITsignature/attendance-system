@@ -54,6 +54,7 @@ const EmployeeDeductions: React.FC = () => {
     amount: 0,
     is_percentage: false,
     deduct_from_base_salary: false,
+    deduct_from_after_nopay_salary: false,
     is_recurring: true,
     effective_from: new Date().toISOString().split('T')[0]
   });
@@ -159,6 +160,7 @@ const EmployeeDeductions: React.FC = () => {
       amount: deduction.amount,
       is_percentage: deduction.is_percentage,
       deduct_from_base_salary: deduction.deduct_from_base_salary || false,
+      deduct_from_after_nopay_salary: deduction.deduct_from_after_nopay_salary || false,
       is_recurring: deduction.is_recurring,
       remaining_installments: deduction.remaining_installments,
       effective_from: deduction.effective_from,
@@ -181,6 +183,7 @@ const EmployeeDeductions: React.FC = () => {
         amount: batch.amount,
         is_percentage: batch.is_percentage,
         deduct_from_base_salary: batch.deduct_from_base_salary || false,
+        deduct_from_after_nopay_salary: batch.deduct_from_after_nopay_salary || false,
         is_recurring: batch.is_recurring,
         remaining_installments: batch.remaining_installments,
         effective_from: batch.effective_from,
@@ -238,6 +241,7 @@ const EmployeeDeductions: React.FC = () => {
       amount: 0,
       is_percentage: false,
       deduct_from_base_salary: false,
+      deduct_from_after_nopay_salary: false,
       is_recurring: true,
       effective_from: new Date().toISOString().split('T')[0]
     });
@@ -459,6 +463,11 @@ const EmployeeDeductions: React.FC = () => {
                     {deduction.is_percentage && deduction.deduct_from_base_salary && (
                       <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                         On Base Salary
+                      </span>
+                    )}
+                    {deduction.is_percentage && deduction.deduct_from_after_nopay_salary && (
+                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        After No-Pay Salary
                       </span>
                     )}
                   </div>
@@ -786,6 +795,26 @@ const EmployeeDeductions: React.FC = () => {
                     </label>
                     <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
                       If checked, percentage is calculated on the fixed base salary (e.g. EPF). Otherwise calculated on gross salary.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {formData.deduction_type === 'epf' && (
+                <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                  <input
+                    type="checkbox"
+                    id="deduct_from_after_nopay_salary"
+                    checked={formData.deduct_from_after_nopay_salary || false}
+                    onChange={(e) => setFormData({ ...formData, deduct_from_after_nopay_salary: e.target.checked })}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <div>
+                    <label htmlFor="deduct_from_after_nopay_salary" className="block text-sm font-medium text-blue-800 dark:text-blue-300 cursor-pointer">
+                      Deduct from After No-Pay Salary
+                    </label>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                      If checked, unpaid leave and absent day amounts are first subtracted from the base above (Base Salary if checked, otherwise Gross Salary) before the percentage is applied. Late/undertime deductions are not subtracted.
                     </p>
                   </div>
                 </div>

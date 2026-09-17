@@ -157,6 +157,8 @@ class SettingsApiService {
 
   async getCompanyInfo(): Promise<{
     company_name: string;
+    company_address: string;
+    company_logo: string;
     timezone: string;
     date_format: string;
     currency: string;
@@ -182,6 +184,8 @@ class SettingsApiService {
         console.warn('Failed to fetch settings, using defaults');
         return {
           company_name: 'Your Company',
+          company_address: '',
+          company_logo: '',
           timezone: 'UTC+00:00',
           date_format: 'YYYY-MM-DD',
           currency: 'USD',
@@ -193,6 +197,8 @@ class SettingsApiService {
 
       return {
         company_name: unquote(settingsData.company_name?.value) || 'Your Company',
+        company_address: unquote(settingsData.company_address?.value) || '',
+        company_logo: unquote(settingsData.company_logo?.value) || '',
         timezone: unquote(settingsData.timezone?.value) || 'UTC+00:00',
         date_format: unquote(settingsData.date_format?.value) || 'YYYY-MM-DD',
         currency: unquote(settingsData.currency?.value) || 'USD',
@@ -202,6 +208,8 @@ class SettingsApiService {
       console.error('Error fetching company info:', error);
       return {
         company_name: 'Your Company',
+        company_address: '',
+        company_logo: '',
         timezone: 'UTC+00:00',
         date_format: 'YYYY-MM-DD',
         currency: 'USD',
