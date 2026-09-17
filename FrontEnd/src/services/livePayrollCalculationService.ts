@@ -127,6 +127,7 @@ interface EmployeeData {
     amount: number;
     is_percentage: boolean;
     is_taxable: boolean;
+    is_component?: boolean;
   }>;
   deductions: Array<{
     id: string;
@@ -168,6 +169,7 @@ interface AllowanceBreakdown {
   amount: number;
   is_percentage: boolean;
   payment_category: string;
+  is_component?: boolean;
 }
 
 interface DeductionBreakdown {
@@ -253,7 +255,8 @@ class LivePayrollCalculationService {
         name: allowance.allowance_name,
         amount: calculatedAmount,
         is_percentage: allowance.is_percentage,
-        payment_category: allowance.payment_category || 'allowance'
+        payment_category: allowance.payment_category || 'allowance',
+        is_component: allowance.is_component === true
       });
 
       total += calculatedAmount;

@@ -294,12 +294,23 @@ function addPayrollSheet(
     row[REMK-1]    = '';
     row[ROUND-1]   = Math.round(result.net_salary||0);
 
-    const expBase = result.base_salary||0;
-    const epf12   = round2(expBase/100*12);
-    const etf3    = round2(expBase/100*3);
+    const employeeEpfDeductions = (result.deductions_breakdown || []).filter(
+      (d: any) => d.category?.toLowerCase() === 'epf' || d.name?.toLowerCase().includes('epf')
+    );
+    const employeeEpfValue =
+      employeeEpfDeductions.length > 0
+        ? employeeEpfDeductions.reduce((sum: number, d: any) => sum + d.amount, 0)
+        : (result.epf_employee || 0);
+
+    const expBase = employeeEpfValue > 0
+      ? (Math.abs(employeeEpfValue - ((result.base_salary || 0) * 0.08)) < 1 ? (result.base_salary || 0) : (employeeEpfValue / 0.08))
+      : (result.base_salary || 0);
+
+    const epf12   = round2(expBase / 100 * 12);
+    const etf3    = round2(expBase / 100 * 3);
     row[COEX_S-1]   = epf12;
     row[COEX_S]     = etf3;
-    row[COEX_S+1]   = round2(epf12+etf3);
+    row[COEX_S+1]   = round2(epf12 + etf3);
 
     return row;
   });

@@ -16,6 +16,7 @@ import jsPDF from 'jspdf';
 import { createRoot } from 'react-dom/client';
 import PayslipCard, { isGemsQualityLanka } from './PayslipCard';
 import settingsApi from '../../services/settingsApi';
+import payrollConfigApi from '../../services/payrollConfigApi';
 
 const LivePayrollDashboard: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
@@ -50,6 +51,7 @@ const LivePayrollDashboard: React.FC = () => {
     company_address: string;
     company_logo: string;
   }>({ company_name: '', company_address: '', company_logo: '' });
+  const [payrollComponents, setPayrollComponents] = useState<any[]>([]);
 
   const companyName = companyInfo.company_name;
 
@@ -61,6 +63,14 @@ const LivePayrollDashboard: React.FC = () => {
           company_address: info.company_address || '',
           company_logo: info.company_logo || ''
         });
+      })
+      .catch(() => {});
+
+    payrollConfigApi.getPayrollComponents()
+      .then(comps => {
+        if (Array.isArray(comps)) {
+          setPayrollComponents(comps);
+        }
       })
       .catch(() => {});
   }, []);
@@ -180,21 +190,32 @@ const LivePayrollDashboard: React.FC = () => {
       const pdf = new jsPDF('p', 'mm', 'a4', true);
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      // Smart single-page fit check:
+      // If the rendered payslip height fits or is within 1.22x of page height, scale it to fit cleanly on 1 page!
+      if (imgHeight <= pageHeight) {
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+      } else if (imgHeight <= pageHeight * 1.22) {
+        const scale = (pageHeight - 8) / imgHeight;
+        const fittedWidth = imgWidth * scale;
+        const fittedHeight = imgHeight * scale;
+        const xOffset = (pageWidth - fittedWidth) / 2;
+        pdf.addImage(imgData, 'JPEG', xOffset, 4, fittedWidth, fittedHeight, undefined, 'FAST');
+      } else {
+        let heightLeft = imgHeight;
+        let position = 0;
 
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
         heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+          heightLeft -= pageHeight;
+        }
       }
 
       const safeName = employee.employee_name.replace(/[^a-z0-9]+/gi, '_');
@@ -273,6 +294,7 @@ const LivePayrollDashboard: React.FC = () => {
               companyAddress={companyInfo.company_address}
               companyLogo={companyInfo.company_logo}
               isGemsQuality={isGemsQuality}
+              payrollComponents={payrollComponents}
             />
           );
           setTimeout(() => {
@@ -332,6 +354,7 @@ const LivePayrollDashboard: React.FC = () => {
                     companyAddress={companyInfo.company_address}
                     companyLogo={companyInfo.company_logo}
                     isGemsQuality={isGemsQuality}
+                    payrollComponents={payrollComponents}
                   />
                 </div>
               ))}
@@ -1903,6 +1926,7 @@ const LivePayrollDashboard: React.FC = () => {
             const ebs = emp.earnings_by_source;
             const attendanceHours = ebs?.attendance?.hours ?? 0;
             const paidLeaveHours = ebs?.paid_leaves?.hours ?? 0;
+            const liveSessionHours = (ebs as any)?.live_sessions?.hours ?? (ebs as any)?.live_session?.hours ?? 0;
             const isGemsQuality = isGemsQualityLanka(
               null,
               null,
@@ -1949,10 +1973,32 @@ const LivePayrollDashboard: React.FC = () => {
               });
 
               const categoryMap = new Map<string, number>();
+              const componentEarnings: Array<{ label: string; amount: number }> = [];
+
+              const earningCompNames = new Set(
+                (payrollComponents || [])
+                  .filter((c: any) => c.component_type === 'earning')
+                  .map((c: any) => c.component_name?.toLowerCase().trim())
+                  .filter(Boolean)
+              );
+
               if (emp.allowances_breakdown && emp.allowances_breakdown.length > 0) {
                 emp.allowances_breakdown.forEach((a) => {
-                  const cat = a.payment_category || 'allowance';
-                  categoryMap.set(cat, (categoryMap.get(cat) || 0) + (a.amount || 0));
+                  const isComp =
+                    (a as any).is_component === true ||
+                    a.payment_category === 'payroll_component' ||
+                    (a.id && (payrollComponents || []).some((c: any) => c.component_type === 'earning' && c.id === a.id)) ||
+                    (a.name && earningCompNames.has(a.name.toLowerCase().trim()));
+
+                  if (isComp) {
+                    componentEarnings.push({
+                      label: a.name,
+                      amount: a.amount || 0,
+                    });
+                  } else {
+                    const cat = a.payment_category || 'allowance';
+                    categoryMap.set(cat, (categoryMap.get(cat) || 0) + (a.amount || 0));
+                  }
                 });
               } else if ((emp.allowances_total || 0) > 0) {
                 categoryMap.set('allowance', emp.allowances_total);
@@ -1972,6 +2018,10 @@ const LivePayrollDashboard: React.FC = () => {
                 });
               }
 
+              componentEarnings.forEach((item) => {
+                earningsList.push(item);
+              });
+
               if (emp.bonuses_breakdown && emp.bonuses_breakdown.length > 0) {
                 emp.bonuses_breakdown.forEach((b) => {
                   earningsList.push({
@@ -1986,7 +2036,7 @@ const LivePayrollDashboard: React.FC = () => {
                 amount: emp.overtime_amount || (ebs?.overtime?.earned || 0),
               });
 
-              const totalAddition = emp.gross_salary || earningsList.reduce((sum, item) => sum + item.amount, 0);
+              const totalAddition = Math.round(earningsList.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
 
               // Deductions list
               const deductionsList: Array<{ label: string; amount: number }> = [];
@@ -2034,7 +2084,7 @@ const LivePayrollDashboard: React.FC = () => {
                 amount: lateEarlyVal,
               });
 
-              const totalDeduction = emp.deductions_total || deductionsList.reduce((sum, item) => sum + item.amount, 0);
+              const totalDeduction = Math.round(deductionsList.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
 
               const employeeEpfDeductions = (emp.deductions_breakdown || []).filter(
                 (d) => d.category?.toLowerCase() === 'epf' || d.name?.toLowerCase().includes('epf')
@@ -2059,7 +2109,7 @@ const LivePayrollDashboard: React.FC = () => {
                 : (emp.etf_employer ? emp.etf_employer : (emp.base_salary ? Math.round((emp.base_salary / 100 * 3) * 100) / 100 : 0));
 
               const netSalary = totalAddition - totalDeduction;
-              const maxRows = Math.max(earningsList.length, deductionsList.length, 8);
+              const maxRows = Math.max(earningsList.length, deductionsList.length);
 
               return (
                 <div ref={payslipContentRef} style={{ backgroundColor: '#ffffff', padding: '16px 20px', fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif", color: '#000000' }}>
@@ -2090,39 +2140,39 @@ const LivePayrollDashboard: React.FC = () => {
                   </div>
 
                   {/* Table 1: Employee Information */}
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', marginBottom: '16px', fontSize: '12px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', marginBottom: 0, fontSize: '12px', lineHeight: '1.3' }}>
                     <tbody>
                       <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '4px 8px', borderRight: '1px solid #000000' }}>Employee ID</td>
-                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '4px 8px' }}>{emp.employee_code || '-'}</td>
+                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>Employee ID</td>
+                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{emp.employee_code || '-'}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '4px 8px', borderRight: '1px solid #000000' }}>Employee Name</td>
-                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '4px 8px' }}>{emp.employee_name || '-'}</td>
+                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>Employee Name</td>
+                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{emp.employee_name || '-'}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '4px 8px', borderRight: '1px solid #000000' }}>EPF No</td>
-                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '4px 8px' }}>{(emp as any).epf_no || (emp as any).epf_number || emp.employee_code || '-'}</td>
+                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>EPF No</td>
+                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{(emp as any).epf_no || (emp as any).epf_number || emp.employee_code || '-'}</td>
                       </tr>
                       <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '4px 8px', borderRight: '1px solid #000000' }}>Designation</td>
-                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '4px 8px' }}>{emp.designation_name || (emp as any).designation_title || (emp as any).designation || emp.department_name || '-'}</td>
+                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>Designation</td>
+                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{emp.designation_name || (emp as any).designation_title || (emp as any).designation || emp.department_name || '-'}</td>
                       </tr>
                       <tr>
-                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '4px 8px', borderRight: '1px solid #000000' }}>Month &amp; Year</td>
-                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '4px 8px' }}>{formatMonthYear(rawData?.period)}</td>
+                        <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>Month &amp; Year</td>
+                        <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{formatMonthYear(rawData?.period)}</td>
                       </tr>
                     </tbody>
                   </table>
 
                   {/* Table 2: Earnings & Deductions */}
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '12px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', borderTop: 'none', fontSize: '12px', lineHeight: '1.3' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px', borderRight: '1px solid #000000' }}>
+                        <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '6px 8px 8px 8px', borderRight: '1px solid #000000' }}>
                           Earnings
                         </th>
-                        <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px' }}>
+                        <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '6px 8px 8px 8px' }}>
                           Deduction
                         </th>
                       </tr>
@@ -2131,88 +2181,123 @@ const LivePayrollDashboard: React.FC = () => {
                       {Array.from({ length: maxRows }).map((_, idx) => {
                         const earn = earningsList[idx];
                         const ded = deductionsList[idx];
+                        const earnLen = earningsList.length;
+                        const dedLen = deductionsList.length;
+
+                        let renderEarnCells: React.ReactNode = null;
+                        if (idx < earnLen) {
+                          renderEarnCells = (
+                            <>
+                              <td style={{ width: '32%', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                                {earn?.label || ''}
+                              </td>
+                              <td style={{ width: '18%', padding: '5px 8px 7px 8px', textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                                {earn ? formatCellAmount(earn.amount, false) : ''}
+                              </td>
+                            </>
+                          );
+                        } else if (idx === earnLen && dedLen > earnLen) {
+                          renderEarnCells = (
+                            <td
+                              colSpan={2}
+                              rowSpan={dedLen - earnLen}
+                              style={{ width: '50%', borderRight: '1px solid #000000', backgroundColor: '#ffffff' }}
+                            />
+                          );
+                        }
+
+                        let renderDedCells: React.ReactNode = null;
+                        if (idx < dedLen) {
+                          renderDedCells = (
+                            <>
+                              <td style={{ width: '32%', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                                {ded?.label || ''}
+                              </td>
+                              <td style={{ width: '18%', padding: '5px 8px 7px 8px', textAlign: 'right', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                                {ded ? formatCellAmount(ded.amount, true) : ''}
+                              </td>
+                            </>
+                          );
+                        } else if (idx === dedLen && earnLen > dedLen) {
+                          renderDedCells = (
+                            <td
+                              colSpan={2}
+                              rowSpan={earnLen - dedLen}
+                              style={{ width: '50%', backgroundColor: '#ffffff' }}
+                            />
+                          );
+                        }
+
                         return (
-                          <tr key={idx} style={{ borderBottom: '1px solid #000000', minHeight: '22px' }}>
-                            <td style={{ width: '32%', padding: '3px 8px', borderRight: '1px solid #000000', verticalAlign: 'middle' }}>
-                              {earn?.label || ''}
-                            </td>
-                            <td style={{ width: '18%', padding: '3px 8px', textAlign: 'right', borderRight: '1px solid #000000', verticalAlign: 'middle' }}>
-                              {earn ? formatCellAmount(earn.amount, false) : ''}
-                            </td>
-                            <td style={{ width: '32%', padding: '3px 8px', borderRight: '1px solid #000000', verticalAlign: 'middle' }}>
-                              {ded?.label || ''}
-                            </td>
-                            <td style={{ width: '18%', padding: '3px 8px', textAlign: 'right', verticalAlign: 'middle' }}>
-                              {ded ? formatCellAmount(ded.amount, true) : ''}
-                            </td>
+                          <tr key={idx} style={{ minHeight: '22px' }}>
+                            {renderEarnCells}
+                            {renderDedCells}
                           </tr>
                         );
                       })}
 
                       {/* Total Row */}
-                      <tr style={{ borderBottom: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>
-                        <td style={{ width: '32%', padding: '4px 8px', borderRight: '1px solid #000000' }}>Total Addition</td>
-                        <td style={{ width: '18%', padding: '4px 8px', textAlign: 'right', borderRight: '1px solid #000000' }}>
+                      <tr style={{ borderBottom: '1px solid #000000', borderTop: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>
+                        <td style={{ width: '32%', padding: '6px 8px 8px 8px', borderRight: '1px solid #000000' }}>Total Addition</td>
+                        <td style={{ width: '18%', padding: '6px 8px 8px 8px', textAlign: 'right', borderRight: '1px solid #000000' }}>
                           {formatCellAmount(totalAddition, false)}
                         </td>
-                        <td style={{ width: '32%', padding: '4px 8px', borderRight: '1px solid #000000' }}>Total Deduction</td>
-                        <td style={{ width: '18%', padding: '4px 8px', textAlign: 'right' }}>
+                        <td style={{ width: '32%', padding: '6px 8px 8px 8px', borderRight: '1px solid #000000' }}>Total Deduction</td>
+                        <td style={{ width: '18%', padding: '6px 8px 8px 8px', textAlign: 'right' }}>
                           {formatCellAmount(totalDeduction, false)}
                         </td>
                       </tr>
 
                       {/* Statutory Employer Contributions under Earnings Side */}
-                      <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <td style={{ width: '32%', padding: '3px 8px', borderRight: '1px solid #000000' }}>EPF 12%</td>
-                        <td style={{ width: '18%', padding: '3px 8px', textAlign: 'right', borderRight: '1px solid #000000' }}>
+                      <tr>
+                        <td style={{ width: '32%', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>EPF 12%</td>
+                        <td style={{ width: '18%', padding: '5px 8px 7px 8px', textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
                           {formatCellAmount(epf12Val, false)}
                         </td>
-                        <td colSpan={2} style={{ width: '50%', backgroundColor: '#ffffff' }}></td>
+                        <td colSpan={2} rowSpan={3} style={{ width: '50%', backgroundColor: '#ffffff', borderBottom: '1px solid #000000' }}></td>
                       </tr>
-                      <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <td style={{ width: '32%', padding: '3px 8px', borderRight: '1px solid #000000' }}>Total EPF</td>
-                        <td style={{ width: '18%', padding: '3px 8px', textAlign: 'right', borderRight: '1px solid #000000' }}>
+                      <tr>
+                        <td style={{ width: '32%', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>Total EPF</td>
+                        <td style={{ width: '18%', padding: '5px 8px 7px 8px', textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
                           {formatCellAmount(totalEpfVal, false)}
                         </td>
-                        <td colSpan={2} style={{ width: '50%', backgroundColor: '#ffffff' }}></td>
                       </tr>
-                      <tr style={{ borderBottom: '1px solid #000000' }}>
-                        <td style={{ width: '32%', padding: '3px 8px', borderRight: '1px solid #000000' }}>ETF 3%</td>
-                        <td style={{ width: '18%', padding: '3px 8px', textAlign: 'right', borderRight: '1px solid #000000' }}>
+                      <tr>
+                        <td style={{ width: '32%', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>ETF 3%</td>
+                        <td style={{ width: '18%', padding: '5px 8px 7px 8px', textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
                           {formatCellAmount(etf3Val, false)}
                         </td>
-                        <td colSpan={2} style={{ width: '50%', backgroundColor: '#ffffff' }}></td>
                       </tr>
 
                       {/* Net Salary Row */}
                       <tr style={{ borderBottom: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>
-                        <td colSpan={2} style={{ width: '50%', padding: '5px 8px', textAlign: 'center', borderRight: '1px solid #000000' }}>
+                        <td colSpan={2} style={{ width: '50%', padding: '6px 8px 8px 8px', textAlign: 'center', borderRight: '1px solid #000000' }}>
                           Net Salary
                         </td>
-                        <td style={{ width: '32%', padding: '5px 8px', textAlign: 'center', borderRight: '1px solid #000000' }}>
+                        <td style={{ width: '32%', padding: '6px 8px 8px 8px', textAlign: 'center', borderRight: '1px solid #000000' }}>
                           LKR
                         </td>
-                        <td style={{ width: '18%', padding: '5px 8px', textAlign: 'right' }}>
+                        <td style={{ width: '18%', padding: '6px 8px 8px 8px', textAlign: 'right' }}>
                           {formatCellAmount(netSalary, false)}
                         </td>
                       </tr>
 
                       {/* Extra Box Height */}
-                      <tr style={{ height: '40px' }}>
+                      <tr style={{ height: '36px' }}>
                         <td colSpan={4} style={{ backgroundColor: '#ffffff' }}>&nbsp;</td>
                       </tr>
                     </tbody>
                   </table>
 
                   {/* Signatures */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: '50px', paddingLeft: '24px', paddingRight: '24px', marginTop: '16px' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'monospace', letterSpacing: '2px', color: '#4b5563' }}>...........................................</div>
-                      <div style={{ fontWeight: 600, color: '#111827', fontSize: '12px', marginTop: '4px' }}>Preparer Signature</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: '32px', paddingLeft: '20px', paddingRight: '20px', marginTop: '8px' }}>
+                    <div style={{ width: '160px', textAlign: 'center' }}>
+                      <div style={{ borderBottom: '1.5px dotted #374151', width: '100%', marginBottom: '6px' }} />
+                      <div style={{ fontWeight: 600, color: '#111827', fontSize: '12px', whiteSpace: 'nowrap' }}>Preparer Signature</div>
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'monospace', letterSpacing: '2px', color: '#4b5563' }}>...........................................</div>
-                      <div style={{ fontWeight: 600, color: '#111827', fontSize: '12px', marginTop: '4px' }}>Employee Signature</div>
+                    <div style={{ width: '160px', textAlign: 'center' }}>
+                      <div style={{ borderBottom: '1.5px dotted #374151', width: '100%', marginBottom: '6px' }} />
+                      <div style={{ fontWeight: 600, color: '#111827', fontSize: '12px', whiteSpace: 'nowrap' }}>Employee Signature</div>
                     </div>
                   </div>
                 </div>

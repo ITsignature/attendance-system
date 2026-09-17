@@ -45,6 +45,8 @@ interface PayslipCardProps {
   companyLogo?: string;
   /** Explicit override for Gems Quality Lanka custom format */
   isGemsQuality?: boolean;
+  /** Configured payroll components to identify earning components (e.g. test) */
+  payrollComponents?: Array<{ id?: string; component_name?: string; component_type?: string }>;
 }
 
 const formatCurrency = (amount: number | null | undefined) => {
@@ -58,12 +60,13 @@ const formatCurrency = (amount: number | null | undefined) => {
 // - Never size a flex row via `line-height` alone - html2canvas resolves flex-row height from
 //   font metrics rather than the box's real computed height, so consecutive rows compress
 //   into each other (boxes overlapping the row above, dividers clipping the last item).
-//   Every row below uses an explicit `minHeight` + `alignItems: center` instead.
-// - Never attach separator borders (`borderTop`/`borderBottom`) directly to a text-bearing
-//   flex row - render them as a standalone `<HRule>` block so their position can't drift.
-// - Bullet dots are wrapped with the text in an `inline-flex` span so they align to their
+// - Do NOT set `min-height` on rows without `box-sizing: border-box`.
+// - Set explicit font-size on every text node - html2canvas doesn't always inherit font-size
+//   properly across deeply-nested flex children.
+// - Background colors on cards must be explicit hex codes (#ffffff), not CSS variables or `bg-white`.
+// - Dividers: always use a dedicated `<div style={{ height: '1px', background: ... }} />` on its
 //   own line, not to the parent box.
-const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCalculated, fontScale = 1, companyName, companyAddress, companyLogo, isGemsQuality }) => {
+const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCalculated, fontScale = 1, companyName, companyAddress, companyLogo, isGemsQuality, payrollComponents }) => {
   // px(10) => `${10 * BASE_SCALE * fontScale}px`, applied to every size value below so the
   // whole card reflows proportionally instead of being post-scaled with CSS transform.
   const BASE_SCALE = 1.2;
@@ -113,10 +116,32 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
     });
 
     const categoryMap = new Map<string, number>();
+    const componentEarnings: Array<{ label: string; amount: number }> = [];
+
+    const earningCompNames = new Set(
+      (payrollComponents || [])
+        .filter((c) => c.component_type === 'earning')
+        .map((c) => c.component_name?.toLowerCase().trim())
+        .filter(Boolean)
+    );
+
     if (emp.allowances_breakdown && emp.allowances_breakdown.length > 0) {
       emp.allowances_breakdown.forEach((a) => {
-        const cat = a.payment_category || 'allowance';
-        categoryMap.set(cat, (categoryMap.get(cat) || 0) + (a.amount || 0));
+        const isComp =
+          (a as any).is_component === true ||
+          a.payment_category === 'payroll_component' ||
+          (a.id && (payrollComponents || []).some((c) => c.component_type === 'earning' && c.id === a.id)) ||
+          (a.name && earningCompNames.has(a.name.toLowerCase().trim()));
+
+        if (isComp) {
+          componentEarnings.push({
+            label: a.name,
+            amount: a.amount || 0,
+          });
+        } else {
+          const cat = a.payment_category || 'allowance';
+          categoryMap.set(cat, (categoryMap.get(cat) || 0) + (a.amount || 0));
+        }
       });
     } else if ((emp.allowances_total || 0) > 0) {
       categoryMap.set('allowance', emp.allowances_total);
@@ -136,6 +161,10 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       });
     }
 
+    componentEarnings.forEach((item) => {
+      earningsList.push(item);
+    });
+
     if (emp.bonuses_breakdown && emp.bonuses_breakdown.length > 0) {
       emp.bonuses_breakdown.forEach((b) => {
         earningsList.push({
@@ -150,7 +179,7 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       amount: emp.overtime_amount || (ebs?.overtime?.earned || 0),
     });
 
-    const totalAddition = emp.gross_salary || earningsList.reduce((sum, item) => sum + item.amount, 0);
+    const totalAddition = Math.round(earningsList.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
 
     // Deductions list
     const deductionsList: Array<{ label: string; amount: number }> = [];
@@ -198,7 +227,7 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       amount: lateEarlyVal,
     });
 
-    const totalDeduction = emp.deductions_total || deductionsList.reduce((sum, item) => sum + item.amount, 0);
+    const totalDeduction = Math.round(deductionsList.reduce((sum, item) => sum + item.amount, 0) * 100) / 100;
 
     const employeeEpfDeductions = (emp.deductions_breakdown || []).filter(
       (d) => d.category?.toLowerCase() === 'epf' || d.name?.toLowerCase().includes('epf')
@@ -223,7 +252,7 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       : (emp.etf_employer ? emp.etf_employer : (emp.base_salary ? Math.round((emp.base_salary / 100 * 3) * 100) / 100 : 0));
 
     const netSalary = totalAddition - totalDeduction;
-    const maxRows = Math.max(earningsList.length, deductionsList.length, 8);
+    const maxRows = Math.max(earningsList.length, deductionsList.length);
 
     return (
       <div style={{ backgroundColor: '#ffffff', padding: `${px(12)} ${px(14)}`, fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif", color: '#000000', boxSizing: 'border-box' }}>
@@ -254,39 +283,39 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
         </div>
 
         {/* Table 1: Employee Information */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', marginBottom: px(10), fontSize: px(8.5) }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', marginBottom: 0, fontSize: px(8.5), lineHeight: '1.3' }}>
           <tbody>
             <tr style={{ borderBottom: '1px solid #000000' }}>
-              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Employee ID</td>
-              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}` }}>{emp.employee_code || '-'}</td>
+              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Employee ID</td>
+              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{emp.employee_code || '-'}</td>
             </tr>
             <tr style={{ borderBottom: '1px solid #000000' }}>
-              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Employee Name</td>
-              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}` }}>{emp.employee_name || '-'}</td>
+              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Employee Name</td>
+              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{emp.employee_name || '-'}</td>
             </tr>
             <tr style={{ borderBottom: '1px solid #000000' }}>
-              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>EPF No</td>
-              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}` }}>{(emp as any).epf_no || (emp as any).epf_number || emp.employee_code || '-'}</td>
+              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>EPF No</td>
+              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{(emp as any).epf_no || (emp as any).epf_number || emp.employee_code || '-'}</td>
             </tr>
             <tr style={{ borderBottom: '1px solid #000000' }}>
-              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Designation</td>
-              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}` }}>{emp.designation_name || (emp as any).designation_title || (emp as any).designation || emp.department_name || '-'}</td>
+              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Designation</td>
+              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{emp.designation_name || (emp as any).designation_title || (emp as any).designation || emp.department_name || '-'}</td>
             </tr>
             <tr>
-              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Month &amp; Year</td>
-              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(2.5)} ${px(5)}` }}>{formatMonthYear(period)}</td>
+              <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Month &amp; Year</td>
+              <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{formatMonthYear(period)}</td>
             </tr>
           </tbody>
         </table>
 
         {/* Table 2: Earnings & Deductions */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', fontSize: px(8.5) }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000000', borderTop: 'none', fontSize: px(8.5), lineHeight: '1.3' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #000000' }}>
-              <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3)} ${px(5)}`, borderRight: '1px solid #000000' }}>
+              <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, borderRight: '1px solid #000000' }}>
                 Earnings
               </th>
-              <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3)} ${px(5)}` }}>
+              <th colSpan={2} style={{ width: '50%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}` }}>
                 Deduction
               </th>
             </tr>
@@ -295,88 +324,123 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
             {Array.from({ length: maxRows }).map((_, idx) => {
               const earn = earningsList[idx];
               const ded = deductionsList[idx];
+              const earnLen = earningsList.length;
+              const dedLen = deductionsList.length;
+
+              let renderEarnCells: React.ReactNode = null;
+              if (idx < earnLen) {
+                renderEarnCells = (
+                  <>
+                    <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                      {earn?.label || ''}
+                    </td>
+                    <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                      {earn ? formatCellAmount(earn.amount, false) : ''}
+                    </td>
+                  </>
+                );
+              } else if (idx === earnLen && dedLen > earnLen) {
+                renderEarnCells = (
+                  <td
+                    colSpan={2}
+                    rowSpan={dedLen - earnLen}
+                    style={{ width: '50%', borderRight: '1px solid #000000', backgroundColor: '#ffffff' }}
+                  />
+                );
+              }
+
+              let renderDedCells: React.ReactNode = null;
+              if (idx < dedLen) {
+                renderDedCells = (
+                  <>
+                    <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                      {ded?.label || ''}
+                    </td>
+                    <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderBottom: '1px solid #000000', verticalAlign: 'middle' }}>
+                      {ded ? formatCellAmount(ded.amount, true) : ''}
+                    </td>
+                  </>
+                );
+              } else if (idx === dedLen && earnLen > dedLen) {
+                renderDedCells = (
+                  <td
+                    colSpan={2}
+                    rowSpan={earnLen - dedLen}
+                    style={{ width: '50%', backgroundColor: '#ffffff' }}
+                  />
+                );
+              }
+
               return (
-                <tr key={idx} style={{ borderBottom: '1px solid #000000', minHeight: px(16) }}>
-                  <td style={{ width: '32%', padding: `${px(2)} ${px(5)}`, borderRight: '1px solid #000000', verticalAlign: 'middle' }}>
-                    {earn?.label || ''}
-                  </td>
-                  <td style={{ width: '18%', padding: `${px(2)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', verticalAlign: 'middle' }}>
-                    {earn ? formatCellAmount(earn.amount, false) : ''}
-                  </td>
-                  <td style={{ width: '32%', padding: `${px(2)} ${px(5)}`, borderRight: '1px solid #000000', verticalAlign: 'middle' }}>
-                    {ded?.label || ''}
-                  </td>
-                  <td style={{ width: '18%', padding: `${px(2)} ${px(5)}`, textAlign: 'right', verticalAlign: 'middle' }}>
-                    {ded ? formatCellAmount(ded.amount, true) : ''}
-                  </td>
+                <tr key={idx} style={{ minHeight: px(16) }}>
+                  {renderEarnCells}
+                  {renderDedCells}
                 </tr>
               );
             })}
 
             {/* Total Row */}
-            <tr style={{ borderBottom: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>
-              <td style={{ width: '32%', padding: `${px(2.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Total Addition</td>
-              <td style={{ width: '18%', padding: `${px(2.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000' }}>
+            <tr style={{ borderBottom: '1px solid #000000', borderTop: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>
+              <td style={{ width: '32%', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, borderRight: '1px solid #000000' }}>Total Addition</td>
+              <td style={{ width: '18%', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000' }}>
                 {formatCellAmount(totalAddition, false)}
               </td>
-              <td style={{ width: '32%', padding: `${px(2.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Total Deduction</td>
-              <td style={{ width: '18%', padding: `${px(2.5)} ${px(5)}`, textAlign: 'right' }}>
+              <td style={{ width: '32%', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, borderRight: '1px solid #000000' }}>Total Deduction</td>
+              <td style={{ width: '18%', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, textAlign: 'right' }}>
                 {formatCellAmount(totalDeduction, false)}
               </td>
             </tr>
 
             {/* Statutory Contributions */}
-            <tr style={{ borderBottom: '1px solid #000000' }}>
-              <td style={{ width: '32%', padding: `${px(2)} ${px(5)}`, borderRight: '1px solid #000000' }}>EPF 12%</td>
-              <td style={{ width: '18%', padding: `${px(2)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000' }}>
+            <tr>
+              <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>EPF 12%</td>
+              <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
                 {formatCellAmount(epf12Val, false)}
               </td>
-              <td colSpan={2} style={{ width: '50%', backgroundColor: '#ffffff' }}></td>
+              <td colSpan={2} rowSpan={3} style={{ width: '50%', backgroundColor: '#ffffff', borderBottom: '1px solid #000000' }}></td>
             </tr>
-            <tr style={{ borderBottom: '1px solid #000000' }}>
-              <td style={{ width: '32%', padding: `${px(2)} ${px(5)}`, borderRight: '1px solid #000000' }}>Total EPF</td>
-              <td style={{ width: '18%', padding: `${px(2)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000' }}>
+            <tr>
+              <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>Total EPF</td>
+              <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
                 {formatCellAmount(totalEpfVal, false)}
               </td>
-              <td colSpan={2} style={{ width: '50%', backgroundColor: '#ffffff' }}></td>
             </tr>
-            <tr style={{ borderBottom: '1px solid #000000' }}>
-              <td style={{ width: '32%', padding: `${px(2)} ${px(5)}`, borderRight: '1px solid #000000' }}>ETF 3%</td>
-              <td style={{ width: '18%', padding: `${px(2)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000' }}>
+            <tr>
+              <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>ETF 3%</td>
+              <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
                 {formatCellAmount(etf3Val, false)}
               </td>
-              <td colSpan={2} style={{ width: '50%', backgroundColor: '#ffffff' }}></td>
             </tr>
 
             {/* Net Salary Row */}
             <tr style={{ borderBottom: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>
-              <td colSpan={2} style={{ width: '50%', padding: `${px(3)} ${px(5)}`, textAlign: 'center', borderRight: '1px solid #000000' }}>
+              <td colSpan={2} style={{ width: '50%', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, textAlign: 'center', borderRight: '1px solid #000000' }}>
                 Net Salary
               </td>
-              <td style={{ width: '32%', padding: `${px(3)} ${px(5)}`, textAlign: 'center', borderRight: '1px solid #000000' }}>
+              <td style={{ width: '32%', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, textAlign: 'center', borderRight: '1px solid #000000' }}>
                 LKR
               </td>
-              <td style={{ width: '18%', padding: `${px(3)} ${px(5)}`, textAlign: 'right' }}>
+              <td style={{ width: '18%', padding: `${px(4)} ${px(5)} ${px(6)} ${px(5)}`, textAlign: 'right' }}>
                 {formatCellAmount(netSalary, false)}
               </td>
             </tr>
 
             {/* Extra Box Height */}
-            <tr style={{ height: px(26) }}>
+            <tr style={{ height: px(24) }}>
               <td colSpan={4} style={{ backgroundColor: '#ffffff' }}>&nbsp;</td>
             </tr>
           </tbody>
         </table>
 
         {/* Signatures */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: px(28), paddingLeft: px(14), paddingRight: px(14), marginTop: px(10) }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'monospace', letterSpacing: '2px', color: '#4b5563', fontSize: px(7.5) }}>...........................................</div>
-            <div style={{ fontWeight: 600, color: '#111827', fontSize: px(8.5), marginTop: px(3) }}>Preparer Signature</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: px(24), paddingLeft: px(10), paddingRight: px(10), marginTop: px(6) }}>
+          <div style={{ width: px(110), textAlign: 'center' }}>
+            <div style={{ borderBottom: `${px(1.5)} dotted #374151`, width: '100%', marginBottom: px(4) }} />
+            <div style={{ fontWeight: 600, color: '#111827', fontSize: px(8), whiteSpace: 'nowrap' }}>Preparer Signature</div>
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'monospace', letterSpacing: '2px', color: '#4b5563', fontSize: px(7.5) }}>...........................................</div>
-            <div style={{ fontWeight: 600, color: '#111827', fontSize: px(8.5), marginTop: px(3) }}>Employee Signature</div>
+          <div style={{ width: px(110), textAlign: 'center' }}>
+            <div style={{ borderBottom: `${px(1.5)} dotted #374151`, width: '100%', marginBottom: px(4) }} />
+            <div style={{ fontWeight: 600, color: '#111827', fontSize: px(8), whiteSpace: 'nowrap' }}>Employee Signature</div>
           </div>
         </div>
       </div>
