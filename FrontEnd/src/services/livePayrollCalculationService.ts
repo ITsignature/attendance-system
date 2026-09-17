@@ -188,6 +188,7 @@ interface CalculatedPayroll {
   employee_code: string;
   employee_name: string;
   department_name: string;
+  designation_name?: string;
   base_salary: number;
   employee_type?: string;
   expected_base_salary: number;
@@ -457,6 +458,7 @@ class LivePayrollCalculationService {
       employee_code: employee.employee_code,
       employee_name: employee.employee_name,
       department_name: employee.department_name,
+      designation_name: employee.designation_name,
       base_salary: employee.base_salary,
       employee_type: employee.employee_type,
       expected_base_salary: Math.round(expected_base_salary * 100) / 100,
