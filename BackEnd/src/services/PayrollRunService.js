@@ -5271,6 +5271,7 @@ class PayrollRunService {
                     allowance_name: comp.component_name,
                     allowance_type: comp.category,
                     payment_category: 'allowance',
+                    is_component: true,
                     amount: comp.calculation_value,
                     is_percentage: comp.calculation_type === 'percentage',
                     is_taxable: comp.is_taxable || false
