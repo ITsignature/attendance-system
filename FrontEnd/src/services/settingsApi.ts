@@ -166,6 +166,7 @@ class SettingsApiService {
     language: string;
   }> {
     // Some settings were saved double-JSON-encoded (e.g. `"\"Gems Quality Lanka\""`),
+    // Some settings were saved double-JSON-encoded (e.g. `"\"Acme Corporation\""`),
     // so a stored value can still be wrapped in literal quotes after being parsed once.
     // Strip one extra layer if present, same fix as Settings.tsx's cleanValue().
     const unquote = (val: any): any => {

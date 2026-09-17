@@ -17,6 +17,15 @@ export const useSettings = () => {
       if (response.success) {
         setSettings(response.data.settings);
         console.log('✅ Settings fetched from use Settings:', response.data.settings);
+        const logoVal = response.data?.settings?.company_logo?.value;
+        if (logoVal !== undefined) {
+          let cleanLogo = logoVal || '';
+          if (typeof cleanLogo === 'string' && cleanLogo.startsWith('"') && cleanLogo.endsWith('"')) {
+            cleanLogo = cleanLogo.slice(1, -1);
+          }
+          localStorage.setItem('cached_company_logo', cleanLogo);
+          window.dispatchEvent(new CustomEvent('company_logo_updated', { detail: cleanLogo }));
+        }
       } else {
         setError('Failed to fetch settings');
       }
@@ -32,6 +41,11 @@ export const useSettings = () => {
       const response = await settingsApi.updateSetting(key, value, description);
       
       if (response.success) {
+        if (key === 'company_logo') {
+          const logoVal = value || '';
+          localStorage.setItem('cached_company_logo', logoVal);
+          window.dispatchEvent(new CustomEvent('company_logo_updated', { detail: logoVal }));
+        }
         // Update local state
         setSettings(prev => ({
           ...prev,
@@ -56,6 +70,11 @@ export const useSettings = () => {
       const response = await settingsApi.updateSettings(newSettings);
 
       if (response.success) {
+        if ('company_logo' in newSettings) {
+          const logoVal = newSettings.company_logo || '';
+          localStorage.setItem('cached_company_logo', logoVal);
+          window.dispatchEvent(new CustomEvent('company_logo_updated', { detail: logoVal }));
+        }
         // Update local state
         setSettings(prev => {
           const updated = { ...prev };

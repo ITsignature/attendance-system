@@ -573,7 +573,7 @@ const hhmmToMinutes = (t) => {
                   type="text"
                   value={localSettings?.company_name || ''}
                   onChange={(e) => updateLocalSetting('company_name', e.target.value)}
-                  placeholder="e.g. GEMS QUALITY LANKA (PVT) LTD"
+                  placeholder="e.g. Acme Corporation"
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -590,7 +590,7 @@ const hhmmToMinutes = (t) => {
                   rows={3}
                   value={localSettings?.company_address || ''}
                   onChange={(e) => updateLocalSetting('company_address', e.target.value)}
-                  placeholder="e.g. NO. 178/2/1, HIGH LEVEL ROAD, NUGEGODA"
+                  placeholder="e.g. 123 Business Avenue, Suite 100, City, Country"
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

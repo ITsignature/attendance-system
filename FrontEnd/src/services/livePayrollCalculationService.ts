@@ -135,6 +135,7 @@ interface EmployeeData {
     calculation_value: number;
     category: string;
     deduct_from_base_salary?: boolean;
+    deduct_from_after_nopay_salary?: boolean;
   }>;
   financial: {
     loans: number;
@@ -278,6 +279,11 @@ class LivePayrollCalculationService {
     const breakdown: DeductionBreakdown[] = [];
     const baseSalary = employee.base_salary || 0;
 
+    // No-pay amount = unpaid leave + absent days only (excludes time-variance/lateness),
+    // subtracted from the selected base when a deduction is flagged deduct_from_after_nopay_salary.
+    const sc = employee.attendance?.shortfall_by_cause;
+    const noPayAmount = (sc?.unpaid_time_off?.deduction || 0) + (sc?.absent_days?.deduction || 0);
+
     if (!employee.deductions || employee.deductions.length === 0) {
       return { epf_employee: 0, etf_employer: 0, total: 0, breakdown: [] };
     }
@@ -288,8 +294,13 @@ class LivePayrollCalculationService {
       const value = isNaN(rawValue) ? 0 : rawValue;
 
       if (deduction.calculation_type === 'percentage' && value > 0) {
-        // Use base salary if flagged, otherwise use actual earned (gross)
-        const baseForCalc = deduction.deduct_from_base_salary ? baseSalary : actualEarnedBase;
+        // Use base salary if flagged, otherwise use actual earned (gross); then, if
+        // deduct_from_after_nopay_salary is also flagged, subtract the no-pay amount
+        // (unpaid leave + absent days only) from that base before applying the percentage.
+        let baseForCalc = deduction.deduct_from_base_salary ? baseSalary : actualEarnedBase;
+        if (deduction.deduct_from_after_nopay_salary) {
+          baseForCalc = Math.max(0, baseForCalc - noPayAmount);
+        }
         const amount = (baseForCalc * value) / 100;
         const calculatedAmount = Math.round(amount * 100) / 100;
 
