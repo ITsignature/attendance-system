@@ -2041,9 +2041,9 @@ const LivePayrollDashboard: React.FC = () => {
               // Deductions list
               const deductionsList: Array<{ label: string; amount: number }> = [];
               const sc = emp.shortfall_by_cause;
-              const noPayVal =
-                (sc?.unpaid_time_off?.deduction || 0) + (sc?.absent_days?.deduction || 0) ||
-                (emp.attendance_shortfall > 0 ? emp.attendance_shortfall : 0);
+              const noPayVal = sc
+                ? ((sc.unpaid_time_off?.deduction || 0) + (sc.absent_days?.deduction || 0))
+                : (emp.attendance_shortfall > 0 ? emp.attendance_shortfall : 0);
 
               deductionsList.push({
                 label: 'No Pay',
