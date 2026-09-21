@@ -62,7 +62,7 @@ interface AttendanceFilters {
   work_duration?: string;
   sortBy: string;
   sortOrder: 'ASC' | 'DESC';
-  employeeName: '';
+  employeeName: string;
 }
 
 const AttendanceView: React.FC = () => {
@@ -96,6 +96,7 @@ const AttendanceView: React.FC = () => {
 
   const [exportMonth, setExportMonth] = useState(new Date().toISOString().slice(0, 7)); // "YYYY-MM"
   const [exporting, setExporting] = useState(false);
+  const [exportingRange, setExportingRange] = useState(false);
 
   const handleExportExcel = async () => {
     try {
@@ -123,6 +124,52 @@ const AttendanceView: React.FC = () => {
       console.error('Failed to export attendance:', error);
     } finally {
       setExporting(false);
+    }
+  };
+
+  // Exports using the Start Date / End Date / Employee / Arrival Status / Work
+  // Duration filters currently set above the table, instead of a whole month.
+  const handleExportRangeExcel = async () => {
+    if (!filters.startDate || !filters.endDate) {
+      alert('Please set both a Start Date and End Date above before exporting a range.');
+      return;
+    }
+
+    try {
+      setExportingRange(true);
+
+      const response = await apiService.getAttendanceRecords({
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        employeeName: filters.employeeName || undefined,
+        arrival_status: (filters.arrival_status || undefined) as 'on_time' | 'late' | 'absent' | undefined,
+        work_duration: (filters.work_duration || undefined) as 'full_day' | 'half_day' | 'short_leave' | 'on_leave' | '' | undefined,
+        limit: 5000,
+        sortBy: 'date',
+        sortOrder: 'DESC'
+      });
+
+      if (response.success && response.data) {
+        const rangeStart = filters.startDate;
+        const rangeEnd = filters.endDate;
+        const startDateObj = new Date(rangeStart);
+        const filenameParts = ['Attendance', rangeStart, 'to', rangeEnd];
+        if (filters.employeeName) {
+          filenameParts.push(filters.employeeName.trim().replace(/\s+/g, '_'));
+        }
+        const filename = `${filenameParts.join('_')}.xlsx`;
+
+        await exportAttendanceToExcel(
+          response.data.attendance,
+          startDateObj.getMonth() + 1,
+          startDateObj.getFullYear(),
+          filename
+        );
+      }
+    } catch (error) {
+      console.error('Failed to export attendance range:', error);
+    } finally {
+      setExportingRange(false);
     }
   };
 
@@ -470,10 +517,20 @@ const filteredRecords = attendanceRecords;
             </Select>
           </div>
 
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <Button onClick={loadAttendanceRecords} disabled={loading} className="w-full lg:w-auto">
               <HiRefresh className="mr-2 h-4 w-4" />
               Refresh
+            </Button>
+            <Button
+              color="light"
+              onClick={handleExportRangeExcel}
+              disabled={exportingRange}
+              className="w-full lg:w-auto"
+              title="Exports the date range and employee filters set above"
+            >
+              <HiDownload className="mr-2 h-4 w-4" />
+              {exportingRange ? 'Exporting...' : 'Export Range'}
             </Button>
           </div>
         </div>

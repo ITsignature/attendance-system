@@ -58,6 +58,7 @@ export interface AttendanceFilters {
   page?: number;
   limit?: number;
   employeeId?: string;
+  employeeName?: string;
   startDate?: string;          // YYYY-MM-DD
   endDate?: string;            // YYYY-MM-DD
   arrival_status?: 'on_time' | 'late' | 'absent';

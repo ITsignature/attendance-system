@@ -27,6 +27,7 @@ export async function exportAttendanceToExcel(
     records : AttendanceRecord[],
     month : number,
     year : number,
+    filenameOverride?: string,
 ): Promise<void> {
     const groups = new Map<string, AttendanceRecord[]>();
 
@@ -125,7 +126,7 @@ export async function exportAttendanceToExcel(
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Attendance_${MONTH_NAMES[month - 1]}_${year}.xlsx`;
+    link.download = filenameOverride || `Attendance_${MONTH_NAMES[month - 1]}_${year}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
