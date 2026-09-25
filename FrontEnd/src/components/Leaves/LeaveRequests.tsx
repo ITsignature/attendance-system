@@ -121,7 +121,10 @@ const LeaveRequestsManagement: React.FC = () => {
   // tab count badges (e.g. selecting "Rejected" made the "Approved" count read 0) and
   // triggering a loading spinner on every tab click.
   useEffect(() => {
-    const filterParams: Record<string, string> = {};
+    // limit is set high (rather than the backend's default 50) so the tab counts
+    // and per-leave-type day subtotals below reflect every matching request, not
+    // just the first page.
+    const filterParams: Record<string, string | number> = { limit: 1000 };
     if (filters.startDate) filterParams.start_date = filters.startDate;
     if (filters.endDate) filterParams.end_date = filters.endDate;
     if (filters.employeeId) filterParams.employee_id = filters.employeeId;
@@ -342,6 +345,32 @@ const handleConfirmAction = async () => {
     return filtered;
   };
 
+  // Sums days_requested per leave type across the currently filtered/tab-scoped
+  // requests, so it updates with tab, employee, leave-type and date-range changes.
+  const getLeaveTypeSubtotals = (filteredRequests: LeaveRequest[]) => {
+    const totals = new Map<string, { name: string; days: number; count: number }>();
+
+    for (const request of filteredRequests) {
+      const key = request.leave_type_id || request.leave_type_name || 'unknown';
+      const name = request.leave_type_name || 'Unknown';
+      const days = Number(request.days_requested) || 0;
+
+      const existing = totals.get(key);
+      if (existing) {
+        existing.days += days;
+        existing.count += 1;
+      } else {
+        totals.set(key, { name, days, count: 1 });
+      }
+    }
+
+    return Array.from(totals.values()).sort((a, b) => b.days - a.days);
+  };
+
+  const formatDays = (days: number) => {
+    return Number.isInteger(days) ? String(days) : days.toFixed(2).replace(/\.?0+$/, '');
+  };
+
   // =============================================
   // RENDER FUNCTIONS
   // =============================================
@@ -375,6 +404,43 @@ const handleConfirmAction = async () => {
       </nav>
     </div>
   );
+
+  const SUBTOTAL_COLORS = [
+    'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+    'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300',
+    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  ];
+
+  const getSubtotalColor = (name: string) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+    return SUBTOTAL_COLORS[hash % SUBTOTAL_COLORS.length];
+  };
+
+  const renderLeaveTypeSubtotals = (filteredRequests: LeaveRequest[]) => {
+    const subtotals = getLeaveTypeSubtotals(filteredRequests);
+    if (subtotals.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          Total days:
+        </span>
+        {subtotals.map(({ name, days, count }) => (
+          <span
+            key={name}
+            title={`${count} request${count !== 1 ? 's' : ''}`}
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getSubtotalColor(name)}`}
+          >
+            {name}: {formatDays(days)} {days === 1 ? 'day' : 'days'}
+          </span>
+        ))}
+      </div>
+    );
+  };
 
   const renderFilters = () => (
     <div className={`mb-4 ${showFilters ? 'block' : 'hidden'}`}>
@@ -693,6 +759,9 @@ const handleConfirmAction = async () => {
 
       {/* Filters */}
       {renderFilters()}
+
+      {/* Per-leave-type day subtotals for the current tab/filters */}
+      {renderLeaveTypeSubtotals(filteredRequests)}
 
       {/* Table */}
       <div>
