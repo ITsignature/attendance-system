@@ -845,6 +845,18 @@ router.put('/requests/:id',
       calculatedDays = totalDays - (holidays[0].count || 0);
     }
 
+    // Editing resets the request to pending, so give back any accrual days deducted on
+    // its previous approval — otherwise re-approval deducts them a second time.
+    if (current.balance_deducted) {
+      const daysToRestore = parseFloat(current.days_requested);
+      await db.execute(`
+        UPDATE leave_accrual_balances
+        SET cumulative_used   = cumulative_used   - ?,
+            available_balance = available_balance + ?
+        WHERE employee_id = ? AND leave_type_id = ?
+      `, [daysToRestore, daysToRestore, current.employee_id, current.leave_type_id]);
+    }
+
     // Recalculate dayofweek breakdown
     const dayOfWeekCounts = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0 };
     let currentDate = new Date(start_date);
@@ -860,7 +872,7 @@ router.put('/requests/:id',
       UPDATE leave_requests
       SET leave_type_id = ?, start_date = ?, end_date = ?, leave_duration = ?,
           start_time = ?, end_time = ?, reason = ?, is_paid = ?,
-          days_requested = ?, dayofweek = ?,
+          days_requested = ?, dayofweek = ?, balance_deducted = 0,
           status = 'pending', reviewed_by = NULL, reviewed_at = NULL, reviewer_comments = NULL,
           payable_leave_hours_weekday = 0, payable_leave_hours_saturday = 0, payable_leave_hours_sunday = 0
       WHERE id = ?
@@ -890,13 +902,25 @@ router.delete('/requests/:id',
     const requestId = req.params.id;
 
     const [existing] = await db.execute(`
-      SELECT lr.id FROM leave_requests lr
+      SELECT lr.id, lr.employee_id, lr.leave_type_id, lr.days_requested, lr.balance_deducted
+      FROM leave_requests lr
       JOIN employees e ON lr.employee_id = e.id
       WHERE lr.id = ? AND e.client_id = ?
     `, [requestId, clientId]);
 
     if (existing.length === 0) {
       return res.status(404).json({ success: false, message: 'Leave request not found' });
+    }
+
+    // Restore accrual days deducted when this request was approved
+    if (existing[0].balance_deducted) {
+      const daysToRestore = parseFloat(existing[0].days_requested);
+      await db.execute(`
+        UPDATE leave_accrual_balances
+        SET cumulative_used   = cumulative_used   - ?,
+            available_balance = available_balance + ?
+        WHERE employee_id = ? AND leave_type_id = ?
+      `, [daysToRestore, daysToRestore, existing[0].employee_id, existing[0].leave_type_id]);
     }
 
     await db.execute('DELETE FROM leave_requests WHERE id = ?', [requestId]);
