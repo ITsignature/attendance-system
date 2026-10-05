@@ -14,11 +14,21 @@ interface PaidLeaveDetail {
   earned: number;
 }
 
+interface AttendanceDailyDetail {
+  date: string;
+  day_type: 'weekday' | 'saturday' | 'sunday';
+  hours: number;
+  raw_hours: number;
+  leave_hours: number;
+  earned: number;
+}
+
 interface EarningsBySource {
   attendance: {
     hours: number;
     earned: number;
     no_pay_allowance_adjustment?: number;
+    details?: AttendanceDailyDetail[];
   };
   paid_leaves: {
     hours: number;

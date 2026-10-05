@@ -2210,6 +2210,8 @@ class PayrollRunService {
         let cappedAttendanceWeekdayHours = 0;
         let cappedAttendanceSaturdayHours = 0;
         let cappedAttendanceSundayHours = 0;
+        // Per-day detail for the Work Hours Earned section of the earnings modal
+        const attendanceDailyDetails = [];
 
         for (const rec of detailedAttendance) {
             const recDateStr = rec.date instanceof Date
@@ -2238,19 +2240,25 @@ class PayrollRunService {
             if (rec.is_weekend >= 2 && rec.is_weekend <= 6) {
                 // Weekday
                 const cap = Math.max(0, weekdayDailyHours - leaveHoursThisDate);
-                cappedAttendanceWeekdayHours += Math.min(rawAttendanceHours, cap);
+                const counted = Math.min(rawAttendanceHours, cap);
+                cappedAttendanceWeekdayHours += counted;
+                attendanceDailyDetails.push({ date: recDateStr, day_type: 'weekday', hours: counted, raw_hours: rawAttendanceHours, leave_hours: leaveHoursThisDate });
             } else if (rec.is_weekend === 7) {
                 // Saturday
                 if (isConfiguredWorkingDay(recDateStr, 'saturday')) {
                     const cap = Math.max(0, saturdayDailyHours - leaveHoursThisDate);
-                    cappedAttendanceSaturdayHours += Math.min(rawAttendanceHours, cap);
+                    const counted = Math.min(rawAttendanceHours, cap);
+                    cappedAttendanceSaturdayHours += counted;
+                    attendanceDailyDetails.push({ date: recDateStr, day_type: 'saturday', hours: counted, raw_hours: rawAttendanceHours, leave_hours: leaveHoursThisDate });
                 }
                 // Unconfigured Saturdays are OT — already handled in unconfiguredSaturdaySeconds, untouched
             } else if (rec.is_weekend === 1) {
                 // Sunday
                 if (isConfiguredWorkingDay(recDateStr, 'sunday')) {
                     const cap = Math.max(0, sundayDailyHours - leaveHoursThisDate);
-                    cappedAttendanceSundayHours += Math.min(rawAttendanceHours, cap);
+                    const counted = Math.min(rawAttendanceHours, cap);
+                    cappedAttendanceSundayHours += counted;
+                    attendanceDailyDetails.push({ date: recDateStr, day_type: 'sunday', hours: counted, raw_hours: rawAttendanceHours, leave_hours: leaveHoursThisDate });
                 }
                 // Unconfigured Sundays are OT — already handled in unconfiguredSundaySeconds, untouched
             }
@@ -2928,6 +2936,12 @@ class PayrollRunService {
                     earned: totalAttendanceEarned,
                     sessions_count: detailedAttendance.length,
                     no_pay_allowance_adjustment: noPayAllowanceGap,
+                    details: attendanceDailyDetails.map(d => ({
+                        ...d,
+                        earned: d.hours * (d.day_type === 'weekday' ? weekdayHourlyRate
+                                         : d.day_type === 'saturday' ? saturdayHourlyRate
+                                                                     : sundayHourlyRate)
+                    })),
                     breakdown: {
                         weekday: { hours: cappedAttendanceWeekdayHours, earned: attendanceWeekdayEarned },
                         saturday: { hours: cappedAttendanceSaturdayHours, earned: attendanceSaturdayEarned },

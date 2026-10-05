@@ -1366,7 +1366,27 @@ const LivePayrollDashboard: React.FC = () => {
                       Work Hours Earned
                       <span className="ml-auto text-green-600 font-medium">{formatCurrency(ebs.attendance.earned)}</span>
                     </h3>
-                    <p className="text-xs text-gray-500">{formatHours(ebs.attendance.hours)} of attended time</p>
+                    <p className="text-xs text-gray-500 mb-2">{formatHours(ebs.attendance.hours)} of attended time</p>
+                    {ebs.attendance.details && ebs.attendance.details.length > 0 && (
+                      <div className="space-y-2">
+                        {ebs.attendance.details.filter(d => d.hours > 0).map((d, i) => (
+                          <div key={i} className="bg-green-50 rounded-lg p-3 flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-gray-700">{formatDate(d.date)}</div>
+                              <div className="text-xs text-gray-500 mt-0.5 capitalize">
+                                {d.day_type}
+                                {d.leave_hours > 0 && ` · ${formatHours(d.leave_hours)} leave same day`}
+                                {d.raw_hours - d.hours > 0.005 && ` · ${formatHours(d.raw_hours - d.hours)} over cap (see Overtime)`}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-xs text-gray-500">{formatHours(d.hours)}</div>
+                              <div className="text-sm font-semibold text-green-700">{formatCurrency(d.earned)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {!!ebs.attendance.no_pay_allowance_adjustment && ebs.attendance.no_pay_allowance_adjustment > 0 && (
                       <p className="text-xs text-red-500 mt-1">
                         No-Pay Allowance Adjustment: -{formatCurrency(ebs.attendance.no_pay_allowance_adjustment)}
