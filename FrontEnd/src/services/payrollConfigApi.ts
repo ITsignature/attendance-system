@@ -349,7 +349,8 @@ class PayrollConfigApiService {
 
   getPaymentCategories() {
     return [
-      { value: 'allowance', label: 'Allowance' },
+      { value: 'allowance', label: 'Fixed Allowance' },
+      { value: 'one_time_allowance', label: 'One Time Allowance' },
       { value: 'performance_incentive', label: 'Performance Incentive' },
       { value: 'salary_adjustment', label: 'Salary Adjustment' }
     ];

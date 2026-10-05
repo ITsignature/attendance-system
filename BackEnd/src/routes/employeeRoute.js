@@ -411,6 +411,13 @@ router.put('/:id',
       }
       return true;
     }),
+    body('inactive_date').optional({ nullable: true }).custom((value) => {
+      if (value === null || value === '' || value === undefined) return true;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) && isNaN(Date.parse(value))) {
+        throw new Error('Please enter a valid inactive date');
+      }
+      return true;
+    }),
     body('employment_status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']).withMessage('Invalid employment status'),
     body('employee_type').optional().isIn(['permanent', 'contract', 'intern', 'consultant', 'trainee']).withMessage('Invalid employee type'),
     body('base_salary').optional().isNumeric().withMessage('Base salary must be a number'),
@@ -625,7 +632,7 @@ router.put('/:id',
 
       // Professional Information
       'employee_code', 'fingerprint_id', 'department_id', 'designation_id', 'manager_id',
-      'hire_date', 'termination_date', 'employment_status', 'employee_type', 'base_salary',
+      'hire_date', 'termination_date', 'inactive_date', 'employment_status', 'employee_type', 'base_salary',
 
       // Emergency Contact
       'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
@@ -657,6 +664,19 @@ router.put('/:id',
     // If reactivating an employee and termination_date wasn't explicitly provided, clear termination_date
     if (req.body.employment_status === 'active' && !req.body.hasOwnProperty('termination_date')) {
       req.body.termination_date = null;
+    }
+
+    // If reactivating an employee and inactive_date wasn't explicitly provided, clear inactive_date
+    if (req.body.employment_status === 'active' && !req.body.hasOwnProperty('inactive_date')) {
+      req.body.inactive_date = null;
+    }
+
+    // If deactivating an employee and inactive_date wasn't explicitly provided, default it to
+    // today — otherwise it stays NULL, which payroll eligibility treats as "never left" and keeps
+    // including them in every run indefinitely. This is separate from termination_date, which is
+    // reserved for employment_status = 'terminated'.
+    if (req.body.employment_status === 'inactive' && !req.body.hasOwnProperty('inactive_date')) {
+      req.body.inactive_date = new Date().toISOString().split('T')[0];
     }
 
     const updateFields = [];

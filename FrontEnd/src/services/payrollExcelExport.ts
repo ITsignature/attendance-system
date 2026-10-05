@@ -97,7 +97,8 @@ function addPayrollSheet(
   // Allowances are grouped into the 3 fixed payment categories rather than by
   // individual allowance name.
   const PAYMENT_CATEGORIES: { key: string; label: string }[] = [
-    { key: 'allowance',             label: 'Allowance' },
+    { key: 'allowance',             label: 'Fixed Allowance' },
+    { key: 'one_time_allowance',    label: 'One Time Allowance' },
     { key: 'performance_incentive', label: 'Performance Incentive' },
     { key: 'salary_adjustment',     label: 'Salary Adjustment' }
   ];

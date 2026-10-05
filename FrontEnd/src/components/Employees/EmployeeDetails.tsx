@@ -1,4 +1,4 @@
-// EmployeeDetails.tsx - Complete Enhanced Design with Updated Attendance and Leave tabs
+﻿// EmployeeDetails.tsx - Complete Enhanced Design with Updated Attendance and Leave tabs
 import React, { useState, useEffect } from "react";
 import { Tabs, Button, Select, Modal, TextInput, Label, Badge, Spinner, Alert, Card, Breadcrumb, Table } from "flowbite-react";
 import { HiUser, HiBriefcase, HiDocumentText, HiCash, HiHome, HiCalendar, HiClock, HiPhone, HiMail, HiLocationMarker, HiIdentification, HiRefresh } from "react-icons/hi";
@@ -36,6 +36,7 @@ interface Employee {
   manager_name?: string;
   hire_date: string;
   termination_date?: string | null;
+  inactive_date?: string | null;
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   base_salary?: number;
@@ -1298,6 +1299,9 @@ const EmployeeDetails: React.FC = () => {
                     <Field label="Hire Date" value={formatDate(employee.hire_date)} />
                     {employee.termination_date && (
                       <Field label="Termination Date" value={formatDate(employee.termination_date)} className="border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10" />
+                    )}
+                    {employee.inactive_date && (
+                      <Field label="Inactive Date" value={formatDate(employee.inactive_date)} className="border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10" />
                     )}
                     <Field label="Employment Status" value={employee.employment_status} />
                     <Field label="Employee Type" value={employee.employee_type} />

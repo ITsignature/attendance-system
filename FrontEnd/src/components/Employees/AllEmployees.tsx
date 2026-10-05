@@ -934,6 +934,11 @@ const AllEmployees: React.FC = () => {
                               Left: {new Date(employee.termination_date).toLocaleDateString()}
                             </div>
                           )}
+                          {employee.inactive_date && (
+                            <div className="text-xs text-amber-500 dark:text-amber-400 font-medium">
+                              Inactive since: {new Date(employee.inactive_date).toLocaleDateString()}
+                            </div>
+                          )}
                           {employee.years_of_service && (
                             <div className="text-xs text-gray-500 dark:text-gray-400">
                               {employee.years_of_service} years

@@ -462,8 +462,9 @@ const EmployeeAllowances: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">Category:</span>
-                      <span className="ml-2 text-gray-900 dark:text-white capitalize">
-                        {(allowance.payment_category || 'allowance').replace('_', ' ')}
+                      <span className="ml-2 text-gray-900 dark:text-white">
+                        {payrollConfigApi.getPaymentCategories().find(c => c.value === (allowance.payment_category || 'allowance'))?.label
+                          || (allowance.payment_category || 'allowance').replace(/_/g, ' ')}
                       </span>
                     </div>
                     <div>

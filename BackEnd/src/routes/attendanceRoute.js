@@ -19,7 +19,7 @@ const router = express.Router();
  * dayType is 'saturday' or 'sunday'.
  */
 const isConfiguredWorkingWeekendDay = (dateStr, dayType, weekendWorkingConfig, companyDefaultWeekendConfig) => {
-  if (!weekendWorkingConfig) return true; // no config at all → backward compat → all working
+  if (!weekendWorkingConfig) return false; // no config at all → not a working day
   const dayConfig = weekendWorkingConfig[dayType];
   if (!dayConfig?.working) return false; // employee not marked as working that day type at all
   const monthlySchedule = dayConfig.monthly_schedule;

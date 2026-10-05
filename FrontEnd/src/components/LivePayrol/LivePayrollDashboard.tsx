@@ -1955,9 +1955,10 @@ const LivePayrollDashboard: React.FC = () => {
               };
 
               const formatPaymentCategory = (cat?: string) => {
-                if (!cat) return 'Allowance';
+                if (!cat) return 'Fixed Allowance';
                 const lower = cat.toLowerCase();
-                if (lower === 'allowance') return 'Allowance';
+                if (lower === 'allowance') return 'Fixed Allowance';
+                if (lower === 'one_time_allowance') return 'One Time Allowance';
                 if (lower === 'performance_incentive') return 'Performance Incentive';
                 if (lower === 'salary_adjustment') return 'Salary Adjustment';
                 return cat

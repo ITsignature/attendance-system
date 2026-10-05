@@ -62,6 +62,7 @@ interface Employee {
   manager_id?: string;
   hire_date: string;
   termination_date?: string | null;
+  inactive_date?: string | null;
   employment_status: 'active' | 'inactive' | 'terminated' | 'on_leave';
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   base_salary?: number;
@@ -495,14 +496,20 @@ const EditEmployeeDetails: React.FC = () => {
         [field]: value
       };
 
-      // Auto-set termination_date when employment_status is changed to terminated or inactive
+      // Auto-set termination_date / inactive_date when employment_status changes — each status
+      // gets its own date column so one doesn't bleed into the other.
       if (field === 'employment_status') {
-        if (value === 'terminated' || value === 'inactive') {
+        if (value === 'terminated') {
           if (!updated.termination_date) {
             updated.termination_date = new Date().toISOString().split('T')[0];
           }
+        } else if (value === 'inactive') {
+          if (!updated.inactive_date) {
+            updated.inactive_date = new Date().toISOString().split('T')[0];
+          }
         } else if (value === 'active') {
           updated.termination_date = null;
+          updated.inactive_date = null;
         }
       }
 
@@ -1092,7 +1099,7 @@ const EditEmployeeDetails: React.FC = () => {
               </Select>
             </div>
 
-            {(formData.employment_status === 'terminated' || formData.employment_status === 'inactive') && (
+            {formData.employment_status === 'terminated' && (
               <div>
                 <Label htmlFor="termination_date" value="Termination Date *" className="text-red-600 dark:text-red-400" />
                 <TextInput
@@ -1100,6 +1107,19 @@ const EditEmployeeDetails: React.FC = () => {
                   type="date"
                   value={formData.termination_date ? formData.termination_date.substring(0, 10) : ''}
                   onChange={(e) => handleChange('termination_date', e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            {formData.employment_status === 'inactive' && (
+              <div>
+                <Label htmlFor="inactive_date" value="Inactive Date *" className="text-amber-600 dark:text-amber-400" />
+                <TextInput
+                  id="inactive_date"
+                  type="date"
+                  value={formData.inactive_date ? formData.inactive_date.substring(0, 10) : ''}
+                  onChange={(e) => handleChange('inactive_date', e.target.value)}
                   required
                 />
               </div>

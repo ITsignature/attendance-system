@@ -405,11 +405,13 @@ class PayrollRunService {
     async getEligibleEmployees(clientId, periodId, filters = {}) {
         const db = getDB();
 
-        // Employees who are no longer 'active' (terminated/resigned/inactive) should still be
-        // included when recreating a run for a PAST period they actually worked/attended —
-        // there's no termination-date column on employees, so attendance records within the
-        // period's date range are the signal used to tell "left before this period even
-        // started" apart from "worked this period, then left later".
+        // Employees who are no longer 'active' (terminated/inactive) should still be
+        // included when recreating a run for a PAST period they actually worked/attended.
+        // termination_date and inactive_date are separate columns (an inactive employee was
+        // never necessarily terminated), so each status is checked against its own date.
+        // A missing date (NULL) falls back to attendance records within the period's date
+        // range as the signal to tell "left before this period even started" apart from
+        // "worked this period, then left later".
         // Conversely, employees hired AFTER the period ends (e.g. joined in August, run is for
         // June) must never be eligible even though they're currently 'active' — hire_date is
         // the signal for that side.
@@ -427,12 +429,13 @@ class PayrollRunService {
             queryParams.push(period.period_end_date);
 
             whereConditions.push(`(e.employment_status = "active"
-                    OR (e.employment_status IN ("terminated", "inactive") AND (e.termination_date IS NULL OR e.termination_date >= ?))
+                    OR (e.employment_status = "terminated" AND (e.termination_date IS NULL OR e.termination_date >= ?))
+                    OR (e.employment_status = "inactive" AND (e.inactive_date IS NULL OR e.inactive_date >= ?))
                     OR EXISTS (
                         SELECT 1 FROM attendance a
                         WHERE a.employee_id = e.id AND a.date BETWEEN ? AND ?
                    ))`);
-            queryParams.push(period.period_start_date, period.period_start_date, period.period_end_date);
+            queryParams.push(period.period_start_date, period.period_start_date, period.period_start_date, period.period_end_date);
         } else {
             whereConditions.push('e.employment_status = "active"');
         }
@@ -459,6 +462,7 @@ class PayrollRunService {
                 e.id, e.employee_code, e.first_name, e.last_name, e.base_salary,
                 e.department_id, e.designation_id, e.employee_type,
                 e.attendance_affects_salary, e.hire_date, e.termination_date,
+                e.employment_status, e.inactive_date,
                 d.name as department_name,
                 des.title as designation_name
             FROM employees e
@@ -467,6 +471,16 @@ class PayrollRunService {
             WHERE ${whereConditions.join(' AND ')}
             ORDER BY e.employee_code
         `, queryParams);
+
+        // Effective end-of-employment date used downstream to clamp/prorate pay: termination_date
+        // for terminated employees, inactive_date for inactive employees — kept on
+        // termination_date so existing clamping logic (which only reads that field) picks it up
+        // for inactive employees too without duplicating the clamp logic at every call site.
+        employees.forEach(emp => {
+            if (emp.employment_status === 'inactive') {
+                emp.termination_date = emp.inactive_date;
+            }
+        });
 
         return employees;
     }
@@ -1512,7 +1526,8 @@ class PayrollRunService {
 
         // Get employee name and code for logging
         const [employeeInfo] = await db.execute(`
-            SELECT first_name, last_name, employee_code, hire_date, termination_date
+            SELECT first_name, last_name, employee_code, hire_date, termination_date,
+                   employment_status, inactive_date
             FROM employees
             WHERE id = ?
         `, [employeeId]);
@@ -1524,11 +1539,15 @@ class PayrollRunService {
                 ? employeeInfo[0].hire_date.toISOString().split('T')[0]
                 : String(employeeInfo[0].hire_date).split('T')[0])
             : null;
-        const employeeTerminationDateStr = employeeInfo[0]?.termination_date
-            ? (employeeInfo[0].termination_date instanceof Date
-                ? employeeInfo[0].termination_date.toISOString().split('T')[0]
-                : String(employeeInfo[0].termination_date).split('T')[0])
+        const toDateStr = (d) => d
+            ? (d instanceof Date ? d.toISOString().split('T')[0] : String(d).split('T')[0])
             : null;
+        // Effective end-of-employment date used to clamp/prorate pay: termination_date for
+        // terminated employees, inactive_date for inactive employees — each status only reads
+        // its own column, so one doesn't bleed into the other.
+        const employeeTerminationDateStr = employeeInfo[0]?.employment_status === 'inactive'
+            ? toDateStr(employeeInfo[0]?.inactive_date)
+            : toDateStr(employeeInfo[0]?.termination_date);
 
         // Fetch weekend_working_config to distinguish configured vs unconfigured weekend days
         const [empWeekendRow] = await db.execute(`
@@ -1591,7 +1610,7 @@ class PayrollRunService {
 
         // Returns true if this specific date is a configured working Saturday/Sunday
         const isConfiguredWorkingDay = (dateStr, dayType) => {
-            if (!weekendWorkingConfig) return true; // no config at all → backward compat → all working
+            if (!weekendWorkingConfig) return false; // no config at all → not a working day
             const dayConfig = weekendWorkingConfig[dayType];
             if (!dayConfig?.working) return false; // employee not marked as working that day type at all
             const monthlySchedule = dayConfig.monthly_schedule;
@@ -1701,8 +1720,9 @@ class PayrollRunService {
         // absent days and unpaid time off keep using the base-salary-only rate — identical to
         // pre-existing behavior. When on, those two causes are deducted against
         // base salary + allowances, per client requirement — time-variance shortfall is never
-        // affected either way. Only allowances tagged payment_category = 'allowance' count
-        // (performance incentives / salary adjustments are excluded).
+        // affected either way. Only allowances tagged payment_category = 'allowance' count —
+        // 'one_time_allowance', performance incentives, and salary adjustments are all excluded
+        // by design (a one-off payment shouldn't inflate the recurring no-pay rate).
         const noPaySettingsHelper = new SettingsHelper(clientId);
         const noPayIncludesAllowances = await noPaySettingsHelper.getSetting('nopay_includes_allowances').catch(() => false);
 
@@ -2460,13 +2480,16 @@ class PayrollRunService {
                 const dow = cur.getDay();
 
                 if (holidaySet.has(ds)) {
-                    // Holiday — always credited as a non-working day, whether or not the
-                    // employee worked it. If they worked it, they ALSO get full OT pay at the
-                    // holiday multiplier (see holidayWorkedSeconds) — the two are independent,
-                    // not mutually exclusive.
-                    fixed30NonWorkingDayCredit += dailySalaryFixed30;
-                    holidayCreditDays++;
-                    holidayCreditDates.push(ds);
+                    // Holiday — credited as a non-working day only if the employee did NOT work
+                    // it. If they worked it, they instead get full OT pay at the holiday
+                    // multiplier (see holidayWorkedSeconds/holidayWorkedByDate) — same exclusion
+                    // rule as unconfigured Saturdays/Sundays below, to avoid double-paying for
+                    // the same day.
+                    if (!(holidayWorkedByDate[ds] > 0)) {
+                        fixed30NonWorkingDayCredit += dailySalaryFixed30;
+                        holidayCreditDays++;
+                        holidayCreditDates.push(ds);
+                    }
                 } else if (dow === 6) {
                     totalSaturdaysInPeriod++;
                     allNonWorkingSatDates.push(ds);
@@ -5946,7 +5969,7 @@ class PayrollRunService {
             } catch(e) { companyDefaultCfg = null; }
 
             const isConfiguredDay = (dateStr, dayType) => {
-                if (!weekendCfg) return true;
+                if (!weekendCfg) return false; // no config at all → not a working day
                 const dayConfig = weekendCfg[dayType];
                 if (!dayConfig?.working) return false;
                 const ms = dayConfig.monthly_schedule;

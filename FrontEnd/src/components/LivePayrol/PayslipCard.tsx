@@ -98,9 +98,10 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
     };
 
     const formatPaymentCategory = (cat?: string) => {
-      if (!cat) return 'Allowance';
+      if (!cat) return 'Fixed Allowance';
       const lower = cat.toLowerCase();
-      if (lower === 'allowance') return 'Allowance';
+      if (lower === 'allowance') return 'Fixed Allowance';
+      if (lower === 'one_time_allowance') return 'One Time Allowance';
       if (lower === 'performance_incentive') return 'Performance Incentive';
       if (lower === 'salary_adjustment') return 'Salary Adjustment';
       return cat
@@ -251,6 +252,9 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       ? (emp.etf_employer ? emp.etf_employer : Math.round((epfBase / 100 * 3) * 100) / 100)
       : (emp.etf_employer ? emp.etf_employer : (emp.base_salary ? Math.round((emp.base_salary / 100 * 3) * 100) / 100 : 0));
 
+    // Trainees are not entitled to EPF/ETF, so the statutory section is hidden for them
+    const showStatutory = emp.employee_type !== 'trainee';
+
     const netSalary = totalAddition - totalDeduction;
     const maxRows = Math.max(earningsList.length, deductionsList.length);
 
@@ -392,6 +396,7 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
             </tr>
 
             {/* Statutory Contributions */}
+            {showStatutory && (<>
             <tr>
               <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>EPF 12%</td>
               <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
@@ -411,6 +416,7 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
                 {formatCellAmount(etf3Val, false)}
               </td>
             </tr>
+            </>)}
 
             {/* Net Salary Row */}
             <tr style={{ borderBottom: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>

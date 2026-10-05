@@ -18,23 +18,24 @@ export interface Employee {
   // Employment Details
   hire_date: string;
   termination_date?: string | null;
+  inactive_date?: string | null;
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   work_location?: 'office' | 'remote' | 'hybrid';
   employment_status: 'active' | 'inactive' | 'terminated' | 'resigned';
-  
+
   // Salary Information
   base_salary?: number;
   currency?: string;
-  
+
   // Documents and Additional Info
   profile_image?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
   emergency_contact_relation?: string;
-  
+
   created_at: string;
   updated_at: string;
   
@@ -64,17 +65,18 @@ export interface CreateEmployeeData {
   // Employment Details
   hire_date: string;
   termination_date?: string | null;
+  inactive_date?: string | null;
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
   employee_type: 'permanent' | 'contract' | 'intern' | 'consultant' | 'trainee';
   work_location?: 'office' | 'remote' | 'hybrid';
   employment_status: 'active' | 'inactive' | 'terminated' | 'resigned';
-  
+
   // Salary Information
   base_salary?: number;
   currency?: string;
-  
+
   // Documents and Additional Info
   profile_image?: string;
   emergency_contact_name?: string;
@@ -101,6 +103,7 @@ export interface UpdateEmployeeData {
   // Employment Details
   hire_date?: string;
   termination_date?: string | null;
+  inactive_date?: string | null;
   department_id?: string;
   designation_id?: string;
   manager_id?: string;
