@@ -2250,6 +2250,7 @@ const LivePayrollDashboard: React.FC = () => {
                       </tr>
 
                       {/* Statutory Employer Contributions under Earnings Side */}
+                      {!isTrainee(emp) && (<>
                       <tr>
                         <td style={{ width: '32%', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>EPF 12%</td>
                         <td style={{ width: '18%', padding: '5px 8px 7px 8px', textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
@@ -2269,6 +2270,7 @@ const LivePayrollDashboard: React.FC = () => {
                           {formatCellAmount(etf3Val, false)}
                         </td>
                       </tr>
+                      </>)}
 
                       {/* Net Salary Row */}
                       <tr style={{ borderBottom: '1px solid #000000', backgroundColor: '#e5e7eb', fontWeight: 700 }}>
