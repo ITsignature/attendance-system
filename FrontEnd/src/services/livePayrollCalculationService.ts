@@ -89,6 +89,7 @@ interface TimeVarianceDetail {
 interface AbsentDayDetail {
   date: string;
   deduction: number;
+  reason?: 'after_termination';
 }
 
 interface ShortfallByCause {

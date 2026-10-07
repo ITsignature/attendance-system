@@ -1524,7 +1524,12 @@ const LivePayrollDashboard: React.FC = () => {
                       <div className="space-y-2">
                         {sbc.absent_days.details.map((d: AbsentDayDetail, i: number) => (
                           <div key={i} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                            <span className="text-gray-800 text-sm font-medium">{formatDate(d.date)}</span>
+                            <span className="text-gray-800 text-sm font-medium">
+                              {formatDate(d.date)}
+                              {d.reason === 'after_termination' && (
+                                <span className="ml-2 text-xs font-normal text-gray-500">(after termination)</span>
+                              )}
+                            </span>
                             <span className="text-red-600 font-semibold">{formatCurrency(d.deduction)}</span>
                           </div>
                         ))}

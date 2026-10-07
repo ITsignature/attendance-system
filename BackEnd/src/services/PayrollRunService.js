@@ -1638,6 +1638,32 @@ class PayrollRunService {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        // Real end of this employee's pay period. The payroll record's own end date is already
+        // cut at the termination date when the run is built, so recover the unclamped end from the
+        // run's period (honouring custom cycles) - needed to deduct the days after termination.
+        let fullPeriodEndDateStr = period.period_end_date;
+        if (employeeTerminationDateStr) {
+            try {
+                const [runPeriodRows] = await db.execute(`
+                    SELECT DATE_FORMAT(pp.period_start_date, '%Y-%m-%d') AS s,
+                           DATE_FORMAT(pp.period_end_date, '%Y-%m-%d') AS e
+                    FROM payroll_runs prun
+                    JOIN payroll_periods pp ON pp.id = prun.period_id
+                    WHERE prun.id = ?
+                `, [runId]);
+                if (runPeriodRows.length > 0) {
+                    const PayrollCycleServiceForEnd = require('./PayrollCycleService');
+                    const fullEmployeePeriod = await PayrollCycleServiceForEnd.calculateEmployeePeriod(
+                        employeeId, runPeriodRows[0].s, runPeriodRows[0].e
+                    );
+                    const fullEnd = PayrollCycleServiceForEnd.formatDate(fullEmployeePeriod.endDate);
+                    if (fullEnd > fullPeriodEndDateStr) fullPeriodEndDateStr = fullEnd;
+                }
+            } catch (err) {
+                console.log(`   ⚠️  Could not resolve full period end for ${employeeId}: ${err.message}`);
+            }
+        }
+
         // Clamp period.period_end_date to employee termination_date if employee was terminated earlier
         if (employeeTerminationDateStr && employeeTerminationDateStr < period.period_end_date) {
             period.period_end_date = employeeTerminationDateStr;
@@ -2891,6 +2917,72 @@ class PayrollRunService {
             }
             cur.setDate(cur.getDate() + 1);
         }
+
+        // Days after the termination/inactive date: the employee earns nothing for them (the adding
+        // method stops at that date), but the base salary still covers the whole period, so they must
+        // be deducted - priced like absent days (base + allowances / 30 when nopay_includes_allowances
+        // is on), which prorates allowances for the part of the period actually employed.
+        //  - fixed-30: every calendar day (incl. Sat/Sun/holidays, which would otherwise have earned
+        //    the non-working day credit) loses one daily salary
+        //  - other methods: only the working days lose pay (non-working days were never part of base)
+        if (employeeTerminationDateStr && employeeTerminationDateStr < fullPeriodEndDateStr) {
+            const isFixed30 = dailyRateMethodFixed === 'fixed_30';
+            let afterTermStart = parseLocalDate(employeeTerminationDateStr);
+            afterTermStart.setDate(afterTermStart.getDate() + 1);
+            if (afterTermStart < periodStartObj) afterTermStart = new Date(periodStartObj);
+            const afterTermEnd = parseLocalDate(fullPeriodEndDateStr);
+
+            let afterTermHolidaySet = new Set();
+            if (!isFixed30 && afterTermStart <= afterTermEnd) {
+                const [afterTermHolidayRows] = await db.execute(`
+                    SELECT DISTINCT DATE_FORMAT(date, '%Y-%m-%d') AS hdate FROM holidays
+                    WHERE client_id = ? AND date BETWEEN ? AND ?
+                    AND (applies_to_all = TRUE OR department_ids IS NULL)
+                `, [clientId, getLocalDateString(afterTermStart), fullPeriodEndDateStr]);
+                afterTermHolidaySet = new Set(afterTermHolidayRows.map(h => h.hdate));
+            }
+
+            let afterTermDays = 0;
+            let afterTermDeduction = 0;
+            const afterTermCur = new Date(afterTermStart);
+            while (afterTermCur <= afterTermEnd) {
+                const ds = getLocalDateString(afterTermCur);
+                const dow = afterTermCur.getDay();
+                let amount = 0;
+                let baseAmount = 0;
+
+                if (isFixed30) {
+                    amount = noPayDailySalary;
+                    baseAmount = dailySalaryFixed30;
+                } else if (!afterTermHolidaySet.has(ds)) {
+                    if (dow >= 1 && dow <= 5) {
+                        amount = weekdayDailyHours * noPayWeekdayHourlyRate;
+                        baseAmount = weekdayDailyHours * weekdayHourlyRate;
+                    } else if (dow === 6 && isConfiguredWorkingDay(ds, 'saturday')) {
+                        amount = saturdayDailyHours * noPaySaturdayHourlyRate;
+                        baseAmount = saturdayDailyHours * saturdayHourlyRate;
+                    } else if (dow === 0 && isConfiguredWorkingDay(ds, 'sunday')) {
+                        amount = sundayDailyHours * noPaySundayHourlyRate;
+                        baseAmount = sundayDailyHours * sundayHourlyRate;
+                    }
+                }
+
+                if (amount > 0) {
+                    absentDaysDetails.push({
+                        date:      ds,
+                        deduction: parseFloat(amount.toFixed(2)),
+                        reason:    'after_termination'
+                    });
+                    absentDaysDeductionBase += baseAmount;
+                    afterTermDays++;
+                    afterTermDeduction += amount;
+                }
+                afterTermCur.setDate(afterTermCur.getDate() + 1);
+            }
+
+            console.log(`\n      🚪 After-termination days for ${employeeName} (${employeeCode}) after ${employeeTerminationDateStr}: ${afterTermDays} day(s), Rs.${afterTermDeduction.toFixed(2)}`);
+        }
+
         const absentDaysDeduction = absentDaysDetails.reduce((sum, d) => sum + d.deduction, 0);
 
         console.log(`\n      ❌ Absent Days Deduction for ${employeeName} (${employeeCode}): Rs.${absentDaysDeduction.toFixed(2)}`);
