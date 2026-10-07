@@ -1,5 +1,6 @@
 const { getDB } = require('../config/database');
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
+const { calculateFullDayLeaveDays, refreshFullDayLeaveDays } = require('../utils/leaveDays');
 
 /**
  * Get employee's own profile details
@@ -478,10 +479,11 @@ const applyForLeave = asyncHandler(async (req, res) => {
 
   // Calculate days requested
   let days_requested = 0;
+  // Bring this employee's existing leave counts up to date before the limit check below
+  await refreshFullDayLeaveDays(db, req.user.clientId, employeeId);
   if (leave_duration === 'full_day') {
-    const start = new Date(start_date);
-    const end = new Date(end_date);
-    days_requested = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    // Same rule as admin-created leaves: exclude holidays and weekend days the employee doesn't work
+    days_requested = await calculateFullDayLeaveDays(db, req.user.clientId, employeeId, start_date, end_date);
   } else if (leave_duration === 'half_day') {
     days_requested = 0.5;
   } else if (leave_duration === 'short_leave') {

@@ -7,6 +7,12 @@ const { checkPermission, ensureClientAccess } = require('../middleware/rbacMiddl
 const { asyncHandler } = require('../middleware/errorHandlerMiddleware');
 const { v4: uuidv4 } = require('uuid');
 const LeaveAccrualService = require('../services/LeaveAccrualService');
+const {
+  loadLeaveDayContext,
+  listLeaveCountedDays,
+  calculateFullDayLeaveDays,
+  refreshFullDayLeaveDays
+} = require('../utils/leaveDays');
 
 // =============================================
 // VALIDATION HELPERS
@@ -28,105 +34,6 @@ const validateDateRange = [
   query('end_date').optional().isISO8601().withMessage('Invalid end date format'),
   query('status').optional().isIn(['pending', 'approved', 'rejected', 'cancelled']).withMessage('Invalid status'),
 ];
-
-// Count leave days for a full_day request: calendar days minus holidays and minus
-// weekend days the employee doesn't work (per employee config + company monthly schedule).
-async function calculateFullDayLeaveDays(db, clientId, employeeId, start_date, end_date) {
-  const startDate = new Date(start_date);
-  const endDate = new Date(end_date);
-  const diffTime = endDate.getTime() - startDate.getTime();
-  const totalCalendarDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
-
-  // Fetch holidays in the date range to exclude them
-  const [holidays] = await db.execute(`
-    SELECT date
-    FROM holidays
-    WHERE client_id = ?
-    AND date BETWEEN ? AND ?
-    AND (applies_to_all = TRUE OR department_ids IS NULL)
-  `, [clientId, start_date, end_date]);
-
-  const holidayCount = holidays.length;
-
-  // Fetch company default weekend schedule (used when employee monthly_schedule === null)
-  let companyDefaultWeekendConfig = null;
-  try {
-      const [companyDefaultRow] = await db.execute(`
-          SELECT setting_value FROM system_settings
-          WHERE client_id = ? AND setting_key = 'default_weekend_working_config'
-          LIMIT 1
-      `, [clientId]);
-      if (companyDefaultRow[0]?.setting_value) {
-          companyDefaultWeekendConfig = JSON.parse(companyDefaultRow[0].setting_value);
-      }
-  } catch(e) { companyDefaultWeekendConfig = null; }
-
-  // Fetch whether the employee works on saturday and sunday
-  const [empWeekendRows] = await db.execute(`
-    SELECT weekend_working_config
-    FROM employees
-    WHERE id = ?
-  `, [employeeId]);
-
-  let empWeekendConfig = null;
-  if (empWeekendRows.length > 0 && empWeekendRows[0].weekend_working_config) {
-    try { empWeekendConfig = JSON.parse(empWeekendRows[0].weekend_working_config); } catch (e) {}
-  }
-
-  // Helper: given a date, return which nth occurrence of that weekday it is in its month (1-based)
-  const getNthOccurrence = (date) => {
-    let count = 0;
-    const d = new Date(date.getFullYear(), date.getMonth(), 1);
-    while (d <= date) {
-      if (d.getDay() === date.getDay()) count++;
-      d.setDate(d.getDate() + 1);
-    }
-    return count;
-  };
-
-  let weekendDaysToExclude = 0;
-  let currentDay = new Date(start_date);
-  const lastDay = new Date(end_date);
-
-  while (currentDay <= lastDay) {
-    const dow = currentDay.getDay(); // 0=Sunday, 6=Saturday
-    const isSaturday = dow === 6;
-    const isSunday   = dow === 0;
-
-    if (isSaturday || isSunday) {
-      const dayKey = isSaturday ? 'saturday' : 'sunday';
-      const empWorking = empWeekendConfig?.[dayKey]?.working;
-
-      if (empWorking === false) {
-        // Employee config explicitly says not working — exclude this day
-        weekendDaysToExclude++;
-      } else {
-        // Employee works this day type (or has no config) — check company schedule for this specific date
-        const yearMonth = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}`;
-        const companySchedule = companyDefaultWeekendConfig?.[dayKey]?.monthly_schedule?.[yearMonth] || [];
-        const nth = getNthOccurrence(currentDay);
-        if (!companySchedule.includes(nth)) {
-          // This specific occurrence is not a working day per company schedule — exclude
-          weekendDaysToExclude++;
-        }
-      }
-    }
-    currentDay.setDate(currentDay.getDate() + 1);
-  }
-
-  const calculatedDays = totalCalendarDays - holidayCount - weekendDaysToExclude;
-
-  if (holidayCount > 0) {
-    console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date}`);
-    console.log(`   Total calendar days: ${totalCalendarDays}`);
-    console.log(`   Holidays excluded: ${holidayCount}`);
-    console.log(`   Final days: ${calculatedDays}`);
-  } else {
-    console.log(`📅 Auto-calculated days for full_day leave: ${start_date} to ${end_date} = ${calculatedDays} days`);
-  }
-
-  return calculatedDays;
-}
 
 // Apply authentication and client access to all routes
 router.use(authenticate);        
@@ -1170,6 +1077,9 @@ router.post('/request',
         }
       }
 
+      // Refresh this employee's existing leave counts first so the limit checks below use current numbers
+      await refreshFullDayLeaveDays(db, clientId, employee_id);
+
       // Calculate actual days based on duration
       let calculatedDays = days_requested || 0;
 
@@ -1460,6 +1370,13 @@ router.put('/requests/:id/approve',
         });
       }
 
+      // Re-count this request with the schedule/holidays in force now, so approval (and any
+      // accrual deduction) uses the current day count rather than the one saved at creation
+      const refreshedDays = await refreshFullDayLeaveDays(db, req.user.clientId, request[0].employee_id, { onlyId: requestId });
+      if (refreshedDays.has(requestId)) {
+        request[0].days_requested = refreshedDays.get(requestId);
+      }
+
       const isPaidLeave = request[0].is_paid || false;
       let payableWeekdayHours = 0;
       let payableSaturdayHours = 0;
@@ -1526,56 +1443,19 @@ router.put('/requests/:id/approve',
 
         console.log(`   Employee hours: Weekday=${weekdayHours.toFixed(2)}h, Saturday=${saturdayHours.toFixed(2)}h, Sunday=${sundayHours.toFixed(2)}h`);
 
-        // Parse dayofweek JSON
-        let dayOfWeekCounts = request[0].dayofweek;
-        if (typeof dayOfWeekCounts === 'string') {
-          try {
-            dayOfWeekCounts = JSON.parse(dayOfWeekCounts);
-          } catch (e) {
-            console.error('Failed to parse dayofweek JSON:', e);
-            dayOfWeekCounts = null;
-          }
+        // Count only days that are really leave days for this employee (not holidays, and not
+        // weekend days they don't work) - same rule as days_requested and payroll.
+        const leaveDayCtx = await loadLeaveDayContext(
+          db, request[0].client_id, request[0].employee_id, request[0].start_date, request[0].end_date
+        );
+        const countedDays = listLeaveCountedDays(leaveDayCtx, request[0].start_date, request[0].end_date);
+
+        let weekdayCount = 0, saturdayCount = 0, sundayCount = 0;
+        for (const day of countedDays) {
+          if (day.dow === 6) saturdayCount++;
+          else if (day.dow === 0) sundayCount++;
+          else weekdayCount++;
         }
-
-        // If dayofweek is missing or null, calculate it now (for old leave requests or employee portal requests)
-        if (!dayOfWeekCounts) {
-          console.log(`   ⚠️  dayofweek field is missing, calculating now...`);
-          dayOfWeekCounts = {
-            "1": 0, // Sunday
-            "2": 0, // Monday
-            "3": 0, // Tuesday
-            "4": 0, // Wednesday
-            "5": 0, // Thursday
-            "6": 0, // Friday
-            "7": 0  // Saturday
-          };
-
-          let currentDate = new Date(request[0].start_date);
-          const leaveEndDate = new Date(request[0].end_date);
-
-          while (currentDate <= leaveEndDate) {
-            const jsDayOfWeek = currentDate.getDay(); // JavaScript day (0-6)
-            const mysqlDayOfWeek = jsDayOfWeek === 0 ? 1 : jsDayOfWeek + 1; // Convert to MySQL DAYOFWEEK (1-7)
-            dayOfWeekCounts[mysqlDayOfWeek.toString()]++;
-
-            // Move to next day
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
-        }
-        
-        console.log(`   Day-of-week breakdown:`, dayOfWeekCounts);
-
-        // Calculate payable hours using the dayofweek breakdown
-        // MySQL: 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
-        const sundayCount = parseInt(dayOfWeekCounts["1"]) || 0;
-        const mondayCount = parseInt(dayOfWeekCounts["2"]) || 0;
-        const tuesdayCount = parseInt(dayOfWeekCounts["3"]) || 0;
-        const wednesdayCount = parseInt(dayOfWeekCounts["4"]) || 0;
-        const thursdayCount = parseInt(dayOfWeekCounts["5"]) || 0;
-        const fridayCount = parseInt(dayOfWeekCounts["6"]) || 0;
-        const saturdayCount = parseInt(dayOfWeekCounts["7"]) || 0;
-
-        const weekdayCount = mondayCount + tuesdayCount + wednesdayCount + thursdayCount + fridayCount;
 
         // Calculate hours for each day type separately
         payableWeekdayHours = weekdayCount * weekdayHours;
@@ -1591,51 +1471,36 @@ router.put('/requests/:id/approve',
           payableSundayHours = payableSundayHours * 0.5;
           console.log(`   🕐 Half-day leave: Multiplying all by 0.5`);
         } else if (leaveDuration === 'short_leave') {
-          // For short leave, calculate actual hours from start_time to end_time
+          // Short leave: actual hours from start_time to end_time, on the day it falls on -
+          // and only if that day is a real leave day (countedDays is empty otherwise)
+          payableWeekdayHours = 0;
+          payableSaturdayHours = 0;
+          payableSundayHours = 0;
+
           const startTime = request[0].start_time;
           const endTime = request[0].end_time;
 
-          if (startTime && endTime) {
+          if (countedDays.length === 0) {
+            console.log(`   ℹ️  Short leave falls on a non-working day or holiday, no payable hours`);
+          } else if (startTime && endTime) {
             const startDate = new Date(`2000-01-01 ${startTime}`);
             const endDate = new Date(`2000-01-01 ${endTime}`);
 
             if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
               const diffMs = endDate.getTime() - startDate.getTime();
               const actualHours = Math.max(0, Math.min(24, diffMs / (1000 * 60 * 60))); // Between 0-24 hours
+              const dow = countedDays[0].dow;
 
-              // Determine which day type this short leave falls on
-              const leaveDate = new Date(request[0].start_date);
-              const dayOfWeek = leaveDate.getDay(); // 0=Sunday, 6=Saturday
-
-              if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                // Weekday
-                payableWeekdayHours = actualHours;
-                payableSaturdayHours = 0;
-                payableSundayHours = 0;
-              } else if (dayOfWeek === 6) {
-                // Saturday
-                payableWeekdayHours = 0;
-                payableSaturdayHours = actualHours;
-                payableSundayHours = 0;
-              } else {
-                // Sunday
-                payableWeekdayHours = 0;
-                payableSaturdayHours = 0;
-                payableSundayHours = actualHours;
-              }
+              if (dow === 6) payableSaturdayHours = actualHours;
+              else if (dow === 0) payableSundayHours = actualHours;
+              else payableWeekdayHours = actualHours;
 
               console.log(`   🕐 Short leave: ${startTime} to ${endTime} = ${actualHours.toFixed(2)}h`);
             } else {
               console.warn(`   ⚠️  Invalid time format for short leave, defaulting to 0h`);
-              payableWeekdayHours = 0;
-              payableSaturdayHours = 0;
-              payableSundayHours = 0;
             }
           } else {
             console.warn(`   ⚠️  No start/end time provided for short leave, defaulting to 0h`);
-            payableWeekdayHours = 0;
-            payableSaturdayHours = 0;
-            payableSundayHours = 0;
           }
         }
 

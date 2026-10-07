@@ -170,8 +170,13 @@ class HolidayService {
                         }
                         isFullDaySalary = employeeWeekendConfig.sunday.full_day_salary || false;
                     }
+                } else if (employeeId) {
+                    // Employee was specified but has no weekend_working_config at all → not a working day.
+                    // Keeps this in sync with isConfiguredWorkingDay()/isConfiguredDay() in PayrollRunService.js.
+                    isWeekendWorking = false;
                 } else {
-                    // Fallback to system-wide weekend settings
+                    // No specific employee context (e.g. department/company-wide calc) → fall back to
+                    // the company-wide legacy weekend setting.
                     isWeekendWorking = await settingsHelper.isWeekendWorkingDay(dayOfWeek);
                 }
 

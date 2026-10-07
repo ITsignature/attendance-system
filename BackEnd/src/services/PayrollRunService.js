@@ -2051,6 +2051,14 @@ class PayrollRunService {
                         continue;
                     }
 
+                    // Weekend days the employee doesn't work are covered by the non-working day
+                    // credit (fixed-30) or simply unpaid-for - never by leave hours.
+                    if ((dayOfWeek === 6 && !isConfiguredWorkingDay(currentDateStr, 'saturday')) ||
+                        (dayOfWeek === 0 && !isConfiguredWorkingDay(currentDateStr, 'sunday'))) {
+                        currentDate.setDate(currentDate.getDate() + 1);
+                        continue;
+                    }
+
                     let dailyHours = 0;
                     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
                         // Weekday (Monday-Friday)
@@ -2150,6 +2158,12 @@ class PayrollRunService {
 
                 while (currentDate <= overlapEnd) {
                     const dayOfWeek = currentDate.getDay();
+                    if ((dayOfWeek === 6 && !isConfiguredWorkingDay(getLocalDateString(currentDate), 'saturday')) ||
+                        (dayOfWeek === 0 && !isConfiguredWorkingDay(getLocalDateString(currentDate), 'sunday'))) {
+                        // Not a working day for this employee - nothing to deduct
+                        currentDate.setDate(currentDate.getDate() + 1);
+                        continue;
+                    }
                     let dailyHours = 0;
 
                     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
@@ -2643,6 +2657,15 @@ class PayrollRunService {
             let cur = new Date(overlapStart);
             while (cur <= overlapEnd) {
                 const dow = cur.getDay();
+                // Mirror the paid-leave loop above: holidays and weekend days the employee
+                // doesn't work carry no leave hours
+                const curStr = getLocalDateString(cur);
+                if (holidayMap.has(curStr) ||
+                    (dow === 6 && !isConfiguredWorkingDay(curStr, 'saturday')) ||
+                    (dow === 0 && !isConfiguredWorkingDay(curStr, 'sunday'))) {
+                    cur.setDate(cur.getDate() + 1);
+                    continue;
+                }
                 let dailyHrs = dow >= 1 && dow <= 5 ? weekdayDailyHours
                              : dow === 6             ? saturdayDailyHours
                                                      : sundayDailyHours;
@@ -2694,6 +2717,12 @@ class PayrollRunService {
             let cur = new Date(overlapStart);
             while (cur <= overlapEnd) {
                 const dow = cur.getDay();
+                const curStr = getLocalDateString(cur);
+                if ((dow === 6 && !isConfiguredWorkingDay(curStr, 'saturday')) ||
+                    (dow === 0 && !isConfiguredWorkingDay(curStr, 'sunday'))) {
+                    cur.setDate(cur.getDate() + 1);
+                    continue;
+                }
                 let dailyHrs = dow >= 1 && dow <= 5 ? weekdayDailyHours
                              : dow === 6             ? saturdayDailyHours
                                                      : sundayDailyHours;
