@@ -999,7 +999,7 @@ class PayrollRunService {
             console.log(`   Attendance Shortfall (Info): Rs.${attendanceDeduction.toFixed(2)}`);
         }
 
-        const totalDeductions = combinedDeductions.total;
+        let totalDeductions = combinedDeductions.total;
         console.log(`   ─────────────────────────────────────────────────────`);
         console.log(`   Total Deductions (EPF/ETF/Loans/Advances): Rs.${totalDeductions.toFixed(2)}`);
         console.log(`   Note: Attendance shortfall shown for info only, not deducted from net salary`);
@@ -1028,6 +1028,24 @@ class PayrollRunService {
         }
 
         const totalTaxes = taxComponents.total;
+
+        // Conditional deductions (e.g. Stamp Duty): applied only when the net salary BEFORE them
+        // (gross - other deductions - loans/advances - APIT) is at least the component's min_net_salary
+        const netBeforeConditional = grossSalary - totalDeductions - totalTaxes;
+        let conditionalDeductionsTotal = 0;
+        for (const comp of (deductionComponents.conditionalComponents || [])) {
+            if (netBeforeConditional >= comp.min_net_salary) {
+                const { min_net_salary, ...componentToSave } = comp;
+                combinedDeductions.components.push(componentToSave);
+                combinedDeductions.total += comp.amount;
+                totalDeductions += comp.amount;
+                conditionalDeductionsTotal += comp.amount;
+                console.log(`   ✅ ${comp.name}: Rs.${comp.amount.toFixed(2)} applied (net before it Rs.${netBeforeConditional.toFixed(2)} >= Rs.${comp.min_net_salary})`);
+            } else {
+                console.log(`   ⏭️  ${comp.name}: skipped (net before it Rs.${netBeforeConditional.toFixed(2)} < Rs.${comp.min_net_salary})`);
+            }
+        }
+
         const netSalary = grossSalary - totalDeductions - totalTaxes;
 
         console.log(`\n✅ Step 6: Net Salary Calculation:`);
@@ -1039,7 +1057,7 @@ class PayrollRunService {
         // Calculate total earnings and deductions from all components for display
         // total_earnings should be ONLY allowances + bonuses (NOT including base salary)
         const totalEarningsFromComponents = allowancesAmount + financialAdjustments.bonuses;
-        const totalDeductionsFromComponents = deductionComponents.total + financialAdjustments.loanDeductions + financialAdjustments.advanceDeductions;
+        const totalDeductionsFromComponents = deductionComponents.total + conditionalDeductionsTotal + financialAdjustments.loanDeductions + financialAdjustments.advanceDeductions;
 
         console.log(`\n💾 Database Update:`);
         console.log(`   Total Earnings (Allowances + Bonuses): Rs.${totalEarningsFromComponents.toFixed(2)} (Allowances: ${allowancesAmount.toFixed(2)} + Bonuses: ${financialAdjustments.bonuses.toFixed(2)})`);
@@ -3508,7 +3526,8 @@ class PayrollRunService {
                 pc.is_taxable,
                 pc.is_mandatory,
                 pc.applies_to,
-                pc.applies_to_ids
+                pc.applies_to_ids,
+                pc.min_net_salary
             FROM payroll_components pc
             WHERE pc.client_id = ? AND pc.is_active = 1
         `, [clientId]);
@@ -4268,6 +4287,9 @@ class PayrollRunService {
         const baseForEmployee = parseFloat(grossSalary) || 0;
         const noPayAmount = parseFloat(noPayDeduction) || 0;
         const components = [];
+        // Components with a min_net_salary condition (e.g. Stamp Duty) - amount is calculated here but
+        // whether they apply is decided by the caller once the net salary before them is known
+        const conditionalComponents = [];
         let total = 0;
 
         console.log(`💸 DEDUCTION CALCULATION:`);
@@ -4288,6 +4310,22 @@ class PayrollRunService {
                     : baseForEmployee;
 
                 const calculatedAmount = await this.calculateComponentAmount(component, baseAmount, null);
+
+                if (calculatedAmount > 0 && component.min_net_salary !== null && component.min_net_salary !== undefined) {
+                    conditionalComponents.push({
+                        code: component.component_name.replace(/\s+/g, '_').toUpperCase(),
+                        name: component.component_name,
+                        type: 'deduction',
+                        category: component.category,
+                        amount: calculatedAmount,
+                        is_taxable: component.is_taxable,
+                        calculation_type: component.calculation_type,
+                        _component_id: component.id,
+                        min_net_salary: parseFloat(component.min_net_salary)
+                    });
+                    console.log(`   ⏳ ${component.component_name}: ${calculatedAmount} deferred (applies only if net salary >= ${component.min_net_salary})`);
+                    continue;
+                }
 
                 if (calculatedAmount > 0) {
                     components.push({
@@ -4381,7 +4419,7 @@ class PayrollRunService {
 
         console.log(`   📊 Total Deductions: ${total}`);
 
-        return { components, total };
+        return { components, total, conditionalComponents };
     }
 
     /**
@@ -5063,7 +5101,8 @@ class PayrollRunService {
                     pc.is_taxable,
                     pc.applies_to,
                     pc.applies_to_ids,
-                    pc.deduct_from_base_salary
+                    pc.deduct_from_base_salary,
+                    pc.min_net_salary
                 FROM payroll_components pc
                 WHERE pc.client_id = ? AND pc.is_active = 1
             `, [clientId]);
@@ -5420,7 +5459,10 @@ class PayrollRunService {
                     calculation_type: comp.calculation_type,
                     calculation_value: comp.calculation_value,
                     category: comp.category,
-                    deduct_from_base_salary: comp.deduct_from_base_salary ? true : false
+                    deduct_from_base_salary: comp.deduct_from_base_salary ? true : false,
+                    min_net_salary: comp.min_net_salary !== null && comp.min_net_salary !== undefined
+                        ? parseFloat(comp.min_net_salary)
+                        : null
                 }));
 
                 // Convert payroll component allowances to standard format

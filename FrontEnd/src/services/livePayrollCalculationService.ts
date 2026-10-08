@@ -148,6 +148,7 @@ interface EmployeeData {
     category: string;
     deduct_from_base_salary?: boolean;
     deduct_from_after_nopay_salary?: boolean;
+    min_net_salary?: number | null;
   }>;
   financial: {
     loans: number;
@@ -287,11 +288,15 @@ class LivePayrollCalculationService {
     etf_employer: number;
     total: number;
     breakdown: DeductionBreakdown[];
+    conditional: Array<DeductionBreakdown & { min_net_salary: number }>;
   } {
     let epf_employee = 0;
     let etf_employer = 0;
     let total = 0;
     const breakdown: DeductionBreakdown[] = [];
+    // Deductions with a min_net_salary condition (e.g. Stamp Duty): amount is worked out here but
+    // applied by calculateEmployee once the net salary before them is known
+    const conditional: Array<DeductionBreakdown & { min_net_salary: number }> = [];
     const baseSalary = employee.base_salary || 0;
 
     // No-pay amount = unpaid leave + absent days only (excludes time-variance/lateness),
@@ -300,7 +305,7 @@ class LivePayrollCalculationService {
     const noPayAmount = (sc?.unpaid_time_off?.deduction || 0) + (sc?.absent_days?.deduction || 0);
 
     if (!employee.deductions || employee.deductions.length === 0) {
-      return { epf_employee: 0, etf_employer: 0, total: 0, breakdown: [] };
+      return { epf_employee: 0, etf_employer: 0, total: 0, breakdown: [], conditional: [] };
     }
 
     employee.deductions.forEach(deduction => {
@@ -318,6 +323,17 @@ class LivePayrollCalculationService {
         }
         const amount = (baseForCalc * value) / 100;
         const calculatedAmount = Math.round(amount * 100) / 100;
+
+        if (deduction.min_net_salary !== null && deduction.min_net_salary !== undefined) {
+          conditional.push({
+            id: deduction.id,
+            name: deduction.component_name,
+            amount: calculatedAmount,
+            category: deduction.category,
+            min_net_salary: deduction.min_net_salary
+          });
+          return;
+        }
 
         breakdown.push({
           id: deduction.id,
@@ -338,6 +354,17 @@ class LivePayrollCalculationService {
       } else if (deduction.calculation_type === 'fixed' && value > 0) {
         // Handle fixed amount deductions
         const calculatedAmount = Math.round(value * 100) / 100;
+
+        if (deduction.min_net_salary !== null && deduction.min_net_salary !== undefined) {
+          conditional.push({
+            id: deduction.id,
+            name: deduction.component_name,
+            amount: calculatedAmount,
+            category: deduction.category,
+            min_net_salary: deduction.min_net_salary
+          });
+          return;
+        }
 
         breakdown.push({
           id: deduction.id,
@@ -362,7 +389,8 @@ class LivePayrollCalculationService {
       epf_employee: Math.round(epf_employee * 100) / 100,
       etf_employer: Math.round(etf_employer * 100) / 100,
       total: Math.round(total * 100) / 100,
-      breakdown
+      breakdown,
+      conditional
     };
   }
 
@@ -464,7 +492,17 @@ class LivePayrollCalculationService {
       });
     }
 
-    const deductions_total = statutoryDeductions.total + financial_deductions + apit;
+    let deductions_total = statutoryDeductions.total + financial_deductions + apit;
+
+    // Conditional deductions (e.g. Stamp Duty): applied only when the net salary BEFORE them
+    // (gross - other deductions - loans/advances - APIT) is at least the component's min_net_salary
+    const netBeforeConditional = gross_salary - deductions_total;
+    statutoryDeductions.conditional.forEach(({ min_net_salary, ...component }) => {
+      if (netBeforeConditional >= min_net_salary) {
+        deductions_breakdown.push(component);
+        deductions_total += component.amount;
+      }
+    });
     const net_salary = gross_salary - deductions_total;
 
     return {

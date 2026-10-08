@@ -28,7 +28,8 @@ const PayrollComponents: React.FC = () => {
     is_mandatory: false,
     applies_to: 'all',
     applies_to_ids: [],
-    deduct_from_base_salary: false
+    deduct_from_base_salary: false,
+    min_net_salary: null
   });
 
   useEffect(() => {
@@ -87,7 +88,10 @@ const PayrollComponents: React.FC = () => {
       is_mandatory: component.is_mandatory,
       applies_to: component.applies_to,
       applies_to_ids: component.applies_to_ids || [],
-      deduct_from_base_salary: component.deduct_from_base_salary || false
+      deduct_from_base_salary: component.deduct_from_base_salary || false,
+      min_net_salary: component.min_net_salary !== undefined && component.min_net_salary !== null
+        ? Number(component.min_net_salary)
+        : null
     });
     setShowForm(true);
   };
@@ -123,7 +127,9 @@ const PayrollComponents: React.FC = () => {
       is_taxable: true,
       is_mandatory: false,
       applies_to: 'all',
-      applies_to_ids: []
+      applies_to_ids: [],
+      deduct_from_base_salary: false,
+      min_net_salary: null
     });
     setEditingComponent(null);
     setShowForm(false);
@@ -219,6 +225,11 @@ const PayrollComponents: React.FC = () => {
                   }`}>
                     {component.is_taxable ? 'Taxable' : 'Non-taxable'}
                   </span>
+                  {component.component_type === 'deduction' && component.min_net_salary !== null && component.min_net_salary !== undefined && (
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                      Only if net ≥ Rs.{Number(component.min_net_salary).toLocaleString()}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
@@ -404,6 +415,30 @@ const PayrollComponents: React.FC = () => {
                       If checked, percentage is calculated on the fixed base salary (e.g. EPF). Otherwise calculated on gross salary.
                     </p>
                   </div>
+                </div>
+              )}
+
+              {formData.component_type === 'deduction' && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <label htmlFor="min_net_salary" className="block text-sm font-medium text-amber-800 mb-1">
+                    Apply only if net salary is at least (Rs.)
+                  </label>
+                  <input
+                    type="number"
+                    id="min_net_salary"
+                    min="0"
+                    step="0.01"
+                    value={formData.min_net_salary ?? ''}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      min_net_salary: e.target.value === '' ? null : parseFloat(e.target.value)
+                    })}
+                    placeholder="Leave empty to always deduct"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                  <p className="text-xs text-amber-600 mt-1">
+                    e.g. Stamp Duty: 25000. The net salary is checked before this deduction is taken (gross − other deductions − loans/advances − APIT).
+                  </p>
                 </div>
               )}
 

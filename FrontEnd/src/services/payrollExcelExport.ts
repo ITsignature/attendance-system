@@ -88,7 +88,8 @@ function addPayrollSheet(
   rawEmployees: any[],
   periodInfo: PeriodInfo,
   company: CompanyInfo,
-  codePrefix: string
+  codePrefix: string,
+  includeCompanyExpenses: boolean = true
 ): void {
 
   const rawByEmpId = new Map<string, any>(rawEmployees.map(e => [e.employee_id, e]));
@@ -168,7 +169,8 @@ function addPayrollSheet(
   const REMK    = NET + 1;
   const ROUND   = REMK + 1;
   const COEX_S  = ROUND + 3;   // 2 gap cols then company expenses
-  const LAST    = COEX_S + 2;  // last col index (1-based)
+  // Trainees are not entitled to EPF/ETF, so their sheet ends at the Round Up column
+  const LAST    = includeCompanyExpenses ? COEX_S + 2 : ROUND;  // last col index (1-based)
   const TOTAL_COLS = LAST;
 
   // ── Build data rows (arrays) ──────────────────────────────────────────────
@@ -295,6 +297,8 @@ function addPayrollSheet(
     row[REMK-1]    = '';
     row[ROUND-1]   = Math.round(result.net_salary||0);
 
+    if (!includeCompanyExpenses) return row;
+
     const employeeEpfDeductions = (result.deductions_breakdown || []).filter(
       (d: any) => d.category?.toLowerCase() === 'epf' || d.name?.toLowerCase().includes('epf')
     );
@@ -324,7 +328,7 @@ function addPayrollSheet(
     ...advanceTypes.map((_,i)=>ADV_S+i),
     ...loanTypes.map((_,i)=>LOAN_S+i),
     ...deductionNames.map((_,i)=>DED_S+i),
-    COEX_S, COEX_S+1, COEX_S+2
+    ...(includeCompanyExpenses ? [COEX_S, COEX_S+1, COEX_S+2] : [])
   ].map(c=>c-1)); // convert to 0-based for array
 
   const totalsRow: DataRow = new Array(TOTAL_COLS).fill('');
@@ -394,7 +398,7 @@ function addPayrollSheet(
   if (D > 0) addGroupHeader(DED_S, DED_S+D-1, 'Deductions', C.hdrDed);
   addGroupHeader(TOT_DED, TOT_DED, 'Total Deductions', C.hdrDed);
   addGroupHeader(AJT, ROUND, 'Summary', C.hdrNet);
-  addGroupHeader(COEX_S, COEX_S+2, 'Company Expenses', C.hdrCoExp);
+  if (includeCompanyExpenses) addGroupHeader(COEX_S, COEX_S+2, 'Company Expenses', C.hdrCoExp);
 
   // ── Sub-header row (row 5) ────────────────────────────────────────────────
   const subRow = ws.addRow([]); // row 5
@@ -418,7 +422,9 @@ function addPayrollSheet(
     ...deductionNames.map((nm, i): [number,string] => [DED_S+i, nm]),
     [TOT_DED, 'Total Deductions'], [AJT, 'Ajt.'], [NET, 'Net Salary'],
     [REMK, 'Remarks'], [ROUND, 'Round Up'],
-    [COEX_S, 'EPF 12%'], [COEX_S+1, 'ETF 3%'], [COEX_S+2, 'Total Expenses'],
+    ...(includeCompanyExpenses
+      ? [[COEX_S, 'EPF 12%'], [COEX_S+1, 'ETF 3%'], [COEX_S+2, 'Total Expenses']] as [number,string][]
+      : []),
   ];
 
   subHeaders.forEach(([col, label]) => {
@@ -438,7 +444,7 @@ function addPayrollSheet(
     ...loanTypes.map((_,i)=>LOAN_S+i),
     ...deductionNames.map((_,i)=>DED_S+i),
     TOT_DED, NET, ROUND,
-    COEX_S, COEX_S+1, COEX_S+2,
+    ...(includeCompanyExpenses ? [COEX_S, COEX_S+1, COEX_S+2] : []),
   ]);
 
   dataRows.forEach((data, idx) => {
@@ -480,7 +486,7 @@ export async function exportLivePayrollToExcel(
   wb.creator = 'IT Signature HRMS';
 
   addPayrollSheet(wb, 'Employees', nonTrainees, rawNonTrainees, periodInfo, company, '');
-  addPayrollSheet(wb, 'Trainees', trainees, rawTrainees, periodInfo, company, 'TR');
+  addPayrollSheet(wb, 'Trainees', trainees, rawTrainees, periodInfo, company, 'TR', false);
 
   // ── Download ──────────────────────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();

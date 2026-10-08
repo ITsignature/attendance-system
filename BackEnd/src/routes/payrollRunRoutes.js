@@ -188,6 +188,7 @@ router.get('/components',
                     applies_to_ids,
                     is_active,
                     deduct_from_base_salary,
+                    min_net_salary,
                     created_at,
                     updated_at
                 FROM payroll_components
@@ -225,6 +226,7 @@ router.post('/components',
         body('is_taxable').optional().isBoolean(),
         body('is_mandatory').optional().isBoolean(),
         body('applies_to').optional().isIn(['all', 'department', 'designation', 'individual']),
+        body('min_net_salary').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0 }).withMessage('Minimum net salary must be a positive number'),
         body('applies_to_ids').optional().custom((value) => {
             // Allow null, empty array, or array of UUIDs
             if (value === null || value === undefined) return true;
@@ -258,8 +260,14 @@ router.post('/components',
             is_mandatory = false,
             applies_to = 'all',
             applies_to_ids = null,
-            deduct_from_base_salary = false
+            deduct_from_base_salary = false,
+            min_net_salary = null
         } = req.body;
+
+        // Optional "apply only if net salary >= X" condition (deductions only); empty = always apply
+        const minNetSalary = component_type === 'deduction' && min_net_salary !== null && min_net_salary !== ''
+            ? parseFloat(min_net_salary)
+            : null;
 
         // Handle applies_to_ids: if it's an empty array or applies_to is 'all', set to null
         let processedAppliesIds = null;
@@ -273,8 +281,8 @@ router.post('/components',
                 id, client_id, component_name, component_type, category,
                 calculation_type, calculation_value, calculation_formula,
                 is_taxable, is_mandatory, applies_to, applies_to_ids,
-                is_active, deduct_from_base_salary, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                is_active, deduct_from_base_salary, min_net_salary, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         `, [
             componentId, clientId, component_name, component_type, category,
             calculation_type,
@@ -283,7 +291,8 @@ router.post('/components',
             is_taxable, is_mandatory, applies_to,
             processedAppliesIds,
             true,
-            deduct_from_base_salary ? 1 : 0
+            deduct_from_base_salary ? 1 : 0,
+            minNetSalary
         ]);
 
             res.status(201).json({
@@ -318,6 +327,7 @@ router.put('/components/:id',
         body('is_taxable').optional().isBoolean(),
         body('is_mandatory').optional().isBoolean(),
         body('applies_to').optional().isIn(['all', 'department', 'designation', 'individual']),
+        body('min_net_salary').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0 }).withMessage('Minimum net salary must be a positive number'),
         body('applies_to_ids').optional().custom((value) => {
             // Allow null, empty array, or array of UUIDs
             if (value === null || value === undefined) return true;
@@ -343,6 +353,11 @@ router.put('/components/:id',
         try {
             const updateFields = [];
             const updateValues = [];
+
+            // An empty "minimum net salary" means no condition
+            if (req.body.min_net_salary === '') {
+                req.body.min_net_salary = null;
+            }
 
             // Handle applies_to_ids specially
             Object.keys(req.body).forEach(key => {
