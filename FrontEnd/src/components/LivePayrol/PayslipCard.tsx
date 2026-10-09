@@ -246,7 +246,6 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       ? Math.round((epfBase / 100 * 12) * 100) / 100
       : (emp.base_salary ? Math.round((emp.base_salary / 100 * 12) * 100) / 100 : 0);
 
-    const totalEpfVal = Math.round((epf12Val + employeeEpfValue) * 100) / 100;
 
     const etf3Val = employeeEpfValue > 0
       ? (emp.etf_employer ? emp.etf_employer : Math.round((epfBase / 100 * 3) * 100) / 100)
@@ -404,13 +403,7 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
               <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
                 {formatCellAmount(epf12Val, false)}
               </td>
-              <td colSpan={2} rowSpan={3} style={{ width: '50%', backgroundColor: '#ffffff', borderBottom: '1px solid #000000' }}></td>
-            </tr>
-            <tr>
-              <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>Total EPF</td>
-              <td style={{ width: '18%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, textAlign: 'right', borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>
-                {formatCellAmount(totalEpfVal, false)}
-              </td>
+              <td colSpan={2} rowSpan={2} style={{ width: '50%', backgroundColor: '#ffffff', borderBottom: '1px solid #000000' }}></td>
             </tr>
             <tr>
               <td style={{ width: '32%', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000', borderBottom: '1px solid #000000' }}>ETF 3%</td>
