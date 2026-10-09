@@ -2176,10 +2176,12 @@ const LivePayrollDashboard: React.FC = () => {
                         <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>Employee Name</td>
                         <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{emp.employee_name || '-'}</td>
                       </tr>
+                      {!isTrainee(emp) && (
                       <tr style={{ borderBottom: '1px solid #000000' }}>
                         <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>EPF No</td>
                         <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{(emp as any).epf_no || (emp as any).epf_number || emp.employee_code || '-'}</td>
                       </tr>
+                      )}
                       <tr style={{ borderBottom: '1px solid #000000' }}>
                         <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px', borderRight: '1px solid #000000' }}>Designation</td>
                         <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: '5px 8px 7px 8px' }}>{emp.designation_name || (emp as any).designation_title || (emp as any).designation || emp.department_name || '-'}</td>

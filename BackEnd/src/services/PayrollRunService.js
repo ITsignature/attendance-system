@@ -868,7 +868,8 @@ class PayrollRunService {
         let unconfiguredWeekendOvertime = null;
         let holidayWorkedOvertime = null;
         // "No-pay" deduction = unpaid leave + absent days ONLY (excludes time-variance/lateness),
-        // used as the amount subtracted from a base when a deduction is flagged deduct_from_after_nopay_salary.
+        // priced at the base-salary-only rate (ignores nopay_includes_allowances), used as the amount
+        // subtracted from a base when a deduction is flagged deduct_from_after_nopay_salary.
         let noPayDeduction = 0;
 
         if (!attendanceAffectsSalary) {
@@ -897,8 +898,8 @@ class PayrollRunService {
             holidayWorkedOvertime = attendanceCalculation.holiday_worked_overtime || null;
 
             const shortfallByCause = attendanceCalculation.shortfall_by_cause || {};
-            noPayDeduction = (shortfallByCause.unpaid_time_off?.deduction || 0) +
-                             (shortfallByCause.absent_days?.deduction || 0);
+            noPayDeduction = (shortfallByCause.unpaid_time_off?.deduction_base || 0) +
+                             (shortfallByCause.absent_days?.deduction_base || 0);
 
             // For fixed-30: add non-working day credit (holidays + non-working Saturdays + Sundays)
             // separately on top of earned salary, same way OT is added — not mixed into deduction
@@ -910,7 +911,7 @@ class PayrollRunService {
             }
             console.log(`   Actual Earned Base: Rs.${actualEarnedBaseSalary.toFixed(2)}`);
             console.log(`   Attendance Shortfall: Rs.${attendanceDeduction.toFixed(2)}`);
-            console.log(`   No-Pay Deduction (Unpaid Leave + Absent Days only): Rs.${noPayDeduction.toFixed(2)}`);
+            console.log(`   No-Pay Deduction, base-only (Unpaid Leave + Absent Days only): Rs.${noPayDeduction.toFixed(2)}`);
         }
 
         // =============================================
@@ -3120,6 +3121,9 @@ class PayrollRunService {
                 unpaid_time_off: {
                     hours: unpaidLeaveWeekdayHours + unpaidLeaveSaturdayHours + unpaidLeaveSundayHours,
                     deduction: unpaidLeaveDeduction,
+                    // Same days priced at the base-salary-only rate (ignores nopay_includes_allowances);
+                    // used for the "after no-pay" EPF/ETF base
+                    deduction_base: Math.round(unpaidLeaveDeductionBase * 100) / 100,
                     details: unpaidTimeOffDetails
                 },
                 time_variance: {
@@ -3129,6 +3133,7 @@ class PayrollRunService {
                 },
                 absent_days: {
                     deduction: absentDaysDeduction,
+                    deduction_base: Math.round(absentDaysDeductionBase * 100) / 100,
                     details: absentDaysDetails
                 }
             },

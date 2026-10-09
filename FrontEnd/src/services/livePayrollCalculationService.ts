@@ -96,6 +96,8 @@ interface ShortfallByCause {
   unpaid_time_off: {
     hours: number;
     deduction: number;
+    /** Same days priced at base-salary-only rate (no allowances) — used for the after-no-pay EPF base */
+    deduction_base?: number;
     details?: UnpaidTimeOffDetail[];
   };
   time_variance: {
@@ -105,6 +107,7 @@ interface ShortfallByCause {
   };
   absent_days: {
     deduction: number;
+    deduction_base?: number;
     details?: AbsentDayDetail[];
   };
 }
@@ -299,10 +302,12 @@ class LivePayrollCalculationService {
     const conditional: Array<DeductionBreakdown & { min_net_salary: number }> = [];
     const baseSalary = employee.base_salary || 0;
 
-    // No-pay amount = unpaid leave + absent days only (excludes time-variance/lateness),
-    // subtracted from the selected base when a deduction is flagged deduct_from_after_nopay_salary.
+    // No-pay amount = unpaid leave + absent days only (excludes time-variance/lateness), priced at
+    // the base-salary-only rate (ignores nopay_includes_allowances), subtracted from the selected
+    // base when a deduction is flagged deduct_from_after_nopay_salary.
     const sc = employee.attendance?.shortfall_by_cause;
-    const noPayAmount = (sc?.unpaid_time_off?.deduction || 0) + (sc?.absent_days?.deduction || 0);
+    const noPayAmount = (sc?.unpaid_time_off?.deduction_base ?? sc?.unpaid_time_off?.deduction ?? 0) +
+                        (sc?.absent_days?.deduction_base ?? sc?.absent_days?.deduction ?? 0);
 
     if (!employee.deductions || employee.deductions.length === 0) {
       return { epf_employee: 0, etf_employer: 0, total: 0, breakdown: [], conditional: [] };

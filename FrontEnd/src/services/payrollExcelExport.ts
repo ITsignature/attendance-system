@@ -123,7 +123,8 @@ function addPayrollSheet(
 
   // ── Column positions (1-based for ExcelJS) ────────────────────────────────
   // cols: 1=EmpCode 2=Name 3=Desig 4=DOJ 5=WorkMonth 6=ExpBase 7=WorkDays 8=NormRate
-  // OT: 9-20  (12 cols: 5x [rate, hours] pairs + Statutory OT Amount + Non-Statutory OT Amount)
+  // OT: 9-22  (14 cols: 5x [rate, hours] pairs + Statutory OT Amount + Non-Statutory OT Amount
+  //            + Sat Covering Extra Time Hours + Sat Covering Extra Time Amount)
   // Allow: 20..20+N-1
   // Bonus: 20+N
   // Gross: 20+N+1
@@ -155,7 +156,9 @@ function addPayrollSheet(
   const OT_STAT_HRS  = OT_S + 9;
   const OT_STAT_AMOUNT    = OT_S + 10;
   const OT_NONSTAT_AMOUNT = OT_S + 11;
-  const AL_S    = OT_NONSTAT_AMOUNT + 1;
+  const OT_EXTRA_HRS      = OT_S + 12;   // Saturday-covering extra time (paid at weekday OT rate)
+  const OT_EXTRA_AMOUNT   = OT_S + 13;
+  const AL_S    = OT_EXTRA_AMOUNT + 1;
   const BONUS   = AL_S + N;
   const GROSS   = BONUS + 1;
   const NOPAY       = GROSS + 1;
@@ -250,11 +253,16 @@ function addPayrollSheet(
     const amountFor = (dt: string) =>
       otRecs.filter((r: any) => r.day_type === dt).reduce((s: number, r: any) => s + (r.amount || 0), 0);
     const statutoryOTAmount    = amountFor('statutory_holiday');
+    // Saturday-covering extra time has its own columns, so it is kept out of Non-Statutory
+    // (Statutory + Non-Statutory + Extra Time = total overtime)
+    const extraTimeAmount      = amountFor('extra_time');
     const nonStatutoryOTAmount = otRecs
-      .filter((r: any) => r.day_type !== 'statutory_holiday')
+      .filter((r: any) => r.day_type !== 'statutory_holiday' && r.day_type !== 'extra_time')
       .reduce((s: number, r: any) => s + (r.amount || 0), 0);
     row[OT_STAT_AMOUNT-1]    = round2(statutoryOTAmount);
     row[OT_NONSTAT_AMOUNT-1] = round2(nonStatutoryOTAmount);
+    row[OT_EXTRA_HRS-1]      = round2(minutesFor('extra_time')/60);
+    row[OT_EXTRA_AMOUNT-1]   = round2(extraTimeAmount);
 
     const allowMap: Record<string,number> = {};
     (result.allowances_breakdown||[]).forEach(a => {
@@ -323,7 +331,7 @@ function addPayrollSheet(
   // ── Totals row ────────────────────────────────────────────────────────────
   const numSumCols = new Set([
     6, GROSS, NOPAY, LATE_EARLY, BONUS, NET, TOT_DED,
-    OT_STAT_AMOUNT, OT_NONSTAT_AMOUNT,  // OT Amount split (not OT hours/rates)
+    OT_STAT_AMOUNT, OT_NONSTAT_AMOUNT, OT_EXTRA_AMOUNT,  // OT Amount split (not OT hours/rates)
     ...allowanceNames.map((_,i)=>AL_S+i),
     ...advanceTypes.map((_,i)=>ADV_S+i),
     ...loanTypes.map((_,i)=>LOAN_S+i),
@@ -388,7 +396,7 @@ function addPayrollSheet(
 
   addGroupHeader(1, 8, '', C.hdrInfo);       // fixed info — label set per sub-header
   grpRow.getCell(1).value = 'Employee Info';
-  addGroupHeader(OT_S, OT_NONSTAT_AMOUNT, 'OT', C.hdrOT);
+  addGroupHeader(OT_S, OT_EXTRA_AMOUNT, 'OT', C.hdrOT);
   if (N > 0) addGroupHeader(AL_S, AL_S+N-1, 'Allowances', C.hdrAllow);
   addGroupHeader(BONUS, BONUS, 'Bonus', C.hdrAllow);
   addGroupHeader(GROSS, GROSS, 'Gross Salary', C.hdrAllow);
@@ -414,6 +422,8 @@ function addPayrollSheet(
     [OT_STAT_RATE, 'Statutory Holiday\nOT Rate'], [OT_STAT_HRS, 'Statutory Holiday\nOT Hours'],
     [OT_STAT_AMOUNT,    'Statutory OT\nAmount'],
     [OT_NONSTAT_AMOUNT, 'Non-Statutory\nOT Amount'],
+    [OT_EXTRA_HRS,      'Sat Covering Extra\nTime Hours'],
+    [OT_EXTRA_AMOUNT,   'Sat Covering Extra\nTime Amount'],
     ...allowanceNames.map((nm, i): [number,string] => [AL_S+i, nm]),
     [BONUS, 'Bonus'], [GROSS, 'Gross Salary'],
     [NOPAY, 'NoPay'], [LATE_EARLY, 'Late/Early Deductions'],
@@ -438,6 +448,7 @@ function addPayrollSheet(
     6, 7, 8,
     OT_WD_RATE, OT_WD_HRS, OT_SAT_RATE, OT_SAT_HRS, OT_SUN_RATE, OT_SUN_HRS,
     OT_HOL_RATE, OT_HOL_HRS, OT_STAT_RATE, OT_STAT_HRS, OT_STAT_AMOUNT, OT_NONSTAT_AMOUNT,
+    OT_EXTRA_HRS, OT_EXTRA_AMOUNT,
     ...allowanceNames.map((_,i)=>AL_S+i),
     BONUS, GROSS, NOPAY, LATE_EARLY,
     ...advanceTypes.map((_,i)=>ADV_S+i),

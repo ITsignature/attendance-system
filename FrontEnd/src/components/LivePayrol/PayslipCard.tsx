@@ -297,10 +297,12 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
               <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Employee Name</td>
               <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{emp.employee_name || '-'}</td>
             </tr>
+            {showStatutory && (
             <tr style={{ borderBottom: '1px solid #000000' }}>
               <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>EPF No</td>
               <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{(emp as any).epf_no || (emp as any).epf_number || emp.employee_code || '-'}</td>
             </tr>
+            )}
             <tr style={{ borderBottom: '1px solid #000000' }}>
               <td style={{ width: '45%', backgroundColor: '#e5e7eb', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}`, borderRight: '1px solid #000000' }}>Designation</td>
               <td style={{ width: '55%', fontWeight: 700, textAlign: 'center', padding: `${px(3.5)} ${px(5)} ${px(5.5)} ${px(5)}` }}>{emp.designation_name || (emp as any).designation_title || (emp as any).designation || emp.department_name || '-'}</td>
