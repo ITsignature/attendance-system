@@ -45,15 +45,16 @@ function styleGroupHeader(cell: ExcelJS.Cell, bgArgb: string) {
   applyBorder(cell, 'medium');
 }
 
-function styleSubHeader(cell: ExcelJS.Cell) {
-  cell.fill  = argbFill(C.subHdr);
+function styleSubHeader(cell: ExcelJS.Cell, tintArgb?: string) {
+  cell.fill  = argbFill(tintArgb || C.subHdr);
   cell.font  = { bold: true, color: { argb: C.subHdrText }, size: 9, name: 'Calibri' };
   cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   applyBorder(cell, 'thin');
 }
 
-function styleDataCell(cell: ExcelJS.Cell, isAlt: boolean, isNumber = false) {
-  if (isAlt) cell.fill = argbFill(C.altRow);
+function styleDataCell(cell: ExcelJS.Cell, isAlt: boolean, isNumber = false, tintArgb?: string) {
+  if (tintArgb) cell.fill = argbFill(tintArgb);
+  else if (isAlt) cell.fill = argbFill(C.altRow);
   cell.font = { size: 9, name: 'Calibri' };
   cell.alignment = {
     horizontal: isNumber ? 'right' : 'center',
@@ -74,6 +75,28 @@ function styleTotalsCell(cell: ExcelJS.Cell, isNumber = false) {
     cell.numFmt = '#,##0.00';
   }
 }
+
+// ── OT column groups ──────────────────────────────────────────────────────────
+// One group per OT day type, each with its own colour (header = strong, tint = sub-header/data
+// cells) so the groups are easy to tell apart. A group is only added to a sheet when at least one
+// employee on that sheet has hours for it. Extra time has no rate column (paid at weekday OT rate).
+interface OtGroupDef {
+  dayType: string;
+  title: string;      // group header (row 4)
+  subLabel: string;   // prefix of the sub-headers (row 5): "<subLabel> Rate / Hours / Amount"
+  hasRate: boolean;
+  header: string;
+  tint: string;
+}
+const OT_GROUPS: OtGroupDef[] = [
+  { dayType: 'weekday',           title: 'Weekday OT',              subLabel: 'Weekday OT',                hasRate: true,  header: 'FFED7D31', tint: 'FFFCE4D6' },
+  { dayType: 'saturday',          title: 'Saturday OT',             subLabel: 'Sat OT',                    hasRate: true,  header: 'FF00897B', tint: 'FFD5EFEB' },
+  { dayType: 'sunday',            title: 'Sunday OT',               subLabel: 'Sun OT',                    hasRate: true,  header: 'FFC2185B', tint: 'FFF8D7E6' },
+  { dayType: 'holiday',           title: 'Holiday OT',              subLabel: 'Holiday OT',                hasRate: true,  header: 'FFBF8F00', tint: 'FFFFF0C2' },
+  { dayType: 'statutory_holiday', title: 'Statutory Holiday OT',    subLabel: 'Statutory Holiday\nOT',     hasRate: true,  header: 'FF3F51B5', tint: 'FFDCE0F5' },
+  { dayType: 'extra_time',        title: 'Sat Covering Extra Time', subLabel: 'Sat Covering Extra\nTime',  hasRate: false, header: 'FF607D8B', tint: 'FFE0E7EB' },
+];
+const OT_TOTAL_STYLE = { header: 'FF843C0C', tint: 'FFEBD5C5' };
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 function round2(n: number) { return Math.round(n * 100) / 100; }
@@ -123,19 +146,10 @@ function addPayrollSheet(
 
   // ── Column positions (1-based for ExcelJS) ────────────────────────────────
   // cols: 1=EmpCode 2=Name 3=Desig 4=DOJ 5=WorkMonth 6=ExpBase 7=WorkDays 8=NormRate
-  // OT: 9-22  (14 cols: 5x [rate, hours] pairs + Statutory OT Amount + Non-Statutory OT Amount
-  //            + Sat Covering Extra Time Hours + Sat Covering Extra Time Amount)
-  // Allow: 20..20+N-1
-  // Bonus: 20+N
-  // Gross: 20+N+1
-  // NoPay: 20+N+2
-  // Late/Early Deductions: 20+N+3
-  // Advances: 20+N+4 .. +4+M-1
-  // Loans: 20+N+4+M .. +3+M+K
-  // Ded: 20+N+4+M+K .. +3+M+K+D
-  // TotalDed: 20+N+4+M+K+D
-  // Ajt: +1  Net: +2  Remarks: +3  RoundUp: +4
-  // gap gap  CoExp: +7 +8 +9
+  // OT: from col 9. One group per OT day type that has hours on this sheet, each [Rate,] Hours, Amount
+  //     (extra time has no Rate), followed by a single Total OT Amount column.
+  // Then Allowances, Bonus, Gross, NoPay, Late/Early, Advances, Loans, Deductions, TotalDed,
+  // Ajt, Net, Remarks, RoundUp, gap gap, Company Expenses.
 
   const N = allowanceNames.length;
   const M = advanceTypes.length;
@@ -143,22 +157,34 @@ function addPayrollSheet(
   const D = deductionNames.length;
 
   const OT_S    = 9;
-  // OT sub-columns: Weekday[R,H], Saturday[R,H], Sunday[R,H], Holiday[R,H], StatHoliday[R,H], Amount
-  const OT_WD_RATE   = OT_S;
-  const OT_WD_HRS    = OT_S + 1;
-  const OT_SAT_RATE  = OT_S + 2;
-  const OT_SAT_HRS   = OT_S + 3;
-  const OT_SUN_RATE  = OT_S + 4;
-  const OT_SUN_HRS   = OT_S + 5;
-  const OT_HOL_RATE  = OT_S + 6;
-  const OT_HOL_HRS   = OT_S + 7;
-  const OT_STAT_RATE = OT_S + 8;
-  const OT_STAT_HRS  = OT_S + 9;
-  const OT_STAT_AMOUNT    = OT_S + 10;
-  const OT_NONSTAT_AMOUNT = OT_S + 11;
-  const OT_EXTRA_HRS      = OT_S + 12;   // Saturday-covering extra time (paid at weekday OT rate)
-  const OT_EXTRA_AMOUNT   = OT_S + 13;
-  const AL_S    = OT_EXTRA_AMOUNT + 1;
+
+  const otMinutesFor = (raw: any, dt: string): number =>
+    ((raw?.overtime?.records || []) as any[])
+      .filter((r: any) => r.day_type === dt)
+      .reduce((sum: number, r: any) => sum + (r.total_minutes || 0), 0);
+
+  // Hide an OT group when nobody on this sheet has hours for it
+  const activeOtGroups = OT_GROUPS.filter(g =>
+    calculatedResults.some(r => otMinutesFor(rawByEmpId.get(r.employee_id), g.dayType) > 0)
+  );
+
+  let nextOtCol = OT_S;
+  const otCols = activeOtGroups.map(group => {
+    const rate = group.hasRate ? nextOtCol++ : null;
+    const hrs  = nextOtCol++;
+    const amt  = nextOtCol++;
+    return { group, rate, hrs, amt };
+  });
+  const OT_TOTAL = nextOtCol;
+
+  // Tint used for the sub-header and data cells of each OT column
+  const otTint = new Map<number, string>();
+  otCols.forEach(({ group, rate, hrs, amt }) => {
+    [rate, hrs, amt].forEach(c => { if (c !== null) otTint.set(c, group.tint); });
+  });
+  otTint.set(OT_TOTAL, OT_TOTAL_STYLE.tint);
+
+  const AL_S    = OT_TOTAL + 1;
   const BONUS   = AL_S + N;
   const GROSS   = BONUS + 1;
   const NOPAY       = GROSS + 1;
@@ -231,38 +257,19 @@ function addPayrollSheet(
     const statOTRate = round2(whRate  * (parseFloat(raw.statutory_holiday_ot_multiplier) || 1));
 
     const otRecs: any[] = raw.overtime?.records || [];
-    const minutesFor = (dt: string) =>
-      otRecs.filter((r: any) => r.day_type === dt).reduce((s: number, r: any) => s + (r.total_minutes || 0), 0);
-    const wkMin   = minutesFor('weekday');
-    const satMin  = minutesFor('saturday');
-    const sunMin  = minutesFor('sunday');
-    const holMin  = minutesFor('holiday');
-    const statMin = minutesFor('statutory_holiday');
-
-    row[OT_WD_RATE-1]   = wkOTRate;
-    row[OT_WD_HRS-1]    = round2(wkMin/60);
-    row[OT_SAT_RATE-1]  = satOTRate;
-    row[OT_SAT_HRS-1]   = round2(satMin/60);
-    row[OT_SUN_RATE-1]  = sunOTRate;
-    row[OT_SUN_HRS-1]   = round2(sunMin/60);
-    row[OT_HOL_RATE-1]  = holOTRate;
-    row[OT_HOL_HRS-1]   = round2(holMin/60);
-    row[OT_STAT_RATE-1] = statOTRate;
-    row[OT_STAT_HRS-1]  = round2(statMin/60);
-
+    const minutesFor = (dt: string) => otMinutesFor(raw, dt);
     const amountFor = (dt: string) =>
-      otRecs.filter((r: any) => r.day_type === dt).reduce((s: number, r: any) => s + (r.amount || 0), 0);
-    const statutoryOTAmount    = amountFor('statutory_holiday');
-    // Saturday-covering extra time has its own columns, so it is kept out of Non-Statutory
-    // (Statutory + Non-Statutory + Extra Time = total overtime)
-    const extraTimeAmount      = amountFor('extra_time');
-    const nonStatutoryOTAmount = otRecs
-      .filter((r: any) => r.day_type !== 'statutory_holiday' && r.day_type !== 'extra_time')
-      .reduce((s: number, r: any) => s + (r.amount || 0), 0);
-    row[OT_STAT_AMOUNT-1]    = round2(statutoryOTAmount);
-    row[OT_NONSTAT_AMOUNT-1] = round2(nonStatutoryOTAmount);
-    row[OT_EXTRA_HRS-1]      = round2(minutesFor('extra_time')/60);
-    row[OT_EXTRA_AMOUNT-1]   = round2(extraTimeAmount);
+      otRecs.filter((r: any) => r.day_type === dt).reduce((sum: number, r: any) => sum + (r.amount || 0), 0);
+
+    const otRates: Record<string, number> = {
+      weekday: wkOTRate, saturday: satOTRate, sunday: sunOTRate, holiday: holOTRate, statutory_holiday: statOTRate
+    };
+    otCols.forEach(({ group, rate, hrs, amt }) => {
+      if (rate !== null) row[rate-1] = otRates[group.dayType];
+      row[hrs-1] = round2(minutesFor(group.dayType)/60);
+      row[amt-1] = round2(amountFor(group.dayType));
+    });
+    row[OT_TOTAL-1] = round2(otRecs.reduce((sum: number, r: any) => sum + (r.amount || 0), 0));
 
     const allowMap: Record<string,number> = {};
     (result.allowances_breakdown||[]).forEach(a => {
@@ -331,7 +338,7 @@ function addPayrollSheet(
   // ── Totals row ────────────────────────────────────────────────────────────
   const numSumCols = new Set([
     6, GROSS, NOPAY, LATE_EARLY, BONUS, NET, TOT_DED,
-    OT_STAT_AMOUNT, OT_NONSTAT_AMOUNT, OT_EXTRA_AMOUNT,  // OT Amount split (not OT hours/rates)
+    ...otCols.map(c => c.amt), OT_TOTAL,  // OT amounts (not OT hours/rates)
     ...allowanceNames.map((_,i)=>AL_S+i),
     ...advanceTypes.map((_,i)=>ADV_S+i),
     ...loanTypes.map((_,i)=>LOAN_S+i),
@@ -396,7 +403,8 @@ function addPayrollSheet(
 
   addGroupHeader(1, 8, '', C.hdrInfo);       // fixed info — label set per sub-header
   grpRow.getCell(1).value = 'Employee Info';
-  addGroupHeader(OT_S, OT_EXTRA_AMOUNT, 'OT', C.hdrOT);
+  otCols.forEach(({ group, rate, amt }) => addGroupHeader(rate ?? (amt - 1), amt, group.title, group.header));
+  addGroupHeader(OT_TOTAL, OT_TOTAL, 'Total OT', OT_TOTAL_STYLE.header);
   if (N > 0) addGroupHeader(AL_S, AL_S+N-1, 'Allowances', C.hdrAllow);
   addGroupHeader(BONUS, BONUS, 'Bonus', C.hdrAllow);
   addGroupHeader(GROSS, GROSS, 'Gross Salary', C.hdrAllow);
@@ -415,15 +423,12 @@ function addPayrollSheet(
   const subHeaders: [number, string][] = [
     [1, 'Emp. Code'], [2, 'Name'], [3, 'Designation'], [4, 'DOJ'],
     [5, 'Work Month'], [6, 'Base Salary'], [7, 'No. of Working Days'], [8, 'Normal Hourly Rate'],
-    [OT_WD_RATE,   'Weekday OT Rate'],   [OT_WD_HRS,   'Weekday OT Hours'],
-    [OT_SAT_RATE,  'Sat OT Rate'],       [OT_SAT_HRS,  'Sat OT Hours'],
-    [OT_SUN_RATE,  'Sun OT Rate'],       [OT_SUN_HRS,  'Sun OT Hours'],
-    [OT_HOL_RATE,  'Holiday OT Rate'],   [OT_HOL_HRS,  'Holiday OT Hours'],
-    [OT_STAT_RATE, 'Statutory Holiday\nOT Rate'], [OT_STAT_HRS, 'Statutory Holiday\nOT Hours'],
-    [OT_STAT_AMOUNT,    'Statutory OT\nAmount'],
-    [OT_NONSTAT_AMOUNT, 'Non-Statutory\nOT Amount'],
-    [OT_EXTRA_HRS,      'Sat Covering Extra\nTime Hours'],
-    [OT_EXTRA_AMOUNT,   'Sat Covering Extra\nTime Amount'],
+    ...otCols.flatMap(({ group, rate, hrs, amt }): [number, string][] => [
+      ...(rate !== null ? [[rate, `${group.subLabel} Rate`] as [number, string]] : []),
+      [hrs, `${group.subLabel} Hours`],
+      [amt, `${group.subLabel} Amount`],
+    ]),
+    [OT_TOTAL, 'Total OT\nAmount'],
     ...allowanceNames.map((nm, i): [number,string] => [AL_S+i, nm]),
     [BONUS, 'Bonus'], [GROSS, 'Gross Salary'],
     [NOPAY, 'NoPay'], [LATE_EARLY, 'Late/Early Deductions'],
@@ -440,15 +445,14 @@ function addPayrollSheet(
   subHeaders.forEach(([col, label]) => {
     const cell = subRow.getCell(col);
     cell.value = label;
-    styleSubHeader(cell);
+    styleSubHeader(cell, otTint.get(col));
   });
 
   // ── Data rows (rows 6+) ───────────────────────────────────────────────────
   const numberCols = new Set<number>([
     6, 7, 8,
-    OT_WD_RATE, OT_WD_HRS, OT_SAT_RATE, OT_SAT_HRS, OT_SUN_RATE, OT_SUN_HRS,
-    OT_HOL_RATE, OT_HOL_HRS, OT_STAT_RATE, OT_STAT_HRS, OT_STAT_AMOUNT, OT_NONSTAT_AMOUNT,
-    OT_EXTRA_HRS, OT_EXTRA_AMOUNT,
+    ...otCols.flatMap(({ rate, hrs, amt }) => [...(rate !== null ? [rate] : []), hrs, amt]),
+    OT_TOTAL,
     ...allowanceNames.map((_,i)=>AL_S+i),
     BONUS, GROSS, NOPAY, LATE_EARLY,
     ...advanceTypes.map((_,i)=>ADV_S+i),
@@ -464,7 +468,7 @@ function addPayrollSheet(
     const isAlt = idx % 2 === 1;
     for (let c = 1; c <= TOTAL_COLS; c++) {
       if (c === ROUND + 1 || c === ROUND + 2) continue; // gap cols — no border/fill
-      styleDataCell(wsRow.getCell(c), isAlt, numberCols.has(c));
+      styleDataCell(wsRow.getCell(c), isAlt, numberCols.has(c), otTint.get(c));
     }
   });
 
