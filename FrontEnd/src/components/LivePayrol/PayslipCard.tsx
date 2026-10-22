@@ -29,6 +29,23 @@ export const isGemsQualityLanka = (
   return false;
 };
 
+/**
+ * Part of the contract base salary that was never earned because the employee had not joined
+ * yet (mid-period hire). Basic Salary on the slip is the full contract amount, so this is shown
+ * as a deduction. Worked out as base - (earned excluding OT) - attendance shortfall; it is 0 for
+ * anyone employed the whole period.
+ */
+export const getPreJoiningDeduction = (emp: CalculatedPayroll): number => {
+  const sc = emp.shortfall_by_cause;
+  if (!sc) return 0;
+  const shortfall = (sc.unpaid_time_off?.deduction || 0)
+    + (sc.absent_days?.deduction || 0)
+    + (sc.time_variance?.deduction || 0);
+  const earnedExOvertime = (emp.actual_earned_base || 0) - (emp.overtime_amount || 0);
+  const gap = (emp.base_salary || 0) - earnedExOvertime - shortfall;
+  return gap >= 1 ? Math.round(gap * 100) / 100 : 0;
+};
+
 interface PayslipCardProps {
   employee: CalculatedPayroll;
   period?: PeriodInfo | null;
@@ -193,6 +210,14 @@ const PayslipCard: React.FC<PayslipCardProps> = ({ employee: emp, period, lastCa
       label: 'No Pay',
       amount: noPayVal,
     });
+
+    const preJoiningVal = getPreJoiningDeduction(emp);
+    if (preJoiningVal > 0) {
+      deductionsList.push({
+        label: 'Not employed (before joining)',
+        amount: preJoiningVal,
+      });
+    }
 
     if (emp.financial_deductions_breakdown && emp.financial_deductions_breakdown.length > 0) {
       emp.financial_deductions_breakdown.forEach((fd) => {

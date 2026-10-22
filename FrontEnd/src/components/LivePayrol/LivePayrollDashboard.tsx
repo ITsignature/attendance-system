@@ -14,7 +14,7 @@ import { exportLivePayrollToExcel } from '../../services/payrollExcelExport';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { createRoot } from 'react-dom/client';
-import PayslipCard, { isGemsQualityLanka } from './PayslipCard';
+import PayslipCard, { isGemsQualityLanka, getPreJoiningDeduction } from './PayslipCard';
 import settingsApi from '../../services/settingsApi';
 import payrollConfigApi from '../../services/payrollConfigApi';
 
@@ -2075,6 +2075,14 @@ const LivePayrollDashboard: React.FC = () => {
                 label: 'No Pay',
                 amount: noPayVal,
               });
+
+              const preJoiningVal = getPreJoiningDeduction(emp);
+              if (preJoiningVal > 0) {
+                deductionsList.push({
+                  label: 'Not employed (before joining)',
+                  amount: preJoiningVal,
+                });
+              }
 
               if (emp.financial_deductions_breakdown && emp.financial_deductions_breakdown.length > 0) {
                 emp.financial_deductions_breakdown.forEach((fd) => {
